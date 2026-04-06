@@ -66,13 +66,13 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_id, item_category, item_name, quantity, note } = req.body;
+    const { room_id, booking_id, guest_id, item_category, item_name, quantity, note } = req.body;
     
     const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO delivery_orders (order_no, room_id, item_category, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [orderNo, room_id, item_category, item_name, quantity, note, 'pending']
+      'INSERT INTO delivery_orders (order_no, room_id, booking_id, guest_id, item_category, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [orderNo, room_id, booking_id || null, guest_id || null, item_category, item_name, quantity, note, 'pending']
     );
     
     res.json(successResponse({ id: result.insertId, order_no: orderNo }, '创建送物订单成功'));

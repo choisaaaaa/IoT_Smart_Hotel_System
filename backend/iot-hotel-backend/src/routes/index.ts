@@ -12,6 +12,7 @@ import deliveryRouter from './v1/delivery';
 import maintenanceRouter from './v1/maintenance';
 import reviewRouter from './v1/reviews';
 import callRouter from './v1/calls';
+import guestRouter from './v1/guests';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/delivery', deliveryRouter);
 router.use('/maintenance', maintenanceRouter);
 router.use('/reviews', reviewRouter);
 router.use('/calls', callRouter);
+router.use('/guests', guestRouter);
 
 export default router;

@@ -71,13 +71,13 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_id, fault_type, fault_description, photos, priority } = req.body;
+    const { room_id, booking_id, guest_id, fault_type, fault_description, photos, priority } = req.body;
     
     const ticketNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO maintenance_tickets (ticket_no, room_id, fault_type, fault_description, photos, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [ticketNo, room_id, fault_type, fault_description, JSON.stringify(photos || []), priority, 'pending']
+      'INSERT INTO maintenance_tickets (ticket_no, room_id, booking_id, guest_id, fault_type, fault_description, photos, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [ticketNo, room_id, booking_id || null, guest_id || null, fault_type, fault_description, JSON.stringify(photos || []), priority, 'pending']
     );
     
     res.json(successResponse({ id: result.insertId, ticket_no: ticketNo }, '创建报修工单成功'));

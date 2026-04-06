@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { successResponse } from '../../types';
+import guests from './guests';
 
 const router = Router();
+
+router.use('/guests', guests);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({
@@ -17,7 +20,8 @@ router.get('/', (_req: Request, res: Response) => {
     delivery: '/api/v1/delivery',
     maintenance: '/api/v1/maintenance',
     reviews: '/api/v1/reviews',
-    calls: '/api/v1/calls'
+    calls: '/api/v1/calls',
+    guests: '/api/v1/guests'
   }));
 });
 
