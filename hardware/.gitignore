@@ -1,0 +1,10 @@
+# 忽略编译产物
+build/
+
+# 忽略 ESP-IDF 自动生成的配置文件 (仅保留 sdkconfig.defaults)
+sdkconfig
+sdkconfig.old
+dependencies.lock
+
+# 忽略自动下载的外部依赖库
+managed_components/
