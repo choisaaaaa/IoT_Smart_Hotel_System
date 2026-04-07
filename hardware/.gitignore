@@ -8,3 +8,6 @@ dependencies.lock
 
 # 忽略自动下载的外部依赖库
 managed_components/
+
+# 忽略统一提取的产物隔离区
+output/

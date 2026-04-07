@@ -26,6 +26,13 @@ esp_err_t service_network_provisioning_start(network_status_cb_t cb);
  */
 esp_err_t service_network_read_nvs_string(const char* key, char* out_value, size_t max_len);
 
+/**
+ * @brief 获取 ISO8601 格式的当前时间戳 (如 "2026-04-07T00:00:00.000Z")
+ * @param out_buffer 输出字符串缓冲区 (建议至少分配 32 字节)
+ * @param max_len 缓冲区最大长度
+ */
+void service_network_get_iso8601_timestamp(char* out_buffer, size_t max_len);
+
 #ifdef __cplusplus
 }
 #endif
