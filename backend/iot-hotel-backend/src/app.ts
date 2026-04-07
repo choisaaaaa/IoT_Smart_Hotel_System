@@ -10,6 +10,9 @@ import { notFoundHandler, errorHandler } from './middleware/error';
 
 const app: Application = express();
 
+// 启用信任代理（用于Nginx反向代理）
+app.set('trust proxy', true);
+
 app.use(helmet());
 app.use(cors());
 app.use(compression());
@@ -19,7 +22,8 @@ app.use(express.urlencoded({ extended: true }));
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: '请求过于频繁，请稍后再试'
+  message: '请求过于频繁，请稍后再试',
+  validate: false
 });
 app.use(apiLimiter);
 
