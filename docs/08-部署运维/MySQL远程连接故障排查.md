@@ -1,7 +1,7 @@
 # MySQL 远程连接故障排查指南
 
 > **错误**: `2013 - Lost connection to server at 'handshake: reading initial communication packet'`  
-> **版本**: v1.0.0  
+> **版本**: v1.0.1  
 > **更新日期**: 2026-04-07
 
 ***
@@ -57,12 +57,13 @@ sudo ss -tlnp | grep 3306
 
 **正常输出**：
 ```
-tcp6 0 0 :::3306 :::* LISTEN 3874/mysqld
+tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN      3874/mysqld
+tcp        0      0 0.0.0.0:33060           0.0.0.0:*               LISTEN      3874/mysqld
 ```
 
 **错误输出**（只监听本地）：
 ```
-tcp6 0 0 127.0.0.1:3306 :::* LISTEN 3874/mysqld
+tcp        0      0 127.0.0.1:3306          0.0.0.0:*               LISTEN      3874/mysqld
 ```
 
 ---
