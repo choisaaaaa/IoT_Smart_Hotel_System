@@ -27,15 +27,6 @@ const apiLimiter = rateLimit({
 });
 app.use(apiLimiter);
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({
-    code: 200,
-    message: '服务正常',
-    timestamp: Date.now(),
-    version: '2.0.0'
-  });
-});
-
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     code: 200,
@@ -43,7 +34,7 @@ app.get('/', (_req: Request, res: Response) => {
     timestamp: Date.now(),
     version: '2.0.0',
     endpoints: {
-      health: '/api/v1/health',
+      health: '/health',
       docs: '/api/v1/docs'
     }
   });
