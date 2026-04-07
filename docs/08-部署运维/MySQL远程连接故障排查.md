@@ -97,9 +97,8 @@ sudo ufw status | grep 3306
 
 **正常输出**：
 ```
-3306                     ALLOW       10.0.0.0/8
-3306                     ALLOW       172.16.0.0/12
-3306                     ALLOW       192.168.0.0/16
+3306                     ALLOW       Anywhere
+3306 (v6)                ALLOW       Anywhere (v6)
 ```
 
 ---
@@ -111,7 +110,7 @@ sudo ufw status | grep 3306
 **入方向规则**：
 - 端口范围: `3306`
 - 协议: `TCP`
-- 授权对象: `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16`
+- 授权对象: `0.0.0.0/0`（测试）或 `10.0.0.0/8`（生产）
 
 ---
 
@@ -171,12 +170,13 @@ sudo netstat -tlnp | grep mysql
 
 **正确输出**：
 ```
-tcp6 0 0 :::3306 :::* LISTEN 3874/mysqld
+tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN      3874/mysqld
+tcp        0      0 0.0.0.0:33060           0.0.0.0:*               LISTEN      3874/mysqld
 ```
 
 **错误输出**（只监听本地）：
 ```
-tcp6 0 0 127.0.0.1:3306 :::* LISTEN 3874/mysqld
+tcp        0      0 127.0.0.1:3306          0.0.0.0:*               LISTEN      3874/mysqld
 ```
 
 ---
@@ -184,16 +184,23 @@ tcp6 0 0 127.0.0.1:3306 :::* LISTEN 3874/mysqld
 ### 步骤 4: 配置防火墙
 
 ```bash
-# 允许内网IP访问
-sudo ufw allow from 10.0.0.0/8 to any port 3306
-sudo ufw allow from 172.16.0.0/12 to any port 3306
-sudo ufw allow from 192.168.0.0/16 to any port 3306
+# 允许所有 IP 访问（仅测试）
+sudo ufw allow 3306
 
-# 启用防火墙（如果未启用）
-sudo ufw enable
+# 或者只允许特定 IP（推荐）
+sudo ufw allow from 8.134.166.69 to any port 3306
+
+# 重启防火墙
+sudo ufw reload
 
 # 查看状态
 sudo ufw status verbose
+```
+
+**正常输出**：
+```
+3306                     ALLOW       Anywhere
+3306 (v6)                ALLOW       Anywhere (v6)
 ```
 
 ---
@@ -204,9 +211,8 @@ sudo ufw status verbose
 
 | 端口范围 | 协议 | 授权对象 | 说明 |
 |---------|------|---------|------|
-| 3306 | TCP | 10.0.0.0/8 | 内网IP段 |
-| 3306 | TCP | 172.16.0.0/12 | 内网IP段 |
-| 3306 | TCP | 192.168.0.0/16 | 内网IP段 |
+| 3306 | TCP | 0.0.0.0/0 | 允许所有 IP（测试） |
+| 3306 | TCP | 10.0.0.0/8 | 内网IP段（生产） |
 
 ---
 
@@ -250,142 +256,39 @@ mysql -u iot_user -p -h 8.134.166.69
 
 ## 📋 配置检查清单
 
-- [ ] `bind-address = 0.0.0.0`（或特定IP）
-- [ ] MySQL 服务已重启
-- [ ] MySQL 监听 `:::3306`（不是 `127.0.0.1:3306`）
+- [x] `bind-address = 0.0.0.0`（或特定IP）
+- [x] MySQL 服务已重启
+- [x] MySQL 监听 `0.0.0.0:3306`（不是 `127.0.0.1:3306`）
 - [ ] 防火墙允许 3306 端口
 - [ ] 云服务商安全组允许 3306 端口
 - [ ] 远程用户已创建
-- [ ] 用户权限已授予
 - [ ] 远程连接测试成功
-
----
-
-## 🎯 常见问题
-
-### Q1: 修改配置后 MySQL 启动失败
-
-**原因**: 配置文件格式错误
-
-**解决方案**：
-```bash
-# 检查配置文件语法
-sudo mysqld --validate-config
-
-# 查看错误日志
-sudo tail -n 50 /var/log/mysql/error.log
-```
-
----
-
-### Q2: MySQL 监听 127.0.0.1 而不是 0.0.0.0
-
-**原因**: `bind-address` 配置错误
-
-**解决方案**：
-```bash
-# 检查配置
-sudo grep bind-address /etc/mysql/mysql.conf.d/mysqld.cnf
-
-# 确保配置正确
-bind-address = 0.0.0.0
-
-# 重启 MySQL
-sudo systemctl restart mysql
-```
-
----
-
-### Q3: 防火墙阻止连接
-
-**原因**: 防火墙未开放 3306 端口
-
-**解决方案**：
-```bash
-# 开放端口
-sudo ufw allow from 10.0.0.0/8 to any port 3306
-
-# 重启防火墙
-sudo ufw reload
-
-# 查看状态
-sudo ufw status
-```
-
----
-
-### Q4: 云服务商安全组阻止连接
-
-**原因**: 安全组未配置入方向规则
-
-**解决方案**：
-1. 登录云服务商控制台
-2. 进入 ECS 实例
-3. 点击"安全组"
-4. 添加入方向规则：
-   - 端口范围: `3306`
-   - 协议: `TCP`
-   - 授权对象: `10.0.0.0/8`
-
----
-
-## 📊 连接测试结果
-
-### ✅ 本地连接测试
-
-```bash
-mysql -u iot_user -p -h 127.0.0.1
-```
-
-**成功输出**：
-```
-Welcome to the MySQL monitor...
-mysql>
-```
-
-### ✅ 远程连接测试
-
-```bash
-mysql -u iot_user -p -h 8.134.166.69
-```
-
-**成功输出**：
-```
-Welcome to the MySQL monitor...
-mysql>
-```
-
-### ❌ 连接失败
-
-**错误**: `2013 - Lost connection to server at 'handshake'`
-
-**原因**: 配置未生效或防火墙阻止
-
-**解决方案**: 重新检查以上所有步骤
 
 ---
 
 ## 🎯 快速修复命令
 
 ```bash
-# 1. 修改配置文件
+# 1. 检查配置
+sudo grep bind-address /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# 2. 修改配置（如果配置错误）
 sudo sed -i 's/^bind-address.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
 
-# 2. 重启 MySQL
+# 3. 重启 MySQL
 sudo systemctl restart mysql
 
-# 3. 验证监听端口
+# 4. 验证监听端口
 sudo netstat -tlnp | grep mysql
 
-# 4. 配置防火墙
-sudo ufw allow from 10.0.0.0/8 to any port 3306
-sudo ufw allow from 172.16.0.0/12 to any port 3306
-sudo ufw allow from 192.168.0.0/16 to any port 3306
+# 5. 配置防火墙
+sudo ufw allow 3306
+sudo ufw reload
 
-# 5. 创建远程用户
+# 6. 创建远程用户
 sudo mysql -u root -p -e "CREATE USER 'iot_user'@'%' IDENTIFIED BY 'Iot2026.'; GRANT ALL PRIVILEGES ON hotel_system.* TO 'iot_user'@'%'; FLUSH PRIVILEGES;"
 
-# 6. 测试连接
+# 7. 测试连接
 mysql -u iot_user -p -h 8.134.166.69
 ```
 
