@@ -57,3 +57,4 @@ hardware/**/*.bin
 .trae/
 
 docs/08-部署运维/云服务器部署指南.md
+backend/iot-hotel-backend/.env服务器
