@@ -57,10 +57,18 @@ curl http://localhost:3000/api/v1/health
 
 ## 📊 API接口
 
+接口基路径：`/api/v1`  
+除 `health` 和部分登录接口外，其余接口默认需要 `Authorization: Bearer <token>`。
+
 ### 1. 酒店管理接口
 
+- `GET /api/v1/hotel` - 获取当前登录酒店信息
+- `PUT /api/v1/hotel` - 更新当前登录酒店信息
 - `GET /api/v1/hotels` - 获取酒店信息
 - `PUT /api/v1/hotels` - 更新酒店信息
+- `GET /api/v1/hotels/search` - 酒店搜索
+- `GET /api/v1/hotels/:id` - 酒店详情
+- `GET /api/v1/hotels/:id/availability` - 指定日期房态余量
 
 ### 2. 房间管理接口
 
@@ -69,6 +77,10 @@ curl http://localhost:3000/api/v1/health
 - `POST /api/v1/rooms` - 创建房间
 - `PUT /api/v1/rooms/:id` - 更新房间
 - `DELETE /api/v1/rooms/:id` - 删除房间
+- `PUT /api/v1/rooms/:id/status` - 更新房态
+- `GET /api/v1/room-types` - 房型列表
+- `POST /api/v1/room-types` - 新建房型
+- `PUT /api/v1/room-types/:id` - 更新房型
 
 ### 3. 预订管理接口
 
@@ -124,6 +136,17 @@ curl http://localhost:3000/api/v1/health
 - `GET /api/v1/reviews` - 获取评价列表
 - `GET /api/v1/reviews/:id` - 获取评价详情
 - `POST /api/v1/reviews` - 创建评价
+
+### 10. 健康检查
+
+- `GET /api/v1/health` - 服务健康状态
+
+## ✅ 本次对齐与测试结论（2026-04）
+
+- 已完成数据库结构对齐脚本执行：`align_api_schema_v260.sql`
+- 已验证核心兼容字段存在：`bookings.hotel_id`、`rooms.hotel_id`、`rooms.room_id`、`users.hotel_id`、`devices.hotel_id`、`hotels.hotel_code`
+- `npm run build` 与 `npm run type-check` 通过
+- 项目当前 `npm run lint` 存在历史问题（大量 warning + 部分 error），不属于本次数据库对齐新增问题
 
 ## 🐳 Docker部署
 

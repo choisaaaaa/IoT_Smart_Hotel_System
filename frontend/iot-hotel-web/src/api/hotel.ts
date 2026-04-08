@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { ApiResponse } from './auth'
+import type { ApiResponse } from '@/types'
 
 export interface RoomInfo {
   id: number

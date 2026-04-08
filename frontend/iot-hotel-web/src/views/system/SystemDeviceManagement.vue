@@ -114,8 +114,13 @@ const formatTime = (t: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '
 const fetchDevices = async () => {
   loading.value = true
   try {
-    const res = await deviceApi.getDeviceList()
-    devices.value = res.data || []
+    const res: any = await deviceApi.getDeviceList()
+    const payload = res?.data
+    devices.value = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : []
   } finally {
     loading.value = false
   }
@@ -123,8 +128,13 @@ const fetchDevices = async () => {
 
 const fetchHotels = async () => {
   try {
-    const res = await hotelManageApi.getAllHotels()
-    hotels.value = res.data || []
+    const res: any = await hotelManageApi.getAllHotels()
+    const payload = res?.data
+    hotels.value = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : []
   } catch (error) {}
 }
 
