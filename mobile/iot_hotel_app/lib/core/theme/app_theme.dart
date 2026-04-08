@@ -15,7 +15,6 @@ class AppTheme {
         onSecondary: Colors.white,
         error: AppColors.error,
         surface: AppColors.surface,
-        background: AppColors.background,
       ),
       textTheme: GoogleFonts.notoSansScTextTheme(),
       scaffoldBackgroundColor: AppColors.background,
