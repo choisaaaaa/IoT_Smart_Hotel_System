@@ -4,9 +4,11 @@ import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
+router.get('/lookup', bookingController.lookupForGuest);
+router.post('/:id/checkin-online', bookingController.checkinOnline);
 router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.get);
 router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.getById);
-router.post('/', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.create);
+router.post('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.create);
 router.put('/:id/confirm', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.confirm);
 router.put('/:id/checkin', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkin);
 router.put('/:id/checkout', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkout);

@@ -461,6 +461,7 @@ import { message, Modal } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
+import { hotelApi } from '@/api/hotel'
 import { useAppStore } from '@/stores/app'
 import {
   EnvironmentOutlined, EnvironmentFilled, StarOutlined, StarFilled,
@@ -516,6 +517,8 @@ const bookingForm = reactive({
   remark: ''
 })
 
+const hotelList = ref<any[]>([])
+
 // --- Computed ---
 const nights = computed(() => {
   if (dateRange.value[0] && dateRange.value[1]) {
@@ -524,54 +527,10 @@ const nights = computed(() => {
   return 1
 })
 
-// Mock Data
-const recommendHotels = reactive([
-  {
-    id: 1,
-    name: '智联大酒店 (CBD店)',
-    location: '上海市浦东新区陆家嘴金融城',
-    star: 5,
-    rating: 4.9,
-    reviewCount: 2856,
-    price: 899,
-    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=1000&auto=format&fit=crop',
-    promotion: '新店优惠',
-    rooms: [
-      { id: 101, name: '商务大床房', area: 35, bedType: '1.8m大床', maxGuests: 2, price: 899, hasBreakfast: true, freeCancel: true, hasWifi: true, availableCount: 5 },
-      { id: 102, name: '行政双床房', area: 40, bedType: '1.2m双床', maxGuests: 2, price: 1099, hasBreakfast: true, freeCancel: true, hasWifi: true, availableCount: 2 }
-    ]
-  },
-  {
-    id: 2,
-    name: '智选假日酒店',
-    location: '北京市朝阳区三里屯',
-    star: 4,
-    rating: 4.7,
-    reviewCount: 1523,
-    price: 499,
-    image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1000&auto=format&fit=crop',
-    rooms: [
-      { id: 201, name: '标准间', area: 28, bedType: '1.5m大床', maxGuests: 2, price: 499, hasBreakfast: false, freeCancel: true, hasWifi: true, availableCount: 10 }
-    ]
-  },
-  {
-    id: 3,
-    name: '悦湖精品民宿',
-    location: '杭州市西湖区灵隐路',
-    star: 5,
-    rating: 4.8,
-    reviewCount: 987,
-    price: 1299,
-    image: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=1000&auto=format&fit=crop',
-    promotion: '湖景优选',
-    rooms: [
-      { id: 301, name: '景观套房', area: 55, bedType: '2.0m超大床', maxGuests: 3, price: 1299, hasBreakfast: true, freeCancel: false, hasWifi: true, availableCount: 1 }
-    ]
-  }
-])
+const recommendHotels = computed(() => hotelList.value.slice(0, 6))
 
 const filteredHotels = computed(() => {
-  let result = [...recommendHotels]
+  let result = [...hotelList.value]
   if (filters.star) result = result.filter(h => h.star === parseInt(filters.star!))
   if (filters.price) {
     const [min, max] = filters.price.split('-').map(Number)
@@ -583,14 +542,55 @@ const filteredHotels = computed(() => {
 })
 
 // --- Methods ---
-const searchHotels = () => {
-  if (!searchForm.destination) return message.warning('请输入目的地')
-  currentStep.value = 1
+const searchHotels = async () => {
+  if (!dateRange.value?.[0] || !dateRange.value?.[1]) return message.warning('请选择入住和退房日期')
+  try {
+    const items = await hotelApi.searchHotels({
+      destination: searchForm.destination || '',
+      check_in: dateRange.value[0].format('YYYY-MM-DD'),
+      check_out: dateRange.value[1].format('YYYY-MM-DD'),
+      rooms: searchForm.rooms,
+      guests: searchForm.guests
+    })
+    hotelList.value = items.map((item: any) => ({
+      ...item,
+      reviewCount: Number(item.reviewCount ?? item.review_count ?? 0),
+      star: Number(item.star || item.star_rating || 3),
+      rooms: []
+    }))
+    currentStep.value = 1
+  } catch (error) {
+    message.error('酒店搜索失败，请稍后重试')
+  }
 }
 
-const selectHotel = (hotel: any) => {
-  selectedHotel.value = hotel
-  currentStep.value = 2
+const selectHotel = async (hotel: any) => {
+  try {
+    const rooms = await hotelApi.getRoomAvailability(
+      Number(hotel.id),
+      dateRange.value[0].format('YYYY-MM-DD'),
+      dateRange.value[1].format('YYYY-MM-DD')
+    )
+    selectedHotel.value = {
+      ...hotel,
+      rooms: (rooms || []).map((room: any) => ({
+        ...room,
+        name: room.name || room.room_name || room.room_number,
+        area: Number(room.area || 0),
+        bedType: room.bedType || room.bed_type || '-',
+        maxGuests: Number(room.maxGuests || room.max_guests || 1),
+        price: Number(room.price || room.room_price || 0),
+        availableCount: Number(room.available_count || room.availableCount || 0),
+        image: room.image || room.image_url || '/room-placeholder.jpg',
+        hasBreakfast: Boolean(room.hasBreakfast),
+        freeCancel: Boolean(room.freeCancel),
+        hasWifi: Boolean(room.hasWifi)
+      }))
+    }
+    currentStep.value = 2
+  } catch (error) {
+    message.error('加载房态失败，请稍后重试')
+  }
 }
 
 const selectRoom = (room: any) => {
@@ -695,8 +695,19 @@ const submitBooking = async () => {
       }
     }
 
-    await new Promise(r => setTimeout(r, 1500))
-    bookingNo.value = 'OTA' + Date.now().toString().slice(-8)
+    const booking = await hotelApi.createBooking({
+      room_id: Number(selectedRoom.value?.id),
+      check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
+      check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
+      guest_name: bookingForm.guestName,
+      guest_phone: bookingForm.phone,
+      guest_id_number: bookingForm.idNumber,
+      guest_count: searchForm.guests,
+      special_requests: bookingForm.remark,
+      payment_method: paymentMethod.value,
+      status: 'pending'
+    })
+    bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
     currentStep.value = 4
     message.success('预订成功！')
   } catch (error) {
@@ -713,6 +724,10 @@ const resetAll = () => {
   Object.assign(searchForm, { destination: '', rooms: 1, guests: 2 })
   Object.assign(bookingForm, { guestName: '', phone: '', idNumber: '', remark: '' })
 }
+
+onMounted(() => {
+  searchHotels()
+})
 </script>
 
 <style scoped>

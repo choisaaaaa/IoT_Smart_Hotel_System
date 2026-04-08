@@ -97,6 +97,114 @@ export const create = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const lookupForGuest = async (req: Request, res: Response) => {
+  try {
+    const { keyword } = req.query;
+    const normalizedKeyword = String(keyword || '').trim();
+
+    if (!normalizedKeyword) {
+      res.status(400).json(errorResponse('请输入预订号或手机号'));
+      return;
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT b.id, b.booking_number, b.guest_name, b.guest_phone, b.check_in_date, b.check_out_date, b.status,
+              r.id as room_id, r.room_number, r.room_name
+       FROM bookings b
+       LEFT JOIN rooms r ON b.room_id = r.id
+       WHERE b.booking_number = ? OR b.guest_phone = ?
+       ORDER BY b.id DESC
+       LIMIT 1`,
+      [normalizedKeyword, normalizedKeyword]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json(errorResponse('未找到匹配预订'));
+      return;
+    }
+
+    const booking = rows[0] as any;
+    res.json(successResponse({
+      id: booking.id,
+      booking_no: booking.booking_number,
+      guest_name: booking.guest_name,
+      guest_phone: booking.guest_phone,
+      room_id: booking.room_id,
+      room_name: booking.room_name || booking.room_number,
+      check_in: booking.check_in_date,
+      check_out: booking.check_out_date,
+      status: booking.status
+    }, '查询预订成功'));
+  } catch (error) {
+    logger.error('查询预订失败:', error);
+    res.status(500).json(errorResponse('查询预订失败'));
+  }
+};
+
+export const checkinOnline = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { guest_phone, real_name, id_type, id_number, arrival_time, plate_number } = req.body || {};
+
+    if (!guest_phone || !real_name || !id_number) {
+      res.status(400).json(errorResponse('缺少必要参数（guest_phone, real_name, id_number）'));
+      return;
+    }
+
+    const [bookingRows] = await pool.query<RowDataPacket[]>(
+      `SELECT b.id, b.booking_number, b.guest_phone, b.status, b.room_id,
+              r.room_number, r.room_name
+       FROM bookings b
+       LEFT JOIN rooms r ON b.room_id = r.id
+       WHERE b.id = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    if (bookingRows.length === 0) {
+      res.status(404).json(errorResponse('预订不存在'));
+      return;
+    }
+
+    const booking = bookingRows[0] as any;
+    if (String(booking.guest_phone) !== String(guest_phone)) {
+      res.status(403).json(errorResponse('手机号与预订信息不匹配'));
+      return;
+    }
+
+    if (!['pending', 'confirmed', 'checked_in'].includes(booking.status)) {
+      res.status(400).json(errorResponse('当前预订状态不允许办理入住'));
+      return;
+    }
+
+    await pool.query<ResultSetHeader>(
+      `UPDATE bookings
+       SET guest_name = ?, guest_id_number = ?, status = ?, check_in_time = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [real_name, id_number, 'checked_in', id]
+    );
+
+    const roomPin = uuidv4().replace(/-/g, '').slice(0, 6).toUpperCase();
+    res.json(successResponse({
+      booking_id: booking.id,
+      booking_no: booking.booking_number,
+      room_id: booking.room_id,
+      room_name: booking.room_name || booking.room_number,
+      room_pin: roomPin,
+      profile: {
+        real_name,
+        id_type: id_type || 'idcard',
+        id_number,
+        arrival_time: arrival_time || null,
+        plate_number: plate_number || null
+      }
+    }, '在线入住办理成功'));
+  } catch (error) {
+    logger.error('在线办理入住失败:', error);
+    res.status(500).json(errorResponse('在线办理入住失败'));
+  }
+};
+
 export const confirm = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;

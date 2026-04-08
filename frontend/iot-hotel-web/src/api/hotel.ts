@@ -1,4 +1,4 @@
-import axios from 'axios'
+import request from './request'
 import type { ApiResponse } from '@/types'
 
 export interface RoomInfo {
@@ -38,51 +38,50 @@ export interface SearchParams {
 }
 
 class HotelApi {
-  private api = axios.create({
-    baseURL: 'http://localhost:9000/api/v1',
-    timeout: 10000
-  })
-
-  // 搜索酒店
   async searchHotels(params: SearchParams): Promise<HotelInfo[]> {
-    const response = await this.api.get<ApiResponse<HotelInfo[]>>('/hotels/search', { params })
-    return response.data.data || []
+    const response: any = await request.get<ApiResponse<{ hotels: HotelInfo[] }>>('/hotels/search', { params })
+    const payload = response?.data
+    if (Array.isArray(payload?.hotels)) return payload.hotels
+    if (Array.isArray(payload)) return payload
+    return []
   }
 
-  // 获取酒店详情
   async getHotelDetail(hotelId: number): Promise<HotelInfo> {
-    const response = await this.api.get<ApiResponse<HotelInfo>>(`/hotels/${hotelId}`)
-    return response.data.data!
+    const response: any = await request.get<ApiResponse<{ hotel: HotelInfo }>>(`/hotels/${hotelId}`)
+    const payload = response?.data
+    return payload?.hotel || payload
   }
 
-  // 查询客房余量
   async getRoomAvailability(hotelId: number, checkIn: string, checkOut: string): Promise<RoomInfo[]> {
-    const response = await this.api.get<ApiResponse<RoomInfo[]>>(
+    const response: any = await request.get<ApiResponse<{ rooms: RoomInfo[] }>>(
       `/hotels/${hotelId}/rooms/availability`,
       {
         params: { check_in: checkIn, check_out: checkOut }
       }
     )
-    return response.data.data || []
+    const payload = response?.data
+    if (Array.isArray(payload?.rooms)) return payload.rooms
+    if (Array.isArray(payload)) return payload
+    return []
   }
 
-  // 创建预订
   async createBooking(bookingData: {
-    hotel_id: number
     room_id: number
-    check_in: string
-    check_out: string
+    check_in_date: string
+    check_out_date: string
     guest_name: string
     guest_phone: string
-    guest_id_type: string
     guest_id_number: string
-    remark?: string
-  }): Promise<{ booking_no: string }> {
-    const response = await this.api.post<ApiResponse<{ booking_no: string }>>(
+    guest_count?: number
+    special_requests?: string
+    payment_method?: string
+    status?: string
+  }): Promise<any> {
+    const response: any = await request.post<ApiResponse<any>>(
       '/bookings',
       bookingData
     )
-    return response.data.data!
+    return response?.data
   }
 }
 

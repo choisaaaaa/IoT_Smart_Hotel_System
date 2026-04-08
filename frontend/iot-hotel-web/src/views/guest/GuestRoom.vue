@@ -162,6 +162,8 @@ import {
   WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
+import { deliveryApi } from '@/api/delivery'
+import { callApi } from '@/api/call'
 
 // 检查是否已办理入住
 const isCheckedIn = computed(() => {
@@ -205,6 +207,15 @@ const extraServices = [
   { key: 'maintenance', name: '报修服务', icon: '🔧', desc: '设备故障报修' },
   { key: 'extend', name: '续住申请', icon: '📅', desc: '延长住宿时间' }
 ]
+
+function getCheckinInfo(): any | null {
+  try {
+    const raw = localStorage.getItem('guest_checkin_info')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 // 页面加载时检查入住状态
 onMounted(async () => {
@@ -260,17 +271,42 @@ function scrollToBottom() {
 
 async function requestDelivery() {
   if (!deliveryForm.item_name) { message.warning('请填写物品名称'); return }
+  const parsedInfo = getCheckinInfo()
+  if (!parsedInfo?.room_id) { message.warning('未获取到房间信息，请重新办理入住'); return }
   deliveryLoading.value = true
   try {
-    await new Promise(r => setTimeout(r, 800))
+    await deliveryApi.create({
+      room_id: Number(parsedInfo.room_id),
+      item_category: deliveryForm.category as 'beverage' | 'food' | 'daily' | 'other',
+      item_name: deliveryForm.item_name,
+      quantity: deliveryForm.quantity,
+      note: deliveryForm.note
+    })
     message.success(`送物请求已提交！${deliveryForm.item_name} x${deliveryForm.quantity} 将尽快送达`)
     Object.assign(deliveryForm, { category: 'beverage', item_name: '', quantity: 1, note: '' })
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '送物请求提交失败')
   } finally {
     deliveryLoading.value = false
   }
 }
 
-function callFrontDesk() { message.info('正在呼叫前台...') }
+async function callFrontDesk() {
+  const parsedInfo = getCheckinInfo()
+  if (!parsedInfo?.room_id) { message.warning('未获取到房间信息，请重新办理入住'); return }
+  try {
+    await callApi.outbound({
+      caller_type: 'app',
+      caller_id: String(parsedInfo.room_id),
+      callee_type: 'front_desk',
+      callee_id: 'front-desk',
+      type: 'voice'
+    })
+    message.success('已向前台发起呼叫请求')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '呼叫失败，请稍后重试')
+  }
+}
 function showMessagePanel() { messageModalVisible.value = true }
 async function sendMsgToReception() {
   if (!msgContent.value.trim()) { message.warning('请输入留言内容'); return }

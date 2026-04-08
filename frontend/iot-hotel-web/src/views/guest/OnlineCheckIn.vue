@@ -127,6 +127,7 @@
 import { ref, reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
+import { bookingApi } from '@/api/booking'
 
 const currentStep = ref(0)
 const searchKey = ref('')
@@ -147,42 +148,65 @@ async function searchBooking() {
   if (!searchKey.value.trim()) { message.warning('请输入查询内容'); return }
   searching.value = true
   try {
-    await new Promise(r => setTimeout(r, 800))
-    foundBooking.value = {
-      booking_no: 'BK20260404002',
-      guest_name: '赵六',
-      room_name: '205 豪华大床房B',
-      check_in: '2026-04-05',
-      check_out: '2026-04-08'
+    const res: any = await bookingApi.lookupBooking(searchKey.value.trim())
+    foundBooking.value = res?.data || null
+    if (!foundBooking.value) {
+      message.error('未找到匹配的预订')
+      return
     }
     checkinForm.real_name = foundBooking.value.guest_name
+    checkinForm.id_number = ''
     message.success('找到预订记录')
-  } catch {
-    message.error('未找到匹配的预订')
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      message.error('未找到匹配的预订')
+      return
+    }
+    message.error('查询失败，请稍后重试')
   } finally {
     searching.value = false
   }
 }
 
 async function confirmCheckin() {
+  if (!foundBooking.value) {
+    message.warning('请先查询预订')
+    return
+  }
+  if (!checkinForm.real_name || !checkinForm.id_number) {
+    message.warning('请填写完整实名信息')
+    return
+  }
   confirming.value = true
   try {
-    await new Promise(r => setTimeout(r, 1200))
-    roomPin.value = Math.random().toString(36).substring(2, 8).toUpperCase()
-    
-    // 保存实名信息到 localStorage
-    const guestInfo = {
+    const res: any = await bookingApi.checkinOnline(foundBooking.value.id, {
+      guest_phone: foundBooking.value.guest_phone,
       real_name: checkinForm.real_name,
       id_type: checkinForm.id_type,
       id_number: checkinForm.id_number,
-      room_name: foundBooking.value?.room_name,
-      booking_no: foundBooking.value?.booking_no,
+      arrival_time: checkinForm.arrival_time ? dayjs(checkinForm.arrival_time).format('HH:mm') : null,
+      plate_number: checkinForm.plate_number
+    })
+    const payload = res?.data || {}
+    roomPin.value = payload.room_pin || ''
+    
+    const guestInfo = {
+      booking_id: foundBooking.value?.id,
+      real_name: checkinForm.real_name,
+      id_type: checkinForm.id_type,
+      id_number: checkinForm.id_number,
+      room_id: payload.room_id || foundBooking.value?.room_id,
+      room_name: payload.room_name || foundBooking.value?.room_name,
+      booking_no: payload.booking_no || foundBooking.value?.booking_no,
+      guest_phone: foundBooking.value?.guest_phone,
       check_in_date: new Date().toISOString()
     }
     localStorage.setItem('guest_checkin_info', JSON.stringify(guestInfo))
     
     currentStep.value = 3
     message.success('入住办理成功！')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '办理失败，请稍后重试')
   } finally {
     confirming.value = false
   }
