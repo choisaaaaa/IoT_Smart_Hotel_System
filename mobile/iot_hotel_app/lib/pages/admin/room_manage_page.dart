@@ -101,7 +101,7 @@ class _RoomManagePageState extends State<RoomManagePage> {
           children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text(room['number'] + '号房', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: getStatusColor(room['status']).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(getStatusText(room['status']), style: TextStyle(fontSize: 11, color: getStatusColor(room['status']), fontWeight: FontWeight.w600))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: getStatusColor(room['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(getStatusText(room['status']), style: TextStyle(fontSize: 11, color: getStatusColor(room['status']), fontWeight: FontWeight.w600))),
             ]),
             const Spacer(),
             Text(room['type'], style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),

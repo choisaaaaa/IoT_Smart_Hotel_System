@@ -35,6 +35,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (!mounted) return;
 
       if (result.success) {
+        if (!context.mounted) return;
         final user = result.data?['user'];
         final role = user['role'] ?? 'guest';
         switch (role) {
@@ -73,12 +74,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           Positioned(
             top: -100,
             right: -100,
-            child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.3))),
+            child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.3))),
           ),
           Positioned(
             bottom: -50,
             left: -50,
-            child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.primary.withOpacity(0.1))),
+            child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.primary.withValues(alpha: 0.1))),
           ),
           Center(
             child: SingleChildScrollView(
@@ -101,7 +102,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
                               borderRadius: BorderRadius.circular(20),
-                              boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                              boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
                             ),
                             child: const Icon(Icons.hotel_rounded, size: 48, color: Colors.white),
                           ),
@@ -180,8 +181,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget _buildRoleChip(String label, String role, Color color) {
     return ActionChip(
       label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-      backgroundColor: color.withOpacity(0.1),
-      side: BorderSide(color: color.withOpacity(0.2)),
+      backgroundColor: color.withValues(alpha: 0.1),
+      side: BorderSide(color: color.withValues(alpha: 0.2)),
       onPressed: () {
         _usernameController.text = role == 'admin' ? 'admin' : role == 'reception' ? 'reception' : 'guest';
         _passwordController.text = '123456';

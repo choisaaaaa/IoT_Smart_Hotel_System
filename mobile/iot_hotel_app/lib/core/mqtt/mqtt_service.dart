@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import '../constants/mqtt_constants.dart';
@@ -30,7 +31,6 @@ class MqttService {
 
      final connMsg = MqttConnectMessage()
         .authenticateAs(MqttConstants.username, MqttConstants.password)
-        .withWillRetain(false)
         .withWillQos(MqttQos.atMostOnce);
 
       _client!.connectionMessage = connMsg;
@@ -44,7 +44,7 @@ class MqttService {
       }
       return false;
     } catch (e) {
-      print('MQTT连接失败: $e');
+      debugPrint('MQTT连接失败: $e');
       _isConnected = false;
       return false;
     }
@@ -91,16 +91,7 @@ class MqttService {
     });
   }
 
-  void _onConnected() {
-    print('MQTT已连接');
-  }
-
-  void _onDisconnected() {
-    print('MQTT已断开');
-    _isConnected = false;
-  }
-
-  void _onSubscribed(String topic) {
-    print('已订阅Topic: $topic');
-  }
+  void _onConnected() { debugPrint('MQTT已连接'); }
+  void _onDisconnected() { debugPrint('MQTT已断开'); _isConnected = false; }
+  void _onSubscribed(String topic) { debugPrint('已订阅Topic: $topic'); }
 }

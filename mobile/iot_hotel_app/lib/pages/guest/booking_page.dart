@@ -44,7 +44,8 @@ class _BookingPageState extends ConsumerState<BookingPage> with SingleTickerProv
                 icon: Icon(Icons.logout_rounded, color: innerBoxIsScrolled ? AppColors.textPrimary : Colors.white),
                 onPressed: () async {
                   await ref.read(authServiceProvider).logout();
-                  if (context.mounted) context.go('/login');
+                  if (!context.mounted) return;
+                  context.go('/login');
                 },
               ),
               const SizedBox(width: 8),
@@ -79,7 +80,7 @@ class _BookingPageState extends ConsumerState<BookingPage> with SingleTickerProv
                           style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Text('智能客房体验，尽在指尖', 
-                          style: GoogleFonts.notoSansSc(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                          style: GoogleFonts.notoSansSc(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
                       ],
                     ),
                   ),
@@ -258,7 +259,7 @@ class _BookingFormState extends State<_BookingForm> {
       label: Text(label),
       selected: isSelected,
       onSelected: (v) => setState(() => _roomType = v ? value : null),
-      selectedColor: AppColors.primary.withOpacity(0.1),
+      selectedColor: AppColors.primary.withValues(alpha: 0.1),
       labelStyle: TextStyle(color: isSelected ? AppColors.primary : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? AppColors.primary : Colors.grey.shade300)),
       showCheckmark: false,
@@ -344,7 +345,7 @@ class _MyBookings extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 4), 
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), 
                 decoration: BoxDecoration(
-                  color: (isConfirmed ? AppColors.success : AppColors.warning).withOpacity(0.1), 
+                  color: (isConfirmed ? AppColors.success : AppColors.warning).withValues(alpha: 0.1), 
                   borderRadius: BorderRadius.circular(4),
                 ), 
                 child: Text(

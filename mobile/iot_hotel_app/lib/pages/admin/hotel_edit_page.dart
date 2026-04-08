@@ -13,7 +13,14 @@ class _HotelEditPageState extends State<HotelEditPage> {
   final _nameController = TextEditingController(text: '智联酒店');
   final _addressController = TextEditingController(text: '深圳市南山区科技园路1000号');
   final _phoneController = TextEditingController(text: '0755-88888888');
-  final _starController = TextEditingController(text: '5');
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +48,7 @@ class _HotelEditPageState extends State<HotelEditPage> {
               decoration: const InputDecoration(labelText: '星级', prefixIcon: Icon(Icons.star)),
               items: ['1','2','3','4','5'].map((s) => DropdownMenuItem(value: s, child: Text('$s星级'))).toList(),
               onChanged: (_) {},
-              value: '5',
+              initialValue: '5',
             ),
             const SizedBox(height: 24),
             SizedBox(width: double.infinity, height: 48, child: FilledButton(onPressed: _save, child: const Text('保存修改', style: TextStyle(fontSize: 16)))),

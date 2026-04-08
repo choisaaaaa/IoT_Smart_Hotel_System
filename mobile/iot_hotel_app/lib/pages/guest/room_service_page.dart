@@ -70,7 +70,7 @@ class RoomServicePage extends StatelessWidget {
   Widget _buildServiceCard(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -78,7 +78,7 @@ class RoomServicePage extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)), child: Icon(icon, size: 28, color: color)),
+              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)), child: Icon(icon, size: 28, color: color)),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -110,7 +110,7 @@ class _DeviceControlTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isOn ? AppColors.primary : AppColors.textHint;
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: isOn ? AppColors.primary.withOpacity(0.2) : Colors.grey.shade100)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: isOn ? AppColors.primary.withValues(alpha: 0.2) : Colors.grey.shade100)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

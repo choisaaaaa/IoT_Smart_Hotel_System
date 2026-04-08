@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -42,7 +43,7 @@ class AuthService {
         final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
         return User.fromJson(userMap);
       } catch (e) {
-        print('Error decoding user info: $e');
+        debugPrint('Error decoding user info: $e');
       }
     }
     return null;

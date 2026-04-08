@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'api_interceptor.dart';
 import '../constants/api_constants.dart';
@@ -23,12 +24,11 @@ class DioClient {
     dio.interceptors.addAll([
       AuthInterceptor(),
       LogInterceptor(
-        request: true,
         requestHeader: true,
-        responseHeader: false,
+        requestBody: true,
+        responseHeader: true,
         responseBody: true,
-        error: true,
-        logPrint: (obj) => print(obj),
+        logPrint: (o) => debugPrint(o.toString()),
       ),
     ]);
   }

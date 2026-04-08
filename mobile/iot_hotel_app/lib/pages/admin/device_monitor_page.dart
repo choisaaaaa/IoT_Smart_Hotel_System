@@ -81,7 +81,7 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
       child: ListTile(
         leading: Container(
           width: 48, height: 48,
-          decoration: BoxDecoration(color: getDeviceColor(device).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: getDeviceColor(device).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
           child: Center(child: Text(device.typeIcon, style: const TextStyle(fontSize: 24))),
         ),
         title: Text(device.deviceName, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -92,7 +92,7 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: getDeviceColor(device).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: getDeviceColor(device).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
               child: Text(getDeviceStatusText(device), style: TextStyle(fontSize: 11, color: getDeviceColor(device))),
             ),
           ],

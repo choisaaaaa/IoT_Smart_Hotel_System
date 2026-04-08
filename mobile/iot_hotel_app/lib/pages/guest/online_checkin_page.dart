@@ -103,7 +103,7 @@ class _OnlineCheckInPageState extends State<OnlineCheckInPage> {
               state: _currentStep > 2 ? StepState.complete : StepState.indexed,
               content: Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)]),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -125,10 +125,10 @@ class _OnlineCheckInPageState extends State<OnlineCheckInPage> {
               content: Container(
                 padding: const EdgeInsets.all(32),
                 width: double.infinity,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppColors.success.withOpacity(0.2))),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppColors.success.withValues(alpha: 0.2))),
                 child: Column(
                   children: [
-                    Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.check_circle_rounded, size: 48, color: AppColors.success)),
+                    Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.check_circle_rounded, size: 48, color: AppColors.success)),
                     const SizedBox(height: 24),
                     Text('入住办理成功！', style: GoogleFonts.notoSansSc(fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
