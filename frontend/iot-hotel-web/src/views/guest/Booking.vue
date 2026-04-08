@@ -542,7 +542,7 @@ const filteredHotels = computed(() => {
 })
 
 // --- Methods ---
-const searchHotels = async () => {
+const searchHotels = async (shouldAdvance = true) => {
   if (!dateRange.value?.[0] || !dateRange.value?.[1]) return message.warning('请选择入住和退房日期')
   try {
     const items = await hotelApi.searchHotels({
@@ -558,7 +558,9 @@ const searchHotels = async () => {
       star: Number(item.star || item.star_rating || 3),
       rooms: []
     }))
-    currentStep.value = 1
+    if (shouldAdvance) {
+      currentStep.value = 1
+    }
   } catch (error) {
     message.error('酒店搜索失败，请稍后重试')
   }
@@ -726,7 +728,7 @@ const resetAll = () => {
 }
 
 onMounted(() => {
-  searchHotels()
+  searchHotels(false)
 })
 </script>
 

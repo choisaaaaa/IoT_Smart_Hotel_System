@@ -5,6 +5,24 @@ import db from '../config/database';
 
 const router = Router();
 
+function parseFacilities(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(item => String(item).trim()).filter(Boolean);
+  const text = String(raw).trim();
+  if (!text) return [];
+  if (text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => String(item).trim()).filter(Boolean);
+      }
+    } catch {
+      return text.split(/[，,]/).map(item => item.trim()).filter(Boolean);
+    }
+  }
+  return text.split(/[，,]/).map(item => item.trim()).filter(Boolean);
+}
+
 // 搜索酒店
 export async function search(req: AuthRequest, res: Response) {
   try {
@@ -12,14 +30,22 @@ export async function search(req: AuthRequest, res: Response) {
 
     // 查询酒店列表（包含可用房间数）
     const sql = `
-      SELECT DISTINCT h.*, 
-             COUNT(CASE WHEN r.room_status = 'available' THEN 1 END) as available_rooms,
-             MIN(r.room_price) as min_price
+      SELECT
+        h.*,
+        IFNULL(ra.available_rooms, 0) AS available_rooms,
+        ra.min_price
       FROM hotels h
-      LEFT JOIN rooms r ON h.hotel_id = r.hotel_id AND r.room_status = 'available'
-      WHERE h.hotel_name LIKE ? OR h.location LIKE ?
-      GROUP BY h.hotel_id
-      HAVING available_rooms > 0
+      LEFT JOIN (
+        SELECT
+          r.hotel_id,
+          COUNT(*) AS available_rooms,
+          MIN(r.room_price) AS min_price
+        FROM rooms r
+        WHERE r.room_status = 'available'
+        GROUP BY r.hotel_id
+      ) ra ON ra.hotel_id = IFNULL(h.hotel_id, h.id)
+      WHERE (h.hotel_name LIKE ? OR h.location LIKE ?)
+        AND IFNULL(ra.available_rooms, 0) > 0
     `;
 
     const keyword = `%${destination || ''}%`;
@@ -139,7 +165,9 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
     const [rooms]: any = await db.execute(sql, params);
 
     sendSuccess(res, {
-      rooms: rooms.map((r: any) => ({
+      rooms: rooms.map((r: any) => {
+        const facilities = parseFacilities(r.facilities);
+        return ({
         id: r.room_id,
         room_number: r.room_number,
         room_name: r.room_name,
@@ -150,18 +178,18 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         bed_type: r.bed_type,
         max_guests: r.max_guests,
         room_status: r.room_status,
-        facilities: r.facilities ? JSON.parse(r.facilities) : [],
+        facilities,
         image: r.image_url || '/room-placeholder.jpg',
         available_count: r.available_count || 0,
-        // 兼容前端字段
         name: r.room_name,
         description: `${r.room_type} · ${r.floor}楼`,
         bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
         maxGuests: r.max_guests,
-        hasBreakfast: r.facilities?.includes('含早餐'),
-        freeCancel: r.facilities?.includes('免费取消'),
-        hasWifi: r.facilities?.includes('免费 WiFi')
-      }))
+        hasBreakfast: facilities.some((item) => item.includes('早餐')),
+        freeCancel: facilities.some((item) => item.includes('免费取消')),
+        hasWifi: facilities.some((item) => /wifi/i.test(item))
+      });
+      })
     });
   } catch (error) {
     console.error('查询客房余量失败:', error);
