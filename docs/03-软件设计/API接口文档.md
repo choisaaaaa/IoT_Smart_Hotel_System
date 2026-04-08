@@ -54,13 +54,13 @@
 
 ## 🔐 认证接口
 
-### 1. 用户登录
+### 1. 生成 API Token
 
-**接口说明**：用户登录，获取JWT Token
+**接口说明**：用户登录并生成一次性 API Token（用于扫码登录）
 
 **请求方式**：`POST`
 
-**请求路径**：`/auth/login`
+**请求路径**：`/auth/generate-token`
 
 **请求头**：
 
@@ -82,27 +82,54 @@ Content-Type: application/json
 ```json
 {
   "code": 200,
-  "message": "登录成功",
+  "message": "Token 生成成功，请在 5 分钟内使用",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_in": 604800,
-    "refresh_expires_in": 2592000,
-    "user": {
-      "id": 1,
-      "username": "admin",
-      "email": "admin@example.com",
-      "role": "admin",
-      "permissions": ["read", "write", "delete"]
-    }
+    "token": "a1b2c3d4e5f6...",
+    "expiresAt": "2026-04-08T10:00:00.000Z"
   }
 }
 ```
 
-**错误码**：
+***
 
-- `401` - 用户名或密码错误
-- `404` - 用户不存在
+### 2. 扫码登录
+
+**接口说明**：使用 API Token 进行登录，获取 JWT Token
+
+**请求方式**：`POST`
+
+**请求路径**：`/auth/scan-login`
+
+**请求头**：
+
+```
+Content-Type: application/json
+```
+
+**请求体**：
+
+```json
+{
+  "token": "a1b2c3d4e5f6..."
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "登录成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": 1,
+      "username": "admin",
+      "role": "admin"
+    }
+  }
+}
+```
 
 ***
 
