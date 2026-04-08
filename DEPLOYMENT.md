@@ -470,7 +470,7 @@ docker-compose exec mysql mysql -u root -p iot_hotel_system < backup.sql
 - [完整部署指南](./docs/完整部署指南.md)
 - [Docker配置说明](./docs/Docker配置说明.md)
 
----
+***
 
-**版本**: v1.0.0  
+**版本**: v1.0.0\
 **最后更新**: 2026年4月4日

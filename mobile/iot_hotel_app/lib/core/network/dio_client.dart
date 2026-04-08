@@ -1,0 +1,70 @@
+import 'package:dio/dio.dart';
+import 'api_interceptor.dart';
+import '../constants/api_constants.dart';
+
+class DioClient {
+  static final DioClient _instance = DioClient._internal();
+  factory DioClient() => _instance;
+  DioClient._internal();
+
+  late final Dio dio;
+
+  void init() {
+    dio = Dio(BaseOptions(
+      baseUrl: ApiConstants.baseUrl,
+      connectTimeout: const Duration(milliseconds: ApiConstants.connectTimeout),
+      receiveTimeout: const Duration(milliseconds: ApiConstants.receiveTimeout),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ));
+
+    dio.interceptors.addAll([
+      AuthInterceptor(),
+      LogInterceptor(
+        request: true,
+        requestHeader: true,
+        responseHeader: false,
+        responseBody: true,
+        error: true,
+        logPrint: (obj) => print(obj),
+      ),
+    ]);
+  }
+
+  Future<Response> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return await dio.get(path, queryParameters: queryParameters, options: options);
+  }
+
+  Future<Response> post(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return await dio.post(path, data: data, queryParameters: queryParameters, options: options);
+  }
+
+  Future<Response> put(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return await dio.put(path, data: data, queryParameters: queryParameters, options: options);
+  }
+
+  Future<Response> delete(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return await dio.delete(path, data: data, queryParameters: queryParameters, options: options);
+  }
+}
