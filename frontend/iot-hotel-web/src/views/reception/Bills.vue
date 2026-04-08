@@ -3,19 +3,19 @@
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :sm="8">
         <a-card size="small">
-          <a-statistic title="今日营收" :value="12856" prefix="¥" :value-style="{ color: '#1890ff', fontWeight: 600 }">
+          <a-statistic title="今日营收" :value="stats.todayTotal" prefix="¥" :value-style="{ color: '#1890ff', fontWeight: 600 }">
             <template #suffix><span style="font-size: 13px; color: #52c41a;"> ↑12.3%</span></template>
           </a-statistic>
         </a-card>
       </a-col>
       <a-col :xs="24" :sm="8">
         <a-card size="small">
-          <a-statistic title="本月累计" :value="386420" prefix="¥" :value-style="{ color: '#722ed1', fontWeight: 600 }" />
+          <a-statistic title="本月累计" :value="stats.monthTotal" prefix="¥" :value-style="{ color: '#722ed1', fontWeight: 600 }" />
         </a-card>
       </a-col>
       <a-col :xs="24" :sm="8">
         <a-card size="small">
-          <a-statistic title="待结算账单" :value="15" suffix="笔" :value-style="{ color: '#ff4d4f' }">
+          <a-statistic title="待结算账单" :value="stats.pendingCount" suffix="笔" :value-style="{ color: '#ff4d4f' }">
             <template #prefix><FileTextOutlined /></template>
           </a-statistic>
         </a-card>
@@ -47,7 +47,7 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'amount'">
-          <span style="font-weight: 600;">¥{{ record.amount }}</span>
+          <span style="font-weight: 600;">¥{{ record.total_price }}</span>
         </template>
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status === 'paid' ? 'success' : record.status === 'pending' ? 'warning' : 'default'">
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
 import { bookingApi } from '@/api/booking'
@@ -130,21 +130,27 @@ const columns = [
   { title: '操作', key: 'action', width: 140 }
 ]
 
+function printBill() {
+  window.print()
+}
+
 async function fetchBills() {
   loading.value = true
   try {
-    const res = await bookingApi.getBookingList({ pageSize: 100 })
+    const res: any = await bookingApi.getBookingList({ pageSize: 100 })
     const list = res.data?.list || []
     
     // 过滤出有价值的账单状态
-    bills.value = list.filter(b => ['checked_in', 'checked_out', 'confirmed'].includes(b.status))
+    bills.value = list.filter((b: any) => ['checked_in', 'checked_out', 'confirmed'].includes(b.status))
     
     // 简单统计逻辑
-    stats.pendingCount = list.filter(b => b.status === 'checked_in').length
-    stats.todayTotal = list.filter(b => b.status === 'checked_out' && b.updated_at?.startsWith(new Date().toISOString().split('T')[0]))
-      .reduce((sum, b) => sum + Number(b.total_price), 0)
-    stats.monthTotal = list.filter(b => b.status === 'checked_out')
-      .reduce((sum, b) => sum + Number(b.total_price), 0)
+    stats.pendingCount = list.filter((b: any) => b.status === 'checked_in').length
+    stats.todayTotal = list
+      .filter((b: any) => b.status === 'checked_out' && b.updated_at?.startsWith(new Date().toISOString().split('T')[0]))
+      .reduce((sum: number, b: any) => sum + Number(b.total_price), 0)
+    stats.monthTotal = list
+      .filter((b: any) => b.status === 'checked_out')
+      .reduce((sum: number, b: any) => sum + Number(b.total_price), 0)
       
   } catch (error) {
     message.error('获取账单列表失败')

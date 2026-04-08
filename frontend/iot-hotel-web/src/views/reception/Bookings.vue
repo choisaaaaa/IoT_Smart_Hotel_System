@@ -2,8 +2,8 @@
   <div class="reception-bookings">
     <div class="toolbar">
       <a-space>
-        <a-input-search v-model:value="searchKey" placeholder="搜索预订号/客人名" style="width: 240px;" allow-clear />
-        <a-select v-model:value="filterStatus" placeholder="状态筛选" allow-clear style="width: 140px;">
+        <a-input-search v-model:value="searchKey" placeholder="搜索预订号/客人名" style="width: 240px;" allow-clear @search="fetchBookings" />
+        <a-select v-model:value="filterStatus" placeholder="状态筛选" allow-clear style="width: 140px;" @change="fetchBookings">
           <a-select-option value="confirmed">已确认</a-select-option>
           <a-select-option value="checked_in">已入住</a-select-option>
           <a-select-option value="checked_out">已退房</a-select-option>
@@ -80,7 +80,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { bookingApi } from '@/api/booking'
 import { useRouter } from 'vue-router'
@@ -138,7 +138,7 @@ function doCheckin(record: any) {
 async function fetchBookings() {
   loading.value = true
   try {
-    const res = await bookingApi.getBookingList({
+    const res: any = await bookingApi.getBookingList({
       status: filterStatus.value,
       guest_name: searchKey.value
     })
@@ -152,7 +152,7 @@ async function fetchBookings() {
 
 function showCreateModal() { 
   modalVisible.value = true 
-  hotelStore.fetchRooms()
+  void hotelStore.fetchRooms({ pageSize: 300 }).catch(() => {})
 }
 
 async function handleCreateBooking() {
@@ -194,7 +194,10 @@ async function handleCancel(id: number) {
   }
 }
 
-onMounted(fetchBookings)
+onMounted(() => {
+  void hotelStore.fetchRooms({ pageSize: 300 }).catch(() => {})
+  fetchBookings()
+})
 </script>
 
 <style scoped>

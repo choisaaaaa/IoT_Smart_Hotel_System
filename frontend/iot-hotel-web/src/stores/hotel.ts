@@ -1,11 +1,15 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { RoomInfo, HotelInfo } from '@/types'
 
 export const useHotelStore = defineStore('hotel', () => {
   const hotelInfo = ref<HotelInfo | null>(null)
   const rooms = ref<RoomInfo[]>([])
   const loading = ref(false)
+  const roomFetchAt = ref(0)
+  const roomFetchKey = ref('')
+  const roomFetchPromise = ref<Promise<any> | null>(null)
+  const roomRateLimitedUntil = ref(0)
 
   async function fetchHotelInfo() {
     loading.value = true
@@ -19,13 +23,58 @@ export const useHotelStore = defineStore('hotel', () => {
   }
 
   async function fetchRooms(params?: any) {
+    const nextKey = JSON.stringify(params || {})
+    const now = Date.now()
+    if (now < roomRateLimitedUntil.value) {
+      return {
+        list: rooms.value,
+        total: rooms.value.length,
+        page: 1,
+        pageSize: rooms.value.length,
+        totalPages: 1
+      }
+    }
+    if (roomFetchPromise.value && roomFetchKey.value === nextKey) {
+      return roomFetchPromise.value
+    }
+    if (roomFetchKey.value === nextKey && now - roomFetchAt.value < 2000 && rooms.value.length > 0) {
+      return {
+        list: rooms.value,
+        total: rooms.value.length,
+        page: 1,
+        pageSize: rooms.value.length,
+        totalPages: 1
+      }
+    }
+    roomFetchKey.value = nextKey
     loading.value = true
-    try {
+    const task = (async () => {
       const { roomApi } = await import('@/api/room')
-      const res: any = await roomApi.getRoomList(params)
-      rooms.value = res.data?.list || []
-      return res.data
+      try {
+        const res: any = await roomApi.getRoomList(params)
+        rooms.value = res.data?.list || []
+        roomFetchAt.value = Date.now()
+        return res.data
+      } catch (error: any) {
+        const status = Number(error?.response?.status || 0)
+        if (status === 429) {
+          roomRateLimitedUntil.value = Date.now() + 10000
+          return {
+            list: rooms.value,
+            total: rooms.value.length,
+            page: 1,
+            pageSize: rooms.value.length,
+            totalPages: 1
+          }
+        }
+        throw error
+      }
+    })()
+    roomFetchPromise.value = task
+    try {
+      return await task
     } finally {
+      roomFetchPromise.value = null
       loading.value = false
     }
   }
@@ -42,10 +91,27 @@ export const useHotelStore = defineStore('hotel', () => {
     return rooms.value.filter(r => r.room_status === 'occupied')
   }
 
+  const floors = computed(() => {
+    const floorSet = new Set<number>()
+    rooms.value.forEach(room => floorSet.add(Number(room.floor)))
+    return Array.from(floorSet).sort((a, b) => a - b).map(floor => ({ floor }))
+  })
+
+  const groupedRooms = computed(() => {
+    return floors.value.map(item => ({
+      floor: item.floor,
+      rooms: rooms.value
+        .filter(room => Number(room.floor) === item.floor)
+        .sort((a, b) => String(a.room_number).localeCompare(String(b.room_number)))
+    }))
+  })
+
   return {
     hotelInfo,
     rooms,
     loading,
+    floors,
+    groupedRooms,
     fetchHotelInfo,
     fetchRooms,
     getRoomsByFloor,

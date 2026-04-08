@@ -151,7 +151,19 @@ const routes: RouteRecordRaw[] = [
         path: 'delivery',
         name: 'DeliveryOrders',
         component: () => import('@/views/reception/DeliveryOrders.vue'),
-        meta: { title: '客房送物', id: 'SendOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '客房送物', icon: 'SendOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+      },
+      {
+        path: 'voice-calls',
+        name: 'VoiceCalls',
+        component: () => import('@/views/reception/VoiceCalls.vue'),
+        meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+      },
+      {
+        path: 'price-settings',
+        name: 'PriceSettings',
+        component: () => import('@/views/reception/PriceSettings.vue'),
+        meta: { title: '房价设置', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
       },
       {
         path: 'bills',

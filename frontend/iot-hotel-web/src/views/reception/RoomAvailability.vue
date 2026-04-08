@@ -35,36 +35,36 @@
     </a-card>
 
     <div v-if="viewMode === 'grid'" class="grid-container">
-      <div v-for="group in hotelStore.groupedRooms" :key="group.floor" class="floor-section">
+      <div v-for="group in groupedRooms" :key="group.floor" class="floor-section">
         <div class="floor-title">{{ group.floor }}层</div>
         <div class="room-grid">
-          <div 
-            v-for="room in group.rooms" 
-            :key="room.id" 
+          <div
+            v-for="room in group.rooms"
+            :key="room.id"
             class="room-card"
-            :class="[room.status]"
+            :class="[room.room_status]"
             @click="showRoomDetail(room)"
           >
             <div class="room-num">{{ room.room_number }}</div>
             <div class="room-type">{{ room.room_name }}</div>
             <div class="room-icon">
-              <component :is="statusMap[room.status]?.icon || InfoCircleOutlined" />
+              <component :is="statusMap[room.room_status]?.icon || InfoCircleOutlined" />
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <a-table 
-      v-else 
-      :columns="columns" 
-      :data-source="hotelStore.rooms" 
+    <a-table
+      v-else
+      :columns="columns"
+      :data-source="filteredRooms"
       :loading="loading"
       class="room-table"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
-          <a-tag :color="statusMap[record.status]?.color">{{ statusMap[record.status]?.label }}</a-tag>
+          <a-tag :color="statusMap[record.room_status]?.color">{{ statusMap[record.room_status]?.label }}</a-tag>
         </template>
         <template v-if="column.key === 'action'">
           <a-button type="link" size="small" @click="showRoomDetail(record)">详情</a-button>
@@ -72,7 +72,6 @@
       </template>
     </a-table>
 
-    <!-- Room Detail Drawer -->
     <a-drawer
       v-model:open="drawerVisible"
       :title="`房间 ${currentRoom?.room_number} 详情`"
@@ -80,9 +79,9 @@
       width="400"
     >
       <div v-if="currentRoom" class="room-detail">
-        <div class="detail-header" :class="currentRoom.status">
-          <component :is="statusMap[currentRoom.status]?.icon" style="font-size: 48px" />
-          <h3>{{ statusMap[currentRoom.status]?.label }}</h3>
+        <div class="detail-header" :class="currentRoom.room_status">
+          <component :is="statusMap[currentRoom.room_status]?.icon" style="font-size: 48px" />
+          <h3>{{ statusMap[currentRoom.room_status]?.label }}</h3>
         </div>
         <a-descriptions :column="1" bordered>
           <a-descriptions-item label="房号">{{ currentRoom.room_number }}</a-descriptions-item>
@@ -90,16 +89,23 @@
           <a-descriptions-item label="价格">¥{{ currentRoom.room_price }} / 晚</a-descriptions-item>
           <a-descriptions-item label="面积">{{ currentRoom.area }} m²</a-descriptions-item>
           <a-descriptions-item label="入住状态">
-            {{ currentRoom.status === 'occupied' ? '客人在住' : '空闲' }}
+            {{ statusMap[currentRoom.room_status]?.label }}
           </a-descriptions-item>
         </a-descriptions>
-        
+
         <div class="detail-actions" style="margin-top: 24px">
           <a-space direction="vertical" block>
-            <a-button v-if="currentRoom.status === 'available'" type="primary" block>办理入住</a-button>
-            <a-button v-if="currentRoom.status === 'cleaning'" type="primary" block>完成打扫</a-button>
-            <a-button v-if="currentRoom.status === 'occupied'" block>下发指令</a-button>
-            <a-button block>修改状态</a-button>
+            <a-button
+              v-if="currentRoom.room_status === 'cleaning'"
+              type="primary"
+              block
+              @click="updateStatus(currentRoom.id, 'available')"
+            >
+              完成打扫
+            </a-button>
+            <a-button block @click="updateStatus(currentRoom.id, 'cleaning')" :disabled="currentRoom.room_status === 'cleaning'">标记待扫</a-button>
+            <a-button block @click="updateStatus(currentRoom.id, 'maintenance')" :disabled="currentRoom.room_status === 'maintenance'">标记维修</a-button>
+            <a-button block @click="updateStatus(currentRoom.id, 'available')" :disabled="currentRoom.room_status === 'available'">标记空闲</a-button>
           </a-space>
         </div>
       </div>
@@ -108,15 +114,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import type { RoomInfo } from '@/types'
 import { useHotelStore } from '@/stores/hotel'
+import { roomApi } from '@/api/room'
 
 import {
   CheckCircleOutlined, CloseCircleOutlined,
   SyncOutlined, InfoCircleOutlined,
-  RestOutlined, CoffeeOutlined,
+  RestOutlined,
   CalendarOutlined
 } from '@ant-design/icons-vue'
 
@@ -126,7 +133,7 @@ const viewMode = ref<'table' | 'grid'>('grid')
 const filterFloor = ref<number | undefined>()
 const filterStatus = ref<string | undefined>()
 const drawerVisible = ref(false)
-const currentRoom = ref<any>(null)
+const currentRoom = ref<RoomInfo | null>(null)
 
 const statusMap: Record<string, any> = {
   available: { label: '空闲', color: '#52c41a', icon: CheckCircleOutlined },
@@ -139,23 +146,60 @@ const statusMap: Record<string, any> = {
 const columns = [
   { title: '房号', dataIndex: 'room_number', width: 80 },
   { title: '名称', dataIndex: 'room_name', ellipsis: true },
-  { title: '房型', dataIndex: 'room_type', width: 100 },
+  { title: '房型', dataIndex: 'room_type_name', width: 100 },
   { title: '价格(元/晚)', dataIndex: 'room_price', key: 'room_price', width: 120 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
+  { title: '状态', dataIndex: 'room_status', key: 'status', width: 110 },
   { title: '楼层', dataIndex: 'floor', width: 60 },
   { title: '面积(m²)', dataIndex: 'area', width: 90 },
-  { title: '操作', key: 'action', width: 200 }
+  { title: '操作', key: 'action', width: 120 }
 ]
+
+const filteredRooms = computed(() => {
+  return hotelStore.rooms.filter(room => {
+    if (filterFloor.value && Number(room.floor) !== Number(filterFloor.value)) return false
+    if (filterStatus.value && room.room_status !== filterStatus.value) return false
+    return true
+  })
+})
+
+const groupedRooms = computed(() => {
+  const map = new Map<number, RoomInfo[]>()
+  filteredRooms.value.forEach(room => {
+    const floor = Number(room.floor)
+    if (!map.has(floor)) map.set(floor, [])
+    map.get(floor)!.push(room)
+  })
+  return Array.from(map.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([floor, rooms]) => ({
+      floor,
+      rooms: rooms.sort((a, b) => String(a.room_number).localeCompare(String(b.room_number)))
+    }))
+})
 
 function showRoomDetail(room: RoomInfo) {
   currentRoom.value = room
   drawerVisible.value = true
 }
 
+async function updateStatus(roomId: number, status: string) {
+  try {
+    await roomApi.updateRoomStatus(roomId, status)
+    message.success('房态更新成功')
+    await refreshData()
+    if (currentRoom.value?.id === roomId) {
+      const refreshed = hotelStore.rooms.find(room => room.id === roomId) || null
+      currentRoom.value = refreshed
+    }
+  } catch (error) {
+    message.error('房态更新失败')
+  }
+}
+
 async function refreshData() {
   loading.value = true
   try {
-    await hotelStore.fetchRooms()
+    await hotelStore.fetchRooms({ pageSize: 300, status: filterStatus.value, floor: filterFloor.value })
   } catch (error) {
     message.error('刷新房态失败')
   } finally {
@@ -186,8 +230,6 @@ onMounted(refreshData)
 .room-num { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
 .room-type { font-size: 12px; color: #666; margin-bottom: 8px; }
 .room-icon { position: absolute; right: 12px; top: 12px; font-size: 24px; opacity: 0.2; }
-
-/* Status Colors */
 .room-card.available { border-top: 4px solid #52c41a; }
 .room-card.occupied { border-top: 4px solid #1890ff; background: #f0f7ff; }
 .room-card.maintenance { border-top: 4px solid #f5222d; background: #fff1f0; }

@@ -66,9 +66,9 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method } = req.body;
+    const { room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, status } = req.body;
     
-    const [roomRows] = await pool.query<RowDataPacket[]>('SELECT room_price FROM rooms WHERE id = ?', [room_id]);
+    const [roomRows] = await pool.query<RowDataPacket[]>('SELECT room_price, hotel_id FROM rooms WHERE id = ?', [room_id]);
     
     if (roomRows.length === 0) {
       res.status(404).json(errorResponse('房间不存在'));
@@ -76,16 +76,18 @@ export const create = async (req: AuthRequest, res: Response) => {
     }
     
     const roomPrice = (roomRows[0] as any).room_price;
+    const hotelId = (roomRows[0] as any).hotel_id;
     const checkIn = new Date(check_in_date);
     const checkOut = new Date(check_out_date);
     const days = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
     const totalPrice = roomPrice * days;
     
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
+    const bookingStatus = status || 'pending';
     
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO bookings (booking_number, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [bookingNumber, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, 'pending']
+      'INSERT INTO bookings (booking_number, hotel_id, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [bookingNumber, hotelId, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, bookingStatus]
     );
     
     res.json(successResponse({ id: result.insertId, booking_number: bookingNumber, total_price: totalPrice }, '创建预订成功'));

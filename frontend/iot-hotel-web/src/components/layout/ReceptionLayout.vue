@@ -42,6 +42,14 @@
           <template #icon><SendOutlined /></template>
           <span>客房送物</span>
         </a-menu-item>
+        <a-menu-item key="/reception/voice-calls">
+          <template #icon><PhoneOutlined /></template>
+          <span>语音通话</span>
+        </a-menu-item>
+        <a-menu-item key="/reception/price-settings">
+          <template #icon><TagsOutlined /></template>
+          <span>房价设置</span>
+        </a-menu-item>
         <a-menu-item key="/reception/bills">
           <template #icon><DollarOutlined /></template>
           <span>账单报表</span>
@@ -92,16 +100,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
-  DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined, LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'
+import { maintenanceApi } from '@/api/maintenance'
+import { deliveryApi } from '@/api/delivery'
 
 const route = useRoute()
 const router = useRouter()
@@ -112,7 +122,7 @@ appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
-const pendingOrders = ref(3)
+const pendingOrders = ref(0)
 
 const currentTitle = computed(() => (route.meta.title as string) || '')
 
@@ -128,6 +138,36 @@ async function handleLogout() {
   await authService.logout()
   router.push('/login')
 }
+
+async function loadPending() {
+  const cacheRaw = sessionStorage.getItem('reception_pending_cache')
+  if (cacheRaw) {
+    try {
+      const cache = JSON.parse(cacheRaw)
+      if (Date.now() - Number(cache.ts || 0) < 5000) {
+        pendingOrders.value = Number(cache.count || 0)
+        return
+      }
+    } catch (error) {}
+  }
+  try {
+    const [maintenanceRes, deliveryRes] = await Promise.all([
+      maintenanceApi.getList({ status: 'pending', pageSize: 1 }),
+      deliveryApi.getList({ status: 'pending', pageSize: 1 })
+    ])
+    const maintenanceTotal = Number((maintenanceRes as any).data?.total || (maintenanceRes as any).data?.data?.total || 0)
+    const deliveryTotal = Number((deliveryRes as any).data?.total || (deliveryRes as any).data?.data?.total || 0)
+    pendingOrders.value = maintenanceTotal + deliveryTotal
+    sessionStorage.setItem('reception_pending_cache', JSON.stringify({
+      count: pendingOrders.value,
+      ts: Date.now()
+    }))
+  } catch (error) {
+    pendingOrders.value = 0
+  }
+}
+
+onMounted(loadPending)
 </script>
 
 <style scoped>

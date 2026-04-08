@@ -25,14 +25,15 @@
 
     <a-table
       :columns="columns"
-      :data-source="orders"
+      :data-source="filteredOrders"
       :pagination="{ pageSize: 10 }"
       row-key="id"
       size="middle"
+      :loading="loading"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'category'">
-          <a-tag>{{ categoryLabel(record.category) }}</a-tag>
+          <a-tag>{{ categoryLabel(record.item_category) }}</a-tag>
         </template>
         <template v-if="column.key === 'status'">
           <a-badge :status="deliveryBadge(record.status)" :text="deliveryStatusText(record.status)" />
@@ -57,7 +58,7 @@
           </a-select>
         </a-form-item>
         <a-form-item label="物品类别" required>
-          <a-select v-model:value="form.category">
+          <a-select v-model:value="form.item_category">
             <a-select-option value="beverage">饮品</a-select-option>
             <a-select-option value="food">食品</a-select-option>
             <a-select-option value="daily">日用品</a-select-option>
@@ -83,19 +84,31 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { SendOutlined, CarOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
+import { deliveryApi } from '@/api/delivery'
 
 const hotelStore = useHotelStore()
 const searchKey = ref('')
 const modalVisible = ref(false)
+const loading = ref(false)
 
-const form = reactive({ room_id: undefined as number | undefined, category: 'beverage', item_name: '', quantity: 1, note: '' })
+const form = reactive({
+  room_id: undefined as number | undefined,
+  item_category: 'beverage' as 'beverage' | 'food' | 'daily' | 'other',
+  item_name: '',
+  quantity: 1,
+  note: ''
+})
 
-const orders = ref([
-  { id: 1, order_no: 'DLV20260404001', room: '102', category: 'beverage', item_name: '矿泉水', quantity: 2, note: '送到房间', status: 'processing', created_at: '2026-04-04 10:00' },
-  { id: 2, order_no: 'DLV20260404002', room: '102', category: 'food', item_name: '方便面', quantity: 1, note: '', status: 'pending', created_at: '2026-04-04 11:30' },
-  { id: 3, order_no: 'DLV20260404003', room: '205', category: 'daily', item_name: '毛巾', quantity: 2, note: '需要大毛巾', status: 'delivering', created_at: '2026-04-04 13:00' },
-  { id: 4, order_no: 'DLV20260403001', room: '301', category: 'beverage', item_name: '可乐', quantity: 4, note: '', status: 'completed', created_at: '2026-04-03 21:00' }
-])
+const orders = ref<any[]>([])
+
+const filteredOrders = computed(() => {
+  const keyword = searchKey.value.trim().toLowerCase()
+  if (!keyword) return orders.value
+  return orders.value.filter(order =>
+    String(order.order_no || '').toLowerCase().includes(keyword) ||
+    String(order.room_number || '').toLowerCase().includes(keyword)
+  )
+})
 
 const pendingCount = computed(() => orders.value.filter(o => o.status === 'pending').length)
 const deliveringCount = computed(() => orders.value.filter(o => o.status === 'delivering').length)
@@ -103,8 +116,8 @@ const doneCount = computed(() => orders.value.filter(o => o.status === 'complete
 
 const columns = [
   { title: '订单号', dataIndex: 'order_no', width: 170 },
-  { title: '房间', dataIndex: 'room', width: 70 },
-  { title: '类别', dataIndex: 'category', key: 'category', width: 80 },
+  { title: '房间', dataIndex: 'room_number', width: 70 },
+  { title: '类别', dataIndex: 'item_category', key: 'category', width: 80 },
   { title: '物品', dataIndex: 'item_name', width: 120 },
   { title: '数量', dataIndex: 'quantity', width: 60 },
   { title: '备注', dataIndex: 'note', ellipsis: true },
@@ -126,12 +139,65 @@ function deliveryStatusText(s: string): string {
 }
 
 function showCreateModal() { modalVisible.value = true }
-async function createDelivery() { message.success('送物订单已创建'); modalVisible.value = false }
-function startDelivery(order: any) { order.status = 'delivering'; message.info(`${order.order_no} 开始配送`) }
-function completeDelivery(order: any) { order.status = 'completed'; message.success(`${order.order_no} 已送达`) }
-function cancelOrder(order: any) { message.warning(`已取消 ${order.order_no}`) }
 
-onMounted(() => hotelStore.fetchRooms())
+async function fetchOrders() {
+  loading.value = true
+  try {
+    const res: any = await deliveryApi.getList({ pageSize: 200 })
+    orders.value = res.data?.list || []
+  } catch (error) {
+    message.error('获取送物订单失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function createDelivery() {
+  if (!form.room_id || !form.item_name) {
+    message.warning('请填写必填项')
+    return
+  }
+  try {
+    await deliveryApi.create({
+      room_id: form.room_id,
+      item_category: form.item_category,
+      item_name: form.item_name,
+      quantity: form.quantity,
+      note: form.note
+    })
+    message.success('送物订单已创建')
+    modalVisible.value = false
+    Object.assign(form, { room_id: undefined, item_category: 'beverage', item_name: '', quantity: 1, note: '' })
+    await fetchOrders()
+  } catch (error) {
+    message.error('创建送物订单失败')
+  }
+}
+
+function startDelivery(order: any) {
+  order.status = 'delivering'
+  message.info(`${order.order_no} 已派送`)
+}
+
+async function completeDelivery(order: any) {
+  try {
+    await deliveryApi.complete(order.id)
+    message.success(`${order.order_no} 已送达`)
+    await fetchOrders()
+  } catch (error) {
+    message.error('送达确认失败')
+  }
+}
+
+function cancelOrder(order: any) {
+  order.status = 'cancelled'
+  message.warning(`已取消 ${order.order_no}`)
+}
+
+onMounted(async () => {
+  await hotelStore.fetchRooms({ pageSize: 300 })
+  await fetchOrders()
+})
 </script>
 
 <style scoped>

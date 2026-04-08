@@ -26,48 +26,77 @@
           <a-radio-button value="processing">处理中</a-radio-button>
           <a-radio-button value="completed">已完成</a-radio-button>
         </a-radio-group>
-        <a-select v-model:value="typeFilter" placeholder="工单类型" allow-clear style="width: 140px;">
-          <a-select-option value="maintenance">维修工单</a-select-option>
-          <a-select-option value="cleaning">清洁工单</a-select-option>
-          <a-select-option value="service">服务工单</a-select-option>
-        </a-select>
       </a-space>
-      <a-button type="primary" @click="showCreateModal"><PlusOutlined /> 新建工单</a-button>
+      <a-button type="primary" @click="showCreateModal"><PlusOutlined /> 新建维修工单</a-button>
     </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="filteredOrders"
-      :pagination="{ pageSize: 10 }"
-      row-key="id"
-      size="middle"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'priority'">
-          <a-tag :color="priorityColor(record.priority)">{{ priorityText(record.priority) }}</a-tag>
-        </template>
-        <template v-if="column.key === 'status'">
-          <a-badge :status="orderBadge(record.status)" :text="orderStatusText(record.status)" />
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" v-if="record.status === 'pending'" @click="startProcess(record)">开始处理</a-button>
-            <a-button type="link" size="small" v-if="record.status === 'processing'" @click="completeOrder(record)">完成</a-button>
-            <a-button type="link" size="small">详情</a-button>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
+    <a-tabs v-model:activeKey="activeTab">
+      <a-tab-pane key="maintenance" tab="维修处理">
+        <a-table
+          :columns="maintenanceColumns"
+          :data-source="filteredOrders"
+          :pagination="{ pageSize: 10 }"
+          row-key="id"
+          size="middle"
+          :loading="loading"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'priority'">
+              <a-tag :color="priorityColor(record.priority)">{{ priorityText(record.priority) }}</a-tag>
+            </template>
+            <template v-if="column.key === 'status'">
+              <a-badge :status="orderBadge(record.status)" :text="orderStatusText(record.status)" />
+            </template>
+            <template v-if="column.key === 'action'">
+              <a-space>
+                <a-button type="link" size="small" v-if="record.status === 'pending'" @click="startProcess(record)">开始处理</a-button>
+                <a-button type="link" size="small" v-if="record.status === 'processing'" @click="completeOrder(record)">完成</a-button>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+      </a-tab-pane>
+      <a-tab-pane key="cleaning" tab="打扫处理">
+        <a-table
+          :columns="cleaningColumns"
+          :data-source="cleaningTasks"
+          :pagination="{ pageSize: 10 }"
+          row-key="id"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'status'">
+              <a-tag :color="record.room_status === 'cleaning' ? 'warning' : 'success'">
+                {{ record.room_status === 'cleaning' ? '待清扫' : '可售房' }}
+              </a-tag>
+            </template>
+            <template v-if="column.key === 'action'">
+              <a-space>
+                <a-button
+                  v-if="record.room_status !== 'cleaning'"
+                  type="link"
+                  size="small"
+                  @click="markCleaning(record.id)"
+                >
+                  标记待扫
+                </a-button>
+                <a-button
+                  v-if="record.room_status === 'cleaning'"
+                  type="link"
+                  size="small"
+                  @click="finishCleaning(record.id)"
+                >
+                  完成打扫
+                </a-button>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+      </a-tab-pane>
+    </a-tabs>
 
     <a-modal v-model:open="modalVisible" title="新建工单" @ok="createOrder" width="550px">
       <a-form :model="newOrder" layout="vertical">
-        <a-form-item label="工单类型" required>
-          <a-select v-model:value="newOrder.type">
-            <a-select-option value="maintenance">维修工单</a-select-option>
-            <a-select-option value="cleaning">清洁工单</a-select-option>
-            <a-select-option value="service">服务工单</a-select-option>
-          </a-select>
-        </a-form-item>
         <a-form-item label="关联房间">
           <a-select v-model:value="newOrder.room_id" show-search placeholder="选择房间" allow-clear>
             <a-select-option v-for="r in hotelStore.rooms" :key="r.id" :value="r.id">{{ r.room_number }}</a-select-option>
@@ -94,21 +123,36 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ClockCircleOutlined, ToolOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
-import axios from '@/api/request'
+import { maintenanceApi } from '@/api/maintenance'
+import { roomApi } from '@/api/room'
 
 const hotelStore = useHotelStore()
+const activeTab = ref('maintenance')
 const statusFilter = ref('')
-const typeFilter = ref<string | undefined>()
 const modalVisible = ref(false)
 const loading = ref(false)
 const allOrders = ref<any[]>([])
+const newOrder = reactive({
+  room_id: undefined as number | undefined,
+  fault_type: '设备故障',
+  description: '',
+  priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent'
+})
 
 const filteredOrders = computed(() => {
   return allOrders.value.filter(o => {
     if (statusFilter.value && o.status !== statusFilter.value) return false
-    if (typeFilter.value && o.type !== typeFilter.value) return false
     return true
   })
+})
+
+const cleaningTasks = computed(() => {
+  return hotelStore.rooms
+    .filter(room => ['cleaning', 'available', 'occupied'].includes(room.room_status))
+    .map(room => ({
+      ...room,
+      room_type_display: room.room_type_name || room.room_type
+    }))
 })
 
 const pendingCount = computed(() => allOrders.value.filter(o => o.status === 'pending').length)
@@ -130,7 +174,7 @@ function orderStatusText(s: string): string {
   return ({ pending: '待处理', processing: '处理中', completed: '已完成' } as Record<string, string>)[s] || s
 }
 
-const columns = [
+const maintenanceColumns = [
   { title: '工单号', dataIndex: 'ticket_no', width: 160 },
   { title: '房间', dataIndex: 'room_number', width: 70 },
   { title: '类型', dataIndex: 'fault_type', width: 100 },
@@ -141,16 +185,23 @@ const columns = [
   { title: '操作', key: 'action', width: 150 }
 ]
 
+const cleaningColumns = [
+  { title: '房号', dataIndex: 'room_number', width: 80 },
+  { title: '房型', dataIndex: 'room_type_display', width: 120 },
+  { title: '楼层', dataIndex: 'floor', width: 70 },
+  { title: '当前状态', dataIndex: 'room_status', key: 'status', width: 100 },
+  { title: '操作', key: 'action', width: 150 }
+]
+
 function showCreateModal() { modalVisible.value = true }
 
 async function fetchOrders() {
   loading.value = true
   try {
-    const res = await axios.get('/maintenance')
+    const res: any = await maintenanceApi.getList({ pageSize: 200 })
     allOrders.value = (res.data?.list || []).map((item: any) => ({
       ...item,
-      ticket_no: `MT${item.id.toString().padStart(6, '0')}`,
-      type: 'maintenance' // 目前后端主要是报修
+      ticket_no: item.ticket_no || `MT${String(item.id).padStart(6, '0')}`
     }))
   } catch (error) {
     message.error('获取工单失败')
@@ -161,10 +212,11 @@ async function fetchOrders() {
 
 async function createOrder() {
   if (!newOrder.room_id || !newOrder.description) {
-    message.warning('请填写必填项'); return
+    message.warning('请填写必填项')
+    return
   }
   try {
-    await axios.post('/maintenance', {
+    await maintenanceApi.create({
       room_id: newOrder.room_id,
       fault_type: newOrder.fault_type,
       fault_description: newOrder.description,
@@ -172,7 +224,8 @@ async function createOrder() {
     })
     message.success('工单已创建')
     modalVisible.value = false
-    fetchOrders()
+    Object.assign(newOrder, { room_id: undefined, fault_type: '设备故障', description: '', priority: 'medium' })
+    await fetchOrders()
   } catch (error) {
     message.error('创建失败')
   }
@@ -180,9 +233,9 @@ async function createOrder() {
 
 async function startProcess(order: any) {
   try {
-    await axios.put(`/maintenance/${order.id}/assign`, { staff_id: 1 }) // 模拟分配给自己
+    await maintenanceApi.assign(order.id, 1)
     message.info(`工单 ${order.ticket_no} 已开始处理`)
-    fetchOrders()
+    await fetchOrders()
   } catch (error) {
     message.error('操作失败')
   }
@@ -190,16 +243,36 @@ async function startProcess(order: any) {
 
 async function completeOrder(order: any) {
   try {
-    await axios.put(`/maintenance/${order.id}/complete`)
+    await maintenanceApi.complete(order.id)
     message.success(`${order.ticket_no} 已完成`)
-    fetchOrders()
+    await fetchOrders()
   } catch (error) {
     message.error('操作失败')
   }
 }
 
+async function markCleaning(roomId: number) {
+  try {
+    await roomApi.updateRoomStatus(roomId, 'cleaning')
+    message.success('已标记为待清扫')
+    await hotelStore.fetchRooms({ pageSize: 300 })
+  } catch (error) {
+    message.error('状态更新失败')
+  }
+}
+
+async function finishCleaning(roomId: number) {
+  try {
+    await roomApi.updateRoomStatus(roomId, 'available')
+    message.success('打扫完成，房间已可售')
+    await hotelStore.fetchRooms({ pageSize: 300 })
+  } catch (error) {
+    message.error('状态更新失败')
+  }
+}
+
 onMounted(() => {
-  hotelStore.fetchRooms()
+  hotelStore.fetchRooms({ pageSize: 300 })
   fetchOrders()
 })
 </script>
