@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { message } from 'ant-design-vue'
+import { useAppStore } from '@/stores/app'
 
 export interface ApiResponse<T = any> {
   code: number
@@ -56,7 +57,7 @@ class AuthService {
 
     // 响应拦截器
     this.api.interceptors.response.use(
-      (response: AxiosResponse<ApiResponse>) => {
+      (response: AxiosResponse) => {
         return response.data
       },
       (error) => {
@@ -70,50 +71,52 @@ class AuthService {
 
   // 生成 API Token (用于扫码登录)
   async generateToken(params: LoginParams): Promise<{ token: string; expiresAt: string }> {
-    const response = await this.api.post<ApiResponse<{ token: string; expiresAt: string }>>(
+    const res = await this.api.post<any, ApiResponse<{ token: string; expiresAt: string }>>(
       '/auth/generate-token',
       params
     )
-    return response.data.data!
+    return res.data!
   }
 
   // 扫码登录
   async scanLogin(token: string): Promise<{ token: string; user: UserInfo }> {
-    const response = await this.api.post<ApiResponse<{ token: string; sessionToken: string; user: UserInfo }>>(
+    const res = await this.api.post<any, ApiResponse<{ token: string; sessionToken: string; user: UserInfo }>>(
       '/auth/scan-login',
       { token }
     )
-    const { token: jwtToken, user } = response.data.data!
+    const { token: jwtToken, user } = res.data!
     
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
-    localStorage.setItem('user_info', JSON.stringify(user))
+    const appStore = useAppStore()
+    appStore.setUserInfo(user)
     
     return { token: jwtToken, user }
   }
 
   // 用户名密码登录
   async login(params: LoginParams): Promise<{ token: string; user: UserInfo }> {
-    const response = await this.api.post<ApiResponse<{ token: string; sessionToken: string; user: UserInfo }>>(
+    const res = await this.api.post<any, ApiResponse<{ token: string; sessionToken: string; user: UserInfo }>>(
       '/auth/login',
       params
     )
-    const { token: jwtToken, user } = response.data.data!
+    const { token: jwtToken, user } = res.data!
     
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
-    localStorage.setItem('user_info', JSON.stringify(user))
+    const appStore = useAppStore()
+    appStore.setUserInfo(user)
     
     return { token: jwtToken, user }
   }
 
   // 用户注册
   async register(params: RegisterParams): Promise<{ userId: number; username: string; role: string }> {
-    const response = await this.api.post<ApiResponse<{ userId: number; username: string; role: string }>>(
+    const res = await this.api.post<any, ApiResponse<{ userId: number; username: string; role: string }>>(
       '/auth/register',
       params
     )
-    return response.data.data!
+    return res.data!
   }
 
   // 登出
@@ -124,17 +127,17 @@ class AuthService {
       console.error('登出失败:', error)
     } finally {
       // 清除本地存储
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_info')
+      const appStore = useAppStore()
+      appStore.setUserInfo(null)
     }
   }
 
   // 获取当前用户信息
   async getCurrentUser(): Promise<UserInfo> {
-    const response = await this.api.get<ApiResponse<{ user: UserInfo; role: string; permissions: string[] }>>(
+    const res = await this.api.get<any, ApiResponse<{ user: UserInfo; role: string; permissions: string[] }>>(
       '/auth/me'
     )
-    return response.data.data!
+    return res.data! as any
   }
 
   // 检查是否已登录

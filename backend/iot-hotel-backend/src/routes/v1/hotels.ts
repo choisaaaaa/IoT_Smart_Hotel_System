@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { search, detail, roomAvailability } from './hotels.controller';
+import { search, detail, roomAvailability } from '../../controllers/hotels.controller';
 
 const router = Router();
 

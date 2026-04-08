@@ -2,13 +2,13 @@ import { Router, Response } from 'express';
 import { AuthRequest } from '../types';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import { hashPassword, comparePassword } from '../utils/password';
+import db from '../config/database';
 
 const router = Router();
 
 // 获取用户列表 (管理员权限)
 export async function list(req: AuthRequest, res: Response) {
   try {
-    const db = require('../config/database');
     const { page = 1, limit = 10, role, keyword } = req.query;
     
     const offset = (Number(page) - 1) * Number(limit);
@@ -61,7 +61,6 @@ export async function list(req: AuthRequest, res: Response) {
 export async function detail(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
-    const db = require('../config/database');
     
     const [users]: any = await db.execute(
       `SELECT u.*, GROUP_CONCAT(r.role_name) as roles
@@ -92,8 +91,6 @@ export async function create(req: AuthRequest, res: Response) {
     if (!username || !password) {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
-    
-    const db = require('../config/database');
     
     // 检查用户名是否已存在
     const [existingUsers]: any = await db.execute(
@@ -136,12 +133,33 @@ export async function create(req: AuthRequest, res: Response) {
   }
 }
 
+// 更新个人资料
+export async function updateProfile(req: AuthRequest, res: Response) {
+  try {
+    const { email } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
+
+    await db.execute(
+      'UPDATE users SET email = ? WHERE id = ?',
+      [email || null, userId]
+    );
+
+    sendSuccess(res, { message: '个人资料更新成功' });
+  } catch (error) {
+    console.error('更新个人资料失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
 // 更新用户信息
 export async function update(req: AuthRequest, res: Response) {
   try {
-    const userId = req.params.id;
-    const { email, role } = req.body;
-    const db = require('../config/database');
+    const { id: userId } = req.params;
+    const { email, role, password } = req.body;
     
     // 检查用户是否存在
     const [users]: any = await db.execute(
@@ -195,8 +213,7 @@ export async function update(req: AuthRequest, res: Response) {
 // 删除用户
 export async function remove(req: AuthRequest, res: Response) {
   try {
-    const userId = req.params.id;
-    const db = require('../config/database');
+    const { id: userId } = req.params;
     
     // 检查用户是否存在
     const [users]: any = await db.execute(
@@ -227,7 +244,6 @@ export async function updatePassword(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
     const { oldPassword, newPassword } = req.body;
-    const db = require('../config/database');
     
     if (!newPassword) {
       return sendError(res, errorResponse('新密码不能为空', 400));

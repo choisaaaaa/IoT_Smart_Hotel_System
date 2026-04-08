@@ -17,16 +17,13 @@
             :class="{ active: isActive('/guest/room') }"
             @click="$router.push('/guest/room')"
           >客房服务</a-button>
-          <a-button type="text" @click="handleAdminAccess">
-            <SettingOutlined /> 管理入口
-          </a-button>
         </div>
         <div class="header-right">
           <a-tag :color="appStore.connected ? 'success' : 'default'" size="small">
             {{ appStore.connected ? '在线' : '' }}
           </a-tag>
           <template v-if="!userInfo">
-            <a-button type="primary" @click="showLoginModal = true">
+            <a-button type="primary" @click="appStore.showLoginModal = true">
               <UserOutlined /> 登录/注册
             </a-button>
           </template>
@@ -64,11 +61,11 @@
 
     <!-- 登录弹窗 -->
     <a-modal
-      v-model:visible="showLoginModal"
+      v-model:visible="appStore.showLoginModal"
       :footer="null"
       :closable="true"
       width="420px"
-      @cancel="showLoginModal = false"
+      @cancel="appStore.showLoginModal = false"
     >
       <template #title>
         <div style="text-align: center; font-size: 18px; font-weight: 600;">
@@ -252,10 +249,10 @@ const router = useRouter()
 const appStore = useAppStore()
 
 // 用户信息
-const userInfo = computed(() => {
-  const userInfoStr = localStorage.getItem('user_info')
-  return userInfoStr ? JSON.parse(userInfoStr) : null
-})
+const userInfo = computed(() => appStore.userInfo)
+
+// 初始化
+appStore.initUserInfo()
 
 // 登录相关
 const showLoginModal = ref(false)
@@ -321,27 +318,6 @@ function isActive(path: string): boolean {
   return route.path.startsWith(path)
 }
 
-// 处理管理入口访问
-function handleAdminAccess() {
-  const token = localStorage.getItem('auth_token')
-  const userInfo = localStorage.getItem('user_info')
-  
-  if (!token || !userInfo) {
-    // 未登录，打开登录弹窗
-    showLoginModal.value = true
-  } else {
-    // 已登录，检查角色
-    const user = JSON.parse(userInfo)
-    if (user.role === 'admin') {
-      router.push('/admin/dashboard')
-    } else if (user.role === 'staff') {
-      router.push('/reception/dashboard')
-    } else {
-      message.warning('您没有权限访问管理端')
-    }
-  }
-}
-
 // 处理登录
 const handleLogin = async () => {
   try {
@@ -349,13 +325,13 @@ const handleLogin = async () => {
     const { user } = await authService.login(loginForm)
     
     message.success('登录成功')
-    showLoginModal.value = false
+    appStore.showLoginModal = false
     
     // 根据角色跳转
-    if (user.role === 'admin' || user.role === 'staff') {
-      setTimeout(() => {
-        router.push(user.role === 'admin' ? '/admin/dashboard' : '/reception/dashboard')
-      }, 500)
+    if (user.role === 'admin') {
+      router.push('/admin/dashboard')
+    } else if (user.role === 'staff') {
+      router.push('/reception/dashboard')
     }
   } catch (error) {
     console.error('登录失败:', error)
@@ -401,13 +377,13 @@ const pollScanLogin = async (token: string) => {
     
     if (result.code === 200) {
       message.success('扫码登录成功')
-      showLoginModal.value = false
+      appStore.showLoginModal = false
       
       const user = result.data.user
-      if (user.role === 'admin' || user.role === 'staff') {
-        setTimeout(() => {
-          router.push(user.role === 'admin' ? '/admin/dashboard' : '/reception/dashboard')
-        }, 500)
+      if (user.role === 'admin') {
+        router.push('/admin/dashboard')
+      } else if (user.role === 'staff') {
+        router.push('/reception/dashboard')
       }
     } else if (result.code === 401) {
       pollScanLogin(token)
@@ -462,8 +438,6 @@ const handleLogout = async () => {
   try {
     await authService.logout()
     message.success('已退出登录')
-    // 刷新页面
-    window.location.reload()
   } catch (error) {
     console.error('登出失败:', error)
   }
@@ -486,7 +460,7 @@ const handleLogout = async () => {
 }
 .header-left { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .header-logo { font-size: 26px; color: #1890ff; }
-.header-left h3 { margin: 0; font-size: 18px; background: linear-gradient(135deg, #1890ff, #722ed1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
+.header-left h3 { margin: 0; font-size: 18px; background: linear-gradient(135deg, #1890ff, #722ed1); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
 .header-nav { display: flex; gap: 4px; }
 .header-nav .ant-btn { font-size: 15px; padding: 4px 16px; border-radius: 20px; font-weight: 500; }
 .header-nav .ant-btn.active { background: #e6f7ff; color: #1890ff; }

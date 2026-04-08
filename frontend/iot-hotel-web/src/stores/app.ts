@@ -5,6 +5,8 @@ export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const currentTier = ref<'admin' | 'floor' | 'room'>('admin')
   const connected = ref(false)
+  const userInfo = ref<any>(null)
+  const showLoginModal = ref(false)
   const notifications = ref<{ id: string; type: string; message: string; time: string }[]>([])
 
   const notificationCount = computed(() => notifications.value.length)
@@ -39,10 +41,34 @@ export const useAppStore = defineStore('app', () => {
     notifications.value = []
   }
 
+  // 初始化从 localStorage 加载用户信息
+  const initUserInfo = () => {
+    const info = localStorage.getItem('user_info')
+    if (info) {
+      try {
+        userInfo.value = JSON.parse(info)
+      } catch (e) {
+        console.error('解析用户信息失败', e)
+      }
+    }
+  }
+
+  const setUserInfo = (info: any) => {
+    userInfo.value = info
+    if (info) {
+      localStorage.setItem('user_info', JSON.stringify(info))
+    } else {
+      localStorage.removeItem('user_info')
+      localStorage.removeItem('auth_token')
+    }
+  }
+
   return {
     sidebarCollapsed,
     currentTier,
     connected,
+    userInfo,
+    showLoginModal,
     notifications,
     notificationCount,
     toggleSidebar,
@@ -50,6 +76,8 @@ export const useAppStore = defineStore('app', () => {
     setConnected,
     addNotification,
     removeNotification,
-    clearNotifications
+    clearNotifications,
+    initUserInfo,
+    setUserInfo
   }
 })

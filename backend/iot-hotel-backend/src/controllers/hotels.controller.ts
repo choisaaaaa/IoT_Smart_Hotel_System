@@ -1,14 +1,13 @@
 import { Router, Response } from 'express';
-import { AuthRequest } from '../../types';
-import { successResponse, errorResponse, sendSuccess, sendError } from '../../types';
+import { AuthRequest, successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import dayjs from 'dayjs';
+import db from '../config/database';
 
 const router = Router();
 
 // 搜索酒店
 export async function search(req: AuthRequest, res: Response) {
   try {
-    const db = require('../../config/database');
     const { destination, check_in, check_out, rooms = 1, guests = 2 } = req.query;
 
     // 查询酒店列表（包含可用房间数）
@@ -49,12 +48,11 @@ export async function search(req: AuthRequest, res: Response) {
 // 获取酒店详情
 export async function detail(req: AuthRequest, res: Response) {
   try {
-    const hotelId = req.params.id;
-    const db = require('../../config/database');
+    const { id } = req.params;
 
     const [hotels]: any = await db.execute(
       'SELECT * FROM hotels WHERE hotel_id = ?',
-      [hotelId]
+      [id]
     );
 
     if (hotels.length === 0) {
@@ -81,19 +79,18 @@ export async function detail(req: AuthRequest, res: Response) {
   }
 }
 
-// 查询客房余量
+// 获取房型可用性
 export async function roomAvailability(req: AuthRequest, res: Response) {
   try {
-    const hotelId = req.params.id;
+    const { id: hotelId } = req.params;
     const { check_in, check_out } = req.query;
-    const db = require('../../config/database');
 
     if (!check_in || !check_out) {
       return sendError(res, errorResponse('请选择入住和退房日期', 400));
     }
 
-    const checkInDate = dayjs(check_in);
-    const checkOutDate = dayjs(check_out);
+    const checkInDate = dayjs(check_in as string);
+    const checkOutDate = dayjs(check_out as string);
 
     // 查询在指定日期范围内可用的房间
     // 可用房间 = 总房间 - 已预订房间
@@ -159,7 +156,6 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         // 兼容前端字段
         name: r.room_name,
         description: `${r.room_type} · ${r.floor}楼`,
-        area: r.area,
         bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
         maxGuests: r.max_guests,
         hasBreakfast: r.facilities?.includes('含早餐'),

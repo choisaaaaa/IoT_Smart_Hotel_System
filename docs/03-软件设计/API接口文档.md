@@ -164,9 +164,69 @@ Authorization: Bearer <token>
 }
 ```
 
-**错误码**：
+***
 
-- `401` - Token无效或已过期
+### 3. 获取常用入住人列表
+
+**接口说明**：获取当前用户的常用入住人名册
+
+**请求方式**：`GET`
+
+**请求路径**：`/frequent-guests`
+
+**请求头**：
+
+```
+Authorization: Bearer <token>
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "guests": [
+      {
+        "id": 1,
+        "name": "张三",
+        "phone": "13800138000",
+        "id_type": "idcard",
+        "id_number": "110101199001011234"
+      }
+    ]
+  }
+}
+```
+
+***
+
+### 4. 添加常用入住人
+
+**接口说明**：添加新的入住人到名册
+
+**请求方式**：`POST`
+
+**请求路径**：`/frequent-guests`
+
+**请求头**：
+
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**：
+
+```json
+{
+  "name": "李四",
+  "phone": "13900139000",
+  "id_type": "idcard",
+  "id_number": "110101199001015678"
+}
+```
 
 ***
 

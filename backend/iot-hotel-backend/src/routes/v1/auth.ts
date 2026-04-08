@@ -4,6 +4,7 @@ import { hashPassword, comparePassword } from '../../utils/password';
 import { generateToken, verifyToken, JwtPayload } from '../../utils/jwt';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../../types';
 import crypto from 'crypto';
+import db from '../../config/database';
 
 const router = Router();
 
@@ -16,7 +17,6 @@ router.post('/generate-token', async (req, res) => {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
-    const db = require('../config/database');
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
       [username]
@@ -63,8 +63,6 @@ router.post('/scan-login', async (req, res) => {
       return sendError(res, errorResponse('Token 不能为空', 400));
     }
 
-    const db = require('../config/database');
-    
     // 查询并验证 Token
     const [tokens]: any = await db.execute(
       `SELECT at.*, u.username, u.role, u.permissions, u.email
@@ -80,12 +78,25 @@ router.post('/scan-login', async (req, res) => {
 
     const tokenData = tokens[0];
 
+    const parsePermissions = (p: any) => {
+      if (!p) return [];
+      if (Array.isArray(p)) return p;
+      if (typeof p === 'string') {
+        try {
+          return JSON.parse(p);
+        } catch (e) {
+          return p.split(',').map((s: string) => s.trim());
+        }
+      }
+      return [];
+    };
+
     // 生成 JWT
     const jwtPayload: JwtPayload = {
       id: tokenData.user_id,
       username: tokenData.username,
       role: tokenData.role,
-      permissions: tokenData.permissions ? JSON.parse(tokenData.permissions) : []
+      permissions: parsePermissions(tokenData.permissions)
     };
 
     const jwtToken = generateToken(jwtPayload);
@@ -133,7 +144,6 @@ router.post('/login', async (req, res) => {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
-    const db = require('../config/database');
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
       [username]
@@ -159,10 +169,23 @@ router.post('/login', async (req, res) => {
       [user.id]
     );
 
+    const parsePermissions = (p: any) => {
+      if (!p) return [];
+      if (Array.isArray(p)) return p;
+      if (typeof p === 'string') {
+        try {
+          return JSON.parse(p);
+        } catch (e) {
+          return p.split(',').map((s: string) => s.trim());
+        }
+      }
+      return [];
+    };
+
     const role = userRoles.length > 0 ? userRoles[0].role_name : user.role;
     const permissions = userRoles.length > 0 
-      ? JSON.parse(userRoles[0].permissions) 
-      : (user.permissions ? JSON.parse(user.permissions) : []);
+      ? parsePermissions(userRoles[0].permissions) 
+      : parsePermissions(user.permissions);
 
     // 生成 JWT
     const jwtPayload: JwtPayload = {
@@ -213,8 +236,6 @@ router.post('/register', async (req, res) => {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
-    const db = require('../config/database');
-    
     // 检查用户名是否已存在
     const [existingUsers]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
@@ -268,7 +289,6 @@ router.post('/logout', async (req: AuthRequest, res) => {
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     
     if (sessionToken) {
-      const db = require('../config/database');
       await db.execute(
         'DELETE FROM login_sessions WHERE session_token = ?',
         [sessionToken]
@@ -298,7 +318,6 @@ router.get('/me', async (req: AuthRequest, res) => {
       return sendError(res, errorResponse('令牌无效', 401));
     }
 
-    const db = require('../config/database');
     const [users]: any = await db.execute(
       'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
       [decoded.id]
