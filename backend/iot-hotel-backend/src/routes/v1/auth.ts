@@ -91,13 +91,28 @@ router.post('/scan-login', async (req, res) => {
       return [];
     };
 
+    // 获取用户信息
+    const [users]: any = await db.execute(
+      `SELECT u.*, h.hotel_name 
+       FROM users u 
+       LEFT JOIN hotels h ON u.hotel_id = h.id 
+       WHERE u.id = ?`,
+      [tokenData.user_id]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('用户不存在', 404));
+    }
+
+    const user = users[0];
+
     // 生成 JWT
     const jwtPayload: JwtPayload = {
-      id: tokenData.user_id,
-      username: tokenData.username,
-      role: tokenData.role,
-      hotel_id: tokenData.hotel_id,
-      permissions: parsePermissions(tokenData.permissions)
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      hotel_id: user.hotel_id,
+      permissions: [] // 后续可以加上
     };
 
     const jwtToken = generateToken(jwtPayload);
@@ -115,18 +130,20 @@ router.post('/scan-login', async (req, res) => {
     await db.execute(
       `INSERT INTO login_sessions (user_id, session_token, expires_at)
        VALUES (?, ?, ?)`,
-      [tokenData.user_id, sessionToken, sessionExpiresAt]
+      [user.id, sessionToken, sessionExpiresAt]
     );
 
     sendSuccess(res, {
       token: jwtToken,
       sessionToken,
       user: {
-        id: tokenData.user_id,
-        username: tokenData.username,
-        role: tokenData.role,
-        permissions: jwtPayload.permissions,
-        email: tokenData.email
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        permissions: [],
+        email: user.email,
+        hotel_id: user.hotel_id,
+        hotel_name: user.hotel_name
       },
       message: '登录成功'
     });
@@ -145,8 +162,12 @@ router.post('/login', async (req, res) => {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
+    // 获取用户信息
     const [users]: any = await db.execute(
-      'SELECT * FROM users WHERE username = ?',
+      `SELECT u.*, h.hotel_name 
+       FROM users u 
+       LEFT JOIN hotels h ON u.hotel_id = h.id 
+       WHERE u.username = ?`,
       [username]
     );
 
@@ -219,7 +240,9 @@ router.post('/login', async (req, res) => {
         username: user.username,
         role,
         permissions,
-        email: user.email
+        email: user.email,
+        hotel_id: user.hotel_id,
+        hotel_name: user.hotel_name
       },
       message: '登录成功'
     });

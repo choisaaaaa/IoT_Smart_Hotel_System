@@ -58,8 +58,19 @@
             <a-time-picker v-model:value="formData.checkout_time" format="HH:mm" placeholder="最晚退房" style="margin-left: 12px;" />
           </a-form-item>
           <a-form-item label="Logo 图片">
-            <a-upload list-type="picture-card" :max-count="1">
-              <div><PlusOutlined /><div style="margin-top: 8px;">上传</div></div>
+            <a-upload
+              name="image"
+              list-type="picture-card"
+              :show-upload-list="false"
+              :action="uploadUrl"
+              :headers="uploadHeaders"
+              @change="handleUploadChange"
+            >
+              <img v-if="formData.logo" :src="getFullUrl(formData.logo)" alt="logo" style="width: 100%" />
+              <div v-else>
+                <PlusOutlined />
+                <div style="margin-top: 8px;">上传</div>
+              </div>
             </a-upload>
           </a-form-item>
         </a-card>
@@ -80,6 +91,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
+import { hotelManageApi } from '@/api/hotel-manage'
 
 const hotelStore = useHotelStore()
 const loading = ref(false)
@@ -90,21 +102,54 @@ const formData = reactive({
   starNum: 5, total_rooms: 200, occupancy_rate: 0,
   base_price: 299, default_max_guests: 2,
   checkin_time: null as any, checkout_time: null as any,
-  description: ''
+  description: '',
+  logo: ''
 })
+
+const uploadUrl = '/api/v1/upload/image'
+const uploadHeaders = {
+  Authorization: `Bearer ${localStorage.getItem('auth_token')}`
+}
+
+const getFullUrl = (url: string) => {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return url.startsWith('/') ? url : '/' + url
+}
+
+const handleUploadChange = (info: any) => {
+  if (info.file.status === 'uploading') {
+    loading.value = true
+    return
+  }
+  if (info.file.status === 'done') {
+    formData.logo = info.file.response.data.url
+    message.success('图片上传成功')
+    loading.value = false
+  } else if (info.file.status === 'error') {
+    message.error('图片上传失败')
+    loading.value = false
+  }
+}
 
 async function loadData() {
   loading.value = true
   try {
-    await hotelStore.fetchHotelInfo()
-    if (hotelStore.hotelInfo) {
-      const h = hotelStore.hotelInfo
+    const res = await hotelManageApi.getHotelInfo()
+    if (res.data) {
+      const h = res.data
       Object.assign(formData, {
-        hotel_name: h.hotel_name, hotel_address: h.hotel_address,
-        hotel_phone: h.hotel_phone, starNum: h.hotel_star,
-        total_rooms: h.total_rooms, description: h.description
+        hotel_name: h.hotel_name,
+        hotel_address: h.hotel_address,
+        hotel_phone: h.hotel_phone,
+        starNum: h.hotel_star,
+        total_rooms: h.total_rooms,
+        description: h.description,
+        logo: h.logo || ''
       })
     }
+  } catch (err) {
+    message.error('加载酒店信息失败')
   } finally {
     loading.value = false
   }
@@ -113,19 +158,19 @@ async function loadData() {
 async function handleSave() {
   saving.value = true
   try {
-    const { hotelManageApi } = await import('@/api/hotel-manage')
     await hotelManageApi.updateHotelInfo(null, {
       hotel_name: formData.hotel_name,
       hotel_address: formData.hotel_address,
       hotel_phone: formData.hotel_phone,
       hotel_star: formData.starNum,
       total_rooms: formData.total_rooms,
-      description: formData.description
+      description: formData.description,
+      logo: formData.logo
     })
     message.success('酒店信息已保存成功')
     loadData()
   } catch (err) {
-    message.error('保存失败')
+    // 错误已由拦截器处理
   } finally {
     saving.value = false
   }

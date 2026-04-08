@@ -46,12 +46,6 @@
           <template #icon><DollarOutlined /></template>
           <span>账单报表</span>
         </a-menu-item>
-        <a-menu-divider />
-        <a-sub-menu key="tier-switch">
-          <template #title><SwapOutlined /><span v-show="!collapsed">切换端</span></template>
-          <a-menu-item key="/admin/dashboard"><SettingOutlined /> 管理端</a-menu-item>
-          <a-menu-item key="/guest/booking"><MobileOutlined /> 客户端</a-menu-item>
-        </a-sub-menu>
       </a-menu>
     </a-layout-sider>
 
@@ -70,7 +64,19 @@
             <BellOutlined class="header-icon" />
           </a-badge>
           <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
-          <a-avatar style="background-color: #1890ff;">前</a-avatar>
+          <a-dropdown>
+            <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <a-avatar style="background-color: #1890ff;">前</a-avatar>
+              <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
+            </span>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </div>
       </a-layout-header>
 
@@ -91,14 +97,18 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
-  DollarOutlined, SwapOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, SettingOutlined, MobileOutlined
+  DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  BellOutlined, LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { authService } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+
+// 初始化用户信息
+appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
@@ -112,6 +122,11 @@ watch(() => route.path, (path) => {
 
 function handleMenuClick({ key }: { key: string }) {
   router.push(key)
+}
+
+async function handleLogout() {
+  await authService.logout()
+  router.push('/login')
 }
 </script>
 

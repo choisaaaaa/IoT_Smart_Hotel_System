@@ -18,6 +18,10 @@
           <template #icon><MobileOutlined /></template>
           <span>全局设备</span>
         </a-menu-item>
+        <a-menu-item key="/system/users">
+          <template #icon><UserOutlined /></template>
+          <span>账户管理</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
     

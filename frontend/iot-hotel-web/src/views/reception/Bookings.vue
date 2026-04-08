@@ -31,13 +31,13 @@
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" size="small" @click="viewDetail(record)">详情</a-button>
-            <a-dropdown v-if="record.status === 'confirmed'">
+            <a-dropdown v-if="record.status === 'pending' || record.status === 'confirmed'">
               <a-button type="link" size="small">操作 <DownOutlined /></a-button>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item @click="confirmBooking(record)">确认预订</a-menu-item>
-                  <a-menu-item @click="doCheckin(record)">办理入住</a-menu-item>
-                  <a-menu-item danger @click="cancelBooking(record)">取消预订</a-menu-item>
+                  <a-menu-item v-if="record.status === 'pending'" @click="handleConfirm(record.id)">确认预订</a-menu-item>
+                  <a-menu-item v-if="record.status === 'confirmed'" @click="doCheckin(record)">办理入住</a-menu-item>
+                  <a-menu-item danger @click="handleCancel(record.id)">取消预订</a-menu-item>
                 </a-menu>
               </template>
             </a-dropdown>
@@ -46,26 +46,32 @@
       </template>
     </a-table>
 
-    <a-modal v-model:open="modalVisible" title="新建预订" @ok="createBooking" width="600px">
+    <a-modal v-model:open="modalVisible" title="新建预订" @ok="handleCreateBooking" width="600px">
       <a-form :model="newBooking" layout="vertical">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="客人姓名" required><a-input v-model:value="newBooking.guest_name" /></a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="联系电话" required><a-input v-model:value="newBooking.phone" /></a-form-item>
+            <a-form-item label="联系电话" required><a-input v-model:value="newBooking.guest_phone" /></a-form-item>
           </a-col>
         </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="入住日期"><a-date-picker v-model:value="newBooking.check_in" style="width: 100%;" /></a-form-item>
+            <a-form-item label="入住日期"><a-date-picker v-model:value="newBooking.check_in_date" style="width: 100%;" /></a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="退房日期"><a-date-picker v-model:value="newBooking.check_out" style="width: 100%;" /></a-form-item>
+            <a-form-item label="退房日期"><a-date-picker v-model:value="newBooking.check_out_date" style="width: 100%;" /></a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="房型偏好"><a-input v-model:value="newBooking.room_type_pref" placeholder="如 豪华大床房" /></a-form-item>
-        <a-form-item label="备注"><a-textarea v-model:value="newBooking.remark" :rows="2" /></a-form-item>
+        <a-form-item label="分配房间" required>
+          <a-select v-model:value="newBooking.room_id" placeholder="选择房间">
+            <a-select-option v-for="r in hotelStore.getAvailableRooms()" :key="r.id" :value="r.id">
+              {{ r.room_number }} - {{ r.room_name }} (¥{{ r.room_price }})
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="备注"><a-textarea v-model:value="newBooking.special_requests" :rows="2" /></a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -74,67 +80,121 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
+import { bookingApi } from '@/api/booking'
+import { useRouter } from 'vue-router'
+import { useHotelStore } from '@/stores/hotel'
 
+const router = useRouter()
+const hotelStore = useHotelStore()
 const loading = ref(false)
 const searchKey = ref('')
 const filterStatus = ref<string | undefined>()
 const modalVisible = ref(false)
+const bookings = ref<any[]>([])
+
+const newBooking = reactive({
+  guest_name: '', 
+  guest_phone: '', 
+  room_id: undefined as number | undefined,
+  check_in_date: dayjs().add(1, 'day'), 
+  check_out_date: dayjs().add(3, 'day'),
+  guest_count: 1,
+  special_requests: '',
+  payment_method: 'balance'
+})
 
 const columns = [
   { title: '预订号', dataIndex: 'booking_number', width: 170 },
   { title: '客人', dataIndex: 'guest_name', width: 100 },
-  { title: '电话', dataIndex: 'phone', width: 130 },
-  { title: '入住', dataIndex: 'check_in', width: 110 },
-  { title: '退房', dataIndex: 'check_out', width: 110 },
+  { title: '电话', dataIndex: 'guest_phone', width: 130 },
+  { title: '房号', dataIndex: 'room_number', width: 80 },
+  { title: '入住', dataIndex: 'check_in_date', key: 'check_in_date', width: 110 },
+  { title: '退房', dataIndex: 'check_out_date', key: 'check_out_date', width: 110 },
   { title: '金额', dataIndex: 'total_price', key: 'total_price', width: 110 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '操作', key: 'action', width: 160 }
 ]
 
-const bookings = ref([
-  { id: 1, booking_number: 'BK20260404001', guest_name: '王五', phone: '137****7000', check_in: '2026-04-04', check_out: '2026-04-06', total_price: '598.00', status: 'checked_in' },
-  { id: 2, booking_number: 'BK20260404002', guest_name: '赵六', phone: '136****6000', check_in: '2026-04-05', check_out: '2026-04-08', total_price: '1797.00', status: 'confirmed' },
-  { id: 3, booking_number: 'BK20260404003', guest_name: '钱七', phone: '135****5000', check_in: '2026-04-06', check_out: '2026-04-09', total_price: '8997.00', status: 'confirmed' },
-  { id: 4, booking_number: 'BK20260404004', guest_name: '孙八', phone: '134****4000', check_in: '2026-04-07', check_out: '2026-04-09', total_price: '998.00', status: 'confirmed' },
-  { id: 5, booking_number: 'BK20260403001', guest_name: '李四', phone: '139****9000', check_in: '2026-04-03', check_out: '2026-04-05', total_price: '598.00', status: 'cancelled' }
-])
-
-const newBooking = reactive({
-  guest_name: '', phone: '', check_in: dayjs().add(1, 'day'), check_out: dayjs().add(3, 'day'),
-  room_type_pref: '', remark: ''
-})
-
 function statusColor(s: string): string {
-  return ({ confirmed: 'processing', checked_in: 'success', checked_out: 'default', cancelled: 'error' } as Record<string, string>)[s] || 'default'
+  return ({ confirmed: 'processing', checked_in: 'success', checked_out: 'default', cancelled: 'error', pending: 'warning' } as Record<string, string>)[s] || 'default'
 }
 function statusText(s: string): string {
-  return ({ confirmed: '已确认', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
+  return ({ confirmed: '已确认', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消', pending: '待确认' } as Record<string, string>)[s] || s
 }
 
-function showCreateModal() { modalVisible.value = true }
-
-async function createBooking() {
-  message.success('预订创建成功')
-  modalVisible.value = false
+function viewDetail(record: any) {
+  message.info(`查看预订 ${record.booking_number} 详情`)
 }
 
-function viewDetail(record: any) { message.info(`查看 ${record.booking_number} 详情`) }
-function confirmBooking(record: any) { message.success(`${record.booking_number} 已确认`) }
-function doCheckin(record: any) { message.info(`为 ${record.guest_name} 办理入住`) }
-function cancelBooking(record: any) { message.warning(`已取消 ${record.booking_number}`) }
+function doCheckin(record: any) {
+  router.push({
+    path: '/reception/checkinout',
+    query: { booking_id: record.id }
+  })
+}
 
-onMounted(async () => {
+async function fetchBookings() {
   loading.value = true
   try {
-    const { bookingApi } = await import('@/api/booking')
-    const res: any = await bookingApi.getBookingList()
-    if (res.data?.list?.length) bookings.value = res.data.list
+    const res = await bookingApi.getBookingList({
+      status: filterStatus.value,
+      guest_name: searchKey.value
+    })
+    bookings.value = res.data?.list || []
+  } catch (error) {
+    message.error('获取预订列表失败')
   } finally {
     loading.value = false
   }
-})
+}
+
+function showCreateModal() { 
+  modalVisible.value = true 
+  hotelStore.fetchRooms()
+}
+
+async function handleCreateBooking() {
+  if (!newBooking.guest_name || !newBooking.guest_phone || !newBooking.room_id) {
+    message.warning('请填写必填项')
+    return
+  }
+  try {
+    await bookingApi.createBooking({
+      ...newBooking,
+      check_in_date: newBooking.check_in_date.format('YYYY-MM-DD'),
+      check_out_date: newBooking.check_out_date.format('YYYY-MM-DD')
+    })
+    message.success('预订创建成功')
+    modalVisible.value = false
+    fetchBookings()
+  } catch (error) {
+    message.error('创建预订失败')
+  }
+}
+
+async function handleConfirm(id: number) {
+  try {
+    await bookingApi.updateBookingStatus(id, 'confirmed')
+    message.success('预订已确认')
+    fetchBookings()
+  } catch (error) {
+    message.error('确认失败')
+  }
+}
+
+async function handleCancel(id: number) {
+  try {
+    await bookingApi.updateBookingStatus(id, 'cancelled')
+    message.success('预订已取消')
+    fetchBookings()
+  } catch (error) {
+    message.error('取消失败')
+  }
+}
+
+onMounted(fetchBookings)
 </script>
 
 <style scoped>

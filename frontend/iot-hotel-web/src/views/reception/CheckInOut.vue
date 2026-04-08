@@ -118,11 +118,13 @@ import { message } from 'ant-design-vue'
 import { UserAddOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
+import { bookingApi } from '@/api/booking'
 
 const hotelStore = useHotelStore()
 const activeTab = ref('checkin')
 const submitting = ref(false)
 const checkoutKeys = ref<number[]>([])
+const currentGuests = ref<any[]>([])
 
 const checkinForm = reactive({
   guest_name: '', phone: '', id_type: 'idcard', id_number: '',
@@ -137,7 +139,7 @@ const estimatedPrice = computed(() => {
   if (!checkinForm.room_id) return 0
   const room = availableRooms.value.find(r => r.id === checkinForm.room_id)
   if (!room) return 0
-  const nights = (checkinForm.check_out_date as any).diff((checkinForm.check_in_date as any), 'day')
+  const nights = dayjs(checkinForm.check_out_date).diff(dayjs(checkinForm.check_in_date), 'day')
   return Number(room.room_price) * Math.max(nights, 1)
 })
 
@@ -151,12 +153,21 @@ const checkoutColumns = [
   { title: '操作', key: 'action', width: 120 }
 ]
 
-const currentGuests = ref([
-  { id: 1, guest_name: '王五', room_number: '102', stay_nights: 2, total_amount: '598.00' },
-  { id: 2, guest_name: '赵六', room_number: '205', stay_nights: 3, total_amount: '1797.00' },
-  { id: 3, guest_name: '吴十', room_number: '108', stay_nights: 3, total_amount: '1298.00' },
-  { id: 4, guest_name: '郑十一', room_number: '203', stay_nights: 4, total_amount: '1196.00' }
-])
+async function fetchCurrentGuests() {
+  try {
+    const res = await bookingApi.getBookingList({ status: 'checked_in' })
+    currentGuests.value = (res.data?.list || []).map((b: any) => {
+      const nights = dayjs().diff(dayjs(b.check_in_date), 'day') || 1
+      return {
+        ...b,
+        stay_nights: nights,
+        total_amount: b.total_price
+      }
+    })
+  } catch (error) {
+    message.error('获取在住客人失败')
+  }
+}
 
 async function handleCheckIn() {
   if (!checkinForm.guest_name || !checkinForm.phone || !checkinForm.room_id) {
@@ -164,9 +175,19 @@ async function handleCheckIn() {
   }
   submitting.value = true
   try {
-    await new Promise(r => setTimeout(r, 800))
+    await bookingApi.createBooking({
+      ...checkinForm,
+      check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
+      check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
+      status: 'checked_in',
+      guest_phone: checkinForm.phone
+    })
     message.success(`入住成功！${checkinForm.guest_name} 已分配房间`)
     resetCheckinForm()
+    fetchCurrentGuests()
+    hotelStore.fetchRooms()
+  } catch (error) {
+    message.error('办理入住失败')
   } finally {
     submitting.value = false
   }
@@ -181,9 +202,19 @@ function resetCheckinForm() {
   })
 }
 
-function handleCheckout(record: any) {
-  message.success(`${record.guest_name}（${record.room_number}）退房成功，应付 ¥${record.total_amount}`)
+async function handleCheckout(record: any) {
+  try {
+    await bookingApi.updateBookingStatus(record.id, 'checked_out')
+    message.success(`${record.guest_name}（${record.room_number}）退房成功，应付 ¥${record.total_amount}`)
+    fetchCurrentGuests()
+    hotelStore.fetchRooms()
+  } catch (error) {
+    message.error('办理退房失败')
+  }
 }
 
-onMounted(() => hotelStore.fetchRooms())
+onMounted(() => {
+  hotelStore.fetchRooms()
+  fetchCurrentGuests()
+})
 </script>

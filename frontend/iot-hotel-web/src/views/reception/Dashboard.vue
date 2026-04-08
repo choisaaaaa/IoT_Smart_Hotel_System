@@ -76,30 +76,22 @@ import {
 } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
 
+import axios from '@/api/request'
+import { bookingApi } from '@/api/booking'
+
 const hotelStore = useHotelStore()
+const loading = ref(false)
 
 const stats = ref([
-  { key: 'today_checkin', title: '今日入住', value: 5, color: '#52c41a', icon: UserAddOutlined },
-  { key: 'today_checkout', title: '今日退房', value: 3, color: '#faad14', icon: UserDeleteOutlined },
-  { key: 'available', title: '可售房间', value: hotelStore.getAvailableRooms().length || 7, color: '#1890ff', icon: CalendarOutlined },
-  { key: 'pending_bills', title: '待结账单', value: 4, color: '#ff4d4f', icon: FileTextOutlined }
+  { key: 'today_checkin', title: '今日入住', value: 0, color: '#52c41a', icon: UserAddOutlined },
+  { key: 'today_checkout', title: '今日退房', value: 0, color: '#faad14', icon: UserDeleteOutlined },
+  { key: 'available', title: '可售房间', value: 0, color: '#1890ff', icon: CalendarOutlined },
+  { key: 'pending_bills', title: '待处理工单', value: 0, color: '#ff4d4f', icon: FileTextOutlined }
 ])
 
-const todayEvents = ref([
-  { guest: '王五', room: '102', type: 'checkin' as const, time: '09:15' },
-  { guest: '赵六', room: '205', type: 'checkin' as const, time: '10:30' },
-  { guest: '李四', room: '108', type: 'checkout' as const, time: '11:00' },
-  { guest: '钱七', room: '301', type: 'checkin' as const, time: '13:20' },
-  { guest: '孙八', room: '203', type: 'checkout' as const, time: '14:00' },
-  { guest: '周九', room: '106', type: 'checkin' as const, time: '15:45' }
-])
-
-const pendingItems = ref([
-  { title: '送物订单 DLV20260404001', desc: '102房 矿泉水x2', status: 'processing' as const },
-  { title: '维修工单 MT20260404001', desc: '309房 空调故障', status: 'error' as const },
-  { title: '预订确认 BK20260404003', desc: '钱七 总统套房', status: 'warning' as const },
-  { title: '清洁请求', desc: '205房 客人要求打扫', status: 'processing' as const }
-])
+const todayEvents = ref<any[]>([])
+const pendingItems = ref<any[]>([])
+const currentGuests = ref<any[]>([])
 
 const guestColumns = [
   { title: '姓名', dataIndex: 'guest_name', width: 90 },
@@ -111,15 +103,76 @@ const guestColumns = [
   { title: '操作', key: 'action', width: 140 }
 ]
 
-const currentGuests = ref([
-  { id: 1, guest_name: '王五', room_number: '102', phone: '137****7000', check_in: '2026-04-04', check_out: '2026-04-06', stay_days: 0 },
-  { id: 2, guest_name: '赵六', room_number: '205', phone: '136****6000', check_in: '2026-04-05', check_out: '2026-04-08', stay_days: 0 },
-  { id: 3, guest_name: '钱七', room_number: '301', phone: '135****5000', check_in: '2026-04-06', check_out: '2026-04-09', stay_days: -2 },
-  { id: 4, guest_name: '吴十', room_number: '108', phone: '134****4000', check_in: '2026-04-02', check_out: '2026-04-05', stay_days: 2 },
-  { id: 5, guest_name: '郑十一', room_number: '203', phone: '133****3000', check_in: '2026-04-01', check_out: '2026-04-04', stay_days: 3 }
-])
+async function fetchDashboardData() {
+  loading.value = true
+  try {
+    // 1. 获取房态统计
+    await hotelStore.fetchRooms()
+    const availableCount = hotelStore.getAvailableRooms().length
+    const statAvailable = stats.value.find(s => s.key === 'available')
+    if (statAvailable) statAvailable.value = availableCount
 
-onMounted(() => hotelStore.fetchRooms())
+    // 2. 获取今日预订/入住/退房数据
+    const today = new Date().toISOString().split('T')[0]
+    const resBookings = await bookingApi.getBookingList({ pageSize: 100 })
+    const allBookings = resBookings.data?.list || []
+    
+    const checkins = allBookings.filter(b => b.check_in_date?.startsWith(today))
+    const checkouts = allBookings.filter(b => b.check_out_date?.startsWith(today))
+    
+    stats.value.find(s => s.key === 'today_checkin')!.value = checkins.length
+    stats.value.find(s => s.key === 'today_checkout')!.value = checkouts.length
+
+    // 3. 构造今日事件时间轴
+    todayEvents.value = [
+      ...checkins.map(b => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkin', time: '今日' })),
+      ...checkouts.map(b => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkout', time: '今日' }))
+    ]
+
+    // 4. 获取待处理事项 (报修和送物)
+    const [resMaintenance, resDelivery] = await Promise.all([
+      axios.get('/maintenance', { params: { status: 'pending' } }),
+      axios.get('/delivery', { params: { status: 'pending' } })
+    ])
+
+    const maintenanceItems = (resMaintenance.data?.list || []).map((m: any) => ({
+      id: m.id,
+      title: `报修: ${m.room_number}房 ${m.fault_type}`,
+      desc: m.fault_description,
+      status: 'error',
+      type: 'maintenance'
+    }))
+
+    const deliveryItems = (resDelivery.data?.list || []).map((d: any) => ({
+      id: d.id,
+      title: `送物: ${d.room_number}房 ${d.item_name}`,
+      desc: `数量: ${d.quantity}`,
+      status: 'processing',
+      type: 'delivery'
+    }))
+
+    pendingItems.value = [...maintenanceItems, ...deliveryItems]
+    stats.value.find(s => s.key === 'pending_bills')!.value = pendingItems.value.length
+
+    // 5. 当前在住客人
+    currentGuests.value = allBookings.filter(b => b.status === 'checked_in').map(b => ({
+      id: b.id,
+      guest_name: b.guest_name,
+      room_number: b.room_number,
+      phone: b.guest_phone,
+      check_in: b.check_in_date?.split('T')[0],
+      check_out: b.check_out_date?.split('T')[0],
+      stay_days: Math.ceil((new Date().getTime() - new Date(b.check_in_date).getTime()) / (1000 * 60 * 60 * 24))
+    }))
+
+  } catch (error) {
+    console.error('加载仪表盘数据失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchDashboardData)
 </script>
 
 <style scoped>

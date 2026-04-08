@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
         name: 'SystemDeviceManagement',
         component: () => import('@/views/system/SystemDeviceManagement.vue'),
         meta: { title: '全局设备', icon: 'MobileOutlined', requiresAuth: true, roles: ['system'] }
+      },
+      {
+        path: 'users',
+        name: 'SystemUserManagement',
+        component: () => import('@/views/system/UserManagement.vue'),
+        meta: { title: '账户管理', icon: 'UserOutlined', requiresAuth: true, roles: ['system'] }
       }
     ]
   },
@@ -93,6 +99,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminReports',
         component: () => import('@/views/admin/AdminReports.vue'),
         meta: { title: '账单报表', icon: 'FileTextOutlined', requiresAuth: true, roles: ['admin'] }
+      },
+      {
+        path: 'users',
+        name: 'AdminUserManagement',
+        component: () => import('@/views/system/UserManagement.vue'),
+        meta: { title: '用户管理', icon: 'UserOutlined', requiresAuth: true, roles: ['admin'] }
       }
     ]
   },

@@ -170,7 +170,7 @@ const uploadHeaders = {
 const getFullUrl = (url: string) => {
   if (!url) return ''
   if (url.startsWith('http')) return url
-  return `${window.location.origin.replace(':3001', ':9000')}${url}`
+  return url.startsWith('/') ? url : '/' + url
 }
 
 const filteredHotels = computed(() => {

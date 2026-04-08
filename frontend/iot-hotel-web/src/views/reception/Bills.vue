@@ -91,13 +91,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
+import { bookingApi } from '@/api/booking'
 
 const payMethodFilter = ref<string | undefined>()
 const drawerVisible = ref(false)
 const currentBill = ref<any>(null)
+const loading = ref(false)
+const bills = ref<any[]>([])
+
+const stats = reactive({
+  todayTotal: 0,
+  monthTotal: 0,
+  pendingCount: 0
+})
 
 const detailColumns = [
   { title: '项目', dataIndex: 'item' },
@@ -106,39 +115,55 @@ const detailColumns = [
 ]
 
 const billDetails = ref([
-  { id: 1, item: '房费', desc: '标准间 x 2晚', amount: '598.00' },
-  { id: 2, item: '餐饮消费', desc: '早餐 + 客房送餐', amount: '86.00' },
-  { id: 3, item: '增值服务', desc: '洗衣服务', amount: '50.00' },
-  { id: 4, item: '其他', desc: '迷你吧消费', amount: '35.00' }
+  { id: 1, item: '房费', desc: '系统计算', amount: '0.00' }
 ])
 
 const columns = [
-  { title: '账单号', dataIndex: 'bill_no', width: 170 },
+  { title: '账单号', dataIndex: 'booking_number', width: 170 },
   { title: '客人', dataIndex: 'guest_name', width: 90 },
   { title: '房号', dataIndex: 'room_number', width: 70 },
-  { title: '入住日期', dataIndex: 'check_in', width: 110 },
-  { title: '退房日期', dataIndex: 'check_out', width: 110 },
-  { title: '金额', dataIndex: 'amount', key: 'amount', width: 110 },
-  { title: '支付方式', dataIndex: 'pay_method', width: 100 },
+  { title: '入住日期', dataIndex: 'check_in_date', key: 'check_in_date', width: 110 },
+  { title: '退房日期', dataIndex: 'check_out_date', key: 'check_out_date', width: 110 },
+  { title: '总金额', dataIndex: 'total_price', key: 'amount', width: 110 },
+  { title: '支付方式', dataIndex: 'payment_method', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '操作', key: 'action', width: 140 }
 ]
 
-const bills = ref([
-  { id: 1, bill_no: 'BILL20260404001', guest_name: '王五', room_number: '102', check_in: '2026-04-04', check_out: '2026-04-06', amount: '769.00', pay_method: '支付宝', status: 'paid' },
-  { id: 2, bill_no: 'BILL20260404002', guest_name: '赵六', room_number: '205', check_in: '2026-04-05', check_out: '2026-04-08', amount: '1797.00', pay_method: '微信', status: 'paid' },
-  { id: 3, bill_no: 'BILL20260404003', guest_name: '钱七', room_number: '301', check_in: '2026-04-06', check_out: '2026-04-09', amount: '9182.00', pay_method: '银行卡', status: 'pending' },
-  { id: 4, bill_no: 'BILL20260403001', guest_name: '孙八', room_number: '108', check_in: '2026-04-02', check_out: '2026-04-05', amount: '1298.00', pay_method: '微信', status: 'paid' },
-  { id: 5, bill_no: 'BILL20260403002', guest_name: '周九', room_number: '203', check_in: '2026-04-01', check_out: '2026-04-04', amount: '1196.00', pay_method: '支付宝', status: 'refunded' }
-])
+async function fetchBills() {
+  loading.value = true
+  try {
+    const res = await bookingApi.getBookingList({ pageSize: 100 })
+    const list = res.data?.list || []
+    
+    // 过滤出有价值的账单状态
+    bills.value = list.filter(b => ['checked_in', 'checked_out', 'confirmed'].includes(b.status))
+    
+    // 简单统计逻辑
+    stats.pendingCount = list.filter(b => b.status === 'checked_in').length
+    stats.todayTotal = list.filter(b => b.status === 'checked_out' && b.updated_at?.startsWith(new Date().toISOString().split('T')[0]))
+      .reduce((sum, b) => sum + Number(b.total_price), 0)
+    stats.monthTotal = list.filter(b => b.status === 'checked_out')
+      .reduce((sum, b) => sum + Number(b.total_price), 0)
+      
+  } catch (error) {
+    message.error('获取账单列表失败')
+  } finally {
+    loading.value = false
+  }
+}
 
 function viewBillDetail(bill: any) {
   currentBill.value = bill
+  billDetails.value = [{ id: 1, item: '房费', desc: `订单 ${bill.booking_number}`, amount: bill.total_price }]
   drawerVisible.value = true
 }
 
-function collectPayment(bill: any) { message.success(`已收取 ${bill.guest_name} 账单 ¥${bill.amount}`) }
-function printBill() { message.info('打印报表功能开发中...') }
+function collectPayment(bill: any) { 
+  message.success(`已收取 ${bill.guest_name} 账单 ¥${bill.total_price}`) 
+}
+
+onMounted(fetchBills)
 </script>
 
 <style scoped>

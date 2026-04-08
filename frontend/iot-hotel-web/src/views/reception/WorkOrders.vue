@@ -94,21 +94,14 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ClockCircleOutlined, ToolOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
+import axios from '@/api/request'
 
 const hotelStore = useHotelStore()
 const statusFilter = ref('')
 const typeFilter = ref<string | undefined>()
 const modalVisible = ref(false)
-
-const newOrder = reactive({ type: 'maintenance', room_id: undefined as number | undefined, priority: 'medium', description: '' })
-
-const allOrders = ref([
-  { id: 1, ticket_no: 'MT20260404001', room: '309', type: 'maintenance', fault_type: '空调故障', description: '空调不制冷，温度设定26度但实际出热风', priority: 'high', status: 'pending', created_at: '2026-04-04 09:00' },
-  { id: 2, ticket_no: 'CL20260404001', room: '205', type: 'cleaning', fault_type: '', description: '客人要求加急打扫', priority: 'medium', status: 'processing', created_at: '2026-04-04 10:30' },
-  { id: 3, ticket_no: 'SV20260404001', room: '108', type: 'service', fault_type: '', description: '客人需要额外毛毯和枕头', priority: 'low', status: 'completed', created_at: '2026-04-04 08:15' },
-  { id: 4, ticket_no: 'MT20260403002', room: '102', type: 'maintenance', fault_type: '水龙头漏水', description: '洗手间水龙头滴水', priority: 'medium', status: 'completed', created_at: '2026-04-03 14:20' },
-  { id: 5, ticket_no: 'CL20260404002', room: '301', type: 'cleaning', fault_type: '', description: '退房后深度清洁', priority: 'urgent', status: 'pending', created_at: '2026-04-04 11:45' }
-])
+const loading = ref(false)
+const allOrders = ref<any[]>([])
 
 const filteredOrders = computed(() => {
   return allOrders.value.filter(o => {
@@ -139,9 +132,9 @@ function orderStatusText(s: string): string {
 
 const columns = [
   { title: '工单号', dataIndex: 'ticket_no', width: 160 },
-  { title: '房间', dataIndex: 'room', width: 70 },
-  { title: '类型', dataIndex: 'type', width: 100 },
-  { title: '描述', dataIndex: 'description', ellipsis: true },
+  { title: '房间', dataIndex: 'room_number', width: 70 },
+  { title: '类型', dataIndex: 'fault_type', width: 100 },
+  { title: '描述', dataIndex: 'fault_description', ellipsis: true },
   { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '创建时间', dataIndex: 'created_at', width: 160 },
@@ -149,11 +142,66 @@ const columns = [
 ]
 
 function showCreateModal() { modalVisible.value = true }
-async function createOrder() { message.success('工单已创建'); modalVisible.value = false }
-function startProcess(order: any) { order.status = 'processing'; message.info(`开始处理 ${order.ticket_no}`) }
-function completeOrder(order: any) { order.status = 'completed'; message.success(`${order.ticket_no} 已完成`) }
 
-onMounted(() => hotelStore.fetchRooms())
+async function fetchOrders() {
+  loading.value = true
+  try {
+    const res = await axios.get('/maintenance')
+    allOrders.value = (res.data?.list || []).map((item: any) => ({
+      ...item,
+      ticket_no: `MT${item.id.toString().padStart(6, '0')}`,
+      type: 'maintenance' // 目前后端主要是报修
+    }))
+  } catch (error) {
+    message.error('获取工单失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function createOrder() {
+  if (!newOrder.room_id || !newOrder.description) {
+    message.warning('请填写必填项'); return
+  }
+  try {
+    await axios.post('/maintenance', {
+      room_id: newOrder.room_id,
+      fault_type: newOrder.fault_type,
+      fault_description: newOrder.description,
+      priority: newOrder.priority
+    })
+    message.success('工单已创建')
+    modalVisible.value = false
+    fetchOrders()
+  } catch (error) {
+    message.error('创建失败')
+  }
+}
+
+async function startProcess(order: any) {
+  try {
+    await axios.put(`/maintenance/${order.id}/assign`, { staff_id: 1 }) // 模拟分配给自己
+    message.info(`工单 ${order.ticket_no} 已开始处理`)
+    fetchOrders()
+  } catch (error) {
+    message.error('操作失败')
+  }
+}
+
+async function completeOrder(order: any) {
+  try {
+    await axios.put(`/maintenance/${order.id}/complete`)
+    message.success(`${order.ticket_no} 已完成`)
+    fetchOrders()
+  } catch (error) {
+    message.error('操作失败')
+  }
+}
+
+onMounted(() => {
+  hotelStore.fetchRooms()
+  fetchOrders()
+})
 </script>
 
 <style scoped>

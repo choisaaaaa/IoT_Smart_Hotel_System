@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 
 export function errorHandler(
   err: Error,
@@ -8,6 +9,13 @@ export function errorHandler(
 ): void {
   const statusCode = (err as any).statusCode || 500;
   
+  // 实时输出错误日志到终端
+  logger.error(`${_req.method} ${_req.url} - Error: ${err.message}`, {
+    stack: err.stack,
+    body: _req.body,
+    query: _req.query
+  });
+
   res.status(statusCode).json({
     code: statusCode,
     message: err.message || '服务器错误',

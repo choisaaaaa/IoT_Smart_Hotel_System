@@ -22,6 +22,7 @@ export interface UserInfo {
   email?: string
   role: string
   hotel_id: number
+  hotel_name?: string
   permissions: string[]
 }
 

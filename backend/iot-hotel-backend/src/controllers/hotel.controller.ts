@@ -6,7 +6,10 @@ import logger from '../utils/logger';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = req.user?.hotel_id || 1;
+    const hotelId = req.user?.hotel_id;
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权，缺少酒店绑定信息'));
+    }
     const hotel = await HotelService.getHotelById(hotelId);
     
     if (!hotel) {

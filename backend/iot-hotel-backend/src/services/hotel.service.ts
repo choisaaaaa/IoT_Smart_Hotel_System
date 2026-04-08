@@ -61,7 +61,19 @@ export class HotelService {
 
   static async updateHotel(id: number, data: Partial<Hotel>): Promise<boolean> {
     try {
-      const { hotel_name, hotel_code, hotel_address, city, hotel_phone, hotel_star, logo, description } = data;
+      const existing = await this.getHotelById(id);
+      if (!existing) return false;
+
+      const { 
+        hotel_name = existing.hotel_name, 
+        hotel_code = existing.hotel_code, 
+        hotel_address = existing.hotel_address, 
+        city = existing.city, 
+        hotel_phone = existing.hotel_phone, 
+        hotel_star = existing.hotel_star, 
+        logo = existing.logo, 
+        description = existing.description 
+      } = data;
       
       await pool.query<ResultSetHeader>(
         'UPDATE hotels SET hotel_name = ?, hotel_code = ?, hotel_address = ?, city = ?, hotel_phone = ?, hotel_star = ?, logo = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',

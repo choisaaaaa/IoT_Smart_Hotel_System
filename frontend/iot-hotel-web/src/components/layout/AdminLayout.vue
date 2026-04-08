@@ -40,12 +40,10 @@
           <template #icon><FileTextOutlined /></template>
           <span>账单报表</span>
         </a-menu-item>
-        <a-menu-divider />
-        <a-sub-menu key="tier-switch">
-          <template #title><SwapOutlined /><span v-show="!collapsed">切换端</span></template>
-          <a-menu-item key="/reception/dashboard"><CustomerServiceOutlined /> 前台端</a-menu-item>
-          <a-menu-item key="/guest/booking"><MobileOutlined /> 客户端</a-menu-item>
-        </a-sub-menu>
+        <a-menu-item key="/admin/users">
+          <template #icon><UserOutlined /></template>
+          <span>用户管理</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
 
@@ -60,13 +58,28 @@
           </a-breadcrumb>
         </div>
         <div class="header-right">
+          <span v-if="appStore.userInfo?.hotel_name" class="hotel-tag">
+            <BankOutlined /> {{ appStore.userInfo.hotel_name }}
+          </span>
           <a-badge :count="appStore.notificationCount" :offset="[-2, 4]">
             <BellOutlined class="header-icon" />
           </a-badge>
           <a-tag :color="appStore.connected ? 'success' : 'error'" class="ws-status">
             {{ appStore.connected ? '系统正常' : '连接异常' }}
           </a-tag>
-          <a-avatar style="background-color: #722ed1;">管</a-avatar>
+          <a-dropdown>
+            <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <a-avatar style="background-color: #722ed1;">管</a-avatar>
+              <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
+            </span>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </div>
       </a-layout-header>
 
@@ -87,15 +100,19 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   SettingOutlined, DashboardOutlined, MonitorOutlined,
   HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
-  SwapOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, CustomerServiceOutlined, MobileOutlined,
-  TagsOutlined, BarsOutlined
+  MenuFoldOutlined, MenuUnfoldOutlined,
+  BellOutlined,
+  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { authService } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+
+// 初始化用户信息
+appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
@@ -108,6 +125,11 @@ watch(() => route.path, (path) => {
 
 function handleMenuClick({ key }: { key: string }) {
   router.push(key)
+}
+
+async function handleLogout() {
+  await authService.logout()
+  router.push('/login')
 }
 </script>
 

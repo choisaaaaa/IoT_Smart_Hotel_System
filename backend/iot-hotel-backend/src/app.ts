@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import expressWinston from 'express-winston';
+import logger from './utils/logger';
 
 import appConfig from './config/app';
 import routes from './routes';
@@ -19,6 +21,16 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 实时请求日志中间件
+app.use(expressWinston.logger({
+  winstonInstance: logger,
+  meta: false, // 不记录元数据，保持日志简洁
+  msg: "HTTP {{req.method}} {{req.url}} {{res.statusCode}} {{res.responseTime}}ms",
+  expressFormat: true,
+  colorize: true,
+  ignoreRoute: function (req, res) { return false; }
+}));
 
 // 静态资源服务
 app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
