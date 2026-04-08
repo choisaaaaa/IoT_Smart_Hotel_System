@@ -186,7 +186,7 @@ const filteredHotels = computed(() => {
 const fetchHotels = async () => {
   loading.value = true
   try {
-    const res = await hotelManageApi.getAllHotels()
+    const res: any = await hotelManageApi.getAllHotels()
     hotels.value = res.data || []
   } catch (error) {
     message.error('获取酒店列表失败')

@@ -135,7 +135,7 @@ const handleUploadChange = (info: any) => {
 async function loadData() {
   loading.value = true
   try {
-    const res = await hotelManageApi.getHotelInfo()
+    const res: any = await hotelManageApi.getHotelInfo()
     if (res.data) {
       const h = res.data
       Object.assign(formData, {

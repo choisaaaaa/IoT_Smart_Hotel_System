@@ -114,19 +114,19 @@ async function fetchDashboardData() {
 
     // 2. 获取今日预订/入住/退房数据
     const today = new Date().toISOString().split('T')[0]
-    const resBookings = await bookingApi.getBookingList({ pageSize: 100 })
+    const resBookings: any = await bookingApi.getBookingList({ pageSize: 100 })
     const allBookings = resBookings.data?.list || []
     
-    const checkins = allBookings.filter(b => b.check_in_date?.startsWith(today))
-    const checkouts = allBookings.filter(b => b.check_out_date?.startsWith(today))
+    const checkins = allBookings.filter((b: any) => b.check_in_date?.startsWith(today))
+    const checkouts = allBookings.filter((b: any) => b.check_out_date?.startsWith(today))
     
     stats.value.find(s => s.key === 'today_checkin')!.value = checkins.length
     stats.value.find(s => s.key === 'today_checkout')!.value = checkouts.length
 
     // 3. 构造今日事件时间轴
     todayEvents.value = [
-      ...checkins.map(b => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkin', time: '今日' })),
-      ...checkouts.map(b => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkout', time: '今日' }))
+      ...checkins.map((b: any) => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkin', time: '今日' })),
+      ...checkouts.map((b: any) => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkout', time: '今日' }))
     ]
 
     // 4. 获取待处理事项 (报修和送物)
@@ -155,7 +155,7 @@ async function fetchDashboardData() {
     stats.value.find(s => s.key === 'pending_bills')!.value = pendingItems.value.length
 
     // 5. 当前在住客人
-    currentGuests.value = allBookings.filter(b => b.status === 'checked_in').map(b => ({
+    currentGuests.value = allBookings.filter((b: any) => b.status === 'checked_in').map((b: any) => ({
       id: b.id,
       guest_name: b.guest_name,
       room_number: b.room_number,

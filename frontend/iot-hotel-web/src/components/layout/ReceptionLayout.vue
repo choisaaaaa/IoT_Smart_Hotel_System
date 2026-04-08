@@ -184,7 +184,7 @@ onMounted(loadPending)
   font-weight: 600;
   border-bottom: 1px solid #f0f0f0;
 }
-.logo-text { background: linear-gradient(135deg, #1890ff, #722ed1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-text { background: linear-gradient(135deg, #1890ff, #722ed1); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .reception-header {
   background: #fff;
   padding: 0 24px;

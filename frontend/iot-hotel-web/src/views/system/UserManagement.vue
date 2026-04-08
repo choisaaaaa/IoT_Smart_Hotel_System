@@ -132,6 +132,22 @@ import { useAppStore } from '@/stores/app'
 import axios from '@/api/request'
 import { hotelManageApi } from '@/api/hotel-manage'
 
+interface UserItem {
+  id: number
+  username: string
+  email?: string
+  role: string
+  hotel_id?: number
+  hotel_name?: string
+  created_at?: string
+}
+
+interface HotelOption {
+  id: number
+  hotel_name: string
+  hotel_code?: string
+}
+
 const appStore = useAppStore()
 const isSystem = computed(() => appStore.userInfo?.role === 'system')
 
@@ -150,15 +166,15 @@ const filteredHotelOptions = computed(() => {
 })
 
 const loading = ref(false)
-const users = ref([])
-const hotels = ref([])
+const users = ref<UserItem[]>([])
+const hotels = ref<HotelOption[]>([])
 const searchKey = ref('')
 const roleFilter = ref(undefined)
 const hotelFilter = ref(undefined)
 const modalVisible = ref(false)
 const editingId = ref(null)
 const submitLoading = ref(false)
-const formRef = ref(null)
+const formRef = ref<any>(null)
 
 const pagination = reactive({
   current: 1,
@@ -227,7 +243,7 @@ const fetchUsers = async () => {
 const fetchHotels = async () => {
   // 不论什么角色都去获取酒店列表，方便填充选项
   try {
-    const res = await hotelManageApi.getAllHotels()
+    const res: any = await hotelManageApi.getAllHotels()
     hotels.value = res.data || []
   } catch (error) {}
 }
@@ -262,25 +278,25 @@ const handleEdit = (record: any) => {
   modalVisible.value = true
 }
 
-const handleModalOk = () => {
-  formRef.value.validate().then(async () => {
+const handleModalOk = async () => {
+  if (!formRef.value) return
+  try {
+    await formRef.value.validate()
     submitLoading.value = true
-    try {
-      if (editingId.value) {
-        await axios.put(`/users/${editingId.value}`, formState)
-        message.success('更新成功')
-      } else {
-        await axios.post('/users', formState)
-        message.success('创建成功')
-      }
-      modalVisible.value = false
-      fetchUsers()
-    } catch (error: any) {
-      message.error(error.response?.data?.message || '操作失败')
-    } finally {
-      submitLoading.value = false
+    if (editingId.value) {
+      await axios.put(`/users/${editingId.value}`, formState)
+      message.success('更新成功')
+    } else {
+      await axios.post('/users', formState)
+      message.success('创建成功')
     }
-  })
+    modalVisible.value = false
+    fetchUsers()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '操作失败')
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 const handleDelete = async (id: number) => {
