@@ -27,10 +27,15 @@
           <span>设备监控</span>
         </a-menu-item>
         <a-sub-menu key="info-manage">
-          <template #title><EditOutlined /><span v-show="!collapsed">信息管理</span></template>
-          <a-menu-item key="/admin/rooms/edit"><HomeOutlined /> 房间信息</a-menu-item>
-          <a-menu-item key="/admin/hotel/info"><BankOutlined /> 酒店信息</a-menu-item>
+          <template #title><EditOutlined /><span v-show="!collapsed">房间管理</span></template>
+          <a-menu-item key="/admin/rooms/edit"><HomeOutlined /> 房间列表</a-menu-item>
+          <a-menu-item key="/admin/rooms/types"><TagsOutlined /> 房型维护</a-menu-item>
+          <a-menu-item key="/admin/rooms/floors"><BarsOutlined /> 楼层管理</a-menu-item>
         </a-sub-menu>
+        <a-menu-item key="/admin/hotel/info">
+          <template #icon><BankOutlined /></template>
+          <span>酒店信息</span>
+        </a-menu-item>
         <a-menu-item key="/admin/reports">
           <template #icon><FileTextOutlined /></template>
           <span>账单报表</span>
@@ -83,7 +88,8 @@ import {
   SettingOutlined, DashboardOutlined, MonitorOutlined,
   HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
   SwapOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, CustomerServiceOutlined, MobileOutlined
+  BellOutlined, CustomerServiceOutlined, MobileOutlined,
+  TagsOutlined, BarsOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 

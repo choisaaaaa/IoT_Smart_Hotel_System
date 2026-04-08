@@ -2,13 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
-
-export interface ApiResponse<T = any> {
-  code: number
-  message: string
-  data?: T
-  timestamp: number
-}
+import type { ApiResponse } from '@/types'
 
 export interface LoginParams {
   username: string
@@ -19,6 +13,7 @@ export interface RegisterParams {
   username: string
   password: string
   email?: string
+  hotel_id: number
 }
 
 export interface UserInfo {
@@ -26,6 +21,7 @@ export interface UserInfo {
   username: string
   email?: string
   role: string
+  hotel_id: number
   permissions: string[]
 }
 
@@ -111,12 +107,8 @@ class AuthService {
   }
 
   // 用户注册
-  async register(params: RegisterParams): Promise<{ userId: number; username: string; role: string }> {
-    const res = await this.api.post<any, ApiResponse<{ userId: number; username: string; role: string }>>(
-      '/auth/register',
-      params
-    )
-    return res.data!
+  async register(params: RegisterParams): Promise<void> {
+    await this.api.post('/auth/register', params)
   }
 
   // 登出

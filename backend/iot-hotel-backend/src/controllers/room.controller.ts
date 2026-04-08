@@ -1,117 +1,125 @@
 import { Request, Response } from 'express';
 import { successResponse, errorResponse, AuthRequest } from '../types';
-import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
+import { RoomService } from '../services/room.service';
 import logger from '../utils/logger';
 
-export const get = async (req: Request, res: Response) => {
+export const get = async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, pageSize = 10, status, type } = req.query;
-    const offset = (Number(page) - 1) * Number(pageSize);
+    let hotelId = req.user?.hotel_id;
     
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
-    
-    if (status) {
-      whereClause += ' AND room_status = ?';
-      params.push(status);
+    // 如果是 system 角色且没有 hotel_id，默认查看第一个酒店的数据或全部
+    if (req.user?.role === 'system' && !hotelId) {
+      hotelId = 1; 
     }
-    
-    if (type) {
-      whereClause += ' AND room_type = ?';
-      params.push(type);
+
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
     }
+
+    const { page = 1, pageSize = 10, status, type, floor, groupBy } = req.query;
     
-    const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM rooms ${whereClause}`, params);
-    const total = (totalRows[0] as any).total;
-    
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT * FROM rooms ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), offset]
-    );
-    
-    res.json(successResponse({
-      list: rows,
-      total,
+    if (groupBy === 'floor') {
+      const data = await RoomService.getRoomsByFloor(hotelId);
+      return res.json(successResponse(data, '按楼层获取房间成功'));
+    }
+
+    const data = await RoomService.getRooms({
       page: Number(page),
       pageSize: Number(pageSize),
-      totalPages: Math.ceil(total / Number(pageSize))
-    }, '获取房间列表成功'));
-  } catch (error) {
+      status: status as string,
+      type: type as string,
+      floor: floor ? Number(floor) : undefined,
+      hotelId
+    });
+    
+    res.json(successResponse(data, '获取房间列表成功'));
+  } catch (error: any) {
     logger.error('获取房间列表失败:', error);
-    res.status(500).json(errorResponse('获取房间列表失败'));
+    res.status(500).json(errorResponse(error.message || '获取房间列表失败'));
   }
 };
 
-export const getById = async (req: Request, res: Response) => {
+export const getById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    let hotelId = req.user?.hotel_id;
+    if (req.user?.role === 'system' && !hotelId) {
+      hotelId = 1;
+    }
+    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+
+    const id = Number(req.params.id);
+    const room = await RoomService.getRoomById(id, hotelId);
     
-    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM rooms WHERE id = ?', [id]);
-    
-    if (rows.length === 0) {
+    if (!room) {
       res.status(404).json(errorResponse('房间不存在'));
       return;
     }
     
-    res.json(successResponse(rows[0], '获取房间详情成功'));
-  } catch (error) {
+    res.json(successResponse(room, '获取房间详情成功'));
+  } catch (error: any) {
     logger.error('获取房间详情失败:', error);
-    res.status(500).json(errorResponse('获取房间详情失败'));
+    res.status(500).json(errorResponse(error.message || '获取房间详情失败'));
   }
 };
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = req.body;
-    
-    const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO rooms (room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || [])]
-    );
-    
-    res.json(successResponse({ id: result.insertId }, '创建房间成功'));
-  } catch (error) {
+    let hotelId = req.user?.hotel_id;
+    if (req.user?.role === 'system' && !hotelId) {
+      hotelId = req.body.hotel_id || 1;
+    }
+    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+
+    const id = await RoomService.createRoom({ ...req.body, hotel_id: hotelId });
+    res.json(successResponse({ id }, '创建房间成功'));
+  } catch (error: any) {
     logger.error('创建房间失败:', error);
-    res.status(500).json(errorResponse('创建房间失败'));
+    res.status(500).json(errorResponse(error.message || '创建房间失败'));
   }
 };
 
 export const update = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const { room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = req.body;
+    let hotelId = req.user?.hotel_id;
+    if (req.user?.role === 'system' && !hotelId) {
+      hotelId = req.body.hotel_id || 1;
+    }
+    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+
+    const id = Number(req.params.id);
+    const success = await RoomService.updateRoom(id, hotelId, req.body);
     
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE rooms SET room_number = ?, room_type = ?, room_name = ?, room_price = ?, room_status = ?, floor = ?, area = ?, bed_type = ?, max_guests = ?, description = ?, facilities = ?, images = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id]
-    );
-    
-    if (result.affectedRows === 0) {
+    if (!success) {
       res.status(404).json(errorResponse('房间不存在'));
       return;
     }
     
     res.json(successResponse(null, '更新房间成功'));
-  } catch (error) {
+  } catch (error: any) {
     logger.error('更新房间失败:', error);
-    res.status(500).json(errorResponse('更新房间失败'));
+    res.status(500).json(errorResponse(error.message || '更新房间失败'));
   }
 };
 
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    let hotelId = req.user?.hotel_id;
+    if (req.user?.role === 'system' && !hotelId) {
+      hotelId = 1; // 这是一个简化的处理，实际应从查询参数或上下文获取
+    }
+    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+
+    const id = Number(req.params.id);
+    const success = await RoomService.deleteRoom(id, hotelId);
     
-    const [result] = await pool.query<ResultSetHeader>('DELETE FROM rooms WHERE id = ?', [id]);
-    
-    if (result.affectedRows === 0) {
+    if (!success) {
       res.status(404).json(errorResponse('房间不存在'));
       return;
     }
     
     res.json(successResponse(null, '删除房间成功'));
-  } catch (error) {
+  } catch (error: any) {
     logger.error('删除房间失败:', error);
-    res.status(500).json(errorResponse('删除房间失败'));
+    res.status(500).json(errorResponse(error.message || '删除房间失败'));
   }
 };

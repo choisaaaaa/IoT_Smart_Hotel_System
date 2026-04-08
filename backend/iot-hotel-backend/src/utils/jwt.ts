@@ -7,6 +7,7 @@ export interface JwtPayload {
   id: number;
   username: string;
   role: string;
+  hotel_id: number;
   permissions?: string[];
 }
 

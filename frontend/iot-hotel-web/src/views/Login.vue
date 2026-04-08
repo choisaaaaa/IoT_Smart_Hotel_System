@@ -103,7 +103,7 @@
 
     <!-- 注册弹窗 -->
     <a-modal
-      v-model:visible="registerVisible"
+      v-model:open="registerVisible"
       title="用户注册"
       @ok="handleRegister"
       :confirmLoading="registerLoading"
@@ -164,9 +164,18 @@
           </a-input>
         </a-form-item>
 
+        <a-form-item name="hotel_id" label="酒店 ID" :rules="[{ required: true, message: '请输入酒店 ID' }]">
+          <a-input-number
+            v-model:value="registerForm.hotel_id"
+            placeholder="请输入分配给您的酒店 ID"
+            size="large"
+            style="width: 100%"
+          />
+        </a-form-item>
+
         <a-alert
           message="提示"
-          description="注册用户默认为普通用户权限，如需升级请联系管理员。"
+          description="注册用户需绑定有效的酒店 ID。若您是系统管理员，请联系技术支持分配账户。"
           type="info"
           show-icon
         />
@@ -223,7 +232,8 @@ const registerForm = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  email: ''
+  email: '',
+  hotel_id: 1
 })
 
 const registerRules: Record<string, Rule[]> = {
@@ -259,6 +269,9 @@ const handleLogin = async () => {
     
     // 根据角色跳转到不同的页面
     switch (user.role) {
+      case 'system':
+        router.push('/system/dashboard')
+        break
       case 'admin':
         router.push('/admin/dashboard')
         break
@@ -324,6 +337,9 @@ const pollScanLogin = async (token: string) => {
       // 根据角色跳转
       const user = result.data.user
       switch (user.role) {
+        case 'system':
+          router.push('/system/dashboard')
+          break
         case 'admin':
           router.push('/admin/dashboard')
           break
@@ -370,7 +386,8 @@ const handleRegister = async () => {
     await authService.register({
       username: registerForm.username,
       password: registerForm.password,
-      email: registerForm.email || undefined
+      email: registerForm.email || undefined,
+      hotel_id: registerForm.hotel_id
     })
     
     message.success('注册成功，请登录')

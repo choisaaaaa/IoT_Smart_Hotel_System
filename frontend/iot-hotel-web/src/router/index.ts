@@ -12,6 +12,37 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     redirect: '/guest/booking'
   },
+  // 系统管理员路由
+  {
+    path: '/system',
+    component: () => import('@/components/layout/SystemLayout.vue'),
+    meta: { requiresAuth: true, roles: ['system'] },
+    children: [
+      {
+        path: '',
+        redirect: '/system/dashboard'
+      },
+      {
+        path: 'dashboard',
+        name: 'SystemDashboard',
+        component: () => import('@/views/admin/Dashboard.vue'), // 复用 Dashboard
+        meta: { title: '系统概览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['system'] }
+      },
+      {
+        path: 'hotels',
+        name: 'HotelManagement',
+        component: () => import('@/views/system/HotelManagement.vue'),
+        meta: { title: '酒店维护', icon: 'BankOutlined', requiresAuth: true, roles: ['system'] }
+      },
+      {
+        path: 'devices',
+        name: 'SystemDeviceManagement',
+        component: () => import('@/views/system/SystemDeviceManagement.vue'),
+        meta: { title: '全局设备', icon: 'MobileOutlined', requiresAuth: true, roles: ['system'] }
+      }
+    ]
+  },
+  // 酒店管理员路由
   {
     path: '/admin',
     component: () => import('@/components/layout/AdminLayout.vue'),
@@ -37,7 +68,19 @@ const routes: RouteRecordRaw[] = [
         path: 'rooms/edit',
         name: 'RoomEdit',
         component: () => import('@/views/admin/RoomEdit.vue'),
-        meta: { title: '房间信息管理', icon: 'HomeOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '房间管理', icon: 'HomeOutlined', requiresAuth: true, roles: ['admin'] }
+      },
+      {
+        path: 'rooms/types',
+        name: 'RoomTypeManage',
+        component: () => import('@/views/admin/RoomTypeManage.vue'),
+        meta: { title: '房型维护', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin'] }
+      },
+      {
+        path: 'rooms/floors',
+        name: 'FloorManage',
+        component: () => import('@/views/admin/FloorManage.vue'),
+        meta: { title: '楼层管理', icon: 'BarsOutlined', requiresAuth: true, roles: ['admin'] }
       },
       {
         path: 'hotel/info',
@@ -152,8 +195,8 @@ router.beforeEach((to, from, next) => {
   const title = to.meta.title as string
   document.title = title ? `${title} - 智联酒店` : '智联酒店 - 智慧酒店物联网控制系统'
 
-  // 检查是否需要认证
-  const requiresAuth = to.meta.requiresAuth === true
+  // 检查是否需要认证 (使用 to.matched 检查嵌套路由)
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const token = localStorage.getItem('auth_token')
   const userInfoStr = localStorage.getItem('user_info')
   const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null
@@ -163,6 +206,9 @@ router.beforeEach((to, from, next) => {
     // 如果已登录且访问登录页，重定向到对应角色的首页
     if (to.path === '/login' && token && userInfo) {
       switch (userInfo.role) {
+        case 'system':
+          next('/system/dashboard')
+          break
         case 'admin':
           next('/admin/dashboard')
           break
@@ -190,11 +236,20 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // 检查角色权限
-  const allowedRoles = to.meta.roles as string[] | undefined
-  if (allowedRoles && !allowedRoles.includes(userInfo.role)) {
+  // 检查角色权限 (使用 to.matched 查找允许的角色)
+  let allowedRoles: string[] = []
+  to.matched.forEach(record => {
+    if (record.meta.roles) {
+      allowedRoles = allowedRoles.concat(record.meta.roles as string[])
+    }
+  })
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(userInfo.role)) {
     // 角色权限不足，重定向到对应角色的首页
     switch (userInfo.role) {
+      case 'system':
+        next('/system/dashboard')
+        break
       case 'admin':
         next('/admin/dashboard')
         break

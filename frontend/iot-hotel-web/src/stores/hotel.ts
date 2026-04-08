@@ -10,8 +10,8 @@ export const useHotelStore = defineStore('hotel', () => {
   async function fetchHotelInfo() {
     loading.value = true
     try {
-      const { hotelApi } = await import('@/api/hotel')
-      const res: any = await hotelApi.getHotelInfo()
+      const { hotelManageApi } = await import('@/api/hotel-manage')
+      const res: any = await hotelManageApi.getHotelInfo()
       hotelInfo.value = res.data
     } finally {
       loading.value = false

@@ -65,7 +65,7 @@ router.post('/scan-login', async (req, res) => {
 
     // 查询并验证 Token
     const [tokens]: any = await db.execute(
-      `SELECT at.*, u.username, u.role, u.permissions, u.email
+      `SELECT at.*, u.username, u.role, u.permissions, u.email, u.hotel_id
        FROM api_tokens at
        JOIN users u ON at.user_id = u.id
        WHERE at.token = ? AND at.is_used = 0 AND at.expires_at > NOW()`,
@@ -96,6 +96,7 @@ router.post('/scan-login', async (req, res) => {
       id: tokenData.user_id,
       username: tokenData.username,
       role: tokenData.role,
+      hotel_id: tokenData.hotel_id,
       permissions: parsePermissions(tokenData.permissions)
     };
 
@@ -192,6 +193,7 @@ router.post('/login', async (req, res) => {
       id: user.id,
       username: user.username,
       role,
+      hotel_id: user.hotel_id,
       permissions
     };
 
@@ -230,10 +232,10 @@ router.post('/login', async (req, res) => {
 // 用户注册
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { username, password, email, hotel_id } = req.body;
 
-    if (!username || !password) {
-      return sendError(res, errorResponse('用户名和密码不能为空', 400));
+    if (!username || !password || !hotel_id) {
+      return sendError(res, errorResponse('用户名、密码和酒店ID不能为空', 400));
     }
 
     // 检查用户名是否已存在
@@ -251,9 +253,9 @@ router.post('/register', async (req, res) => {
 
     // 创建用户 (默认为 user 角色)
     const [result]: any = await db.execute(
-      `INSERT INTO users (username, password, email, role) 
-       VALUES (?, ?, ?, 'user')`,
-      [username, hashedPassword, email || null]
+      `INSERT INTO users (username, password, email, role, hotel_id) 
+       VALUES (?, ?, ?, 'user', ?)`,
+      [username, hashedPassword, email || null, hotel_id]
     );
 
     const userId = result.insertId;

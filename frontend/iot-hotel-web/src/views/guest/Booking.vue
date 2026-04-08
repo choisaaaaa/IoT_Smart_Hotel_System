@@ -429,7 +429,7 @@
 
     <!-- Frequent Guest Management Modal -->
     <a-modal
-      v-model:visible="showGuestModal"
+      v-model:open="showGuestModal"
       :title="editingGuestId ? '编辑联系人' : '添加联系人'"
       @ok="saveGuest"
     >

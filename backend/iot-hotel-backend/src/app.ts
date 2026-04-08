@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 
 import appConfig from './config/app';
 import routes from './routes';
@@ -18,6 +19,9 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 静态资源服务
+app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

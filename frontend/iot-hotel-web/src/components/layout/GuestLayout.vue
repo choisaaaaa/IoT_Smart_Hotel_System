@@ -61,7 +61,7 @@
 
     <!-- 登录弹窗 -->
     <a-modal
-      v-model:visible="appStore.showLoginModal"
+      v-model:open="appStore.showLoginModal"
       :footer="null"
       :closable="true"
       width="420px"
@@ -163,7 +163,7 @@
 
     <!-- 注册弹窗 -->
     <a-modal
-      v-model:visible="showRegisterModal"
+      v-model:open="showRegisterModal"
       title="用户注册"
       @ok="handleRegister"
       :confirmLoading="registerLoading"
@@ -288,7 +288,8 @@ const registerForm = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  email: ''
+  email: '',
+  hotel_id: 1
 })
 
 const registerRules: Record<string, Rule[]> = {
@@ -328,7 +329,9 @@ const handleLogin = async () => {
     appStore.showLoginModal = false
     
     // 根据角色跳转
-    if (user.role === 'admin') {
+    if (user.role === 'system') {
+      router.push('/system/dashboard')
+    } else if (user.role === 'admin') {
       router.push('/admin/dashboard')
     } else if (user.role === 'staff') {
       router.push('/reception/dashboard')
@@ -380,7 +383,9 @@ const pollScanLogin = async (token: string) => {
       appStore.showLoginModal = false
       
       const user = result.data.user
-      if (user.role === 'admin') {
+      if (user.role === 'system') {
+        router.push('/system/dashboard')
+      } else if (user.role === 'admin') {
         router.push('/admin/dashboard')
       } else if (user.role === 'staff') {
         router.push('/reception/dashboard')
@@ -412,7 +417,8 @@ const handleRegister = async () => {
     await authService.register({
       username: registerForm.username,
       password: registerForm.password,
-      email: registerForm.email || undefined
+      email: registerForm.email || undefined,
+      hotel_id: registerForm.hotel_id
     })
     
     message.success('注册成功，请登录')

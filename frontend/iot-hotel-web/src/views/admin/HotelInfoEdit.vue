@@ -113,8 +113,19 @@ async function loadData() {
 async function handleSave() {
   saving.value = true
   try {
-    await new Promise(r => setTimeout(r, 600))
+    const { hotelManageApi } = await import('@/api/hotel-manage')
+    await hotelManageApi.updateHotelInfo(null, {
+      hotel_name: formData.hotel_name,
+      hotel_address: formData.hotel_address,
+      hotel_phone: formData.hotel_phone,
+      hotel_star: formData.starNum,
+      total_rooms: formData.total_rooms,
+      description: formData.description
+    })
     message.success('酒店信息已保存成功')
+    loadData()
+  } catch (err) {
+    message.error('保存失败')
   } finally {
     saving.value = false
   }

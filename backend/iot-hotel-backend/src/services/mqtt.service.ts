@@ -2,17 +2,23 @@ import mqtt, { MqttClient, IClientOptions } from 'mqtt';
 import config from '../config';
 import logger from '../utils/logger';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
+import { calculateSignature, verifySignature } from '../utils/signature';
 
 interface DeviceStatusPayload {
   device_id: string;
+  hotel_id?: number;
   status: string;
   firmware_version?: string;
+  signature?: string;
+  timestamp?: string;
 }
 
 interface SensorDataPayload {
   device_id: string;
   sensor_type: string;
   value: string | number;
+  signature?: string;
+  timestamp?: string;
 }
 
 interface CommandResultPayload {
@@ -21,6 +27,8 @@ interface CommandResultPayload {
   command_type: string;
   status: 'success' | 'failed' | 'timeout';
   result?: string;
+  signature?: string;
+  timestamp?: string;
 }
 
 class MQTTService {
@@ -131,46 +139,117 @@ class MQTTService {
   }
 
   async handleMessage(topic: string, data: any) {
-    switch (topic) {
-      case 'hotel/device/status':
-        await this.handleDeviceStatus(data as DeviceStatusPayload);
-        break;
-      case 'hotel/device/data/temperature':
-      case 'hotel/device/data/humidity':
-      case 'hotel/device/data/light':
-      case 'hotel/device/data/motion':
-      case 'hotel/device/data/door':
-        await this.handleSensorData(data as SensorDataPayload);
-        break;
-      case 'hotel/device/command/result':
-        await this.handleCommandResult(data as CommandResultPayload);
-        break;
-      case 'hotel/security/event':
-        await this.handleSecurityEvent(data);
-        break;
-      default:
-        if (topic.startsWith('hotel/device/data/')) {
-          await this.handleSensorData(data as SensorDataPayload);
+    const deviceId = data.device_id;
+    if (!deviceId) {
+      logger.warn(`收到缺少 device_id 的消息 [${topic}]`);
+      return;
+    }
+
+    try {
+      // 1. 获取设备信息以检查审核状态和密钥
+      const [rows] = await pool.query<RowDataPacket[]>(
+        'SELECT audit_status, device_key FROM devices WHERE device_id = ?',
+        [deviceId]
+      );
+
+      const device = rows[0] as { audit_status: string, device_key: string } | undefined;
+
+      // 2. 只有处于 pending 状态的设备可以发送 status 消息进行注册
+      if (!device || device.audit_status !== 'approved') {
+        if (topic === 'hotel/device/status' || topic.startsWith('hotel/device/status/')) {
+          // 允许注册阶段的状态上报
+          await this.handleDeviceStatus(data as DeviceStatusPayload);
+          return;
         } else {
-          logger.debug(`未处理的MQTT主题: ${topic}`);
+          logger.warn(`未审核通过的设备尝试发送数据: ${deviceId} [${topic}]`);
+          return;
         }
+      }
+
+      // 3. 已通过审核的设备，必须验证签名
+      if (!data.signature || !data.timestamp) {
+        logger.error(`已审核设备发送消息缺少签名或时间戳: ${deviceId} [${topic}]`);
+        return;
+      }
+
+      // 验证时间戳（防重放攻击，容忍 5 分钟误差）
+      const msgTime = new Date(data.timestamp).getTime();
+      const now = Date.now();
+      if (isNaN(msgTime) || Math.abs(now - msgTime) > 5 * 60 * 1000) {
+        logger.error(`消息时间戳无效或已过期: ${deviceId} [${topic}]`);
+        return;
+      }
+
+      // 准备待签名的 Payload (排除 signature)
+      const { signature, ...payloadWithoutSignature } = data;
+      if (!verifySignature(payloadWithoutSignature, signature, device.device_key)) {
+        logger.error(`设备消息签名验证失败: ${deviceId} [${topic}]`);
+        return;
+      }
+
+      // 4. 签名验证通过，处理具体业务逻辑
+      switch (topic) {
+        case 'hotel/device/status':
+        case (topic.startsWith('hotel/device/status/') ? topic : ''):
+          await this.handleDeviceStatus(data as DeviceStatusPayload);
+          break;
+        case 'hotel/device/data/temperature':
+        case 'hotel/device/data/humidity':
+        case 'hotel/device/data/light':
+        case 'hotel/device/data/motion':
+        case 'hotel/device/data/door':
+          await this.handleSensorData(data as SensorDataPayload);
+          break;
+        case 'hotel/device/command/result':
+          await this.handleCommandResult(data as CommandResultPayload);
+          break;
+        case 'hotel/security/event':
+          await this.handleSecurityEvent(data);
+          break;
+        default:
+          if (topic.startsWith('hotel/device/data/')) {
+            await this.handleSensorData(data as SensorDataPayload);
+          } else {
+            logger.debug(`未处理的MQTT主题: ${topic}`);
+          }
+      }
+    } catch (error) {
+      logger.error(`处理MQTT消息时发生错误: ${error}`);
     }
   }
 
   async handleDeviceStatus(data: DeviceStatusPayload) {
     try {
       const now = new Date();
+      const hotelId = data.hotel_id || 1; // 如果未提供，默认归属到 ID 为 1 的酒店
+      
+      // 使用 INSERT ... ON DUPLICATE KEY UPDATE 兼容新设备注册和旧设备更新
       await pool.query<ResultSetHeader>(
-        `UPDATE devices SET 
-          device_status = ?, 
-          last_seen = ?, 
-          firmware_version = COALESCE(?, firmware_version),
-          updated_at = ?
-         WHERE device_id = ?`,
-        [data.status, now, data.firmware_version || null, now, data.device_id]
+        `INSERT INTO devices (
+          device_id, device_type, device_name, device_key, 
+          device_status, firmware_version, last_seen, 
+          audit_status, hotel_id, created_at, updated_at
+        ) VALUES (?, ?, ?, '', ?, ?, ?, 'pending', ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          device_status = VALUES(device_status),
+          last_seen = VALUES(last_seen),
+          firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
+          hotel_id = VALUES(hotel_id),
+          updated_at = VALUES(updated_at)`,
+        [
+          data.device_id, 
+          (data as any).device_type || 'unknown', 
+          `New Device ${data.device_id}`, 
+          data.status, 
+          data.firmware_version || null, 
+          now, 
+          hotelId,
+          now, 
+          now
+        ]
       );
 
-      logger.info(`设备状态更新: ${data.device_id} -> ${data.status}`);
+      logger.info(`设备状态更新 (MQTT): ${data.device_id} -> ${data.status}`);
 
       this.wsInstance?.emit('device_status_changed', {
         device_id: data.device_id,
@@ -278,6 +357,20 @@ class MQTTService {
 
   async sendDeviceCommand(deviceId: string, commandType: string, commandValue: string, createdBy?: string): Promise<number | null> {
     try {
+      // 1. 获取设备密钥以计算签名
+      const [rows] = await pool.query<RowDataPacket[]>(
+        'SELECT device_key FROM devices WHERE device_id = ? AND audit_status = "approved"',
+        [deviceId]
+      );
+
+      if (rows.length === 0) {
+        logger.warn(`无法向未审核或不存在的设备发送指令: ${deviceId}`);
+        return null;
+      }
+
+      const { device_key } = rows[0] as { device_key: string };
+
+      // 2. 存入数据库
       const [result] = await pool.query<ResultSetHeader>(
         `INSERT INTO control_commands (device_id, command_type, command_value, command_status, created_by, created_at)
          VALUES (?, ?, ?, 'pending', ?, NOW())`,
@@ -285,16 +378,23 @@ class MQTTService {
       );
 
       const commandId = result.insertId;
+      const timestamp = new Date().toISOString();
 
-      await this.publish('hotel/device/command', {
+      // 3. 准备带有签名的消息
+      const payload: any = {
         command_id: commandId,
         device_id: deviceId,
         command_type: commandType,
         command_value: commandValue,
-        timestamp: new Date().toISOString()
-      });
+        timestamp
+      };
 
-      logger.info(`发送设备指令: #${commandId} -> ${deviceId}/${commandType}=${commandValue}`);
+      payload.signature = calculateSignature(payload, device_key);
+
+      // 4. 发布到 MQTT
+      await this.publish('hotel/device/command', payload);
+
+      logger.info(`发送设备指令 (已签名): #${commandId} -> ${deviceId}/${commandType}=${commandValue}`);
       return commandId;
     } catch (error) {
       logger.error('发送设备指令失败:', error);

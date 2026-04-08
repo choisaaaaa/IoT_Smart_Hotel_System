@@ -28,6 +28,7 @@ client.on('connect', () => {
     const statusTopic = `hotel/device/status/room/${DEVICE_ID}`;
     const statusPayload = {
         device_id: DEVICE_ID,
+        hotel_id: 1, // 指定酒店 ID
         device_type: "room",
         status: "online",
         firmware_version: "v1.1.0_sim",

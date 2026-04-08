@@ -28,15 +28,41 @@ export interface HotelInfo {
   updated_at: string
 }
 
+export interface RoomTypeInfo {
+  id: number
+  name: string
+  code: string
+  base_price: string | number
+  area: number
+  bed_type: string
+  max_guests: number
+  facilities: string[]
+  description: string
+  images?: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface FloorInfo {
+  id: number
+  floor_number: number
+  floor_name: string
+  floor_plan_image?: string
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
 export interface RoomInfo {
   id: number
   room_number: string
-  room_type: 'standard' | 'deluxe' | 'suite' | 'presidential'
+  room_type: string
+  room_type_id: number
   room_name: string
-  room_price: string
-  room_status: 'available' | 'occupied' | 'maintenance' | 'cleaning'
+  room_price: string | number
+  room_status: 'available' | 'occupied' | 'maintenance' | 'cleaning' | 'reserved'
   floor: number
-  area: string
+  area: string | number
   bed_type: 'single' | 'double' | 'king' | 'twin'
   max_guests: number
   description: string
@@ -44,9 +70,13 @@ export interface RoomInfo {
   images: string[] | null
   created_at: string
   updated_at: string
+  // Join fields
+  room_type_name?: string
+  room_type_code?: string
 }
 
 export interface DeviceInfo {
+  id: number
   device_id: string
   device_type: 'main' | 'sub1' | 'sub2' | 'sensor' | 'actuator'
   device_name: string
@@ -54,7 +84,12 @@ export interface DeviceInfo {
   device_status: 'online' | 'offline' | 'error' | 'unknown'
   firmware_version: string
   last_seen: string
+  audit_status: 'pending' | 'approved' | 'rejected'
   room_id?: number
+  room_number?: string
+  area?: string
+  ip_address?: string
+  mac_address?: string
   created_at: string
   updated_at: string
 }

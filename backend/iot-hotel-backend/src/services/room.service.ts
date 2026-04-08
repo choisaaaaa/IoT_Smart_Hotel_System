@@ -5,6 +5,7 @@ export interface Room extends RowDataPacket {
   id: number;
   room_number: string;
   room_type: string;
+  room_type_id: number;
   room_name: string;
   room_price: number;
   room_status: string;
@@ -17,6 +18,9 @@ export interface Room extends RowDataPacket {
   images: string;
   created_at: Date;
   updated_at: Date;
+  // Join fields
+  room_type_name?: string;
+  room_type_code?: string;
 }
 
 export interface RoomListResponse {
@@ -33,29 +37,47 @@ export class RoomService {
     pageSize?: number;
     status?: string;
     type?: string;
+    floor?: number;
+    hotelId: number;
   }): Promise<RoomListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, type } = params;
+      const { page = 1, pageSize = 10, status, type, floor, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
       
-      let whereClause = 'WHERE 1=1';
-      const paramsArray: any[] = [];
+      let whereClause = 'WHERE r.hotel_id = ?';
+      const paramsArray: any[] = [hotelId];
       
       if (status) {
-        whereClause += ' AND room_status = ?';
+        whereClause += ' AND r.room_status = ?';
         paramsArray.push(status);
       }
       
       if (type) {
-        whereClause += ' AND room_type = ?';
-        paramsArray.push(type);
+        whereClause += ' AND (r.room_type = ? OR rt.code = ?)';
+        paramsArray.push(type, type);
+      }
+
+      if (floor) {
+        whereClause += ' AND r.floor = ?';
+        paramsArray.push(Number(floor));
       }
       
-      const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM rooms ${whereClause}`, paramsArray);
+      const [totalRows] = await pool.query<RowDataPacket[]>(`
+        SELECT COUNT(*) as total 
+        FROM rooms r 
+        LEFT JOIN room_types rt ON r.room_type_id = rt.id 
+        ${whereClause}`, 
+        paramsArray
+      );
       const total = (totalRows[0] as any).total;
       
       const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT * FROM rooms ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
+         FROM rooms r 
+         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
+         ${whereClause} 
+         ORDER BY r.floor ASC, r.room_number ASC 
+         LIMIT ? OFFSET ?`,
         [...paramsArray, Number(pageSize), offset]
       );
       
@@ -72,9 +94,45 @@ export class RoomService {
     }
   }
 
-  static async getRoomById(id: number): Promise<Room | null> {
+  static async getRoomsByFloor(hotelId: number): Promise<any> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM rooms WHERE id = ?', [id]);
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
+         FROM rooms r 
+         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
+         WHERE r.hotel_id = ?
+         ORDER BY r.floor ASC, r.room_number ASC`,
+        [hotelId]
+      );
+
+      const grouped: Record<number, Room[]> = {};
+      rows.forEach((row) => {
+        const floor = row.floor;
+        if (!grouped[floor]) {
+          grouped[floor] = [];
+        }
+        grouped[floor].push(row as Room);
+      });
+
+      return Object.keys(grouped).map(floor => ({
+        floor: Number(floor),
+        rooms: grouped[Number(floor)]
+      }));
+    } catch (error) {
+      logger.error('按楼层获取房间失败:', error);
+      throw new Error('按楼层获取房间失败');
+    }
+  }
+
+  static async getRoomById(id: number, hotelId: number): Promise<Room | null> {
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
+         FROM rooms r 
+         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
+         WHERE r.id = ? AND r.hotel_id = ?`, 
+        [id, hotelId]
+      );
       return (rows[0] as Room) || null;
     } catch (error) {
       logger.error('获取房间详情失败:', error);
@@ -82,13 +140,14 @@ export class RoomService {
     }
   }
 
-  static async createRoom(data: Partial<Room>): Promise<number> {
+  static async createRoom(data: Partial<Room> & { hotel_id: number }): Promise<number> {
     try {
-      const { room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = data;
+      const { room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id } = data;
       
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO rooms (room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || [])]
+        `INSERT INTO rooms (room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), hotel_id]
       );
       
       return result.insertId;
@@ -98,13 +157,27 @@ export class RoomService {
     }
   }
 
-  static async updateRoom(id: number, data: Partial<Room>): Promise<boolean> {
+  static async updateRoom(id: number, hotelId: number, data: Partial<Room>): Promise<boolean> {
     try {
-      const { room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = data;
+      const { room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = data;
       
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE rooms SET room_number = ?, room_type = ?, room_name = ?, room_price = ?, room_status = ?, floor = ?, area = ?, bed_type = ?, max_guests = ?, description = ?, facilities = ?, images = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id]
+        `UPDATE rooms SET 
+          room_number = COALESCE(?, room_number), 
+          room_type_id = COALESCE(?, room_type_id), 
+          room_name = COALESCE(?, room_name), 
+          room_price = COALESCE(?, room_price), 
+          room_status = COALESCE(?, room_status), 
+          floor = COALESCE(?, floor), 
+          area = COALESCE(?, area), 
+          bed_type = COALESCE(?, bed_type), 
+          max_guests = COALESCE(?, max_guests), 
+          description = COALESCE(?, description), 
+          facilities = ?, 
+          images = ?, 
+          updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND hotel_id = ?`,
+        [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id, hotelId]
       );
       
       return result.affectedRows > 0;
@@ -114,9 +187,9 @@ export class RoomService {
     }
   }
 
-  static async deleteRoom(id: number): Promise<boolean> {
+  static async deleteRoom(id: number, hotelId: number): Promise<boolean> {
     try {
-      const [result] = await pool.query<ResultSetHeader>('DELETE FROM rooms WHERE id = ?', [id]);
+      const [result] = await pool.query<ResultSetHeader>('DELETE FROM rooms WHERE id = ? AND hotel_id = ?', [id, hotelId]);
       return result.affectedRows > 0;
     } catch (error) {
       logger.error('删除房间失败:', error);

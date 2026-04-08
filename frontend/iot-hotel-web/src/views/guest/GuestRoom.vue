@@ -161,6 +161,7 @@ import {
   CarOutlined, MedicineBoxOutlined, ScissorOutlined,
   WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons-vue'
+import { useHotelStore } from '@/stores/hotel'
 
 // 检查是否已办理入住
 const isCheckedIn = computed(() => {
@@ -168,6 +169,7 @@ const isCheckedIn = computed(() => {
   return !!guestInfo
 })
 
+const hotelStore = useHotelStore()
 const activeTab = ref('butler')
 const inputText = ref('')
 const aiThinking = ref(false)
@@ -176,26 +178,24 @@ const messageModalVisible = ref(false)
 const msgContent = ref('')
 const deliveryLoading = ref(false)
 
-// 页面加载时检查入住状态
-onMounted(() => {
-  if (!isCheckedIn.value) {
-    message.info('您还未办理入住，部分功能可能受限')
-  }
-})
+const chatMessages = ref<{ role: string; content: string }[]>([])
 
-const chatMessages = ref<{ role: string; content: string }[]>([
-  { role: 'assistant', content: '您好！我是智联酒店的 AI 管家 🤖。我可以帮您控制房间设备、请求送物、联系前台等。请问有什么可以帮您的？' }
-])
+const updateInitialMessage = () => {
+  const hotelName = hotelStore.hotelInfo?.hotel_name || '智联酒店'
+  chatMessages.value = [
+    { role: 'assistant', content: `您好！我是${hotelName}的 AI 管家 🤖。我可以帮您控制房间设备、请求送物、联系前台等。请问有什么可以帮您的？` }
+  ]
+}
 
 const quickQuestions = ['帮我打开空调', '送两瓶矿泉水', '现在几点了', '明天天气怎么样', '我想续住一晚']
 
 const deliveryForm = reactive({ category: 'beverage', item_name: '', quantity: 1, note: '' })
 
-const hotlines = [
-  { name: '总机前台', desc: '24小时服务', icon: PhoneOutlined, number: '010-12345678' },
+const hotlines = computed(() => [
+  { name: '总机前台', desc: '24小时服务', icon: PhoneOutlined, number: hotelStore.hotelInfo?.hotel_phone || '010-12345678' },
   { name: '客房服务中心', desc: '送物、清洁等服务', icon: SendOutlined, number: '分机 8001' },
   { name: '紧急救援', desc: '紧急情况专用', icon: SafetyCertificateOutlined, number: '110 / 120' }
-]
+])
 
 const extraServices = [
   { key: 'taxi', name: '叫车服务', icon: '🚗', desc: '预约出租车/专车' },
@@ -205,6 +205,15 @@ const extraServices = [
   { key: 'maintenance', name: '报修服务', icon: '🔧', desc: '设备故障报修' },
   { key: 'extend', name: '续住申请', icon: '📅', desc: '延长住宿时间' }
 ]
+
+// 页面加载时检查入住状态
+onMounted(async () => {
+  if (!isCheckedIn.value) {
+    message.info('您还未办理入住，部分功能可能受限')
+  }
+  await hotelStore.fetchHotelInfo()
+  updateInitialMessage()
+})
 
 async function sendMessage() {
   const text = inputText.value.trim()
