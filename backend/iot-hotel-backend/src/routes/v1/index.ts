@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { successResponse } from '../../types';
 import guests from './guests';
+import hotels from './hotels';
 
 const router = Router();
 
 router.use('/guests', guests);
+router.use('/hotels', hotels);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({

@@ -1,9 +1,13 @@
 import { Router } from 'express';
+import { list, detail, create, update, remove, updatePassword } from '../../controllers/user.controller';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
-  res.json({ message: '用户管理接口' });
-});
+router.get('/', list);
+router.get('/:id', detail);
+router.post('/', create);
+router.put('/:id', update);
+router.delete('/:id', remove);
+router.put('/:id/password', updatePassword);
 
 export default router;

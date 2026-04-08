@@ -169,6 +169,18 @@ async function confirmCheckin() {
   try {
     await new Promise(r => setTimeout(r, 1200))
     roomPin.value = Math.random().toString(36).substring(2, 8).toUpperCase()
+    
+    // 保存实名信息到 localStorage
+    const guestInfo = {
+      real_name: checkinForm.real_name,
+      id_type: checkinForm.id_type,
+      id_number: checkinForm.id_number,
+      room_name: foundBooking.value?.room_name,
+      booking_no: foundBooking.value?.booking_no,
+      check_in_date: new Date().toISOString()
+    }
+    localStorage.setItem('guest_checkin_info', JSON.stringify(guestInfo))
+    
     currentStep.value = 3
     message.success('入住办理成功！')
   } finally {

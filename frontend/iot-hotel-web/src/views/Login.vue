@@ -1,81 +1,11 @@
 <template>
-  <div class="guest-layout">
-    <a-layout>
-      <a-layout-header class="guest-header">
-        <div class="header-left">
-          <MobileOutlined class="header-logo" />
-          <h3 @click="$router.push('/guest/booking')">智联酒店</h3>
-        </div>
-        <div class="header-nav">
-          <a-button
-            type="text"
-            :class="{ active: isActive('/guest/booking') || isActive('/guest/checkin-online') }"
-            @click="$router.push('/guest/booking')"
-          >预订入住</a-button>
-          <a-button
-            type="text"
-            :class="{ active: isActive('/guest/room') }"
-            @click="$router.push('/guest/room')"
-          >客房服务</a-button>
-          <a-button type="text" @click="handleAdminAccess">
-            <SettingOutlined /> 管理入口
-          </a-button>
-        </div>
-        <div class="header-right">
-          <a-tag :color="appStore.connected ? 'success' : 'default'" size="small">
-            {{ appStore.connected ? '在线' : '' }}
-          </a-tag>
-          <template v-if="!userInfo">
-            <a-button type="primary" @click="showLoginModal = true">
-              <UserOutlined /> 登录/注册
-            </a-button>
-          </template>
-          <template v-else>
-            <a-dropdown>
-              <a class="user-dropdown" @click.prevent>
-                <a-tag color="blue">{{ userInfo.username }}</a-tag>
-              </a>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="profile">
-                    <UserOutlined /> 我的账户
-                  </a-menu-item>
-                  <a-menu-item key="logout" @click="handleLogout">
-                    <LogoutOutlined /> 退出登录
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </template>
-        </div>
-      </a-layout-header>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-header">
+        <h1 class="login-title">智联酒店</h1>
+        <p class="login-subtitle">智慧酒店物联网控制系统</p>
+      </div>
 
-      <a-layout-content class="guest-content">
-        <router-view />
-      </a-layout-content>
-
-      <a-layout-footer class="guest-footer">
-        <p>©2026 智联酒店 - 智慧酒店物联网控制系统</p>
-        <p class="footer-links">
-          <a href="#">关于我们</a> · <a href="#">服务条款</a> · <a href="#">隐私政策</a> · <a href="#">联系客服</a>
-        </p>
-      </a-layout-footer>
-    </a-layout>
-
-    <!-- 登录弹窗 -->
-    <a-modal
-      v-model:visible="showLoginModal"
-      :footer="null"
-      :closable="true"
-      width="420px"
-      @cancel="showLoginModal = false"
-    >
-      <template #title>
-        <div style="text-align: center; font-size: 18px; font-weight: 600;">
-          欢迎登录智联酒店
-        </div>
-      </template>
-      
       <a-tabs v-model:activeKey="activeTab" class="login-tabs">
         <a-tab-pane key="password" tab="密码登录">
           <a-form
@@ -115,7 +45,7 @@
                 html-type="submit"
                 size="large"
                 block
-                :loading="loginLoading"
+                :loading="loading"
               >
                 登录
               </a-button>
@@ -123,7 +53,7 @@
 
             <div class="form-footer">
               <span>还没有账号？</span>
-              <a @click="showRegisterModal = true">立即注册</a>
+              <a @click="showRegisterModal">立即注册</a>
             </div>
           </a-form>
         </a-tab-pane>
@@ -131,7 +61,14 @@
         <a-tab-pane key="scan" tab="扫码登录">
           <div class="scan-login-container">
             <div v-if="!scanToken" class="scan-intro">
-              <p class="scan-tip">请使用智联酒店 APP 扫码登录</p>
+              <a-qrcode
+                :value="scanUrl"
+                :size="200"
+                :bg-color="'#ffffff'"
+                :color="'#000000'"
+                :level="'H'"
+              />
+              <p class="scan-tip">请使用管理端 APP 扫码登录</p>
               <a-button
                 type="primary"
                 @click="handleGenerateToken"
@@ -162,11 +99,11 @@
           </div>
         </a-tab-pane>
       </a-tabs>
-    </a-modal>
+    </div>
 
     <!-- 注册弹窗 -->
     <a-modal
-      v-model:visible="showRegisterModal"
+      v-model:visible="registerVisible"
       title="用户注册"
       @ok="handleRegister"
       :confirmLoading="registerLoading"
@@ -226,6 +163,13 @@
             </template>
           </a-input>
         </a-form-item>
+
+        <a-alert
+          message="提示"
+          description="注册用户默认为普通用户权限，如需升级请联系管理员。"
+          type="info"
+          show-icon
+        />
       </a-form>
     </a-modal>
   </div>
@@ -233,35 +177,21 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { Rule } from 'ant-design-vue/es/form'
 import {
-  MobileOutlined,
-  SettingOutlined,
   UserOutlined,
   LockOutlined,
-  MailOutlined,
-  LogoutOutlined
+  MailOutlined
 } from '@ant-design/icons-vue'
-import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'
+import type { Rule } from 'ant-design-vue/es/form'
 
-const route = useRoute()
 const router = useRouter()
-const appStore = useAppStore()
-
-// 用户信息
-const userInfo = computed(() => {
-  const userInfoStr = localStorage.getItem('user_info')
-  return userInfoStr ? JSON.parse(userInfoStr) : null
-})
 
 // 登录相关
-const showLoginModal = ref(false)
-const showRegisterModal = ref(false)
 const activeTab = ref('password')
-const loginLoading = ref(false)
+const loading = ref(false)
 const loginFormRef = ref()
 const loginForm = reactive({
   username: '',
@@ -283,8 +213,10 @@ const loginRules: Record<string, Rule[]> = {
 const generatingToken = ref(false)
 const scanToken = ref('')
 const tokenExpireTime = ref(0)
+const scanUrl = 'scan-login://iot-hotel-system'
 
 // 注册相关
+const registerVisible = ref(false)
 const registerLoading = ref(false)
 const registerFormRef = ref()
 const registerForm = reactive({
@@ -317,50 +249,32 @@ const registerRules: Record<string, Rule[]> = {
   ]
 }
 
-function isActive(path: string): boolean {
-  return route.path.startsWith(path)
-}
-
-// 处理管理入口访问
-function handleAdminAccess() {
-  const token = localStorage.getItem('auth_token')
-  const userInfo = localStorage.getItem('user_info')
-  
-  if (!token || !userInfo) {
-    // 未登录，打开登录弹窗
-    showLoginModal.value = true
-  } else {
-    // 已登录，检查角色
-    const user = JSON.parse(userInfo)
-    if (user.role === 'admin') {
-      router.push('/admin/dashboard')
-    } else if (user.role === 'staff') {
-      router.push('/reception/dashboard')
-    } else {
-      message.warning('您没有权限访问管理端')
-    }
-  }
-}
-
 // 处理登录
 const handleLogin = async () => {
   try {
-    loginLoading.value = true
+    loading.value = true
     const { user } = await authService.login(loginForm)
     
     message.success('登录成功')
-    showLoginModal.value = false
     
-    // 根据角色跳转
-    if (user.role === 'admin' || user.role === 'staff') {
-      setTimeout(() => {
-        router.push(user.role === 'admin' ? '/admin/dashboard' : '/reception/dashboard')
-      }, 500)
+    // 根据角色跳转到不同的页面
+    switch (user.role) {
+      case 'admin':
+        router.push('/admin/dashboard')
+        break
+      case 'staff':
+        router.push('/reception/dashboard')
+        break
+      case 'user':
+        router.push('/guest/booking')
+        break
+      default:
+        router.push('/admin/dashboard')
     }
   } catch (error) {
     console.error('登录失败:', error)
   } finally {
-    loginLoading.value = false
+    loading.value = false
   }
 }
 
@@ -389,6 +303,7 @@ const pollScanLogin = async (token: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 3000))
     
+    // 检查 token 是否仍然有效 (未被使用)
     const response = await fetch('http://localhost:9000/api/v1/auth/scan-login', {
       method: 'POST',
       headers: {
@@ -400,19 +315,33 @@ const pollScanLogin = async (token: string) => {
     const result = await response.json()
     
     if (result.code === 200) {
+      // 扫码登录成功
       message.success('扫码登录成功')
-      showLoginModal.value = false
       
+      // 保存用户信息
+      localStorage.setItem('user_info', JSON.stringify(result.data.user))
+      
+      // 根据角色跳转
       const user = result.data.user
-      if (user.role === 'admin' || user.role === 'staff') {
-        setTimeout(() => {
-          router.push(user.role === 'admin' ? '/admin/dashboard' : '/reception/dashboard')
-        }, 500)
+      switch (user.role) {
+        case 'admin':
+          router.push('/admin/dashboard')
+          break
+        case 'staff':
+          router.push('/reception/dashboard')
+          break
+        case 'user':
+          router.push('/guest/booking')
+          break
+        default:
+          router.push('/admin/dashboard')
       }
     } else if (result.code === 401) {
+      // Token 无效或已过期，继续轮询
       pollScanLogin(token)
     }
   } catch (error) {
+    // 网络错误，继续轮询
     pollScanLogin(token)
   }
 }
@@ -429,6 +358,11 @@ const handleResetScan = () => {
   tokenExpireTime.value = 0
 }
 
+// 显示注册弹窗
+const showRegisterModal = () => {
+  registerVisible.value = true
+}
+
 // 处理注册
 const handleRegister = async () => {
   try {
@@ -440,7 +374,7 @@ const handleRegister = async () => {
     })
     
     message.success('注册成功，请登录')
-    showRegisterModal.value = false
+    registerVisible.value = false
     
     // 清空表单
     registerForm.username = ''
@@ -456,67 +390,97 @@ const handleRegister = async () => {
     registerLoading.value = false
   }
 }
-
-// 处理登出
-const handleLogout = async () => {
-  try {
-    await authService.logout()
-    message.success('已退出登录')
-    // 刷新页面
-    window.location.reload()
-  } catch (error) {
-    console.error('登出失败:', error)
-  }
-}
 </script>
 
 <style scoped>
-.guest-layout { min-height: 100vh; background: linear-gradient(180deg, #f0f5ff 0%, #e6f7ff 100%); }
-.guest-header {
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+.login-container {
+  min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 32px;
-  height: 60px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.header-left { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.header-logo { font-size: 26px; color: #1890ff; }
-.header-left h3 { margin: 0; font-size: 18px; background: linear-gradient(135deg, #1890ff, #722ed1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
-.header-nav { display: flex; gap: 4px; }
-.header-nav .ant-btn { font-size: 15px; padding: 4px 16px; border-radius: 20px; font-weight: 500; }
-.header-nav .ant-btn.active { background: #e6f7ff; color: #1890ff; }
-.header-right { display: flex; align-items: center; gap: 12px; }
-.user-dropdown { cursor: pointer; }
-.guest-content {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 28px 24px;
-  min-height: calc(100vh - 60px - 80px);
-}
-.guest-footer {
-  text-align: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
-  color: rgba(0,0,0,0.45);
-  background: transparent;
 }
-.guest-footer p { margin: 4px 0; font-size: 13px; }
-.footer-links a { color: rgba(0,0,0,0.45); }
-.footer-links a:hover { color: #1890ff; }
 
-.login-tabs { margin-top: 16px; }
-.form-footer { text-align: center; margin-top: 16px; color: #666; }
-.form-footer a { color: #667eea; text-decoration: none; margin-left: 8px; }
-.form-footer a:hover { text-decoration: underline; }
+.login-box {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
 
-.scan-login-container { padding: 20px 0; text-align: center; }
-.scan-intro { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.scan-tip { color: #666; margin: 0; font-size: 14px; }
-.scan-waiting { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.scan-token-display { margin-top: 16px; }
-.scan-token-display p { margin: 0 0 8px 0; color: #666; font-size: 14px; }
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-title {
+  font-size: 32px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.login-tabs {
+  margin-top: 24px;
+}
+
+.form-footer {
+  text-align: center;
+  margin-top: 16px;
+  color: #666;
+}
+
+.form-footer a {
+  color: #667eea;
+  text-decoration: none;
+  margin-left: 8px;
+}
+
+.form-footer a:hover {
+  text-decoration: underline;
+}
+
+.scan-login-container {
+  padding: 20px 0;
+  text-align: center;
+}
+
+.scan-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.scan-tip {
+  color: #666;
+  margin: 0;
+  font-size: 14px;
+}
+
+.scan-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.scan-token-display {
+  margin-top: 16px;
+}
+
+.scan-token-display p {
+  margin: 0 0 8px 0;
+  color: #666;
+  font-size: 14px;
+}
 </style>

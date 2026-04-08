@@ -1,7 +1,7 @@
 <template>
   <div class="guest-room">
     <a-tabs v-model:activeKey="activeTab" centered size="large">
-      <a-tab-pane key="butler" tab="🤖 AI客房管家">
+      <a-tab-pane v-if="isCheckedIn" key="butler" tab="🤖 AI 客房管家">
         <div class="chat-container">
           <div class="chat-messages" ref="chatContainerRef">
             <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['message', msg.role]">
@@ -41,7 +41,18 @@
       </a-tab-pane>
 
       <a-tab-pane key="delivery" tab="📦 客房送物">
-        <a-card title="请求配送物品到房间" :bordered="false">
+        <a-alert
+          v-if="!isCheckedIn"
+          message="温馨提示"
+          description="请先办理入住手续后再使用客房送物服务"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <a-card title="请求配送物品到房间" :bordered="false" :disabled="!isCheckedIn">
+          <div v-if="!isCheckedIn" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 10; display: flex; align-items: center; justify-content: center;">
+            <a-button type="primary" @click="$router.push('/guest/checkin-online')">去办理入住</a-button>
+          </div>
           <a-form :model="deliveryForm" layout="vertical">
             <a-form-item label="物品类别" required>
               <a-select v-model:value="deliveryForm.category">
@@ -70,49 +81,69 @@
       </a-tab-pane>
 
       <a-tab-pane key="contact" tab="📞 联系前台">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="24" :md="12">
-            <a-card hoverable @click="callFrontDesk" class="contact-card">
-              <PhoneOutlined style="font-size: 36px; color: #1890ff;" />
-              <h3>呼叫前台</h3>
-              <p>一键拨打前台电话，即时沟通</p>
-              <a-button type="primary" block>立即呼叫</a-button>
-            </a-card>
-          </a-col>
-          <a-col :xs="24" :md="12">
-            <a-card hoverable @click="showMessagePanel" class="contact-card">
-              <MessageOutlined style="font-size: 36px; color: #52c41a;" />
-              <h3>在线留言</h3>
-              <p>发送文字消息给前台工作人员</p>
-              <a-button block>发送消息</a-button>
-            </a-card>
-          </a-col>
-        </a-row>
+        <a-alert
+          v-if="!isCheckedIn"
+          message="温馨提示"
+          description="请先办理入住手续后再使用联系前台服务"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <div :style="{ opacity: !isCheckedIn ? 0.5 : 1, pointerEvents: !isCheckedIn ? 'none' : 'auto' }">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="24" :md="12">
+              <a-card hoverable @click="callFrontDesk" class="contact-card">
+                <PhoneOutlined style="font-size: 36px; color: #1890ff;" />
+                <h3>呼叫前台</h3>
+                <p>一键拨打前台电话，即时沟通</p>
+                <a-button type="primary" block>立即呼叫</a-button>
+              </a-card>
+            </a-col>
+            <a-col :xs="24" :md="12">
+              <a-card hoverable @click="showMessagePanel" class="contact-card">
+                <MessageOutlined style="font-size: 36px; color: #52c41a;" />
+                <h3>在线留言</h3>
+                <p>发送文字消息给前台工作人员</p>
+                <a-button block>发送消息</a-button>
+              </a-card>
+            </a-col>
+          </a-row>
 
-        <a-card title="常用服务热线" :bordered="false" style="margin-top: 16px;">
-          <a-list :data-source="hotlines" size="small">
-            <template #renderItem="{ item }">
-              <a-list-item>
-                <a-list-item-meta :title="item.name" :description="item.desc">
-                  <template #avatar><component :is="item.icon" style="font-size: 22px; color: #1890ff;" /></template>
-                </a-list-item-meta>
-                <a-tag color="blue">{{ item.number }}</a-tag>
-              </a-list-item>
-            </template>
-          </a-list>
-        </a-card>
+          <a-card title="常用服务热线" :bordered="false" style="margin-top: 16px;">
+            <a-list :data-source="hotlines" size="small">
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta :title="item.name" :description="item.desc">
+                    <template #avatar><component :is="item.icon" style="font-size: 22px; color: #1890ff;" /></template>
+                  </a-list-item-meta>
+                  <a-tag color="blue">{{ item.number }}</a-tag>
+                </a-list-item>
+              </template>
+            </a-list>
+          </a-card>
+        </div>
       </a-tab-pane>
 
       <a-tab-pane key="services" tab="⚙️ 更多服务">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="12" :sm="8" v-for="svc in extraServices" :key="svc.key">
-            <a-card hoverable size="small" class="service-tile" @click="handleService(svc)">
-              <div style="font-size: 32px; text-align: center; margin-bottom: 8px;">{{ svc.icon }}</div>
-              <h4 style="text-align: center;">{{ svc.name }}</h4>
-              <p style="text-align: center; font-size: 12px; color: rgba(0,0,0,0.45);">{{ svc.desc }}</p>
-            </a-card>
-          </a-col>
-        </a-row>
+        <a-alert
+          v-if="!isCheckedIn"
+          message="温馨提示"
+          description="请先办理入住手续后再使用更多服务"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <div :style="{ opacity: !isCheckedIn ? 0.5 : 1, pointerEvents: !isCheckedIn ? 'none' : 'auto' }">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="12" :sm="8" v-for="svc in extraServices" :key="svc.key">
+              <a-card hoverable size="small" class="service-tile" @click="handleService(svc)">
+                <div style="font-size: 32px; text-align: center; margin-bottom: 8px;">{{ svc.icon }}</div>
+                <h4 style="text-align: center;">{{ svc.name }}</h4>
+                <p style="text-align: center; font-size: 12px; color: rgba(0,0,0,0.45);">{{ svc.desc }}</p>
+              </a-card>
+            </a-col>
+          </a-row>
+        </div>
       </a-tab-pane>
     </a-tabs>
 
@@ -123,13 +154,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive, nextTick, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   SendOutlined, PhoneOutlined, MessageOutlined,
   CarOutlined, MedicineBoxOutlined, ScissorOutlined,
   WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons-vue'
+
+// 检查是否已办理入住
+const isCheckedIn = computed(() => {
+  const guestInfo = localStorage.getItem('guest_checkin_info')
+  return !!guestInfo
+})
 
 const activeTab = ref('butler')
 const inputText = ref('')
@@ -138,6 +175,13 @@ const chatContainerRef = ref<HTMLDivElement>()
 const messageModalVisible = ref(false)
 const msgContent = ref('')
 const deliveryLoading = ref(false)
+
+// 页面加载时检查入住状态
+onMounted(() => {
+  if (!isCheckedIn.value) {
+    message.info('您还未办理入住，部分功能可能受限')
+  }
+})
 
 const chatMessages = ref<{ role: string; content: string }[]>([
   { role: 'assistant', content: '您好！我是智联酒店的 AI 管家 🤖。我可以帮您控制房间设备、请求送物、联系前台等。请问有什么可以帮您的？' }
