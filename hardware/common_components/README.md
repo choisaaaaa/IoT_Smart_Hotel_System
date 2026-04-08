@@ -61,3 +61,13 @@
 * **`driver_oled` (本地显示驱动)**
   * **核心 API**: `driver_oled_show_text_line(line, text)`
   * **功能**: 简化 I2C OLED 屏幕驱动流程。业务层仅需指定行号与字符文本，底层自动完成字模映射与像素换算。
+
+#### 已登记驱动清单（按分层目录 `drivers/`）
+
+- 执行/交互：`driver_sg90`、`driver_relay`、`driver_buzzer_active`、`driver_rgb_led`、`driver_ec11`
+- 传感采集：`driver_dht11`、`driver_mq2`、`driver_ldr`、`driver_ntc`、`driver_potentiometer`、`driver_rd03_simple`、`driver_rd03_uart`
+- 通信与存储：`driver_rc522`、`driver_w25q64`
+- 显示与红外：`driver_oled`、`driver_ir_tx`、`driver_ir_rx`
+- 音频相关：`driver_inmp441`、`driver_lmd2718_mic`、`driver_ns4168`、`driver_pam8403`
+
+> 注：音频链路建议主线为 **LMD2718 + NS4168**；`INMP441`、`PAM8403` 保留为兼容/备选。

@@ -5,7 +5,12 @@
 cmake_minimum_required(VERSION 3.16)
 
 # 引入我们刚才创建的“高复用组件池”
-set(EXTRA_COMPONENT_DIRS "../common_components")
+set(EXTRA_COMPONENT_DIRS
+    "../common_components/drivers"
+    "../common_components/hal"
+    "../common_components/services"
+    "../common_components/config"
+)
 
 # Include the main ESP-IDF build system script
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
