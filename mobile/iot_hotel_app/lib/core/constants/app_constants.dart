@@ -3,7 +3,7 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 
   static const String tokenKey = 'access_token';
-  static const String refreshTokenKey = 'refresh_token';
+  static const String sessionTokenKey = 'session_token';
   static const String userInfoKey = 'user_info';
 
   static const List<String> userRoles = ['admin', 'reception', 'guest'];

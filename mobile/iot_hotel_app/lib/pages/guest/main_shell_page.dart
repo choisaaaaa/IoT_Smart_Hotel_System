@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'hotel_list_page.dart';
+import 'room_service_page.dart';
 import 'member_page.dart';
 import 'profile_page.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,7 +19,7 @@ class _MainShellPageState extends State<MainShellPage> {
   final List<Widget> _pages = [
     const HomePage(),
     const HotelListPage(),
-    const Center(child: Text('定制服务 (开发中)')),
+    const RoomServicePage(),
     const MemberPage(),
     const ProfilePage(),
   ];

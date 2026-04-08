@@ -1,21 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../routes/app_router.dart';
 
-class OrderListPage extends StatefulWidget {
+class OrderListPage extends ConsumerStatefulWidget {
   const OrderListPage({super.key});
 
   @override
-  State<OrderListPage> createState() => _OrderListPageState();
+  ConsumerState<OrderListPage> createState() => _OrderListPageState();
 }
 
-class _OrderListPageState extends State<OrderListPage> with SingleTickerProviderStateMixin {
+class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = false;
+  List<dynamic> _orders = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    _fetchOrders();
+  }
+
+  Future<void> _fetchOrders() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(bookingServiceProvider).getBookings();
+      if (result.success) {
+        setState(() {
+          _orders = result.data?['list'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching orders: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -44,9 +65,9 @@ class _OrderListPageState extends State<OrderListPage> with SingleTickerProvider
         ),
         centerTitle: true,
         actions: [
-          TextButton(
-            onPressed: () {},
-            child: const Text('开发票', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
+            onPressed: _fetchOrders,
           ),
         ],
         bottom: TabBar(
@@ -65,67 +86,81 @@ class _OrderListPageState extends State<OrderListPage> with SingleTickerProvider
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildOrderList(),
-          const Center(child: Text('暂无待支付订单')),
-          const Center(child: Text('暂无待入住订单')),
-          const Center(child: Text('暂无待评价订单')),
-          const Center(child: Text('暂无取消订单')),
-        ],
-      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : TabBarView(
+            controller: _tabController,
+            children: [
+              _buildOrderList(),
+              const Center(child: Text('暂无待支付订单')),
+              const Center(child: Text('暂无待入住订单')),
+              const Center(child: Text('暂无待评价订单')),
+              const Center(child: Text('暂无取消订单')),
+            ],
+          ),
     );
   }
 
   Widget _buildOrderList() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      children: [
-        _buildNoticeBar(),
-        _buildSortBar(),
-        _buildOrderItem(
-          hotelName: '星程珠海金湾机场酒店',
-          status: '已完成',
-          dateRange: '04.04-04.06',
-          nights: 2,
-          roomType: '商务双床房',
-          rooms: 1,
-          price: '761.44',
-          isCompleted: true,
-        ),
-        _buildOrderItem(
-          hotelName: '星程珠海金湾机场酒店',
-          status: '已取消',
-          dateRange: '04.04-04.06',
-          nights: 2,
-          roomType: '商务双床房',
-          rooms: 1,
-          price: '781.44',
-          isCompleted: false,
-        ),
-        _buildOrderItem(
-          hotelName: '星程珠海金湾机场酒店',
-          status: '已完成',
-          dateRange: '03.28-03.29',
-          nights: 1,
-          roomType: '商务双床房',
-          rooms: 1,
-          price: '254.32',
-          isCompleted: true,
-        ),
-        _buildOrderItem(
-          hotelName: '星程珠海金湾机场酒店',
-          status: '已完成',
-          dateRange: '03.27-03.28',
-          nights: 1,
-          roomType: '商务双床房',
-          rooms: 1,
-          price: '254.32',
-          isCompleted: true,
-        ),
-      ],
+    if (_orders.isEmpty) {
+      return const Center(child: Text('暂无订单'));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchOrders,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        itemCount: _orders.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) return _buildNoticeBar();
+          if (index == 1) return _buildSortBar();
+          
+          final order = _orders[index - 2];
+          return _buildOrderItem(
+            hotelName: '智联酒店 (珠海店)',
+            status: _getStatusText(order['status']),
+            dateRange: '${_formatDate(order['check_in_date'])} - ${_formatDate(order['check_out_date'])}',
+            nights: _calculateNights(order['check_in_date'], order['check_out_date']),
+            roomType: order['room_type'] ?? '标准间',
+            rooms: order['guest_count'] ?? 1,
+            price: order['total_price']?.toString() ?? '0.00',
+            isCompleted: order['status'] == 'checked_out',
+          );
+        },
+      ),
     );
+  }
+
+  String _getStatusText(String? status) {
+    switch (status) {
+      case 'pending': return '待支付';
+      case 'confirmed': return '待入住';
+      case 'checked_in': return '已入住';
+      case 'checked_out': return '已完成';
+      case 'cancelled': return '已取消';
+      default: return '未知状态';
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.month}.${date.day}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  int _calculateNights(String? checkIn, String? checkOut) {
+    if (checkIn == null || checkOut == null) return 1;
+    try {
+      final start = DateTime.parse(checkIn);
+      final end = DateTime.parse(checkOut);
+      return end.difference(start).inDays;
+    } catch (e) {
+      return 1;
+    }
   }
 
   Widget _buildNoticeBar() {
@@ -271,6 +306,27 @@ class _OrderListPageState extends State<OrderListPage> with SingleTickerProvider
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (status == '待支付')
+                FilledButton(
+                  onPressed: () {},
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('去支付', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              if (status == '待入住')
+                FilledButton(
+                  onPressed: () {},
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('办理入住', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(

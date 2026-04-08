@@ -13,25 +13,47 @@ class AuthService {
 
   Future<ApiResult<Map<String, dynamic>>> login(String username, String password) async {
     try {
-      final response = await _dioClient.post(ApiConstants.authLogin, data: {'username': username, 'password': password});
+      final response = await _dioClient.post(ApiConstants.authLogin, data: {
+        'username': username,
+        'password': password,
+      });
+      
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         await _localStorage.saveToken(data['token']);
-        if (data['refresh_token'] != null) {
-          await _localStorage.saveRefreshToken(data['refresh_token']);
+        if (data['sessionToken'] != null) {
+          await _localStorage.saveSessionToken(data['sessionToken']);
         }
         await _localStorage.save(AppConstants.userInfoKey, jsonEncode(data['user']));
-        return ApiResult.success(data as Map<String, dynamic>);
-      }
-      return ApiResult.failure(response.data['message'] ?? '登录失败');
-    } catch (e) { return ApiResult.failure('网络错误：$e'); }
-  }
+         return ApiResult.success(data as Map<String, dynamic>);
+       }
+       return ApiResult.failure(response.data['message'] ?? '登录失败');
+     } catch (e) {
+       return ApiResult.failure('网络错误：$e');
+     }
+   }
+ 
+   Future<ApiResult<Map<String, dynamic>>> register(String username, String password, String? email) async {
+     try {
+       final response = await _dioClient.post(ApiConstants.authRegister, data: {
+         'username': username,
+         'password': password,
+         'email': email,
+       });
+ 
+       if (response.statusCode == 200 && response.data['code'] == 200) {
+         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+       }
+       return ApiResult.failure(response.data['message'] ?? '注册失败');
+     } catch (e) {
+       return ApiResult.failure('网络错误：$e');
+     }
+   }
 
-  Future<ApiResult<void>> logout() async {
+  Future<void> logout() async {
     try { await _dioClient.post(ApiConstants.authLogout); } catch (_) {}
     await _localStorage.clearTokens();
     await _localStorage.remove(AppConstants.userInfoKey);
-    return ApiResult.success(null);
   }
 
   Future<bool> isLoggedIn() async { final token = await _localStorage.getToken(); return token != null && token.isNotEmpty; }

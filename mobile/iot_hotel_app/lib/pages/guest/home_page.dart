@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../routes/app_router.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, ref),
             _buildSearchCard(context),
             _buildQuickActions(),
             _buildBanner(),
@@ -25,7 +27,9 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref) {
+    final authService = ref.watch(authServiceProvider);
+    
     return Container(
       width: double.infinity,
       height: 260,
@@ -50,12 +54,21 @@ class HomePage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('早上好,', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 16)),
-                    Text('金会员 谭玮坤先生', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  ],
+                FutureBuilder(
+                  future: authService.getCurrentUser(),
+                  builder: (context, snapshot) {
+                    final user = snapshot.data;
+                    final displayName = user?.username ?? '游客';
+                    final roleName = user?.role == 'admin' ? '系统管理员' : user?.role == 'staff' ? '金会员' : '普通会员';
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('早上好,', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 16)),
+                        Text('$roleName $displayName 先生', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                      ],
+                    );
+                  },
                 ),
                 const Row(
                   children: [
@@ -154,24 +167,28 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildQuickActions() {
-    final actions = [
-      {'icon': Icons.calendar_today, 'label': '会员签到'},
-      {'icon': Icons.business, 'label': '企业预订'},
-      {'icon': Icons.shopping_cart, 'label': '华住商城'},
-      {'icon': Icons.bookmark, 'label': '收藏/足迹'},
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      color: Colors.white,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: actions.map((a) => Column(
-          children: [
-            Icon(a['icon'] as IconData, color: AppColors.textPrimary, size: 30),
-            const SizedBox(height: 8),
-            Text(a['label'] as String, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ],
-        )).toList(),
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildActionItem(Icons.calendar_today_outlined, '会员签到'),
+          _buildActionItem(Icons.business_outlined, '企业预订'),
+          _buildActionItem(Icons.shopping_cart_outlined, '华住商城'),
+          _buildActionItem(Icons.bookmark_outline, '收藏/足迹'),
+        ],
       ),
+    );
+  }
+
+  Widget _buildActionItem(IconData icon, String label) {
+    return Column(
+      children: [
+        Icon(icon, size: 28, color: AppColors.textPrimary),
+        const SizedBox(height: 8),
+        Text(label, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textPrimary)),
+      ],
     );
   }
 

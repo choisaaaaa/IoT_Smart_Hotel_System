@@ -37,16 +37,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (result.success) {
         if (!context.mounted) return;
         final user = result.data?['user'];
+        if (user == null) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('登录返回数据异常'), behavior: SnackBarBehavior.floating));
+          return;
+        }
         final role = user['role'] ?? 'guest';
         switch (role) {
           case 'admin':
             context.go('/admin');
             break;
+          case 'staff':
           case 'reception':
             context.go('/reception');
             break;
           default:
-            context.go('/guest');
+            context.go('/');
             break;
         }
       } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '登录失败'), behavior: SnackBarBehavior.floating)); }
@@ -146,7 +151,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 : const Text('登 录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 4)),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('没有账号？', style: TextStyle(color: AppColors.textSecondary)),
+                              TextButton(
+                                onPressed: () => context.push('/register'),
+                                child: const Text('立即注册', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
                           const Row(
                             children: [
                               Expanded(child: Divider()),

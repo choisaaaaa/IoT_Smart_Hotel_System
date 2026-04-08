@@ -46,16 +46,16 @@ class LocalStorage {
     return read(AppConstants.tokenKey);
   }
 
-  Future<void> saveRefreshToken(String token) async {
-    await save(AppConstants.refreshTokenKey, token);
+  Future<void> saveSessionToken(String token) async {
+    await save(AppConstants.sessionTokenKey, token);
   }
 
-  Future<String?> getRefreshToken() async {
-    return read(AppConstants.refreshTokenKey);
+  Future<String?> getSessionToken() async {
+    return read(AppConstants.sessionTokenKey);
   }
 
   Future<void> clearTokens() async {
     await remove(AppConstants.tokenKey);
-    await remove(AppConstants.refreshTokenKey);
+    await remove(AppConstants.sessionTokenKey);
   }
 }

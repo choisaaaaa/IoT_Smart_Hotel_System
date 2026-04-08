@@ -167,7 +167,12 @@ class HotelDetailPage extends StatelessWidget {
                     SizedBox(
                       height: 40,
                       child: FilledButton(
-                        onPressed: () => context.push('/booking-flow'),
+                        onPressed: () => context.push('/booking-flow', extra: {
+                          'hotelName': '星程珠海金湾机场酒店',
+                          'roomType': '商务双床房',
+                          'price': 255.0,
+                          'roomId': 101, // 模拟房型ID
+                        }),
                         style: FilledButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                         child: const Text('抢', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
