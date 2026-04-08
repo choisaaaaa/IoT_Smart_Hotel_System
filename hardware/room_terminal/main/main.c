@@ -1,11 +1,13 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "cJSON.h"
 
-// 引入所有高内聚、低耦合的底层硬件抽象组件库！
+// 引入底层硬件抽象组件库
 #include "driver_rc522.h"
 #include "service_mqtt.h"
 #include "hal_actuators.h"
@@ -15,27 +17,146 @@
 #include "hal_infrared.h"
 #include "driver_oled.h"
 #include "service_network.h"
+#include "global_config.h"
 
 static const char *TAG = "ROOM_TERMINAL_MAIN";
 static char current_room_id[16] = "UNKNOWN";
+static char device_id[32] = "room_UNKNOWN";
+
+// --- 辅助组包函数 (规范化数据上报) ---
+
+// 发布设备上线状态 (规范 6.1.1)
+void publish_device_online_status() {
+    char topic[128];
+    snprintf(topic, sizeof(topic), "hotel/device/status/room/%s", device_id);
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "room");
+    cJSON_AddStringToObject(root, "status", "online");
+    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+    
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+// 辅助函数：上报单项传感器数据 (规范 4.2.2)
+void publish_sensor_data(const char *sensor_type, double value, const char *unit) {
+    char topic[128];
+    snprintf(topic, sizeof(topic), "hotel/device/data/%s/%s", sensor_type, device_id);
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "sensor_type", sensor_type);
+    cJSON_AddNumberToObject(root, "value", value);
+    cJSON_AddStringToObject(root, "unit", unit);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+// 上报安全事件 (规范 4.2.5)
+void publish_security_door_event() {
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "event_type", "door_open");
+    
+    cJSON *event_data = cJSON_CreateObject();
+    cJSON_AddNumberToObject(event_data, "room_id", atoi(current_room_id));
+    cJSON_AddStringToObject(event_data, "door_type", "main");
+    cJSON_AddItemToObject(root, "event_data", event_data);
+
+    cJSON_AddStringToObject(root, "level", "info");
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish("hotel/security/event", json_str);
+
+    free(json_str);
+    cJSON_Delete(root);
+}
 
 // --- 业务回调函数 ---
 
-// MQTT 消息接收回调 (模拟接收到后端开灯指令)
+// MQTT 消息接收回调 (处理云端指令，规范 4.2.3 和 4.2.4)
 void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
-    ESP_LOGI(TAG, "==== 收到云端 MQTT 消息 ====");
-    ESP_LOGI(TAG, "Topic: %s | Payload: %.*s", topic, data_len, data);
+    ESP_LOGI(TAG, "==== 收到云端 MQTT 指令 ====");
     
-    // 伪造业务逻辑：收到任何消息，立刻把主灯和窗帘打开
-    ESP_LOGI(TAG, "业务逻辑触发：控制底层执行器...");
-    hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, true);
-    hal_actuators_set_state(ACTUATOR_CURTAIN, true);
-    
-    // 并且屏幕显示提示
-    driver_oled_show_text_line(2, "Cloud CMD Received");
-    
-    // 蜂鸣器提示
-    hal_interactive_beep(1, 100);
+    // 解析 JSON
+    cJSON *root = cJSON_ParseWithLength(data, data_len);
+    if (root == NULL) {
+        ESP_LOGE(TAG, "JSON 解析失败，不符合规范格式");
+        return;
+    }
+
+    cJSON *cmd_id_item = cJSON_GetObjectItem(root, "command_id");
+    cJSON *cmd_type_item = cJSON_GetObjectItem(root, "command_type");
+
+    if (cJSON_IsNumber(cmd_id_item) && cJSON_IsString(cmd_type_item)) {
+        int cmd_id = cmd_id_item->valueint;
+        const char *cmd_type = cmd_type_item->valuestring;
+        bool exec_success = false;
+
+        ESP_LOGI(TAG, "执行指令: %s (ID: %d)", cmd_type, cmd_id);
+
+        // 简单清晰的指令分发逻辑 (查阅文档 A. 常用命令类型)
+        if (strcmp(cmd_type, "light_on") == 0) {
+            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, true);
+            exec_success = true;
+        } else if (strcmp(cmd_type, "light_off") == 0) {
+            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, false);
+            exec_success = true;
+        } else if (strcmp(cmd_type, "door_unlock") == 0) {
+            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true);
+            exec_success = true;
+        }
+
+        // 上报执行结果回执 (规范 4.2.4)
+        char timestamp[32];
+        service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+        cJSON *reply = cJSON_CreateObject();
+        cJSON_AddStringToObject(reply, "device_id", device_id);
+        cJSON_AddNumberToObject(reply, "command_id", cmd_id);
+        cJSON_AddStringToObject(reply, "command_type", cmd_type);
+        cJSON_AddStringToObject(reply, "status", exec_success ? "success" : "failed");
+        if (exec_success) {
+            cJSON_AddStringToObject(reply, "result", "执行成功");
+        } else {
+            cJSON_AddStringToObject(reply, "result", "未识别的指令或设备故障");
+        }
+        cJSON_AddStringToObject(reply, "timestamp", timestamp);
+
+        char *reply_str = cJSON_PrintUnformatted(reply);
+        service_mqtt_publish("hotel/device/command/result", reply_str);
+        
+        free(reply_str);
+        cJSON_Delete(reply);
+        
+        // 界面及声音反馈
+        driver_oled_show_text_line(2, cmd_type);
+        hal_interactive_beep(1, 100);
+    } else {
+        ESP_LOGW(TAG, "云端指令缺少 command_id 或 command_type 字段");
+    }
+    cJSON_Delete(root);
 }
 
 // 网络连接状态回调
@@ -45,14 +166,19 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         snprintf(msg, sizeof(msg), "IP:%s", ip_address);
         driver_oled_show_text_line(1, msg);
         
-        // 连上网后，启动 MQTT
-        char mqtt_client_id[32];
-        snprintf(mqtt_client_id, sizeof(mqtt_client_id), "room_%s", current_room_id);
-        service_mqtt_start("mqtt://hotel-backend-ip:1883", mqtt_client_id);
+        // 连上网后，使用统一的宏地址启动 MQTT
+        service_mqtt_start(GLOBAL_MQTT_BROKER_URI, device_id);
         
-        char topic[64];
-        snprintf(topic, sizeof(topic), "hotel/room/%s/cmd", current_room_id);
-        service_mqtt_subscribe(topic, hotel_mqtt_callback);
+        // 订阅房间专属控制指令 (规范 11.4)
+        char sub_topic[128];
+        snprintf(sub_topic, sizeof(sub_topic), "hotel/device/command/room/%s", device_id);
+        service_mqtt_subscribe(sub_topic, hotel_mqtt_callback);
+
+        // 延迟一小段以确保 MQTT 连接建立后再发送状态 (Mock演示用)
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+        // 发布规范的上线状态
+        publish_device_online_status();
     }
 }
 
@@ -64,7 +190,9 @@ void task_sensor_monitor(void *pvParameters) {
     sensor_data_t env_data;
     
     while(1) {
-        // 读取传感器数据
+        vTaskDelay(pdMS_TO_TICKS(15000)); // 每15秒采一次，避免刷屏
+        
+        // 读取真实的传感器层数据 (在没插真外设时是 Mock 的固定值)
         hal_sensors_read_all(&env_data);
         
         // 将温湿度显示在 OLED 上
@@ -72,14 +200,9 @@ void task_sensor_monitor(void *pvParameters) {
         snprintf(display_str, sizeof(display_str), "T:%.1fC H:%.1f%%", env_data.temperature, env_data.humidity);
         driver_oled_show_text_line(3, display_str);
         
-        // 判断如果有人，且空气质量差，自动发个 MQTT
-        if (env_data.is_human_present && env_data.air_quality_adc > 420) {
-            ESP_LOGW(TAG, "检测到有人且空气变差，准备自动控制...");
-            ir_ac_cmd_t ac_cmd = {.power_on = true, .temperature = 26};
-            hal_infrared_send_ac_command(IR_BRAND_GREE, &ac_cmd);
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(5000)); // 每5秒采一次
+        // 分拆 Topic，按照规范格式发送
+        publish_sensor_data("temperature", env_data.temperature, "℃");
+        publish_sensor_data("humidity", env_data.humidity, "%");
     }
 }
 
@@ -108,10 +231,11 @@ void app_main(void)
     driver_oled_clear_screen();
     driver_oled_show_text_line(0, "System Booting...");
 
-    // 3. 从 NVS 读取当前房号
+    // 3. 从 NVS 读取当前房号，严格拼接规范的 Client ID
     if (service_network_read_nvs_string("Room_ID", current_room_id, sizeof(current_room_id)) != ESP_OK) {
-        strncpy(current_room_id, "UNASSIGNED", sizeof(current_room_id));
+        strncpy(current_room_id, "301", sizeof(current_room_id));
     }
+    snprintf(device_id, sizeof(device_id), "room_%s", current_room_id);
     
     char boot_msg[32];
     snprintf(boot_msg, sizeof(boot_msg), "Room: %s", current_room_id);
@@ -125,24 +249,23 @@ void app_main(void)
     ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 ---");
     xTaskCreatePinnedToCore(task_sensor_monitor, "Sensor_Task", 4096, NULL, 5, NULL, 1);
 
-    // 6. 主线程死循环 (模拟一些突发的物理按键或卡片事件)
+    // 6. 主线程死循环 (模拟突发的安防事件：刷卡开门)
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(15000)); 
+        vTaskDelay(pdMS_TO_TICKS(30000)); // 每30秒模拟一次开门 
         
         ESP_LOGI(TAG, "--- (主线程模拟) 突发事件：住客刷房卡！ ---");
         uint8_t sector_data[16];
         
-        // [安全演进提示]: 
-        // 以下明文存放的默认通信密钥(FFFFFFFFFFFF) 仅限于原型联调期使用。
-        // 在正式量产固件中，此密钥将被强制移入 NVS 存储区，由上位机经安全信道下发分发。
+        // [安全演进提示]: 明文存放的默认通信密钥(FFFFFFFFFFFF) 仅限于原型联调期使用。
         uint8_t key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         
         if (driver_rc522_read_sector(1, key, sector_data) == ESP_OK) {
-            // 假设卡片验证通过
             hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true); // 开门
             hal_interactive_beep(1, 200); // 短鸣1声
             hal_interactive_set_led_color(0, 0, 255, 0); // 亮绿灯
-            service_mqtt_publish("hotel/room/301/door", "{\"event\":\"opened\"}");
+            
+            // 按规范上报带时间戳和 event_data 嵌套的安防 JSON 报文
+            publish_security_door_event();
             
             vTaskDelay(pdMS_TO_TICKS(3000));
             hal_actuators_set_state(ACTUATOR_DOOR_LOCK, false); // 3秒后关门锁
