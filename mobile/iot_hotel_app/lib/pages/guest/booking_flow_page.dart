@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/logic/member_logic.dart';
 import '../../routes/app_router.dart';
 
 class BookingFlowPage extends ConsumerStatefulWidget {
@@ -145,28 +146,37 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Widget _buildBookingInfo() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+    return FutureBuilder(
+      future: ref.read(memberServiceProvider).getMyAssets(),
+      builder: (context, snapshot) {
+        final assets = snapshot.data?.data;
+        final double totalSpent = double.tryParse(assets?['total_spent']?.toString() ?? '0') ?? 0;
+        final level = MemberLevel.fromExperience(totalSpent.floor());
+
+        return Container(
+          color: Colors.white,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('4月08日 今天 - 4月09日 明天', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              SizedBox(width: 8),
-              Text('1晚', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-              Spacer(),
-              Text('房型详情', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              const Row(
+                children: [
+                  Text('4月08日 今天 - 4月09日 明天', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(width: 8),
+                  Text('1晚', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                  Spacer(),
+                  Text('房型详情', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text('${widget.roomType} | ${level.label}${level.pointsMultiplier}倍积分房', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              const Text('28-30m² | 2张1.35米床 | 外景窗', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const Divider(height: 32),
+              const Text('4月8日 18:00 前可免费取消，18:00 后不可取消', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             ],
           ),
-          const SizedBox(height: 8),
-          Text('${widget.roomType} | 金会员9倍积分房', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          const Text('28-30m² | 2张1.35米床 | 外景窗', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          const Divider(height: 32),
-          const Text('4月8日 18:00 前可免费取消，18:00 后不可取消', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        ],
-      ),
+        );
+      }
     );
   }
 
@@ -226,20 +236,33 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Widget _buildMemberBenefits() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      color: Colors.white,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('会员权益', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          _buildBenefitRow(Icons.timer_outlined, '延迟退房', '金会员可延迟至14:00退房'),
-          _buildBenefitRow(Icons.local_cafe_outlined, '免费早餐', '金会员享用双人精美早餐'),
-          _buildBenefitRow(Icons.auto_awesome_outlined, '积分加速', '本订单可获得约2295积分'),
-        ],
-      ),
+    return FutureBuilder(
+      future: ref.read(memberServiceProvider).getMyAssets(),
+      builder: (context, snapshot) {
+        final assets = snapshot.data?.data;
+        final double totalSpent = double.tryParse(assets?['total_spent']?.toString() ?? '0') ?? 0;
+        final level = MemberLevel.fromExperience(totalSpent.floor());
+        
+        final estimatedPoints = (widget.price * _roomCount * level.pointsMultiplier).floor();
+
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          color: Colors.white,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${level.label}权益', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              if (level != MemberLevel.none)
+                _buildBenefitRow(Icons.timer_outlined, '延迟退房', '${level.label}可延迟至14:00退房'),
+              if (level.index >= MemberLevel.gold.index)
+                _buildBenefitRow(Icons.local_cafe_outlined, '免费早餐', '${level.label}享用双人精美早餐'),
+              _buildBenefitRow(Icons.auto_awesome_outlined, '积分加速', '本订单预计可获得 $estimatedPoints 积分 (${level.pointsMultiplier}倍)'),
+            ],
+          ),
+        );
+      }
     );
   }
 
@@ -259,51 +282,63 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Widget _buildBottomPayBar() {
-    final totalPrice = widget.price * _roomCount;
-    
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+    return FutureBuilder(
+      future: ref.read(memberServiceProvider).getMyAssets(),
+      builder: (context, snapshot) {
+        final assets = snapshot.data?.data;
+        final double totalSpent = double.tryParse(assets?['total_spent']?.toString() ?? '0') ?? 0;
+        final level = MemberLevel.fromExperience(totalSpent.floor());
+
+        final originalTotal = widget.price * _roomCount;
+        final discountedTotal = originalTotal * level.discount;
+        final savedAmount = originalTotal - discountedTotal;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('合计 ', style: TextStyle(fontSize: 12)),
-                    Text('¥${totalPrice.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.secondary, fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    const Text('明细', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                    const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('合计 ', style: TextStyle(fontSize: 12)),
+                        Text('¥${discountedTotal.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.secondary, fontSize: 24, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        const Text('明细', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+                      ],
+                    ),
+                    if (savedAmount > 0)
+                      Text('已优惠 ¥${savedAmount.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.secondary, fontSize: 11)),
                   ],
                 ),
-                const Text('已优惠 ¥34.00', style: TextStyle(color: AppColors.secondary, fontSize: 11)),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 140,
-            height: 48,
-            child: FilledButton(
-              onPressed: _isLoading ? null : _submitBooking,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
-              child: _isLoading 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('提交订单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
+              SizedBox(
+                width: 140,
+                height: 48,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : _submitBooking,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  child: _isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('提交订单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      }
     );
   }
 }

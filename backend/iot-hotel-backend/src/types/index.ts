@@ -83,8 +83,7 @@ export function sendSuccess<T>(res: Response, data?: T, message = '操作成功'
 }
 
 export function sendError(res: Response, error: ApiError): Response {
-  const status = error.code >= 500 ? 500 : error.code >= 400 ? 400 : 200;
-  return res.status(status).json({
+  return res.status(error.code || 500).json({
     code: error.code,
     message: error.message,
     details: error.details,

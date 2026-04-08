@@ -1,5 +1,17 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
-  static const String baseUrl = 'http://localhost:9000/api/v1/';
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:9000/api/v1/';
+    }
+    // 安卓模拟器访问宿主机需要使用 10.0.2.2
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:9000/api/v1/';
+    }
+    return 'http://localhost:9000/api/v1/';
+  }
 
   static const int connectTimeout = 15000;
   static const int receiveTimeout = 30000;

@@ -23,6 +23,7 @@ router.post('/generate-token', async (req, res) => {
     );
 
     if (users.length === 0) {
+      console.log(`Login failed: user ${username} not found`);
       return sendError(res, errorResponse('用户名或密码错误', 401));
     }
 
@@ -30,6 +31,7 @@ router.post('/generate-token', async (req, res) => {
     const isPasswordValid = await comparePassword(password, user.password);
 
     if (!isPasswordValid) {
+      console.log(`Login failed: password mismatch for user ${username}`);
       return sendError(res, errorResponse('用户名或密码错误', 401));
     }
 

@@ -48,7 +48,7 @@ class ProfilePage extends ConsumerWidget {
           child: Column(
             children: [
               _buildHeader(context, ref),
-              _buildMemberCard(),
+              _buildMemberCard(ref),
               _buildAssetStats(ref),
               _buildPointsBanner(),
               _buildOrderSection(context),
@@ -109,72 +109,87 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMemberCard() {
-    // 模拟数据，实际应从 memberService 获取
-    const int currentExp = 350;
-    final level = MemberLevel.fromExperience(currentExp);
-    final nextExp = level.nextLevelExperience();
-    final progress = currentExp / nextExp;
+  Widget _buildMemberCard(WidgetRef ref) {
+    final memberService = ref.watch(memberServiceProvider);
+    
+    return FutureBuilder(
+      future: memberService.getMyAssets(),
+      builder: (context, snapshot) {
+        final assets = snapshot.data?.data;
+        // 使用 total_spent 作为经验值，如果没有则默认为 0
+        final double totalSpent = double.tryParse(assets?['total_spent']?.toString() ?? '0') ?? 0;
+        final int currentExp = totalSpent.floor();
+        
+        // 根据后端返回的 member_level 字符串映射等级，或者根据经验值重新计算
+        final level = MemberLevel.fromExperience(currentExp);
+        final nextExp = level.nextLevelExperience();
+        final progress = (currentExp / nextExp).clamp(0.0, 1.0);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [level.color.withValues(alpha: 0.8), level.color],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: level.color.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [level.color.withValues(alpha: 0.8), level.color],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: level.color.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(level.label, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('经验值 $currentExp/$nextExp', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(level.label, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text('成长值 $currentExp/$nextExp', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('会员中心', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
+              const SizedBox(height: 20),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  minHeight: 4,
                 ),
-                child: const Text('会员中心', style: TextStyle(color: Colors.white, fontSize: 12)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.stars_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 4),
+                  Text('享受 ${level.discount < 1.0 ? (level.discount * 10).toStringAsFixed(1) : '全'} 折优惠 & ${level.pointsMultiplier} 倍积分', 
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          LinearProgressIndicator(
-            value: progress,
-            backgroundColor: Colors.white.withValues(alpha: 0.2),
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-            borderRadius: BorderRadius.circular(2),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.stars_rounded, color: Colors.white, size: 16),
-              const SizedBox(width: 4),
-              Text('享受 ${level.discount * 10} 折优惠 & ${level.pointsMultiplier} 倍积分', style: const TextStyle(color: Colors.white, fontSize: 12)),
-            ],
-          ),
-        ],
-      ),
+        );
+      }
     );
   }
 
