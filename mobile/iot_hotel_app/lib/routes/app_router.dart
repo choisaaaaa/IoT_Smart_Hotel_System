@@ -24,11 +24,12 @@ import '../core/auth/auth_state_notifier.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authService = ref.watch(authServiceProvider);
+  final authState = ref.watch(authStateProvider);
 
   return GoRouter(
     initialLocation: '/',
     redirect: (context, state) async {
-      final isLoggedIn = await authService.isLoggedIn();
+      final isLoggedIn = authState.isAuthenticated;
       final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
       final currentPath = state.matchedLocation;
 
@@ -39,7 +40,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoggedIn && isLoggingIn) {
-        return '/';
+        switch (authState.currentMode) {
+          case AppMode.reception:
+            return '/reception';
+          case AppMode.manager:
+            return '/reception';
+          default:
+            return '/';
+        }
+      }
+
+      if (isLoggedIn) {
+        final protectedPaths = ['/booking-flow', '/orders', '/order-detail', '/online-checkin', '/checkout', '/extend-stay', '/review-submit', '/favorites', '/personal-info'];
+        if (protectedPaths.any((p) => currentPath.startsWith(p)) && authState.currentMode == AppMode.guest) {
+          return '/login';
+        }
+
+        if (currentPath.startsWith('/reception') && !authState.canSwitchTo(AppMode.reception)) {
+          return '/';
+        }
+        if (currentPath.startsWith('/admin') && !authState.canSwitchTo(AppMode.manager)) {
+          return '/';
+        }
       }
 
       return null;
