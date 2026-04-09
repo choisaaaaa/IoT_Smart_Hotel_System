@@ -228,7 +228,9 @@ const handleModalOk = async () => {
     modalVisible.value = false
     fetchRoomTypes()
   } catch (error) {
-    message.error('保存失败')
+    const err = error as any
+    const backendMessage = err?.response?.data?.message || err?.message
+    message.error(backendMessage || '保存失败')
   } finally {
     submitLoading.value = false
   }

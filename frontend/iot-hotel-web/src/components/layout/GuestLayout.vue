@@ -34,9 +34,6 @@
               </a>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item key="profile">
-                    <UserOutlined /> 我的账户
-                  </a-menu-item>
                   <a-menu-item key="logout" @click="handleLogout">
                     <LogoutOutlined /> 退出登录
                   </a-menu-item>
@@ -53,9 +50,6 @@
 
       <a-layout-footer class="guest-footer">
         <p>©2026 智联酒店 - 智慧酒店物联网控制系统</p>
-        <p class="footer-links">
-          <a href="#">关于我们</a> · <a href="#">服务条款</a> · <a href="#">隐私政策</a> · <a href="#">联系客服</a>
-        </p>
       </a-layout-footer>
     </a-layout>
 

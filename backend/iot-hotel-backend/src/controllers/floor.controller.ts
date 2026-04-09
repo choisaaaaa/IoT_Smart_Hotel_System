@@ -10,7 +10,7 @@ export class FloorController {
       res.json(successResponse(list, '获取楼层列表成功'));
     } catch (error: any) {
       logger.error('获取楼层列表失败:', error);
-      res.status(500).json(errorResponse(error.message || '获取楼层列表失败'));
+      res.status(error.status || 500).json(errorResponse(error.message || '获取楼层列表失败'));
     }
   }
 
@@ -25,7 +25,7 @@ export class FloorController {
       }
     } catch (error: any) {
       logger.error('获取楼层详情失败:', error);
-      res.status(500).json(errorResponse(error.message || '获取楼层详情失败'));
+      res.status(error.status || 500).json(errorResponse(error.message || '获取楼层详情失败'));
     }
   }
 
@@ -35,7 +35,7 @@ export class FloorController {
       res.status(201).json(successResponse({ id }, '创建楼层成功'));
     } catch (error: any) {
       logger.error('创建楼层失败:', error);
-      res.status(500).json(errorResponse(error.message || '创建楼层失败'));
+      res.status(error.status || 500).json(errorResponse(error.message || '创建楼层失败'));
     }
   }
 
@@ -50,7 +50,7 @@ export class FloorController {
       }
     } catch (error: any) {
       logger.error('更新楼层失败:', error);
-      res.status(500).json(errorResponse(error.message || '更新楼层失败'));
+      res.status(error.status || 500).json(errorResponse(error.message || '更新楼层失败'));
     }
   }
 
@@ -65,7 +65,7 @@ export class FloorController {
       }
     } catch (error: any) {
       logger.error('删除楼层失败:', error);
-      res.status(500).json(errorResponse(error.message || '删除楼层失败'));
+      res.status(error.status || 500).json(errorResponse(error.message || '删除楼层失败'));
     }
   }
 }

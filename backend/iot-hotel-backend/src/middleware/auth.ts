@@ -62,9 +62,11 @@ export function authorize(roles: string[]): any {
     }
 
     if (!hasRole(req.user.role, roles)) {
+      const currentRole = normalizeRole(req.user.role);
+      const allowedRoles = roles.map((role) => normalizeRole(role)).join(' / ');
       return res.status(403).json({
         code: 403,
-        message: '权限不足',
+        message: `权限不足：当前角色为 ${currentRole || 'unknown'}，需要角色 ${allowedRoles}`,
         timestamp: Date.now()
       });
     }

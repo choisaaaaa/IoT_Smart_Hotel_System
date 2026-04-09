@@ -45,7 +45,6 @@ export async function search(req: AuthRequest, res: Response) {
         GROUP BY r.hotel_id
       ) ra ON ra.hotel_id = h.id
       WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ?)
-        AND IFNULL(ra.available_rooms, 0) > 0
     `;
 
     const keyword = `%${destination || ''}%`;

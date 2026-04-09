@@ -37,7 +37,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // 增加限制到 1000 次每 15 分钟，避免管理端高频操作触发 429
   message: '请求过于频繁，请稍后再试',
   validate: false
 });

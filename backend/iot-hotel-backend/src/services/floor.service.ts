@@ -96,7 +96,9 @@ export class FloorService {
     try {
       const hasFloorsTable = await this.hasTable('floors');
       if (!hasFloorsTable) {
-        throw new Error('当前数据库未启用楼层表');
+        const error = new Error('当前数据库未启用楼层表，请联系管理员执行数据库迁移');
+        (error as any).status = 500;
+        throw error;
       }
       const { floor_number, floor_name, floor_plan_image, description } = data;
       const [result] = await pool.query<ResultSetHeader>(
@@ -106,10 +108,17 @@ export class FloorService {
       return result.insertId;
     } catch (error: any) {
       if (error.code === 'ER_DUP_ENTRY') {
-        throw new Error(`楼层号 ${data.floor_number} 已存在`);
+        const customError = new Error(`楼层号 ${data.floor_number} 已存在，请更换后重试`);
+        (customError as any).status = 409;
+        throw customError;
+      }
+      if (error.code === 'ER_BAD_FIELD_ERROR') {
+        const customError = new Error('楼层表字段不完整，请联系管理员执行数据库迁移');
+        (customError as any).status = 500;
+        throw customError;
       }
       logger.error('创建楼层失败:', error);
-      throw new Error('创建楼层失败');
+      throw error;
     }
   }
 
@@ -117,7 +126,9 @@ export class FloorService {
     try {
       const hasFloorsTable = await this.hasTable('floors');
       if (!hasFloorsTable) {
-        throw new Error('当前数据库未启用楼层表');
+        const error = new Error('当前数据库未启用楼层表，请联系管理员执行数据库迁移');
+        (error as any).status = 500;
+        throw error;
       }
       const { floor_number, floor_name, floor_plan_image, description } = data;
       const [result] = await pool.query<ResultSetHeader>(
@@ -132,10 +143,12 @@ export class FloorService {
       return result.affectedRows > 0;
     } catch (error: any) {
       if (error.code === 'ER_DUP_ENTRY') {
-        throw new Error(`楼层号 ${data.floor_number} 已存在`);
+        const customError = new Error(`楼层号 ${data.floor_number} 已存在，请更换后重试`);
+        (customError as any).status = 409;
+        throw customError;
       }
       logger.error('更新楼层失败:', error);
-      throw new Error('更新楼层失败');
+      throw error;
     }
   }
 
@@ -143,7 +156,9 @@ export class FloorService {
     try {
       const hasFloorsTable = await this.hasTable('floors');
       if (!hasFloorsTable) {
-        throw new Error('当前数据库未启用楼层表');
+        const error = new Error('当前数据库未启用楼层表，请联系管理员执行数据库迁移');
+        (error as any).status = 500;
+        throw error;
       }
       // 检查楼层下是否有房间
       const [rows] = await pool.query<RowDataPacket[]>(
@@ -151,7 +166,9 @@ export class FloorService {
         [id]
       );
       if ((rows[0] as any).count > 0) {
-        throw new Error('该楼层下尚有房间，无法删除');
+        const error = new Error('该楼层下尚有房间，无法删除');
+        (error as any).status = 400;
+        throw error;
       }
 
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM floors WHERE id = ?', [id]);

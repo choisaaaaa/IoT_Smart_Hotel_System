@@ -11,9 +11,12 @@ export interface RoomType extends RowDataPacket {
   max_guests: number;
   facilities: string;
   description: string;
+  images: string;
   created_at: Date;
   updated_at: Date;
 }
+
+type ServiceError = Error & { statusCode?: number };
 
 export class RoomTypeService {
   private static tableCache = new Map<string, boolean>();
@@ -93,7 +96,38 @@ export class RoomTypeService {
       return result.insertId;
     } catch (error) {
       logger.error('创建房型失败:', error);
-      throw new Error('创建房型失败');
+      const serviceError: ServiceError = new Error('创建房型失败');
+      const dbError = error as { code?: string; sqlMessage?: string };
+      const sqlMessage = dbError?.sqlMessage || '';
+
+      if (error instanceof Error && error.message === '当前数据库未启用房型表') {
+        serviceError.message = '当前数据库未启用房型表，请先完成数据库迁移';
+        serviceError.statusCode = 500;
+        throw serviceError;
+      }
+
+      if (dbError?.code === 'ER_DUP_ENTRY') {
+        if (sqlMessage.includes('room_types.name')) {
+          serviceError.message = '房型名称已存在，请更换名称后重试';
+          serviceError.statusCode = 409;
+          throw serviceError;
+        }
+        if (sqlMessage.includes('room_types.code')) {
+          serviceError.message = '房型编码已存在，请更换编码后重试';
+          serviceError.statusCode = 409;
+          throw serviceError;
+        }
+      }
+
+      if (dbError?.code === 'ER_BAD_FIELD_ERROR') {
+        serviceError.message = '房型表字段不完整，请联系管理员执行数据库迁移';
+        serviceError.statusCode = 500;
+        throw serviceError;
+      }
+
+      serviceError.message = '创建房型失败，请检查输入后重试';
+      serviceError.statusCode = 500;
+      throw serviceError;
     }
   }
 
@@ -121,7 +155,26 @@ export class RoomTypeService {
       return result.affectedRows > 0;
     } catch (error) {
       logger.error('更新房型失败:', error);
-      throw new Error('更新房型失败');
+      const serviceError: ServiceError = new Error('更新房型失败');
+      const dbError = error as { code?: string; sqlMessage?: string };
+      const sqlMessage = dbError?.sqlMessage || '';
+
+      if (dbError?.code === 'ER_DUP_ENTRY') {
+        if (sqlMessage.includes('room_types.name')) {
+          serviceError.message = '房型名称已存在，请更换名称后重试';
+          serviceError.statusCode = 409;
+          throw serviceError;
+        }
+        if (sqlMessage.includes('room_types.code')) {
+          serviceError.message = '房型编码已存在，请更换编码后重试';
+          serviceError.statusCode = 409;
+          throw serviceError;
+        }
+      }
+
+      serviceError.message = '更新房型失败，请检查输入后重试';
+      serviceError.statusCode = 500;
+      throw serviceError;
     }
   }
 

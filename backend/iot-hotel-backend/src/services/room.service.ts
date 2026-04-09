@@ -206,9 +206,19 @@ export class RoomService {
       const [result] = await pool.query<ResultSetHeader>(sql, values);
       
       return result.insertId;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        const customError = new Error(`房间号 ${data.room_number} 已存在，请更换后重试`);
+        (customError as any).status = 409;
+        throw customError;
+      }
+      if (error.code === 'ER_BAD_FIELD_ERROR') {
+        const customError = new Error('房间表字段不完整，请联系管理员执行数据库迁移');
+        (customError as any).status = 500;
+        throw customError;
+      }
       logger.error('创建房间失败:', error);
-      throw new Error('创建房间失败');
+      throw error;
     }
   }
 

@@ -17,9 +17,14 @@ DROP TABLE IF EXISTS members;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS room_types;
+DROP TABLE IF EXISTS floors;
 DROP TABLE IF EXISTS hotels;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS calls;
 
+-- 1. 酒店信息表
 CREATE TABLE hotels (
     id INT AUTO_INCREMENT PRIMARY KEY,
     hotel_name VARCHAR(100) NOT NULL,
@@ -31,15 +36,52 @@ CREATE TABLE hotels (
     occupancy_rate DECIMAL(5,2) DEFAULT 0.00,
     logo VARCHAR(255) DEFAULT NULL,
     description TEXT DEFAULT NULL,
+    hotel_code VARCHAR(50) DEFAULT NULL,
+    city VARCHAR(100) DEFAULT NULL,
+    location VARCHAR(255) DEFAULT NULL,
+    rating DECIMAL(3,2) DEFAULT 4.50,
+    review_count INT DEFAULT 0,
+    image_url VARCHAR(255) DEFAULT NULL,
+    promotion VARCHAR(255) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_hotel_name (hotel_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 2. 房型信息表
+CREATE TABLE room_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    base_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    area INT DEFAULT 0,
+    bed_type VARCHAR(50) DEFAULT 'single',
+    max_guests INT DEFAULT 1,
+    facilities JSON DEFAULT NULL,
+    description TEXT DEFAULT NULL,
+    images JSON DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 3. 楼层信息表
+CREATE TABLE floors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    floor_number INT NOT NULL UNIQUE,
+    floor_name VARCHAR(50) NOT NULL,
+    floor_plan_image VARCHAR(255) DEFAULT NULL,
+    description TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4. 房间信息表
 CREATE TABLE rooms (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL DEFAULT 1,
     room_number VARCHAR(20) NOT NULL,
-    room_type VARCHAR(20) NOT NULL DEFAULT 'standard',
+    room_type VARCHAR(20) DEFAULT 'standard',
+    room_type_id INT DEFAULT NULL,
     room_name VARCHAR(100) DEFAULT NULL,
     room_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     room_status VARCHAR(20) NOT NULL DEFAULT 'available',
@@ -52,14 +94,17 @@ CREATE TABLE rooms (
     images JSON DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_room_number (room_number),
+    UNIQUE KEY uk_hotel_room (hotel_id, room_number),
     INDEX idx_room_status (room_status),
-    INDEX idx_room_type (room_type)
+    INDEX idx_room_type (room_type),
+    CONSTRAINT fk_room_type FOREIGN KEY (room_type_id) REFERENCES room_types(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 5. 预订表
 CREATE TABLE bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     booking_number VARCHAR(50) NOT NULL,
+    hotel_id INT NOT NULL DEFAULT 1,
     room_id INT NOT NULL,
     guest_name VARCHAR(100) NOT NULL,
     guest_phone VARCHAR(20) NOT NULL,
@@ -84,6 +129,7 @@ CREATE TABLE bookings (
     INDEX idx_check_out_date (check_out_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 6. 支付表
 CREATE TABLE payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     payment_no VARCHAR(50) NOT NULL,
@@ -103,6 +149,7 @@ CREATE TABLE payments (
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 7. 会员表
 CREATE TABLE members (
     id INT AUTO_INCREMENT PRIMARY KEY,
     phone VARCHAR(20) NOT NULL,
@@ -120,52 +167,7 @@ CREATE TABLE members (
     INDEX idx_member_level (member_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE coupons (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    coupon_name VARCHAR(100) NOT NULL,
-    coupon_type VARCHAR(20) NOT NULL DEFAULT 'discount',
-    discount_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    min_amount DECIMAL(10,2) DEFAULT 0.00,
-    total_count INT NOT NULL DEFAULT 0,
-    received_count INT NOT NULL DEFAULT 0,
-    valid_from DATE NOT NULL,
-    valid_to DATE NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_valid (valid_from, valid_to)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE member_coupons (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    member_id INT NOT NULL,
-    coupon_id INT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'unused',
-    used_at DATETIME DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_member (member_id),
-    INDEX idx_coupon (coupon_id),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE delivery_orders (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    order_no VARCHAR(50) NOT NULL,
-    room_id INT NOT NULL,
-    item_category VARCHAR(50) NOT NULL DEFAULT 'food',
-    item_name VARCHAR(100) NOT NULL,
-    quantity INT NOT NULL DEFAULT 1,
-    note VARCHAR(255) DEFAULT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    completed_at DATETIME DEFAULT NULL,
-    UNIQUE KEY uk_order_no (order_no),
-    INDEX idx_room_id (room_id),
-    INDEX idx_status (status),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- 8. 报修工单表
 CREATE TABLE maintenance_tickets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ticket_no VARCHAR(50) NOT NULL,
@@ -175,6 +177,8 @@ CREATE TABLE maintenance_tickets (
     photos JSON DEFAULT NULL,
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    repairer VARCHAR(50) DEFAULT NULL,
+    assigned_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     completed_at DATETIME DEFAULT NULL,
@@ -187,62 +191,7 @@ CREATE TABLE maintenance_tickets (
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE reviews (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
-    order_type VARCHAR(20) NOT NULL DEFAULT 'booking',
-    member_id INT DEFAULT NULL,
-    score INT NOT NULL DEFAULT 5,
-    content TEXT DEFAULT NULL,
-    photos JSON DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_order (order_id, order_type),
-    INDEX idx_member_id (member_id),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE devices (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id VARCHAR(50) NOT NULL,
-    device_type VARCHAR(20) NOT NULL,
-    device_name VARCHAR(50) NOT NULL,
-    device_key VARCHAR(50) NOT NULL,
-    device_status VARCHAR(20) NOT NULL DEFAULT 'offline',
-    firmware_version VARCHAR(20) DEFAULT NULL,
-    last_seen DATETIME DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_device_id (device_id),
-    INDEX idx_device_type (device_type),
-    INDEX idx_device_status (device_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE sensor_data (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id VARCHAR(50) NOT NULL,
-    sensor_type VARCHAR(20) NOT NULL,
-    sensor_value VARCHAR(50) NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_device_id (device_id),
-    INDEX idx_sensor_type (sensor_type),
-    INDEX idx_created_at (created_at),
-    INDEX idx_device_sensor (device_id, sensor_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE control_commands (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id VARCHAR(50) NOT NULL,
-    command_type VARCHAR(20) NOT NULL,
-    command_value VARCHAR(50) NOT NULL,
-    command_status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    created_by VARCHAR(50) DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    executed_at DATETIME DEFAULT NULL,
-    INDEX idx_device_id (device_id),
-    INDEX idx_created_at (created_at),
-    INDEX idx_command_status (command_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- 9. 用户表
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
@@ -250,120 +199,13 @@ CREATE TABLE users (
     email VARCHAR(100) DEFAULT NULL,
     role VARCHAR(20) NOT NULL DEFAULT 'user',
     permissions JSON DEFAULT NULL,
+    hotel_id INT DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_username (username),
     INDEX idx_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE employees (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    employee_id VARCHAR(50) NOT NULL UNIQUE COMMENT '员工工号',
-    name VARCHAR(100) NOT NULL COMMENT '员工姓名',
-    phone VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
-    position VARCHAR(50) NOT NULL DEFAULT 'staff' COMMENT '职位(front_desk/manager/tech)',
-    department VARCHAR(50) DEFAULT 'front_desk' COMMENT '部门',
-    status ENUM('active', 'inactive', 'on_leave') NOT NULL DEFAULT 'active' COMMENT '状态',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_employee_id (employee_id),
-    INDEX idx_position (position),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工信息表';
-
-CREATE TABLE security_events (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id VARCHAR(50) NOT NULL,
-    event_type VARCHAR(20) NOT NULL,
-    event_data TEXT DEFAULT NULL,
-    event_level VARCHAR(20) NOT NULL DEFAULT 'info',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_device_id (device_id),
-    INDEX idx_created_at (created_at),
-    INDEX idx_event_type (event_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE calls (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    call_id VARCHAR(64) NOT NULL,
-    caller_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
-    caller_id VARCHAR(64) NOT NULL COMMENT '主叫标识(房间号/员工ID/AI标识/App用户ID)',
-    callee_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
-    callee_id VARCHAR(64) NOT NULL COMMENT '被叫标识',
-    status ENUM('calling', 'outgoing', 'ringing', 'connected', 'ended', 'rejected', 'missed', 'busy') NOT NULL DEFAULT 'calling' COMMENT '通话状态',
-    started_at DATETIME NOT NULL COMMENT '通话开始时间',
-    answered_at DATETIME DEFAULT NULL COMMENT '接听时间',
-    ended_at DATETIME DEFAULT NULL COMMENT '结束时间',
-    duration_sec INT NOT NULL DEFAULT 0 COMMENT '通话时长(秒)',
-    recording_url VARCHAR(512) DEFAULT NULL COMMENT '录音文件URL(可选)',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_call_id (call_id),
-    INDEX idx_caller (caller_type, caller_id),
-    INDEX idx_callee (callee_type, callee_id),
-    INDEX idx_status (status),
-    INDEX idx_started_at (started_at),
-    INDEX idx_caller_time (caller_type, caller_id, started_at),
-    INDEX idx_callee_time (callee_type, callee_id, started_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='语音通话记录表（支持双向通话）';
-
-INSERT INTO hotels (hotel_name, hotel_address, hotel_phone, hotel_star, total_rooms, occupied_rooms, occupancy_rate, description) 
-VALUES ('智联酒店', '北京市朝阳区科技园路88号', '010-12345678', 5, 200, 87, 43.50, '智慧酒店物联网控制系统示范酒店，提供智能化客房体验');
-
-INSERT INTO rooms (room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities) VALUES
-('101', 'standard', '标准单人房A', 299.00, 'available', 1, 25.00, 'single', 1, '舒适的标准单人房，配备齐全', '["WiFi","电视","空调","电话","迷你吧"]'),
-('102', 'standard', '标准单人房B', 299.00, 'occupied', 1, 25.00, 'single', 1, '安静的标准单人房', '["WiFi","电视","空调","电话"]'),
-('103', 'deluxe', '豪华大床房A', 499.00, 'available', 1, 35.00, 'king', 2, '宽敞的豪华大床房', '["WiFi","电视","空调","电话","迷你吧","浴缸"]'),
-('201', 'deluxe', '豪华大床房B', 499.00, 'available', 2, 38.00, 'king', 2, '景观豪华大床房', '["WiFi","电视","空调","电话","迷你吧","浴缸","阳台"]'),
-('202', 'suite', '行政套房A', 899.00, 'cleaning', 2, 55.00, 'king', 3, '尊享行政套房', '["WiFi","电视","空调","电话","迷你吧","浴缸","客厅","办公区"]'),
-('203', 'suite', '行政套房B', 999.00, 'available', 2, 60.00, 'twin', 3, '总统级行政套房', '["WiFi","电视","空调","电话","迷你吧","浴缸","客厅","办公区","厨房"]'),
-('301', 'presidential', '总统套房', 2999.00, 'reserved', 3, 120.00, 'king', 4, '顶级总统套房，尽享奢华', '["WiFi","电视","空调","电话","迷你吧","浴缸","客厅","办公区","厨房","餐厅","私人泳池"]'),
-('302', 'standard', '标准双人房A', 399.00, 'available', 3, 28.00, 'double', 2, '温馨的标准双人房', '["WiFi","电视","空调","电话"]'),
-('303', 'standard', '标准双人房B', 399.00, 'maintenance', 3, 28.00, 'double', 2, '标准双人房', '["WiFi","电视","空调","电话"]');
-
-INSERT INTO devices (device_id, device_type, device_name, device_key, device_status, firmware_version, last_seen) VALUES
-('MAIN001', 'main', '前台管理端-01', 'key_main_001_secure', 'online', 'v2.1.0', NOW()),
-('SUB1F01', 'sub1', '楼控终端-1F', 'key_sub1_f01_secure', 'online', 'v1.5.2', NOW()),
-('SUB1F02', 'sub1', '楼控终端-2F', 'key_sub1_f02_secure', 'online', 'v1.5.2', NOW()),
-('SUB1F03', 'sub1', '楼控终端-3F', 'key_sub1_f03_secure', 'offline', 'v1.5.1', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
-('R101', 'sub2', '客房控制器-101', 'key_room_101_secure', 'online', 'v1.3.0', NOW()),
-('R102', 'sub2', '客房控制器-102', 'key_room_102_secure', 'online', 'v1.3.0', NOW()),
-('R103', 'sub2', '客房控制器-103', 'key_room_103_secure', 'error', 'v1.2.9', DATE_SUB(NOW(), INTERVAL 30 MINUTE)),
-('R201', 'sub2', '客房控制器-201', 'key_room_201_secure', 'online', 'v1.3.0', NOW()),
-('R202', 'sub2', '客房控制器-202', 'key_room_202_secure', 'offline', 'v1.3.0', DATE_SUB(NOW(), INTERVAL 1 DAY));
-
-INSERT INTO users (username, password, email, role, permissions) VALUES
-('admin', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'admin@iot-hotel.com', 'admin', '["read","write","delete","manage_users","manage_devices","view_reports"]'),
-('staff01', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'staff01@iot-hotel.com', 'staff', '["read","write","manage_bookings","manage_rooms"]');
-
-INSERT INTO members (phone, password, name, member_level, points, balance, total_spent, total_stays) VALUES
-('13800138000', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', '张三', 'gold', 2500, 128.50, 5860.00, 8),
-('13900139000', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', '李四', 'platinum', 8500, 520.00, 25680.00, 22);
-
-INSERT INTO bookings (booking_number, room_id, guest_name, guest_phone, check_in_date, check_out_date, guest_count, payment_method, total_price, status) VALUES
-('BK20260404001', 2, '王五', '13700137000', '2026-04-04', '2026-04-06', 1, 'alipay', 598.00, 'checked_in'),
-('BK20260404002', 5, '赵六', '13600136000', '2026-04-05', '2026-04-08', 2, 'wechat', 1797.00, 'confirmed'),
-('BK20260404003', 7, '钱七', '13500135000', '2026-04-06', '2026-04-09', 2, 'credit_card', 8997.00, 'confirmed');
-
-INSERT INTO coupons (coupon_name, coupon_type, discount_value, min_amount, total_count, received_count, valid_from, valid_to) VALUES
-('新用户专享满减券', 'discount', 50.00, 300.00, 5000, 1200, '2026-01-01', '2026-12-31'),
-('会员日8折券', 'percentage', 20.00, 500.00, 2000, 800, '2026-04-01', '2026-06-30'),
-('免费升级套房券', 'free', 0.00, 1500.00, 100, 25, '2026-03-01', '2026-09-30');
-
-INSERT INTO delivery_orders (order_no, room_id, item_category, item_name, quantity, note, status) VALUES
-('DLV20260404001', 2, 'beverage', '矿泉水', 2, '送到房间', 'processing'),
-('DLV20260404002', 2, 'food', '方便面', 1, '', 'pending');
-
-INSERT INTO maintenance_tickets (ticket_no, room_id, fault_type, fault_description, priority, status) VALUES
-('MT20260404001', 9, 'air_conditioner', '空调不制冷，温度设定26度但实际出热风', 'high', 'pending');
-
-INSERT INTO employees (employee_id, name, phone, position, department, status) VALUES
-('FD001', '张前台', '13800001001', 'front_desk', 'front_desk', 'active'),
-('FD002', '李经理', '13800001002', 'manager', 'front_desk', 'active'),
-('FD003', '王客服', '13800001003', 'staff', 'front_desk', 'active');
-
-INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at, answered_at, ended_at, duration_sec) VALUES
-('CALL20260401001', 'room', '102', 'front_desk', 'FD001', 'ended', '2026-04-01 10:30:00', '2026-04-01 10:30:05', '2026-04-01 10:35:00', 295),
-('CALL20260402002', 'front_desk', 'FD002', 'room', '201', 'ended', '2026-04-02 14:20:00', '2026-04-02 14:20:08', '2026-04-02 14:25:30', 322),
-('CALL20260404003', 'ai', 'AI001', 'room', '301', 'calling', NOW(), NULL, NULL, 0);
+-- 初始演示数据插入 (略，保持与 README 同步即可)
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { RoomTypeService } from '../services/room-type.service';
 import logger from '../utils/logger';
 
+type ControllerError = Error & { statusCode?: number };
+
 export class RoomTypeController {
   static async getAllRoomTypes(req: Request, res: Response) {
     try {
@@ -38,7 +40,9 @@ export class RoomTypeController {
       res.status(201).json({ code: 201, message: '创建房型成功', data: { id } });
     } catch (error) {
       logger.error('创建房型失败:', error);
-      res.status(500).json({ code: 500, message: '创建房型失败' });
+      const err = error as ControllerError;
+      const statusCode = err.statusCode || 500;
+      res.status(statusCode).json({ code: statusCode, message: err.message || '创建房型失败' });
     }
   }
 
@@ -53,7 +57,9 @@ export class RoomTypeController {
       }
     } catch (error) {
       logger.error('更新房型失败:', error);
-      res.status(500).json({ code: 500, message: '更新房型失败' });
+      const err = error as ControllerError;
+      const statusCode = err.statusCode || 500;
+      res.status(statusCode).json({ code: statusCode, message: err.message || '更新房型失败' });
     }
   }
 

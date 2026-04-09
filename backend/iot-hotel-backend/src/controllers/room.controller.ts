@@ -89,7 +89,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     res.json(successResponse({ id }, '创建房间成功'));
   } catch (error: any) {
     logger.error('创建房间失败:', error);
-    res.status(500).json(errorResponse(error.message || '创建房间失败'));
+    res.status(error.status || 500).json(errorResponse(error.message || '创建房间失败'));
   }
 };
 
@@ -140,5 +140,36 @@ export const remove = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     logger.error('删除房间失败:', error);
     res.status(500).json(errorResponse(error.message || '删除房间失败'));
+  }
+};
+
+export const updateStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    let hotelId = req.user?.hotel_id;
+    if (isSystemRole(req.user?.role)) {
+      hotelId = req.body.hotel_id || req.query.hotel_id;
+    }
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
+
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json(errorResponse('缺少状态参数'));
+    }
+
+    const success = await RoomService.updateRoom(id, hotelId, { room_status: status } as any);
+    
+    if (!success) {
+      res.status(404).json(errorResponse('房间不存在'));
+      return;
+    }
+    
+    res.json(successResponse(null, '更新房间状态成功'));
+  } catch (error: any) {
+    logger.error('更新房间状态失败:', error);
+    res.status(500).json(errorResponse(error.message || '更新房间状态失败'));
   }
 };

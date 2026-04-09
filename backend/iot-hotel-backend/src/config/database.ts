@@ -10,7 +10,10 @@ const poolOptions: PoolOptions = {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  charset: 'utf8mb4_unicode_ci'
+  charset: 'utf8mb4_unicode_ci',
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
+  connectTimeout: 10000 // 10秒连接超时
 };
 
 const pool: Pool = mysql.createPool(poolOptions);

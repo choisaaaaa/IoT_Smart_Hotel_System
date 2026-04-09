@@ -13,5 +13,6 @@ router.put('/:id/confirm', authenticate as any, authorize(['admin', 'staff', 'sy
 router.put('/:id/checkin', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkin);
 router.put('/:id/checkout', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkout);
 router.put('/:id/cancel', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.cancel);
+router.patch('/:id/status', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.updateStatus);
 
 export default router;

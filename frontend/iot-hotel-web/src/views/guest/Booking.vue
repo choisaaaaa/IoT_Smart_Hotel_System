@@ -91,8 +91,7 @@
       <!-- Step 0: Featured / Recommendations -->
       <div v-if="currentStep === 0" class="recommendations-section">
         <div class="section-header">
-          <h2 class="section-title">✨ 精选热门推荐</h2>
-          <a-button type="link">查看更多 <RightOutlined /></a-button>
+          <h2 class="section-title">🏨 合作智能酒店</h2>
         </div>
         
         <a-row :gutter="[20, 20]">
@@ -100,8 +99,8 @@
             <div class="ota-hotel-card" @click="selectHotel(hotel)">
               <div class="card-image-wrapper">
                 <img :src="hotel.image || '/hotel-placeholder.jpg'" :alt="hotel.name" />
-                <div class="card-badge" v-if="hotel.promotion">{{ hotel.promotion }}</div>
-                <div class="card-wishlist"><HeartOutlined /></div>
+                <div class="card-badge danger" v-if="hotel.availableRooms === 0">已售罄</div>
+                <div class="card-badge" v-else-if="hotel.promotion">{{ hotel.promotion }}</div>
               </div>
               <div class="card-body">
                 <div class="card-header">
@@ -232,7 +231,7 @@
           </div>
         </div>
 
-        <div class="ota-room-list">
+        <div class="ota-room-list" v-if="selectedHotel?.rooms?.length > 0">
           <div class="room-item-card" v-for="room in selectedHotel?.rooms" :key="room.id">
             <a-row :gutter="20">
               <a-col :md="6">
@@ -277,6 +276,12 @@
                 </div>
               </a-col>
             </a-row>
+          </div>
+        </div>
+        <div v-else class="ota-empty-rooms">
+          <a-empty description="该酒店暂无可预订房型" />
+          <div style="text-align: center; margin-top: 20px;">
+            <a-button @click="currentStep = 0">返回浏览其他酒店</a-button>
           </div>
         </div>
       </div>
@@ -465,8 +470,8 @@ import { hotelApi } from '@/api/hotel'
 import { useAppStore } from '@/stores/app'
 import {
   EnvironmentOutlined, EnvironmentFilled, StarOutlined, StarFilled,
-  UserOutlined, MobileOutlined, CheckOutlined, RightOutlined,
-  HeartOutlined, CheckCircleOutlined, LeftOutlined, WifiOutlined,
+  UserOutlined, MobileOutlined, CheckOutlined,
+  CheckCircleOutlined, LeftOutlined, WifiOutlined,
   CoffeeOutlined, WalletOutlined, WechatOutlined, AlipayCircleOutlined,
   SecurityScanOutlined, PlusOutlined, DeleteOutlined, EditOutlined
 } from '@ant-design/icons-vue'
@@ -527,7 +532,7 @@ const nights = computed(() => {
   return 1
 })
 
-const recommendHotels = computed(() => hotelList.value.slice(0, 6))
+const recommendHotels = computed(() => hotelList.value)
 
 const filteredHotels = computed(() => {
   let result = [...hotelList.value]
@@ -929,6 +934,11 @@ onMounted(() => {
   border-radius: 6px;
   font-weight: bold;
   font-size: 12px;
+  z-index: 2;
+}
+
+.card-badge.danger {
+  background: #8c8c8c;
 }
 
 .card-wishlist {

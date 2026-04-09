@@ -314,6 +314,7 @@ async function fetchMemberList() {
 }
 
 async function fetchTodayBookings() {
+  if (todayBookingLoading.value) return
   todayBookingLoading.value = true
   try {
     const today = dayjs().format('YYYY-MM-DD')

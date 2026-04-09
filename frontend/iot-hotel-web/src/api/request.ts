@@ -60,7 +60,12 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => {
     const res = response.data as ApiResponse
-    if (res.code !== undefined && res.code !== 200 && res.code !== 0) {
+    const code = Number(res.code)
+    const isBusinessSuccess =
+      res.code === undefined ||
+      res.code === 0 ||
+      (Number.isFinite(code) && code >= 200 && code < 300)
+    if (!isBusinessSuccess) {
       message.error(res.message || '请求失败')
       return Promise.reject(new Error(res.message))
     }
@@ -79,7 +84,7 @@ request.interceptors.response.use(
           }
           break
         case 403:
-          message.error('拒绝访问')
+          message.error(error.response?.data?.message || '拒绝访问')
           break
         case 404:
           message.error('请求的资源不存在')
