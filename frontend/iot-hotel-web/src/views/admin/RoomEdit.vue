@@ -126,6 +126,9 @@ import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import type { RoomInfo, RoomTypeInfo } from '@/types'
 import { roomApi } from '@/api/room'
 import { roomTypeApi } from '@/api/room-type'
+import { useHotelStore } from '@/stores/hotel'
+
+const hotelStore = useHotelStore()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -278,7 +281,7 @@ const saveRoom = async () => {
       await roomApi.updateRoom(editingId.value, formModel)
       message.success('更新房间成功')
     } else {
-      await roomApi.createRoom(formModel)
+      await roomApi.createRoom({ ...formModel, hotel_id: hotelStore.currentHotelId! })
       message.success('创建房间成功')
     }
     modalVisible.value = false

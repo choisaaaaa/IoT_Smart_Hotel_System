@@ -164,7 +164,8 @@ async function handleCreateBooking() {
     await bookingApi.createBooking({
       ...newBooking,
       check_in_date: newBooking.check_in_date.format('YYYY-MM-DD'),
-      check_out_date: newBooking.check_out_date.format('YYYY-MM-DD')
+      check_out_date: newBooking.check_out_date.format('YYYY-MM-DD'),
+      hotel_id: hotelStore.currentHotelId!
     })
     message.success('预订创建成功')
     modalVisible.value = false
