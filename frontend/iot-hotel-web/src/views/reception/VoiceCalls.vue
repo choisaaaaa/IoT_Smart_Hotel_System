@@ -487,9 +487,13 @@ async function handleIncomingReject() {
 }
 
 function toggleRegister() {
-  let socket = getSocket()
-  if (!socket || !socket.connected) socket = initWebSocket()
-  if (!socket || !socket.connected) { message.error('WebSocket 连接中...'); return; }
+  // 初始化 WebSocket（如果已存在且连接中则复用，否则创建新的）
+  const socket = initWebSocket()
+  
+  if (!socket || !socket.connected) { 
+    message.error('WebSocket 连接中...')
+    return
+  }
   
   // 确保事件监听已设置
   setupSignalingListeners()
@@ -500,8 +504,10 @@ function toggleRegister() {
     message.info('已下线')
   } else {
     const id = appStore.userInfo?.username || 'FD-01'
+    console.log('[VoiceCalls] 注册客户端:', id)
     socket.emit('register_client', { clientType: 'front_desk', clientId: id })
     socket.once('registered', (data: any) => {
+      console.log('[VoiceCalls] 注册成功:', data)
       isRegistered.value = true
       clientDisplayName.value = data.clientName
       message.success(`欢迎，${data.clientName}`)
@@ -512,14 +518,33 @@ function toggleRegister() {
 
 onMounted(async () => {
   await Promise.all([fetchCalls(), fetchUsers(), hotelStore.fetchRooms({ pageSize: 300 })])
-  let socket = getSocket()
-  if (!socket || !socket.connected) socket = initWebSocket()
+  
+  // 初始化 WebSocket（如果已存在且连接中则复用，否则创建新的）
+  const socket = initWebSocket()
+  
   if (socket) {
     socketConnected.value = socket.connected
-    socket.on('connect', () => { socketConnected.value = true; setupSignalingListeners(); })
-    socket.on('disconnect', () => { socketConnected.value = false; isRegistered.value = false; })
-    if (socket.connected) {
+    
+    // 无论是否已连接，都先设置监听
+    setupSignalingListeners()
+    
+    socket.on('connect', () => { 
+      socketConnected.value = true
+      console.log('[VoiceCalls] WebSocket 已连接')
+      // 重新连接时重新设置监听
+      listenersSetup.value = false
       setupSignalingListeners()
+      socket.emit('get_online_status')
+    })
+    
+    socket.on('disconnect', () => { 
+      socketConnected.value = false
+      isRegistered.value = false
+      console.log('[VoiceCalls] WebSocket 已断开')
+    })
+    
+    if (socket.connected) {
+      console.log('[VoiceCalls] WebSocket 已连接，获取在线状态')
       socket.emit('get_online_status')
     }
   }
