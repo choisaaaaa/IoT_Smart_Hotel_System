@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/theme/app_colors.dart';
-import '../../routes/app_router.dart';
 import '../../services/auth_service.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {

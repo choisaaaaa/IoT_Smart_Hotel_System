@@ -7,7 +7,7 @@ import '../../../core/mqtt/mqtt_service.dart';
 import '../../../services/device_service.dart';
 import '../../../services/delivery_service.dart';
 import '../../../services/voice_call_service.dart';
-import '../../../core/network/api_result.dart';
+import '../../../services/booking_service.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
   const RoomServicePage({super.key});
@@ -19,7 +19,9 @@ class RoomServicePage extends ConsumerStatefulWidget {
 class _RoomServicePageState extends ConsumerState<RoomServicePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _isCheckedIn = false;
+  Map<String, dynamic>? _currentStay;
   List<dynamic> _devices = [];
   final MqttService _mqttService = MqttService();
 
@@ -27,8 +29,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _fetchDevices();
-    _connectMqtt();
+    _checkCheckinStatus();
   }
 
   @override
@@ -36,6 +37,28 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     _tabController.dispose();
     _mqttService.disconnect();
     super.dispose();
+  }
+
+  Future<void> _checkCheckinStatus() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(bookingServiceProvider).getMyCurrentStay();
+      if (result.success && mounted) {
+        final stay = result.data;
+        if (stay != null) {
+          setState(() {
+            _isCheckedIn = true;
+            _currentStay = stay;
+          });
+          _fetchDevices();
+          _connectMqtt();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking check-in status: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _connectMqtt() async {
@@ -63,7 +86,8 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   }
 
   Future<void> _toggleDevice(dynamic device) async {
-    final newStatus = device['status'] == 'on' ? 'off' : 'on';
+    final currentStatus = device['device_status'] ?? device['status'] ?? 'off';
+    final newStatus = currentStatus == 'on' ? 'off' : 'on';
     try {
       final result = await ref
           .read(deviceServiceProvider)
@@ -93,12 +117,56 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_isCheckedIn) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text('客房服务', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.hotel_outlined, size: 80, color: AppColors.textHint.withValues(alpha: 0.3)),
+                const SizedBox(height: 24),
+                const Text('您尚未入住', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                const SizedBox(height: 12),
+                const Text('请先完成预订支付并办理入住后，\n即可使用客房服务功能。', style: TextStyle(fontSize: 14, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                const SizedBox(height: 32),
+                FilledButton.icon(
+                  onPressed: () => context.push('/online-checkin'),
+                  icon: const Icon(Icons.login_rounded),
+                  label: const Text('在线办理入住'),
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () => context.push('/orders'),
+                  child: const Text('查看我的订单'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final roomNumber = _currentStay?['room_number'] ?? _currentStay?['room_id']?.toString() ?? '-';
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('客房服务',
-            style:
-                GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+        title: Text('$roomNumber号房 · 客房服务', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         bottom: TabBar(
@@ -120,8 +188,8 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         controller: _tabController,
         children: [
           _AiButlerTab(),
-          _DeliveryTab(),
-          _ContactFrontDeskTab(),
+          _DeliveryTab(roomId: _currentStay?['room_id'], roomNumber: _currentStay?['room_number']?.toString(), currentStay: _currentStay),
+          _ContactFrontDeskTab(roomId: _currentStay?['room_id']),
           _buildDeviceControlTab(),
         ],
       ),
@@ -148,10 +216,10 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
                   itemBuilder: (context, index) {
                     final device = _devices[index];
                     return _DeviceControlTile(
-                      icon: _getDeviceIcon(device['type']),
+                      icon: _getDeviceIcon(device['device_type'] ?? device['type']),
                       name: device['device_name'] ?? '未知设备',
-                      status: device['status'] == 'on' ? '开启' : '关闭',
-                      isOn: device['status'] == 'on',
+                      status: (device['device_status'] ?? device['status'] ?? 'off') == 'on' ? '开启' : '关闭',
+                      isOn: (device['device_status'] ?? device['status'] ?? 'off') == 'on',
                       onTap: () => _toggleDevice(device),
                     );
                   },
@@ -422,6 +490,10 @@ class _ChatMessage {
 }
 
 class _DeliveryTab extends ConsumerStatefulWidget {
+  final dynamic roomId;
+  final String? roomNumber;
+  final Map<String, dynamic>? currentStay;
+  const _DeliveryTab({this.roomId, this.roomNumber, this.currentStay});
   @override
   ConsumerState<_DeliveryTab> createState() => _DeliveryTabState();
 }
@@ -569,37 +641,60 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
   }
 
   Future<void> _submitDelivery() async {
-    final items = <Map<String, dynamic>>[];
+    final selectedItems = <Map<String, dynamic>>[];
     _quantities.forEach((id, qty) {
       final item = DeliveryService.deliveryItemCatalog
           .firstWhere((i) => i['id'] == id);
-      items.add({'item_id': id, 'name': item['name'], 'quantity': qty});
+      selectedItems.add({
+        'item_id': id,
+        'name': item['name'],
+        'category': item['category'],
+        'price': item['price'],
+        'quantity': qty,
+      });
     });
 
-    try {
-      final result = await ref.read(deliveryServiceProvider).createDeliveryOrder({
-        'items': items,
-        'note': _noteController.text.trim(),
-      });
-      if (result.success && mounted) {
+    int successCount = 0;
+    int failCount = 0;
+
+    for (final item in selectedItems) {
+      try {
+        final orderData = <String, dynamic>{
+          'room_id': widget.roomId,
+          'booking_id': widget.currentStay?['id'],
+          'guest_id': widget.currentStay?['user_id'],
+          'item_category': item['category'],
+          'item_name': item['name'],
+          'quantity': item['quantity'],
+          'note': _noteController.text.trim(),
+        };
+        final result = await ref.read(deliveryServiceProvider).createDeliveryOrder(orderData);
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (e) {
+        failCount++;
+        debugPrint('Error creating delivery order: $e');
+      }
+    }
+
+    if (mounted) {
+      if (successCount > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('送物请求已提交，请稍候配送'),
-              backgroundColor: AppColors.success),
+          SnackBar(
+            content: Text('已提交$successCount项送物请求，请稍候配送${failCount > 0 ? '，$failCount项失败' : ''}'),
+            backgroundColor: failCount > 0 ? AppColors.warning : AppColors.success,
+          ),
         );
         setState(() {
           _quantities.clear();
           _noteController.clear();
         });
-      } else if (mounted) {
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message ?? '提交失败')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('提交失败：$e')),
+          const SnackBar(content: Text('提交失败，请重试')),
         );
       }
     }
@@ -607,6 +702,8 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
 }
 
 class _ContactFrontDeskTab extends ConsumerStatefulWidget {
+  final dynamic roomId;
+  const _ContactFrontDeskTab({this.roomId});
   @override
   ConsumerState<_ContactFrontDeskTab> createState() =>
       _ContactFrontDeskTabState();
@@ -615,7 +712,6 @@ class _ContactFrontDeskTab extends ConsumerStatefulWidget {
 class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   final _messageController = TextEditingController();
   List<Map<String, dynamic>> _messages = [];
-  bool _isCalling = false;
 
   @override
   void dispose() {
@@ -624,7 +720,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   }
 
   Future<void> _makeCall() async {
-    setState(() => _isCalling = true);
     try {
       final callService = VoiceCallService();
       callService.init('guest_app');
@@ -688,8 +783,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           SnackBar(content: Text('呼叫失败：$e')),
         );
       }
-    } finally {
-      setState(() => _isCalling = false);
     }
   }
 

@@ -103,6 +103,19 @@ class MaintenanceService {
       return ApiResult.failure('网络错误：$e');
     }
   }
+
+  Future<ApiResult<void>> deleteWorkOrder(int workOrderId) async {
+    try {
+      final response = await _dioClient.delete('${ApiConstants.maintenance}$workOrderId');
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '删除工单失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
 }
 
 final maintenanceServiceProvider = Provider((ref) => MaintenanceService());

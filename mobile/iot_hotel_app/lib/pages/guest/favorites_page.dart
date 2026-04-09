@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
+import '../../core/constants/app_constants.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -25,7 +26,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('hotel_favorites') ?? '[]';
+      final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
       final List<dynamic> decoded = jsonDecode(raw);
       setState(() => _favorites = decoded.cast<Map<String, dynamic>>().toList());
     } catch (e) {
@@ -39,7 +40,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final removed = _favorites[index];
     setState(() => _favorites.removeAt(index));
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('hotel_favorites', jsonEncode(_favorites));
+    await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(_favorites));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -48,7 +49,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             label: '撤销',
             onPressed: () async {
               setState(() => _favorites.insert(index, removed));
-              await prefs.setString('hotel_favorites', jsonEncode(_favorites));
+              await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(_favorites));
             },
           ),
         ),

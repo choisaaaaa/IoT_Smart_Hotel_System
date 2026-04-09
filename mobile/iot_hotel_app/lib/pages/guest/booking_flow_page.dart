@@ -81,7 +81,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     if (user != null && mounted) {
       setState(() {
         _nameController.text = user.username;
-        _phoneController.text = user.phone ?? '';
+        _phoneController.text = '';
       });
     }
   }
@@ -121,7 +121,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
 
       if (result.success) {
         final orderId = result.data!['id'];
-        final totalPrice = result.data!['total_price'];
+        final totalPrice = result.data!['total_price'] ?? result.data!['total_amount'] ?? widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
 
         // 2. 创建支付记录
         final createPayResult = await ref.read(paymentServiceProvider).createPayment({
@@ -142,7 +142,14 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         await Future.delayed(const Duration(seconds: 1));
 
         // 4. 确认支付
-        final paymentId = createPayResult.data!['id'];
+        final paymentId = createPayResult.data?['id'];
+        if (paymentId == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单创建异常，请稍后在订单中查看')));
+            context.go('/orders');
+          }
+          return;
+        }
         final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
         
         if (payResult.success && mounted) {

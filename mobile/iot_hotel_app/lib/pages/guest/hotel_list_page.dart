@@ -31,8 +31,10 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
     setState(() => _isLoading = true);
     try {
       final city = _selectedCity == '全部' ? null : _selectedCity;
+      final keyword = _searchController.text.isNotEmpty ? _searchController.text : null;
       final result = await ref.read(hotelServiceProvider).getHotels(
-        city: _searchController.text.isNotEmpty ? _searchController.text : city,
+        city: city,
+        keyword: keyword,
       );
       if (result.success && mounted) {
         setState(() => _hotels = result.data ?? []);

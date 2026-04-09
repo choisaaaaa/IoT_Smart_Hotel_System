@@ -20,11 +20,11 @@ class AuthInterceptor extends Interceptor {
       await _clearAuthData();
       authStateNotifier.markUnauthenticated();
 
-      final navigatorKey = AppRouter.navigatorKey;
-      if (navigatorKey.currentContext != null) {
+      final context = AppRouter.navigatorKey.currentContext;
+      if (context != null) {
         Future.microtask(() {
-          if (navigatorKey.currentContext!.mounted) {
-            navigatorKey.currentContext!.go('/login');
+          if (context.mounted) {
+            context.go('/login');
           }
         });
       }

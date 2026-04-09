@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
+import '../../core/constants/app_constants.dart';
 import '../../services/review_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
@@ -53,14 +54,14 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
 
   Future<List<Map<String, dynamic>>> _getFavoritesList() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('hotel_favorites') ?? '[]';
+    final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
     final List<dynamic> decoded = jsonDecode(raw);
     return decoded.cast<Map<String, dynamic>>().toList();
   }
 
   void _toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('hotel_favorites') ?? '[]';
+    final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
     final List<dynamic> decoded = jsonDecode(raw);
     final favorites = decoded.cast<Map<String, dynamic>>().toList();
     final hotelId = widget.hotelId ?? 1;
@@ -76,7 +77,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         'location': _hotelInfo?['location'] ?? '',
       });
     }
-    await prefs.setString('hotel_favorites', jsonEncode(favorites));
+    await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(favorites));
     setState(() => _isFavorited = !_isFavorited);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,8 +93,12 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       if (result.success && mounted) {
         final raw = result.data;
         if (raw != null) {
+          var hotelData = raw;
+          if (raw.containsKey('hotel') && raw['hotel'] is Map) {
+            hotelData = Map<String, dynamic>.from(raw['hotel'] as Map);
+          }
           final normalized = <String, dynamic>{};
-          raw.forEach((key, value) {
+          hotelData.forEach((key, value) {
             normalized[key] = value;
           });
           if (!normalized.containsKey('name') && normalized.containsKey('hotel_name')) {
@@ -333,28 +338,57 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
 
   Widget _buildDateSelector() {
     final format = DateFormat('MM月dd日');
-    return Container(
-      color: Colors.white,
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${format.format(_checkInDate)} - ${format.format(_checkOutDate)} >', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('${DateFormat('E', 'zh_CN').format(_checkInDate)}入住 - ${DateFormat('E', 'zh_CN').format(_checkOutDate)}离店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-            ],
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(20)),
-            child: const Text('全日房', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-        ],
+    return GestureDetector(
+      onTap: _selectDates,
+      child: Container(
+        color: Colors.white,
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${format.format(_checkInDate)} - ${format.format(_checkOutDate)} >', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('${DateFormat('E', 'zh_CN').format(_checkInDate)}入住 - ${DateFormat('E', 'zh_CN').format(_checkOutDate)}离店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(20)),
+              child: const Text('全日房', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _selectDates() async {
+    final checkIn = await showDatePicker(
+      context: context,
+      initialDate: _checkInDate.isAfter(DateTime.now()) ? _checkInDate : DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: '选择入住日期',
+    );
+    if (checkIn == null || !mounted) return;
+
+    final checkOut = await showDatePicker(
+      context: context,
+      initialDate: checkIn.add(const Duration(days: 1)),
+      firstDate: checkIn.add(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: '选择退房日期',
+    );
+    if (checkOut == null || !mounted) return;
+
+    setState(() {
+      _checkInDate = checkIn;
+      _checkOutDate = checkOut;
+    });
+    _fetchRooms();
   }
 
   Widget _buildRoomItem(BuildContext context, dynamic room) {

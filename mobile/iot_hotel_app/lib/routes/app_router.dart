@@ -31,8 +31,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         final userRole = await authService.getUserRole();
         switch (userRole) {
           case 'admin':
+          case 'system':
             return '/admin';
           case 'staff':
+          case 'receptionist':
             return '/reception';
           default:
             return '/';
@@ -43,10 +45,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         final userRole = await authService.getUserRole();
         final currentPath = state.matchedLocation;
 
-        if (userRole == 'admin' && currentPath != '/admin' && !currentPath.startsWith('/admin')) {
+        if ((userRole == 'admin' || userRole == 'system') && currentPath != '/admin' && !currentPath.startsWith('/admin')) {
           return '/admin';
         }
-        if (userRole == 'staff' && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
+        if ((userRole == 'staff' || userRole == 'receptionist') && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
           return '/reception';
         }
       }

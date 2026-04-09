@@ -8,21 +8,26 @@ class HotelService {
 
   Future<ApiResult<List<dynamic>>> getHotels({
     String? city,
+    String? keyword,
     double? lat,
     double? lng,
     int page = 1,
     int pageSize = 10,
   }) async {
     try {
+      final queryParams = <String, dynamic>{
+        'lat': lat,
+        'lng': lng,
+        'page': page,
+        'pageSize': pageSize,
+      };
+      if (city != null) queryParams['city'] = city;
+      if (keyword != null) queryParams['keyword'] = keyword;
+      if (city == null && keyword == null) queryParams['destination'] = null;
+
       final response = await _dioClient.get(
         '${ApiConstants.hotels}search',
-        queryParameters: {
-          'destination': city,
-          'lat': lat,
-          'lng': lng,
-          'page': page,
-          'pageSize': pageSize,
-        }..removeWhere((key, value) => value == null),
+        queryParameters: queryParams..removeWhere((key, value) => value == null),
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -36,7 +41,7 @@ class HotelService {
 
   Future<ApiResult<Map<String, dynamic>>> getHotelById(int hotelId) async {
     try {
-      final response = await _dioClient.get(ApiConstants.hotel);
+      final response = await _dioClient.get('${ApiConstants.hotels}$hotelId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -50,15 +55,18 @@ class HotelService {
   Future<ApiResult<List<dynamic>>> getRoomAvailability(int hotelId, String checkIn, String checkOut) async {
     try {
       final response = await _dioClient.get(
-        ApiConstants.rooms,
+        '${ApiConstants.hotels}$hotelId/rooms/availability',
         queryParameters: {
-          'pageSize': 100,
+          'check_in': checkIn,
+          'check_out': checkOut,
         },
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
-        if (data is Map && data.containsKey('list')) {
+        if (data is Map && data.containsKey('rooms')) {
+          return ApiResult.success(List<dynamic>.from(data['rooms'] ?? []));
+        } else if (data is Map && data.containsKey('list')) {
           return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
         } else if (data is List) {
           return ApiResult.success(List<dynamic>.from(data));

@@ -30,8 +30,11 @@ class MqttService {
       _client!.onSubscribed = _onSubscribed;
 
      final connMsg = MqttConnectMessage()
-        .authenticateAs(MqttConstants.username, MqttConstants.password)
         .withWillQos(MqttQos.atMostOnce);
+
+      if (MqttConstants.username.isNotEmpty) {
+        connMsg.authenticateAs(MqttConstants.username, MqttConstants.password);
+      }
 
       _client!.connectionMessage = connMsg;
 

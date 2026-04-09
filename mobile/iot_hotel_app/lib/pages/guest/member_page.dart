@@ -219,7 +219,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
               const SizedBox(height: 32),
               Text(user?.username ?? '未登录', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(user?.phone != null ? '${user!.phone!.substring(0, 3)}****${user.phone!.substring(7)}' : '手机号未绑定', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Text(user?.email != null ? user!.email! : '邮箱未绑定', style: const TextStyle(color: Colors.white70, fontSize: 14)),
               const SizedBox(height: 24),
               Row(
                 children: [

@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
-import '../../routes/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
 import '../../core/logic/member_logic.dart';
@@ -78,7 +77,6 @@ class HomePage extends ConsumerWidget {
                     final assets = assetsResult?.data ?? {};
                     
                     final displayName = user?.username ?? '游客';
-                    final roleName = user?.role == 'admin' ? '系统管理员' : user?.role == 'staff' ? '金会员' : '普通会员';
                     final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
                     final level = MemberLevel.fromExperience(totalSpent.floor());
                     

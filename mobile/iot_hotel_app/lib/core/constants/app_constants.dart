@@ -6,14 +6,16 @@ class AppConstants {
   static const String sessionTokenKey = 'session_token';
   static const String userInfoKey = 'user_info';
   static const String guestCheckinInfoKey = 'guest_checkin_info';
-  static const String favoriteHotelsKey = 'favorite_hotels';
+  static const String favoriteHotelsKey = 'hotel_favorites';
 
-  static const List<String> userRoles = ['admin', 'reception', 'guest'];
+  static const List<String> userRoles = ['admin', 'system', 'receptionist', 'staff', 'user'];
 
   static Map<String, String> roleNames = {
     'admin': '管理员',
-    'reception': '前台',
-    'guest': '住客',
+    'system': '系统管理员',
+    'receptionist': '前台',
+    'staff': '员工',
+    'user': '住客',
   };
 
   static Map<String, String> roomStatusMap = {

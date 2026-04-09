@@ -36,7 +36,14 @@ class ApiResult<T> {
     final resultData = data['data'];
 
     if (code == 200 || code == 201) {
-      return ApiResult<T>.success(resultData as T, code: code);
+      if (resultData is T) {
+        return ApiResult<T>.success(resultData, code: code);
+      }
+      try {
+        return ApiResult<T>.success(resultData as T, code: code);
+      } catch (e) {
+        return ApiResult<T>.failure('数据类型转换失败', code: code);
+      }
     }
     return ApiResult<T>.failure(message, code: code);
   }

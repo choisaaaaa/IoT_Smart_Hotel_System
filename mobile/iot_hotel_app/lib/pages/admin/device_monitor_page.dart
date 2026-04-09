@@ -31,12 +31,11 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
         setState(() {
           _devices = deviceList.map((d) => Device(
             id: d['id'] ?? 0,
+            deviceId: d['device_id']?.toString() ?? d['id']?.toString() ?? '',
             deviceName: d['device_name'] ?? '未知设备',
             deviceType: d['type'] ?? d['device_type'] ?? 'unknown',
-            deviceCode: d['device_code'] ?? '',
-            roomId: d['room_id'] ?? 0,
-            isOnline: d['is_online'] ?? true,
-            status: d['status'] ?? 'offline',
+            deviceKey: d['device_key'] ?? d['device_code'] ?? '',
+            deviceStatus: d['device_status'] ?? d['status'] ?? 'offline',
           )).toList();
         });
       }
@@ -54,12 +53,12 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
     if (_filterStatus == null || _filterStatus == 'all') return _devices.cast<Device>();
     if (_filterStatus == 'online') return _devices.where((d) => (d as Device).isOnline).cast<Device>().toList();
     if (_filterStatus == 'offline') return _devices.where((d) => !(d as Device).isOnline).cast<Device>().toList();
-    return _devices.where((d) => (d as Device).status == _filterStatus).cast<Device>().toList();
+    return _devices.where((d) => (d as Device).deviceStatus == _filterStatus).cast<Device>().toList();
   }
 
   Color getDeviceColor(Device d) {
     if (!d.isOnline) return AppColors.deviceOffline;
-    switch (d.status) {
+    switch (d.deviceStatus) {
       case 'error': return AppColors.deviceError;
       case 'warning': return AppColors.deviceWarning;
       default: return AppColors.deviceOnline;
@@ -68,14 +67,14 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
 
   String getDeviceStatusText(Device d) {
     if (!d.isOnline) return '离线';
-    switch (d.status) {
+    switch (d.deviceStatus) {
       case 'on': return '运行中';
       case 'off': return '已关闭';
       case 'locked': return '已锁定';
       case 'unlocked': return '已解锁';
       case 'normal': return '正常';
       case 'error': return '异常';
-      default: return d.status;
+      default: return d.deviceStatus;
     }
   }
 
@@ -129,7 +128,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${device.typeName} · ${device.roomId}号房', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text('${device.typeName} · ${device.deviceId}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -163,7 +162,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
                   child: FilledButton.tonal(
                     onPressed: () async {
                       Navigator.pop(context);
-                      final newStatus = device.status == 'on' ? 'off' : 'on';
+                      final newStatus = device.deviceStatus == 'on' ? 'off' : 'on';
                       try {
                         final result = await ref.read(deviceServiceProvider).controlDevice(device.id, 'toggle', newStatus);
                         if (result.success && mounted) {
@@ -176,7 +175,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
                         }
                       }
                     },
-                    child: Text(device.status == 'on' || device.status == 'unlocked' ? '关闭${device.typeName}' : '打开${device.typeName}'),
+                    child: Text(device.deviceStatus == 'on' || device.deviceStatus == 'unlocked' ? '关闭${device.typeName}' : '打开${device.typeName}'),
                   ),
                 ),
               const SizedBox(height: 12),

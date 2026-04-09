@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'core/network/dio_client.dart';
+import 'core/network/api_interceptor.dart';
 
 class IoTHotelApp extends ConsumerStatefulWidget {
   const IoTHotelApp({super.key});
@@ -29,6 +30,15 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: router,
+      builder: (context, child) {
+        return Navigator(
+          key: AppRouter.navigatorKey,
+          onDidRemovePage: (Page<void> page) {},
+          pages: [
+            MaterialPage(child: child ?? const SizedBox.shrink()),
+          ],
+        );
+      },
     );
   }
 }

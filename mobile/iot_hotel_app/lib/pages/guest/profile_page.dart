@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/logic/member_logic.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
@@ -376,7 +377,7 @@ class ProfilePage extends ConsumerWidget {
   Future<int> _getFavoritesCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('hotel_favorites') ?? '[]';
+      final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
       final List<dynamic> decoded = jsonDecode(raw);
       return decoded.length;
     } catch (e) {

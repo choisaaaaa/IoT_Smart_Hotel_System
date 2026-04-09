@@ -12,9 +12,9 @@ class HotelEditPage extends ConsumerStatefulWidget {
 
 class _HotelEditPageState extends ConsumerState<HotelEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: '智联酒店');
-  final _addressController = TextEditingController(text: '深圳市南山区科技园路1000号');
-  final _phoneController = TextEditingController(text: '0755-88888888');
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _phoneController = TextEditingController();
   String _selectedStar = '5';
   bool _isSaving = false;
 

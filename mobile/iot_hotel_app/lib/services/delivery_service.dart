@@ -49,10 +49,19 @@ class DeliveryService {
 
   Future<ApiResult<void>> updateDeliveryStatus(int deliveryId, String status) async {
     try {
+      if (status == 'completed' || status == 'delivered') {
+        final response = await _dioClient.put(
+          '${ApiConstants.delivery}$deliveryId/complete',
+        );
+        if (response.statusCode == 200 && response.data['code'] == 200) {
+          return ApiResult.success(null);
+        }
+        return ApiResult.failure(response.data['message'] ?? '更新送物状态失败');
+      }
       final response = await _dioClient.put(
-        '${ApiConstants.delivery}$deliveryId/complete',
+        '${ApiConstants.delivery}$deliveryId/status',
+        data: {'status': status},
       );
-
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }

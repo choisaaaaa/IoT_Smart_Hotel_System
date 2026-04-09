@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -129,6 +130,77 @@ class BookingService {
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
+  }
+
+  Future<ApiResult<Map<String, dynamic>?>> getMyCurrentStay() async {
+    List<dynamic> extractList(dynamic data) {
+      if (data is Map && data.containsKey('list')) {
+        return List<dynamic>.from(data['list'] ?? []);
+      } else if (data is List) {
+        return List<dynamic>.from(data);
+      }
+      return [];
+    }
+
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.bookings,
+        queryParameters: {'status': 'checked_in', 'pageSize': 10},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final list = extractList(response.data['data']);
+        final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
+        if (checkedIn.isNotEmpty) {
+          return ApiResult.success(Map<String, dynamic>.from(checkedIn.first));
+        }
+      }
+    } catch (e) {
+      debugPrint('getMyCurrentStay attempt 1 failed: $e');
+    }
+
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.bookings,
+        queryParameters: {'pageSize': 50},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final list = extractList(response.data['data']);
+        final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
+        if (checkedIn.isNotEmpty) {
+          return ApiResult.success(Map<String, dynamic>.from(checkedIn.first));
+        }
+      }
+    } catch (e) {
+      debugPrint('getMyCurrentStay attempt 2 failed: $e');
+    }
+
+    try {
+      final meResponse = await _dioClient.get(ApiConstants.authMe);
+      if (meResponse.statusCode == 200 && meResponse.data['code'] == 200) {
+        final userData = meResponse.data['data'];
+        final keyword = userData['phone'] ?? userData['username'] ?? '';
+        if (keyword.isNotEmpty) {
+          final lookupResponse = await _dioClient.get(
+            '${ApiConstants.bookings}lookup',
+            queryParameters: {'keyword': keyword},
+          );
+          if (lookupResponse.statusCode == 200 && lookupResponse.data['code'] == 200) {
+            final lookupData = lookupResponse.data['data'];
+            if (lookupData != null && lookupData['status'] == 'checked_in') {
+              final fullResponse = await _dioClient.get('${ApiConstants.bookings}${lookupData['id']}');
+              if (fullResponse.statusCode == 200 && fullResponse.data['code'] == 200) {
+                return ApiResult.success(Map<String, dynamic>.from(fullResponse.data['data']));
+              }
+              return ApiResult.success(Map<String, dynamic>.from(lookupData));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('getMyCurrentStay attempt 3 failed: $e');
+    }
+
+    return ApiResult.success(null);
   }
 }
 

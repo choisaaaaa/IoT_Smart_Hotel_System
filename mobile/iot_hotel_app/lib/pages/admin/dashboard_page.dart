@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../routes/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/room_service.dart';

@@ -2,44 +2,85 @@ import 'package:json_annotation/json_annotation.dart';
 
 class Room {
   final int id;
+  @JsonKey(name: 'hotel_id')
+  final int hotelId;
   @JsonKey(name: 'room_number')
   final String roomNumber;
   @JsonKey(name: 'room_type')
   final String roomType;
+  @JsonKey(name: 'room_type_id')
+  final int? roomTypeId;
+  @JsonKey(name: 'room_name')
+  final String? roomName;
+  @JsonKey(name: 'room_price')
+  final double roomPrice;
+  @JsonKey(name: 'room_status')
+  final String roomStatus;
   @JsonKey(name: 'floor')
-  final int floor;
-  @JsonKey(name: 'status')
-  final String status;
-  @JsonKey(name: 'price_per_night')
-  final double pricePerNight;
+  final int? floor;
+  @JsonKey(name: 'area')
+  final double? area;
+  @JsonKey(name: 'bed_type')
+  final String? bedType;
   @JsonKey(name: 'max_guests')
   final int maxGuests;
-  @JsonKey(name: 'hotel_id')
-  final int hotelId;
+  @JsonKey(name: 'description')
+  final String? description;
+  @JsonKey(name: 'facilities')
+  final dynamic facilities;
+  @JsonKey(name: 'images')
+  final dynamic images;
+  @JsonKey(name: 'image_url')
+  final String? imageUrl;
 
   Room({
     required this.id,
-    required this.roomNumber,
-    this.roomType = '标准间',
-    this.floor = 1,
-    this.status = 'available',
-    this.pricePerNight = 0.0,
-    this.maxGuests = 2,
     this.hotelId = 1,
+    required this.roomNumber,
+    this.roomType = 'standard',
+    this.roomTypeId,
+    this.roomName,
+    this.roomPrice = 0.0,
+    this.roomStatus = 'available',
+    this.floor,
+    this.area,
+    this.bedType,
+    this.maxGuests = 1,
+    this.description,
+    this.facilities,
+    this.images,
+    this.imageUrl,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) => Room(
-        id: json['id'] ?? 0, roomNumber: json['room_number'] ?? '', roomType: json['room_type'] ?? '标准间',
-        floor: json['floor'] ?? 1, status: json['status'] ?? 'available',
-        pricePerNight: (json['price_per_night'] ?? 0).toDouble(), maxGuests: json['max_guests'] ?? 2,
+        id: json['id'] ?? 0,
         hotelId: json['hotel_id'] ?? 1,
+        roomNumber: json['room_number'] ?? '',
+        roomType: json['room_type'] ?? 'standard',
+        roomTypeId: json['room_type_id'],
+        roomName: json['room_name'],
+        roomPrice: (json['room_price'] ?? 0).toDouble(),
+        roomStatus: json['room_status'] ?? json['status'] ?? 'available',
+        floor: json['floor'],
+        area: json['area'] != null ? (json['area']).toDouble() : null,
+        bedType: json['bed_type'],
+        maxGuests: json['max_guests'] ?? 1,
+        description: json['description'],
+        facilities: json['facilities'],
+        images: json['images'],
+        imageUrl: json['image_url'],
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'room_number': roomNumber, 'room_type': roomType,
-    'floor': floor, 'status': status, 'price_per_night': pricePerNight, 'max_guests': maxGuests, 'hotel_id': hotelId};
+  Map<String, dynamic> toJson() => {
+        'id': id, 'hotel_id': hotelId, 'room_number': roomNumber, 'room_type': roomType,
+        'room_type_id': roomTypeId, 'room_name': roomName, 'room_price': roomPrice,
+        'room_status': roomStatus, 'floor': floor, 'area': area, 'bed_type': bedType,
+        'max_guests': maxGuests, 'description': description, 'facilities': facilities,
+        'images': images, 'image_url': imageUrl,
+      };
 
   String get statusText {
     const map = {'available': '空闲', 'occupied': '已入住', 'cleaning': '清洁中', 'maintenance': '维修中', 'reserved': '已预订'};
-    return map[status] ?? status;
+    return map[roomStatus] ?? roomStatus;
   }
 }
