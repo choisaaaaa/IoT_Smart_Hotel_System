@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../routes/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
@@ -11,6 +13,8 @@ import '../../services/booking_service.dart';
 import '../../services/room_service.dart';
 import '../../services/delivery_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/voice_call_service.dart';
+import '../../services/room_type_service.dart';
 
 class ReceptionDashboardPage extends ConsumerStatefulWidget {
   const ReceptionDashboardPage({super.key});
@@ -19,33 +23,47 @@ class ReceptionDashboardPage extends ConsumerStatefulWidget {
   ConsumerState<ReceptionDashboardPage> createState() => _ReceptionDashboardPageState();
 }
 
-class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> {
-  int _selectedIndex = 0;
+class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _notificationCount = 0;
 
   final List<_NavItem> _navItems = const [
     _NavItem(icon: Icons.dashboard_rounded, label: '总览'),
     _NavItem(icon: Icons.how_to_reg_rounded, label: '入住退房'),
     _NavItem(icon: Icons.calendar_month_rounded, label: '预订'),
     _NavItem(icon: Icons.door_back_door_rounded, label: '客房'),
-    _NavItem(icon: Icons.build_rounded, label: '工单'),
-    _NavItem(icon: Icons.delivery_dining_rounded, label: '送物'),
-    _NavItem(icon: Icons.receipt_long_rounded, label: '账单'),
+    _NavItem(icon: Icons.build_rounded, label: '工单处理'),
+    _NavItem(icon: Icons.delivery_dining_rounded, label: '客房送物'),
+    _NavItem(icon: Icons.phone_in_talk_rounded, label: '语音通话'),
+    _NavItem(icon: Icons.price_change_rounded, label: '房价设置'),
+    _NavItem(icon: Icons.receipt_long_rounded, label: '账单报表'),
   ];
-
-  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    _pages = [
-      const _ReceptionHomeContent(),
-      const CheckInOutPage(),
-      const BookingsPage(),
-      const RoomAvailabilityPage(),
-      const WorkOrdersPage(),
-      const DeliveryOrdersPage(),
-      const BillsPage(),
-    ];
+    _tabController = TabController(length: _navItems.length, vsync: this);
+    _loadNotificationCount();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      final maintenanceResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 1);
+      final deliveryResult = await ref.read(deliveryServiceProvider).getDeliveryOrders(status: 'pending', pageSize: 1);
+      int count = 0;
+      if (maintenanceResult.success) count += 1;
+      if (deliveryResult.success) count += 1;
+      if (mounted) setState(() => _notificationCount = count);
+    } catch (e) {
+      debugPrint('Error loading notifications: $e');
+    }
   }
 
   @override
@@ -55,10 +73,28 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
       appBar: AppBar(
         title: Text('智联酒店 - 前台端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications_rounded), onPressed: () {}),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_rounded),
+                onPressed: () => _showNotificationPanel(),
+              ),
+              if (_notificationCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                    child: Text('$_notificationCount', style: const TextStyle(color: Colors.white, fontSize: 9), textAlign: TextAlign.center),
+                  ),
+                ),
+            ],
+          ),
           PopupMenuButton<String>(
             icon: const CircleAvatar(radius: 16, backgroundColor: AppColors.primary, child: Icon(Icons.person, size: 18, color: Colors.white)),
-            onSelected: (value) async { 
+            onSelected: (value) async {
               if (value == 'logout') {
                 await ref.read(authServiceProvider).logout();
                 if (!context.mounted) return;
@@ -70,27 +106,72 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
               const PopupMenuItem(value: 'logout', child: Text('退出登录')),
             ],
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
         ],
-      ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _pages[_selectedIndex],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))]),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: (i) => setState(() => _selectedIndex = i),
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.textSecondary,
-          showUnselectedLabels: true,
-          selectedLabelStyle: GoogleFonts.notoSansSc(fontSize: 10, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: GoogleFonts.notoSansSc(fontSize: 10),
-          items: _navItems.map((item) => BottomNavigationBarItem(icon: Icon(item.icon), label: item.label)).toList(),
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: AppColors.primary,
+          labelStyle: GoogleFonts.notoSansSc(fontSize: 13, fontWeight: FontWeight.bold),
+          tabAlignment: TabAlignment.start,
+          tabs: _navItems.map((item) => Tab(
+            icon: Icon(item.icon, size: 18),
+            text: item.label,
+          )).toList(),
         ),
       ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          const _ReceptionHomeContent(),
+          const CheckInOutPage(),
+          const BookingsPage(),
+          const RoomAvailabilityPage(),
+          const WorkOrdersPage(),
+          const DeliveryOrdersPage(),
+          const VoiceCallsPage(),
+          const PriceSettingsPage(),
+          const BillsPage(),
+        ],
+      ),
+    );
+  }
+
+  void _showNotificationPanel() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            const Text('消息通知', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _buildNotificationItem('工单处理', '有新的待处理工单', Icons.build_rounded, AppColors.warning, 4),
+            _buildNotificationItem('客房送物', '有新的送物请求', Icons.delivery_dining_rounded, AppColors.info, 5),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    ).then((_) => _loadNotificationCount());
+  }
+
+  Widget _buildNotificationItem(String title, String desc, IconData icon, Color color, int tabIndex) {
+    return ListTile(
+      leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.1), child: Icon(icon, color: color, size: 20)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(desc),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.pop(context);
+        _tabController.animateTo(tabIndex);
+      },
     );
   }
 }
@@ -136,8 +217,8 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
   }
 
   void _navigateToTab(int tabIndex) {
-    final parent = context.findAncestorStateOfType<_ReceptionDashboardPageState>();
-    parent?.setState(() => parent._selectedIndex = tabIndex);
+    final state = context.findAncestorStateOfType<_ReceptionDashboardPageState>();
+    state?._tabController.animateTo(tabIndex);
   }
 
   @override
@@ -900,6 +981,315 @@ class _BillsPageState extends ConsumerState<BillsPage> {
         children: [
           SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14))),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+        ],
+      ),
+    );
+  }
+}
+
+class VoiceCallsPage extends ConsumerStatefulWidget {
+  const VoiceCallsPage({super.key});
+  @override
+  ConsumerState<VoiceCallsPage> createState() => _VoiceCallsPageState();
+}
+
+class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
+  List<dynamic> _callHistory = [];
+  bool _isLoading = true;
+  bool _isOnline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCallHistory();
+  }
+
+  Future<void> _loadCallHistory() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await DioClient().get('${ApiConstants.calls}history');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        if (mounted) {
+          setState(() {
+            _callHistory = data is List ? data : [];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading call history: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _makeCall(String targetType, String targetId) async {
+    try {
+      final callService = VoiceCallService();
+      callService.init('reception_${DateTime.now().millisecondsSinceEpoch}');
+      callService.startCall(targetId, targetType);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('正在呼叫 $targetId...')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('呼叫失败：$e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('通话状态', style: TextStyle(fontWeight: FontWeight.bold)),
+                Switch(
+                  value: _isOnline,
+                  onChanged: (v) => setState(() => _isOnline = v),
+                  activeColor: AppColors.success,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Colors.white,
+            child: Row(
+              children: [
+                _buildQuickCallCard('前台', 'front_desk', Icons.support_agent_rounded, AppColors.primary),
+                const SizedBox(width: 8),
+                _buildQuickCallCard('101房', '101', Icons.door_back_door_rounded, AppColors.secondary),
+                const SizedBox(width: 8),
+                _buildQuickCallCard('201房', '201', Icons.door_back_door_rounded, AppColors.info),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('通话记录', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('${_callHistory.length}条记录', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _callHistory.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.phone_disabled_outlined, size: 48, color: AppColors.textHint.withValues(alpha: 0.3)),
+                            const SizedBox(height: 12),
+                            const Text('暂无通话记录', style: TextStyle(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _callHistory.length,
+                        itemBuilder: (context, i) {
+                          final call = _callHistory[i];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                              child: Icon(
+                                call['direction'] == 'outbound' ? Icons.call_made_rounded : Icons.call_received_rounded,
+                                color: call['direction'] == 'outbound' ? AppColors.success : AppColors.primary,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text('${call['target_name'] ?? call['target_id'] ?? '-'}'),
+                            subtitle: Text('${call['started_at'] ?? ''} · ${call['duration'] ?? '0'}秒'),
+                            trailing: Text(
+                              call['status'] == 'completed' ? '已完成' : call['status'] == 'missed' ? '未接听' : '已取消',
+                              style: TextStyle(
+                                color: call['status'] == 'missed' ? AppColors.error : AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickCallCard(String name, String targetId, IconData icon, Color color) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _makeCall('room', targetId),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 6),
+              Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PriceSettingsPage extends ConsumerStatefulWidget {
+  const PriceSettingsPage({super.key});
+  @override
+  ConsumerState<PriceSettingsPage> createState() => _PriceSettingsPageState();
+}
+
+class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
+  List<dynamic> _roomTypes = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoomTypes();
+  }
+
+  Future<void> _loadRoomTypes() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(roomTypeServiceProvider).getRoomTypes();
+      if (result.success && mounted) {
+        setState(() => _roomTypes = result.data ?? []);
+      }
+    } catch (e) {
+      debugPrint('Error loading room types: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updatePrice(int typeId, double newPrice) async {
+    try {
+      final result = await ref.read(roomTypeServiceProvider).updateRoomType(typeId, {'base_price': newPrice});
+      if (result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('价格已更新'), backgroundColor: AppColors.success),
+        );
+        _loadRoomTypes();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '更新失败')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('更新失败：$e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _roomTypes.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.price_change_outlined, size: 48, color: AppColors.textHint.withValues(alpha: 0.3)),
+                      const SizedBox(height: 12),
+                      const Text('暂无房型数据', style: TextStyle(color: AppColors.textSecondary)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _roomTypes.length,
+                  itemBuilder: (context, i) {
+                    final rt = _roomTypes[i];
+                    final price = double.tryParse(rt['base_price']?.toString() ?? '0') ?? 0;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(rt['type_name'] ?? rt['name'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text('${rt['bed_type'] ?? '-'} · 最多${rt['max_guests'] ?? 1}人 · ${rt['area'] ?? '-'}㎡', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('¥${price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
+                                const Text('/晚', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                const SizedBox(height: 4),
+                                TextButton(
+                                  onPressed: () => _showPriceEditor(rt, price),
+                                  child: const Text('修改价格'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+
+  void _showPriceEditor(Map<String, dynamic> roomType, double currentPrice) {
+    final controller = TextEditingController(text: currentPrice.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('修改${roomType['type_name'] ?? roomType['name'] ?? ''}价格'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '基础价格（元/晚）',
+            prefixText: '¥',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => ctx.pop(), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              final newPrice = double.tryParse(controller.text) ?? currentPrice;
+              ctx.pop();
+              _updatePrice(roomType['id'] as int, newPrice);
+            },
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
