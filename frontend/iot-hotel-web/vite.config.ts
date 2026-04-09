@@ -21,15 +21,15 @@ server: {
   host: '0.0.0.0',  // 改为监听所有地址
   proxy: {
     '/api': {
-      target: 'http://127.0.0.1:9000',
+      target: 'http://192.168.1.100:9000',
       changeOrigin: true
     },
     '/uploads': {
-      target: 'http://127.0.0.1:9000',
+      target: 'http://192.168.1.100:9000',
       changeOrigin: true
     },
     '/socket.io': {
-      target: 'http://127.0.0.1:9000',
+      target: 'http://192.168.1.100:9000',
       ws: true,
       changeOrigin: true
     }

@@ -22,26 +22,31 @@ export class CallService {
       
       let calleeExists = false;
       
-      switch (data.callee_type) {
-        case 'room':
-          const [room] = await pool.query<RowDataPacket[]>('SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?', [data.callee_id, data.callee_id]);
-          calleeExists = room.length > 0;
-          break;
-        case 'front_desk':
-          const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
-          calleeExists = employee.length > 0;
-          break;
-        case 'ai':
-          calleeExists = true;
-          break;
-        case 'app':
-          const [user] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ?', [data.callee_id]);
-          calleeExists = user.length > 0;
-          break;
-      }
-      
-      if (!calleeExists) {
-        throw new Error('被叫方不存在');
+      // 集体呼叫模式：callee_id 为 'all' 时跳过存在性检查
+      if (data.callee_id !== 'all') {
+        switch (data.callee_type) {
+          case 'room':
+            const [room] = await pool.query<RowDataPacket[]>('SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?', [data.callee_id, data.callee_id]);
+            calleeExists = room.length > 0;
+            break;
+          case 'front_desk':
+            const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
+            calleeExists = employee.length > 0;
+            break;
+          case 'ai':
+            calleeExists = true;
+            break;
+          case 'app':
+            const [user] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ?', [data.callee_id]);
+            calleeExists = user.length > 0;
+            break;
+        }
+        
+        if (!calleeExists) {
+          throw new Error('被叫方不存在');
+        }
+      } else {
+        calleeExists = true; // 集体呼叫模式，始终存在
       }
       
       const [existingCall] = await pool.query<RowDataPacket[]>(

@@ -19,6 +19,7 @@ import guestRouter from './v1/guests';
 import uploadRouter from './v1/upload';
 import frequentGuestRouter from './v1/frequent-guests';
 import healthRouter from './v1/health';
+import aiButlerRouter from './v1/ai-butler';
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use('/guests', guestRouter);
 router.use('/upload', uploadRouter);
 router.use('/frequent-guests', frequentGuestRouter);
 router.use('/health', healthRouter);
+router.use('/ai-butler', aiButlerRouter);
 
 export default router;
