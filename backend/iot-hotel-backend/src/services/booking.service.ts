@@ -40,32 +40,33 @@ export class BookingService {
     pageSize?: number;
     status?: string;
     guest_name?: string;
+    hotelId: number;
   }): Promise<BookingListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, guest_name } = params;
+      const { page = 1, pageSize = 10, status, guest_name, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
-      
-      let whereClause = 'WHERE 1=1';
-      const paramsArray: any[] = [];
-      
+
+      let whereClause = 'WHERE b.hotel_id = ?';
+      const paramsArray: any[] = [hotelId];
+
       if (status) {
         whereClause += ' AND b.status = ?';
         paramsArray.push(status);
       }
-      
+
       if (guest_name) {
         whereClause += ' AND b.guest_name LIKE ?';
         paramsArray.push(`%${guest_name}%`);
       }
-      
+
       const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, paramsArray);
       const total = (totalRows[0] as any).total;
-      
+
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT b.*, r.room_number, r.room_type FROM bookings b LEFT JOIN rooms r ON b.room_id = r.id ${whereClause} ORDER BY b.id DESC LIMIT ? OFFSET ?`,
         [...paramsArray, Number(pageSize), offset]
       );
-      
+
       return {
         list: rows as Booking[],
         total,
@@ -79,11 +80,11 @@ export class BookingService {
     }
   }
 
-  static async getBookingById(id: number): Promise<Booking | null> {
+  static async getBookingById(id: number, hotelId: number): Promise<Booking | null> {
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT b.*, r.room_number, r.room_type FROM bookings b LEFT JOIN rooms r ON b.room_id = r.id WHERE b.id = ?',
-        [id]
+        'SELECT b.*, r.room_number, r.room_type FROM bookings b LEFT JOIN rooms r ON b.room_id = r.id WHERE b.id = ? AND b.hotel_id = ?',
+        [id, hotelId]
       );
       return (rows[0] as Booking) || null;
     } catch (error) {
@@ -93,6 +94,7 @@ export class BookingService {
   }
 
   static async createBooking(data: {
+    hotel_id: number;
     room_id: number;
     guest_name: string;
     guest_phone: string;
@@ -104,27 +106,27 @@ export class BookingService {
     payment_method: string;
   }): Promise<{ id: number; booking_number: string; total_price: number }> {
     try {
-      const { room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method } = data;
-      
-      const [roomRows] = await pool.query<RowDataPacket[]>('SELECT room_price FROM rooms WHERE id = ?', [room_id]);
-      
+      const { hotel_id, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method } = data;
+
+      const [roomRows] = await pool.query<RowDataPacket[]>('SELECT room_price FROM rooms WHERE id = ? AND hotel_id = ?', [room_id, hotel_id]);
+
       if (roomRows.length === 0) {
-        throw new Error('房间不存在');
+        throw new Error('房间不存在或不属于该酒店');
       }
-      
+
       const roomPrice = (roomRows[0] as any).room_price;
       const checkIn = new Date(check_in_date);
       const checkOut = new Date(check_out_date);
       const days = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
       const totalPrice = roomPrice * days;
-      
+
       const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
-      
+
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO bookings (booking_number, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [bookingNumber, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, 'pending']
+        'INSERT INTO bookings (hotel_id, booking_number, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [hotel_id, bookingNumber, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, 'pending']
       );
-      
+
       return {
         id: result.insertId,
         booking_number: bookingNumber,
@@ -136,11 +138,11 @@ export class BookingService {
     }
   }
 
-  static async confirmBooking(id: number): Promise<boolean> {
+  static async confirmBooking(id: number, hotelId: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE bookings SET status = ? WHERE id = ?',
-        ['confirmed', id]
+        'UPDATE bookings SET status = ? WHERE id = ? AND hotel_id = ?',
+        ['confirmed', id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -149,11 +151,11 @@ export class BookingService {
     }
   }
 
-  static async checkIn(id: number): Promise<boolean> {
+  static async checkIn(id: number, hotelId: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE bookings SET status = ?, check_in_time = CURRENT_TIMESTAMP WHERE id = ?',
-        ['checked_in', id]
+        'UPDATE bookings SET status = ?, check_in_time = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['checked_in', id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -162,11 +164,11 @@ export class BookingService {
     }
   }
 
-  static async checkOut(id: number): Promise<boolean> {
+  static async checkOut(id: number, hotelId: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE bookings SET status = ?, check_out_time = CURRENT_TIMESTAMP WHERE id = ?',
-        ['checked_out', id]
+        'UPDATE bookings SET status = ?, check_out_time = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['checked_out', id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -175,11 +177,11 @@ export class BookingService {
     }
   }
 
-  static async cancelBooking(id: number): Promise<boolean> {
+  static async cancelBooking(id: number, hotelId: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE bookings SET status = ?, cancelled_at = CURRENT_TIMESTAMP WHERE id = ?',
-        ['cancelled', id]
+        'UPDATE bookings SET status = ?, cancelled_at = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['cancelled', id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {

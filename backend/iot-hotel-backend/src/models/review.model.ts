@@ -1,5 +1,6 @@
 export interface Review {
   id: number;
+  hotel_id: number;
   order_id: number;
   order_type: string;
   member_id: number;
@@ -10,6 +11,7 @@ export interface Review {
 }
 
 export interface ReviewInput {
+  hotel_id: number;
   order_id: number;
   order_type: string;
   member_id: number;
@@ -21,5 +23,6 @@ export interface ReviewInput {
 export interface ReviewQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   order_type?: string;
 }

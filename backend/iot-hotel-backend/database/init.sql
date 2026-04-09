@@ -105,6 +105,7 @@ CREATE TABLE bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     booking_number VARCHAR(50) NOT NULL,
     hotel_id INT NOT NULL DEFAULT 1,
+    user_id INT DEFAULT NULL COMMENT '关联用户ID（前台办理入住时关联）',
     room_id INT NOT NULL,
     guest_name VARCHAR(100) NOT NULL,
     guest_phone VARCHAR(20) NOT NULL,
@@ -124,9 +125,11 @@ CREATE TABLE bookings (
     cancelled_at DATETIME DEFAULT NULL,
     UNIQUE KEY uk_booking_number (booking_number),
     INDEX idx_room_id (room_id),
+    INDEX idx_user_id (user_id),
     INDEX idx_status (status),
     INDEX idx_check_in_date (check_in_date),
-    INDEX idx_check_out_date (check_out_date)
+    INDEX idx_check_out_date (check_out_date),
+    CONSTRAINT fk_bookings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. 支付表
@@ -191,7 +194,29 @@ CREATE TABLE maintenance_tickets (
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. 用户表
+-- 9. 送物订单表
+CREATE TABLE delivery_orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(50) NOT NULL,
+    room_id INT NOT NULL,
+    booking_id INT DEFAULT NULL,
+    guest_id INT DEFAULT NULL,
+    item_name VARCHAR(200) NOT NULL COMMENT '商品名称（自由输入，不做分类限制）',
+    quantity INT NOT NULL DEFAULT 1 COMMENT '数量',
+    note TEXT DEFAULT NULL COMMENT '备注',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态流转: pending→delivering→completed, pending→cancelled',
+    started_delivering_at DATETIME DEFAULT NULL COMMENT '开始配送时间',
+    completed_at DATETIME DEFAULT NULL COMMENT '完成时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_order_no (order_no),
+    INDEX idx_room_id (room_id),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at),
+    CONSTRAINT fk_delivery_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. 用户表
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL,

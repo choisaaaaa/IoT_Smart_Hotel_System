@@ -36,37 +36,38 @@ export class MaintenanceTicketService {
     status?: string;
     fault_type?: string;
     priority?: string;
+    hotelId: number;
   }): Promise<MaintenanceTicketListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, fault_type, priority } = params;
+      const { page = 1, pageSize = 10, status, fault_type, priority, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
-      
-      let whereClause = 'WHERE 1=1';
-      const paramsArray: any[] = [];
-      
+
+      let whereClause = 'WHERE m.hotel_id = ?';
+      const paramsArray: any[] = [hotelId];
+
       if (status) {
         whereClause += ' AND m.status = ?';
         paramsArray.push(status);
       }
-      
+
       if (fault_type) {
         whereClause += ' AND m.fault_type = ?';
         paramsArray.push(fault_type);
       }
-      
+
       if (priority) {
         whereClause += ' AND m.priority = ?';
         paramsArray.push(priority);
       }
-      
+
       const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM maintenance_tickets m ${whereClause}`, paramsArray);
       const total = (totalRows[0] as any).total;
-      
+
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT m.*, r.room_number FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id ${whereClause} ORDER BY m.id DESC LIMIT ? OFFSET ?`,
         [...paramsArray, Number(pageSize), offset]
       );
-      
+
       return {
         list: rows as MaintenanceTicket[],
         total,
@@ -80,11 +81,11 @@ export class MaintenanceTicketService {
     }
   }
 
-  static async getMaintenanceTicketById(id: number): Promise<MaintenanceTicket | null> {
+  static async getMaintenanceTicketById(id: number, hotelId: number): Promise<MaintenanceTicket | null> {
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT m.*, r.room_number FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?',
-        [id]
+        'SELECT m.*, r.room_number FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ? AND m.hotel_id = ?',
+        [id, hotelId]
       );
       return (rows[0] as MaintenanceTicket) || null;
     } catch (error) {
@@ -94,6 +95,7 @@ export class MaintenanceTicketService {
   }
 
   static async createMaintenanceTicket(data: {
+    hotel_id: number;
     room_id: number;
     fault_type: string;
     fault_description: string;
@@ -101,15 +103,15 @@ export class MaintenanceTicketService {
     priority: string;
   }): Promise<{ id: number; ticket_no: string }> {
     try {
-      const { room_id, fault_type, fault_description, photos, priority } = data;
-      
+      const { hotel_id, room_id, fault_type, fault_description, photos, priority } = data;
+
       const ticketNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
-      
+
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO maintenance_tickets (ticket_no, room_id, fault_type, fault_description, photos, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [ticketNo, room_id, fault_type, fault_description, JSON.stringify(photos || []), priority, 'pending']
+        'INSERT INTO maintenance_tickets (hotel_id, ticket_no, room_id, fault_type, fault_description, photos, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [hotel_id, ticketNo, room_id, fault_type, fault_description, JSON.stringify(photos || []), priority, 'pending']
       );
-      
+
       return {
         id: result.insertId,
         ticket_no: ticketNo
@@ -120,11 +122,11 @@ export class MaintenanceTicketService {
     }
   }
 
-  static async assignTicket(id: number, repairer: string): Promise<boolean> {
+  static async assignTicket(id: number, hotelId: number, repairer: string): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE maintenance_tickets SET status = ?, repairer = ?, assigned_at = CURRENT_TIMESTAMP WHERE id = ?',
-        ['assigned', repairer, id]
+        'UPDATE maintenance_tickets SET status = ?, repairer = ?, assigned_at = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['assigned', repairer, id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -133,11 +135,11 @@ export class MaintenanceTicketService {
     }
   }
 
-  static async completeTicket(id: number, repair_description: string, repair_cost: number): Promise<boolean> {
+  static async completeTicket(id: number, hotelId: number, repair_description: string, repair_cost: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>(
-        'UPDATE maintenance_tickets SET status = ?, repair_description = ?, repair_cost = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?',
-        ['completed', repair_description, repair_cost, id]
+        'UPDATE maintenance_tickets SET status = ?, repair_description = ?, repair_cost = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['completed', repair_description, repair_cost, id, hotelId]
       );
       return result.affectedRows > 0;
     } catch (error) {

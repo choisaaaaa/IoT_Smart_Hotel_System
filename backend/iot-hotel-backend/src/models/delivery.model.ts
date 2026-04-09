@@ -1,8 +1,8 @@
 export interface DeliveryOrder {
   id: number;
+  hotel_id: number;
   order_no: string;
   room_id: number;
-  item_category: string;
   item_name: string;
   quantity: number;
   note: string;
@@ -13,8 +13,8 @@ export interface DeliveryOrder {
 }
 
 export interface DeliveryOrderInput {
+  hotel_id: number;
   room_id: number;
-  item_category: string;
   item_name: string;
   quantity: number;
   note?: string;
@@ -23,6 +23,6 @@ export interface DeliveryOrderInput {
 export interface DeliveryOrderQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
-  item_category?: string;
 }

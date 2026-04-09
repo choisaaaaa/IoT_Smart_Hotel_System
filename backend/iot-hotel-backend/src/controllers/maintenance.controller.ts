@@ -130,3 +130,42 @@ export const complete = async (req: AuthRequest, res: Response) => {
     res.status(500).json(errorResponse('完成报修工单失败'));
   }
 };
+
+export const remove = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // 先检查工单是否存在
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT status FROM maintenance_tickets WHERE id = ?',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json(errorResponse('报修工单不存在'));
+      return;
+    }
+
+    // 检查是否允许删除（只有pending状态的工单可以删除）
+    const ticketStatus = (rows[0] as any).status;
+    if (!['pending', 'cancelled'].includes(ticketStatus)) {
+      res.status(400).json(errorResponse(`当前状态(${ticketStatus})的工单不允许删除`));
+      return;
+    }
+
+    const [result] = await pool.query<ResultSetHeader>(
+      'DELETE FROM maintenance_tickets WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      res.status(404).json(errorResponse('报修工单不存在'));
+      return;
+    }
+
+    res.json(successResponse(null, '删除报修工单成功'));
+  } catch (error) {
+    logger.error('删除报修工单失败:', error);
+    res.status(500).json(errorResponse('删除报修工单失败'));
+  }
+};

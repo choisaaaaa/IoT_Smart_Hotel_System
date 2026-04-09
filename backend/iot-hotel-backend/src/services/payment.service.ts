@@ -31,32 +31,33 @@ export class PaymentService {
     pageSize?: number;
     status?: string;
     order_type?: string;
+    hotelId: number;
   }): Promise<PaymentListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, order_type } = params;
+      const { page = 1, pageSize = 10, status, order_type, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
-      
-      let whereClause = 'WHERE 1=1';
-      const paramsArray: any[] = [];
-      
+
+      let whereClause = 'WHERE hotel_id = ?';
+      const paramsArray: any[] = [hotelId];
+
       if (status) {
         whereClause += ' AND status = ?';
         paramsArray.push(status);
       }
-      
+
       if (order_type) {
         whereClause += ' AND order_type = ?';
         paramsArray.push(order_type);
       }
-      
+
       const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM payments ${whereClause}`, paramsArray);
       const total = (totalRows[0] as any).total;
-      
+
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT * FROM payments ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
         [...paramsArray, Number(pageSize), offset]
       );
-      
+
       return {
         list: rows as Payment[],
         total,
@@ -70,9 +71,9 @@ export class PaymentService {
     }
   }
 
-  static async getPaymentById(id: number): Promise<Payment | null> {
+  static async getPaymentById(id: number, hotelId: number): Promise<Payment | null> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ?', [id]);
+      const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ? AND hotel_id = ?', [id, hotelId]);
       return (rows[0] as Payment) || null;
     } catch (error) {
       logger.error('获取支付详情失败:', error);
@@ -81,6 +82,7 @@ export class PaymentService {
   }
 
   static async createPayment(data: {
+    hotel_id: number;
     order_type: string;
     order_id: number;
     amount: number;
@@ -88,15 +90,15 @@ export class PaymentService {
     description: string;
   }): Promise<{ id: number; payment_no: string }> {
     try {
-      const { order_type, order_id, amount, payment_method, description } = data;
-      
+      const { hotel_id, order_type, order_id, amount, payment_method, description } = data;
+
       const paymentNo = `PAY${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
-      
+
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO payments (payment_no, order_type, order_id, amount, payment_method, status, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [paymentNo, order_type, order_id, amount, payment_method, 'pending', description]
+        'INSERT INTO payments (hotel_id, payment_no, order_type, order_id, amount, payment_method, status, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [hotel_id, paymentNo, order_type, order_id, amount, payment_method, 'pending', description]
       );
-      
+
       return {
         id: result.insertId,
         payment_no: paymentNo
@@ -107,13 +109,13 @@ export class PaymentService {
     }
   }
 
-  static async payPayment(id: number, transaction_no: string): Promise<boolean> {
+  static async payPayment(id: number, hotelId: number, transaction_no: string): Promise<boolean> {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
       // 1. 获取支付记录以确定 order_type 和 order_id
-      const [rows] = await connection.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ?', [id]);
+      const [rows] = await connection.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ? AND hotel_id = ?', [id, hotelId]);
       if (rows.length === 0) {
         await connection.rollback();
         return false;
@@ -122,8 +124,8 @@ export class PaymentService {
 
       // 2. 更新支付状态
       const [result] = await connection.query<ResultSetHeader>(
-        'UPDATE payments SET status = ?, transaction_no = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?',
-        ['paid', transaction_no, id]
+        'UPDATE payments SET status = ?, transaction_no = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+        ['paid', transaction_no, id, hotelId]
       );
 
       if (result.affectedRows === 0) {
@@ -133,11 +135,11 @@ export class PaymentService {
 
       // 3. 根据 order_type 更新关联表的状态
       if (payment.order_type === 'booking') {
-        await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
+        await connection.query('UPDATE bookings SET status = ? WHERE id = ? AND hotel_id = ?', ['confirmed', payment.order_id, hotelId]);
       } else if (payment.order_type === 'delivery') {
-        await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ?', ['paid', payment.order_id]);
+        await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ? AND hotel_id = ?', ['paid', payment.order_id, hotelId]);
       } else if (payment.order_type === 'maintenance') {
-        await connection.query('UPDATE maintenance_requests SET status = ? WHERE id = ?', ['paid', payment.order_id]);
+        await connection.query('UPDATE maintenance_tickets SET status = ? WHERE id = ? AND hotel_id = ?', ['paid', payment.order_id, hotelId]);
       }
 
       await connection.commit();

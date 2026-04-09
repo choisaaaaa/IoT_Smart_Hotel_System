@@ -9,5 +9,6 @@ router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']),
 router.post('/', authenticate as any, authorize(['admin', 'staff', 'system']), maintenanceController.create);
 router.put('/:id/assign', authenticate as any, authorize(['admin', 'staff', 'system']), maintenanceController.assign);
 router.put('/:id/complete', authenticate as any, authorize(['admin', 'staff', 'system']), maintenanceController.complete);
+router.delete('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), maintenanceController.remove);
 
 export default router;

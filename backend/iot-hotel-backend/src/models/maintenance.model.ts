@@ -1,5 +1,6 @@
 export interface MaintenanceTicket {
   id: number;
+  hotel_id: number;
   ticket_no: string;
   room_id: number;
   fault_type: string;
@@ -15,6 +16,7 @@ export interface MaintenanceTicket {
 }
 
 export interface MaintenanceTicketInput {
+  hotel_id: number;
   room_id: number;
   fault_type: string;
   fault_description: string;
@@ -25,6 +27,7 @@ export interface MaintenanceTicketInput {
 export interface MaintenanceTicketQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
   fault_type?: string;
   priority?: string;

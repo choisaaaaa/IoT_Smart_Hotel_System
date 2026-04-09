@@ -2,10 +2,10 @@ import request from './request'
 import type { BookingInfo, PaginatedResponse, ApiResponse } from '@/types'
 
 export const bookingApi = {
-  getBookingList: (params?: { page?: number; pageSize?: number; status?: string; guest_name?: string }) =>
+  getBookingList: (params?: { page?: number; pageSize?: number; status?: string; guest_name?: string; hotel_id?: number }) =>
     request.get<PaginatedResponse<BookingInfo>>('/bookings', { params }),
 
-  createBooking: (data: Partial<BookingInfo>) =>
+  createBooking: (data: Partial<BookingInfo> & { hotel_id: number }) =>
     request.post<ApiResponse<BookingInfo>>('/bookings', data),
 
   lookupBooking: (keyword: string) =>
@@ -27,7 +27,7 @@ export const bookingApi = {
     id_type: string
     id_number: string
     arrival_time?: string | null
-    plate_number?: string
+    plate_number?: string | null
   }) =>
     request.post<ApiResponse<{
       booking_id: number
@@ -37,6 +37,6 @@ export const bookingApi = {
       room_pin: string
     }>>(`/bookings/${id}/checkin-online`, data),
 
-  updateBookingStatus: (id: number, status: string) =>
-    request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status })
+  updateBookingStatus: (id: number, status: string, hotelId?: number) =>
+    request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) })
 }

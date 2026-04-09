@@ -15,30 +15,24 @@
     <!-- 主内容区 -->
     <div class="main-content">
       <!-- AI形象 -->
-      <div class="ai-avatar-container" :class="{ listening: isListening, speaking: isSpeaking }">
+      <div class="ai-avatar-container" :class="{ listening: isListening, speaking: isSpeaking, thinking: isLoading }">
         <div class="ai-avatar">
-          <RobotOutlined />
+          <LoadingOutlined v-if="isLoading" spin />
+          <RobotOutlined v-else />
         </div>
         <div class="voice-waves" v-if="isListening || isSpeaking">
           <span v-for="i in 5" :key="i" :style="{ animationDelay: `${i * 0.1}s` }"></span>
         </div>
+        <!-- 思考中的脉冲动画 -->
+        <div class="thinking-pulse" v-if="isLoading"></div>
       </div>
 
       <!-- 对话内容 -->
       <div class="chat-container" ref="chatContainer">
         <div v-if="messages.length === 0" class="welcome-message">
           <h2>您好，我是AI管家小智</h2>
-          <p>说出"小智小智"唤醒我，或点击下方按钮</p>
-          <div class="quick-actions">
-            <a-button @click="handleQuickAction('转人工')">
-              <CustomerServiceOutlined />
-              转接前台
-            </a-button>
-            <a-button @click="handleQuickAction('需要客房服务')">
-              <ToolOutlined />
-              客房服务
-            </a-button>
-          </div>
+          <p>我可以帮您控制房间设备、查询信息、安排服务</p>
+          <p class="example-text">试试问我："打开灯光"、"需要保洁"、"WiFi密码是多少"</p>
         </div>
         
         <div v-else class="messages">
@@ -53,44 +47,122 @@
                 <UserOutlined v-if="msg.type === 'user'" />
                 <RobotOutlined v-else />
               </span>
-              <div class="bubble">{{ msg.text }}</div>
+              <div class="bubble-wrapper">
+                <!-- 打字机效果：显示已打出的文字 + 光标 -->
+                <div 
+                  class="bubble" 
+                  :class="{ 
+                    'with-audio': msg.type === 'ai',
+                    'typing': msg.typing && isTyping && index === messages.length - 1
+                  }"
+                >
+                  <template v-if="msg.typing && isTyping && index === messages.length - 1">
+                    {{ displayedText }}<span class="cursor">|</span>
+                  </template>
+                  <template v-else>
+                    {{ msg.text }}
+                  </template>
+                </div>
+                
+                <!-- AI消息的语音控制按钮 -->
+                <div v-if="msg.type === 'ai' && index === messages.length - 1 && isPlayingAudio" class="audio-indicator">
+                  <SoundOutlined :spin="isPlayingAudio" />
+                  <span>正在播放...</span>
+                  <a-button type="link" size="small" @click="toggleAudio">
+                    {{ isPlayingAudio ? '暂停' : '播放' }}
+                  </a-button>
+                </div>
+              </div>
             </div>
             <div class="message-time">{{ msg.time }}</div>
+          </div>
+          
+          <!-- 智能建议（最后一条AI消息后显示） -->
+          <div v-if="suggestions.length > 0 && !isLoading && !isTyping" class="suggestions">
+            <span class="suggestion-label">💡 您可能还想问：</span>
+            <div class="suggestion-chips">
+              <span 
+                v-for="(suggestion, sIdx) in suggestions.slice(0, 3)" 
+                :key="sIdx"
+                class="suggestion-chip"
+                @click="handleQuickAction(suggestion)"
+              >
+                {{ suggestion }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 麦克风权限请求按钮 -->
-    <div v-if="!microphonePermission" class="permission-bar">
-      <a-button 
-        type="primary" 
-        shape="round" 
-        size="large"
-        @click="requestMicrophonePermission"
-      >
-        <AudioOutlined /> 启用语音通话
-      </a-button>
-      <p class="hint">点击启用语音功能</p>
+    <!-- 底部控制区 - 文字+语音输入 -->
+    <div class="input-area">
+      <!-- 快捷功能按钮 -->
+      <div class="quick-chips" v-if="messages.length === 0">
+        <span 
+          v-for="chip in quickChips" 
+          :key="chip.text"
+          class="chip"
+          @click="handleQuickAction(chip.text)"
+        >
+          {{ chip.icon }} {{ chip.label }}
+        </span>
+      </div>
+      
+      <!-- 输入框 -->
+      <div class="input-box">
+        <a-input
+          v-model:value="userInput"
+          :placeholder="isLoading ? 'AI正在思考中...' : '输入您的问题，如：打开灯光、需要保洁、查询WiFi...'"
+          :disabled="isLoading"
+          size="large"
+          @pressEnter="sendMessage"
+          allow-clear
+        >
+          <template #prefix>
+            <EditOutlined style="color: #999;" />
+          </template>
+        </a-input>
+        
+        <!-- 发送按钮 -->
+        <a-button 
+          type="primary" 
+          size="large"
+          class="send-btn"
+          :loading="isLoading"
+          :disabled="!userInput.trim() || isLoading"
+          @click="sendMessage"
+        >
+          <SendOutlined />
+        </a-button>
+        
+        <!-- 语音按钮（可选） -->
+        <a-button 
+          v-if="microphonePermission"
+          shape="circle" 
+          size="large"
+          class="voice-btn-small"
+          :class="{ listening: isListening }"
+          @mousedown="startListening"
+          @mouseup="stopListening"
+          @touchstart="startListening"
+          @touchend="stopListening"
+        >
+          <AudioOutlined />
+        </a-button>
+      </div>
+      
+      <!-- 提示文字 -->
+      <p class="hint-text">
+        {{ isLoading ? `正在为您${currentAction}...` : '按 Enter 发送，或点击麦克风使用语音' }}
+      </p>
     </div>
 
-    <!-- 底部控制区 -->
-    <div v-else class="control-bar">
-      <a-button 
-        type="primary" 
-        shape="circle" 
-        size="large"
-        class="voice-btn"
-        :class="{ listening: isListening }"
-        @mousedown="startListening"
-        @mouseup="stopListening"
-        @touchstart="startListening"
-        @touchend="stopListening"
-      >
-        <AudioOutlined v-if="!isListening" />
-        <LoadingOutlined v-else spin />
+    <!-- 麦克风权限请求（首次） -->
+    <div v-if="!microphonePermission && messages.length > 0" class="permission-hint">
+      <a-button type="link" size="small" @click="requestMicrophonePermission">
+        <AudioOutlined /> 启用语音输入
       </a-button>
-      <p class="hint">{{ isListening ? '正在聆听...' : '按住说话' }}</p>
     </div>
 
     <!-- 转接中弹窗 -->
@@ -216,7 +288,14 @@ import {
   ToolOutlined,
   PhoneOutlined,
   CloseOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  BulbOutlined,
+  ThunderboltOutlined,
+  ClearOutlined,
+  CoffeeOutlined,
+  SendOutlined,
+  EditOutlined,
+  SoundOutlined
 } from '@ant-design/icons-vue'
 import { useRoute } from 'vue-router'
 import { getSocket } from '@/utils/websocket'
@@ -229,9 +308,36 @@ const roomId = ref(route.query.room as string || '101')
 const isConnected = ref(false)
 const isListening = ref(false)
 const isSpeaking = ref(false)
+const isLoading = ref(false)  // AI处理中的加载状态
+const currentAction = ref('')   // 当前正在执行的操作
+const userInput = ref('')       // 用户输入的文字
 const microphonePermission = ref(false)
-const messages = ref<{ type: 'user' | 'ai'; text: string; time: string }[]>([])
+const messages = ref<{ type: 'user' | 'ai'; text: string; time: string; typing?: boolean }[]>([])
 const chatContainer = ref<HTMLElement>()
+const isTyping = ref(false)      // 打字机效果状态
+const displayedText = ref('')     // 当前显示的文字（打字机用）
+const suggestions = ref<string[]>([])  // 智能建议
+
+// 快捷功能标签
+const quickChips = [
+  { icon: '💡', label: '开灯', text: '打开灯光' },
+  { icon: '🏠', label: '房间状态', text: '查询房间状态' },
+  { icon: '🧹', label: '保洁', text: '需要保洁服务' },
+  { icon: '☕', label: '送餐', text: '需要送餐服务' },
+  { icon: '📶', label: 'WiFi密码', text: '查询酒店WiFi密码' },
+  { icon: '👨‍💼', label: '转人工', text: '转接人工' }
+]
+
+// 智能建议映射（根据上下文推荐）
+const suggestionMap: Record<string, string[]> = {
+  '灯光': ['调暗一点', '关闭灯光', '打开所有灯'],
+  '空调': ['调到26度', '开启制冷模式', '关闭空调'],
+  '保洁': ['现在就来', '1小时后', '只整理床铺'],
+  '送餐': ['查看菜单', '30分钟后送达', '素食套餐'],
+  'WiFi': ['连接不上怎么办', '密码是什么', '网速太慢'],
+  '维修': ['空调不制冷', '水管漏水', '电视没信号'],
+  '默认': ['还需要什么帮助？', '查询酒店设施', '叫醒服务']
+}
 
 // 转接弹窗
 const transferModal = ref({
@@ -552,15 +658,78 @@ async function handleUserInput(text: string) {
   }
 }
 
+// 打字机效果
+function typeWriterEffect(text: string, callback?: () => void) {
+  isTyping.value = true
+  displayedText.value = ''
+  let index = 0
+  
+  const typeChar = () => {
+    if (index < text.length) {
+      displayedText.value += text.charAt(index)
+      index++
+      scrollToBottom()
+      setTimeout(typeChar, 30 + Math.random() * 20) // 随机速度，更自然
+    } else {
+      isTyping.value = false
+      if (callback) callback()
+    }
+  }
+  
+  typeChar()
+}
+
+// 更新智能建议
+function updateSuggestions(lastUserMessage: string) {
+  let matchedKey = '默认'
+  
+  for (const key of Object.keys(suggestionMap)) {
+    if (lastUserMessage.includes(key)) {
+      matchedKey = key
+      break
+    }
+  }
+  
+  suggestions.value = suggestionMap[matchedKey] || suggestionMap['默认']
+}
+
+// 发送文字消息
+async function sendMessage() {
+  const text = userInput.value.trim()
+  if (!text || isLoading.value) return
+  
+  userInput.value = ''
+  await handleQuickAction(text)
+}
+
 // 快捷操作
 async function handleQuickAction(text: string) {
+  // 显示用户消息
   messages.value.push({
     type: 'user',
     text,
     time: new Date().toLocaleTimeString()
   })
   scrollToBottom()
-  await sendToAI(text)
+  
+  // 设置加载状态
+  isLoading.value = true
+  currentAction.value = text
+  
+  // 添加"正在处理"提示
+  messages.value.push({
+    type: 'ai',
+    text: `⏳ 正在为您${text}...`,
+    time: new Date().toLocaleTimeString()
+  })
+  scrollToBottom()
+  
+  try {
+    await sendToAI(text)
+  } finally {
+    isLoading.value = false
+    currentAction.value = ''
+  }
 }
 
 // 发送给AI处理
@@ -574,42 +743,81 @@ async function sendToAI(text: string) {
       session_id: `${roomId.value}_${Date.now()}`
     })
 
-    if (res.data?.code === 200) {
-      const aiResponse = res.data.data
+    if (res.code === 200) {
+      const aiResponse = res.data
       
-      // 播放语音回复
+      // 移除"正在处理"的提示消息（保留最后一条）
+      const loadingMsgIndex = messages.value.findIndex(m => m.text.startsWith('⏳ 正在为您'))
+      if (loadingMsgIndex !== -1) {
+        messages.value.splice(loadingMsgIndex, 1)
+      }
+      
+      // 播放语音回复（如果有）
       if (aiResponse.audioUrl) {
         playAudio(aiResponse.audioUrl)
       }
       
-      // 显示文字回复
+      // 使用打字机效果显示AI回复
+      const aiText = aiResponse.text || '抱歉，我没有理解您的意思，请换个说法试试？'
+      
+      // 先添加占位消息
       messages.value.push({
         type: 'ai',
-        text: aiResponse.text,
-        time: new Date().toLocaleTimeString()
+        text: aiText,  // 完整文本保存
+        time: new Date().toLocaleTimeString(),
+        typing: true   // 标记为打字中
       })
+      
+      // 启动打字机效果
+      typeWriterEffect(aiText, () => {
+        // 打字完成后更新智能建议
+        updateSuggestions(text)
+        
+        // 标记消息完成
+        const lastMsg = messages.value[messages.value.length - 1]
+        if (lastMsg) {
+          lastMsg.typing = false
+        }
+      })
+      
       scrollToBottom()
 
       // 如果需要转接
       if (aiResponse.action === 'transfer') {
-        // 立即显示转接中弹窗
-        transferModal.value.visible = true
-        transferModal.value.statusText = '正在为您转接前台...'
-        transferModal.value.statusDesc = '正在呼叫前台，请稍候...'
-        transferModal.value.frontDeskCount = aiResponse.frontDeskCount || 0
-        transferModal.value.callId = aiResponse.callId || ''
-        
-        // 添加系统消息到聊天记录
-        messages.value.push({
-          type: 'ai',
-          text: `正在为您转接前台...${aiResponse.frontDeskCount ? `（${aiResponse.frontDeskCount}位前台在线）` : ''}`,
-          time: new Date().toLocaleTimeString()
-        })
-        scrollToBottom()
+        setTimeout(() => {
+          transferModal.value.visible = true
+          transferModal.value.statusText = '正在为您转接前台...'
+          transferModal.value.statusDesc = '正在呼叫前台，请稍候...'
+          transferModal.value.frontDeskCount = aiResponse.frontDeskCount || 0
+          transferModal.value.callId = aiResponse.callId || ''
+          
+          messages.value.push({
+            type: 'ai',
+            text: `📞 正在为您转接前台...${aiResponse.frontDeskCount ? `（${aiResponse.frontDeskCount}位前台在线）` : ''}`,
+            time: new Date().toLocaleTimeString()
+          })
+          scrollToBottom()
+        }, 1000)
       }
+    } else {
+      throw new Error(res.data?.message || 'AI服务返回异常')
     }
   } catch (error) {
-    message.error('AI服务暂时不可用')
+    console.error('AI请求失败:', error)
+    
+    // 移除加载提示
+    const loadingMsgIndex = messages.value.findIndex(m => m.text.startsWith('⏳ 正在为您'))
+    if (loadingMsgIndex !== -1) {
+      messages.value.splice(loadingMsgIndex, 1)
+    }
+    
+    // 添加友好的错误消息
+    messages.value.push({
+      type: 'ai',
+      text: '🤔 我好像遇到了点问题，不过您可以继续问我其他问题哦~',
+      time: new Date().toLocaleTimeString()
+    })
+    scrollToBottom()
   } finally {
     isSpeaking.value = false
   }
@@ -644,13 +852,78 @@ async function requestMicrophonePermission() {
   }
 }
 
-// 播放音频
+// 播放AI语音回复
+const audioPlayer = ref<HTMLAudioElement | null>(null)
+const isPlayingAudio = ref(false)
+
 function playAudio(base64Audio: string) {
   try {
+    // 停止之前的音频
+    if (audioPlayer.value) {
+      audioPlayer.value.pause()
+      audioPlayer.value = null
+    }
+    
+    // 创建新的音频对象
     const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`)
-    audio.play()
+    audioPlayer.value = audio
+    
+    // 设置播放状态
+    isPlayingAudio.value = true
+    
+    audio.onended = () => {
+      isPlayingAudio.value = false
+      console.log('[AIButler] 语音播放完成')
+    }
+    
+    audio.onerror = (e) => {
+      isPlayingAudio.value = false
+      console.error('[AIButler] 语音播放失败:', e)
+      message.warning('语音播放失败，请检查音量设置')
+    }
+    
+    // 尝试播放（处理自动播放策略）
+    const playPromise = audio.play()
+    
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        console.log('[AIButler] 语音开始播放')
+      }).catch((error) => {
+        isPlayingAudio.value = false
+        console.warn('[AIButler] 自动播放被阻止:', error)
+        
+        // 显示提示让用户点击启用
+        message.info('🔊 点击页面任意位置播放AI语音')
+        
+        // 监听一次用户点击来播放
+        const playOnce = () => {
+          audio.play().then(() => {
+            isPlayingAudio.value = true
+            document.removeEventListener('click', playOnce)
+          })
+        }
+        
+        setTimeout(() => {
+          document.addEventListener('click', playOnce, { once: true })
+        }, 100)
+      })
+    }
   } catch (e) {
-    console.error('播放音频失败:', e)
+    isPlayingAudio.value = false
+    console.error('创建音频对象失败:', e)
+  }
+}
+
+// 手动停止/播放语音
+function toggleAudio() {
+  if (!audioPlayer.value) return
+  
+  if (isPlayingAudio.value) {
+    audioPlayer.value.pause()
+    isPlayingAudio.value = false
+  } else {
+    audioPlayer.value.play()
+    isPlayingAudio.value = true
   }
 }
 
@@ -983,6 +1256,7 @@ function scrollToBottom() {
   flex-direction: column;
   align-items: center;
   margin-bottom: 20px;
+  position: relative;
 }
 
 .ai-avatar {
@@ -1002,6 +1276,32 @@ function scrollToBottom() {
   transform: scale(1.1);
   background: rgba(255, 255, 255, 0.3);
   box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+}
+
+/* AI思考中状态 */
+.ai-avatar-container.thinking .ai-avatar {
+  background: rgba(100, 181, 246, 0.4);
+  box-shadow: 0 0 30px rgba(100, 181, 246, 0.6);
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.thinking-pulse {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(100, 181, 246, 0.4);
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
 .voice-waves {
@@ -1045,13 +1345,79 @@ function scrollToBottom() {
 
 .welcome-message p {
   color: #666;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
+}
+
+.welcome-message .example-text {
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
 }
 
 .quick-actions {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   justify-content: center;
+}
+
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.3s ease;
+}
+
+.loading-indicator p {
+  color: white;
+  font-size: 14px;
+  margin: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.action-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  border-radius: 20px !important;
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  color: #1a1a2e !important;
+  font-weight: 500 !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn.danger {
+  background: rgba(255, 77, 79, 0.5) !important;
+  border-color: rgba(255, 77, 79, 0.7) !important;
+  color: white !important;
+}
+
+.action-btn.danger:hover {
+  background: rgba(255, 77, 79, 0.7) !important;
 }
 
 .messages {
@@ -1111,10 +1477,245 @@ function scrollToBottom() {
   color: white;
 }
 
+/* 气泡包装器（用于添加语音控制） */
+.bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bubble.with-audio {
+  position: relative;
+}
+
+/* 语音播放指示器 */
+.audio-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #667eea15, #764ba215);
+  border-radius: 20px;
+  font-size: 12px;
+  color: #667eea;
+  animation: fadeInUp 0.3s ease;
+}
+
+.audio-indicator .anticon {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.audio-indicator span {
+  font-weight: 500;
+}
+
+.audio-indicator .ant-btn-link {
+  padding: 0 4px;
+  height: auto;
+  font-size: 11px;
+  color: #764ba2;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 打字机光标效果 */
+.bubble.typing .cursor {
+  display: inline-block;
+  color: #667eea;
+  font-weight: bold;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 智能建议区域 */
+.suggestions {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8f9ff, #f0f4ff);
+  border-radius: 12px;
+  animation: slideUp 0.3s ease;
+}
+
+.suggestion-label {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-chip {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #e0e5ff;
+  border-radius: 20px;
+  font-size: 13px;
+  color: #5568a3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.suggestion-chip:hover {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .message-time {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+
+/* 输入区域 */
+.input-area {
+  padding: 20px;
+  background: white;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  justify-content: center;
+}
+
+.chip {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.input-box {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  background: #f5f7fa;
+  border-radius: 12px;
+  border: 1px solid #e1e4e8;
+  transition: all 0.3s ease;
+}
+
+.input-box:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.input-box .ant-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  font-size: 15px;
+  box-shadow: none !important;
+}
+
+.send-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50% !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.send-btn:disabled {
+  background: #ccc !important;
+  color: #999 !important;
+}
+
+.voice-btn-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #e1e4e8;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.voice-btn-small:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.voice-btn-small.listening {
+  background: #ff4d4f;
+  color: white;
+  border-color: #ff4d4f;
+  animation: pulse 1s infinite;
+}
+
+.hint-text {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  margin: 8px 0 0 0;
+}
+
+.permission-hint {
+  text-align: center;
+  padding: 8px;
+  background: #f0f9ff;
+  border-top: 1px solid #e6f7ff;
 }
 
 .control-bar, .permission-bar {

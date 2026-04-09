@@ -1,5 +1,6 @@
 export interface Coupon {
   id: number;
+  hotel_id: number;
   coupon_name: string;
   coupon_type: string;
   discount_value: number;
@@ -13,6 +14,7 @@ export interface Coupon {
 }
 
 export interface CouponInput {
+  hotel_id: number;
   coupon_name: string;
   coupon_type: string;
   discount_value: number;
@@ -25,5 +27,6 @@ export interface CouponInput {
 export interface CouponQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
 }

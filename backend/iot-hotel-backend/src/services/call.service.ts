@@ -59,13 +59,14 @@ export class CallService {
       }
       
       const [result] = await pool.query<ResultSetHeader>(
-        `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [callId, data.caller_type, data.caller_id, data.callee_type, data.callee_id, 'calling', new Date()]
+        `INSERT INTO calls (hotel_id, call_id, caller_type, caller_id, callee_type, callee_id, status, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [data.hotel_id, callId, data.caller_type, data.caller_id, data.callee_type, data.callee_id, 'calling', new Date()]
       );
-      
+
       return {
         id: result.insertId,
+        hotel_id: data.hotel_id,
         call_id: callId,
         caller_type: data.caller_type,
         caller_id: data.caller_id,
@@ -123,13 +124,14 @@ export class CallService {
       }
       
       const [result] = await pool.query<ResultSetHeader>(
-        `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [callId, data.caller_type, data.caller_id, data.callee_type, data.callee_id, 'outgoing', new Date()]
+        `INSERT INTO calls (hotel_id, call_id, caller_type, caller_id, callee_type, callee_id, status, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [data.hotel_id, callId, data.caller_type, data.caller_id, data.callee_type, data.callee_id, 'outgoing', new Date()]
       );
-      
+
       return {
         id: result.insertId,
+        hotel_id: data.hotel_id,
         call_id: callId,
         caller_type: data.caller_type,
         caller_id: data.caller_id,

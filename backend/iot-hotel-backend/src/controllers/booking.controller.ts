@@ -3,20 +3,34 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { isSystemRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
+    let hotelId = req.user?.hotel_id;
+
+    if (isSystemRole(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      }
+    }
+
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
+
     const { page = 1, pageSize = 10, status, guest_name } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
-    
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
-    
+
+    let whereClause = 'WHERE b.hotel_id = ?';
+    const params: any[] = [hotelId];
+
     if (status) {
       whereClause += ' AND b.status = ?';
       params.push(status);
     }
-    
+
     if (guest_name) {
       whereClause += ' AND b.guest_name LIKE ?';
       params.push(`%${guest_name}%`);
@@ -28,20 +42,20 @@ export const get = async (req: AuthRequest, res: Response) => {
       params.push(req.user.username); // 假设 username 是手机号
       params.push(req.user.id);
     }
-    
+
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, params);
     const total = (totalRows[0] as any).total;
-    
+
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.*, r.room_number, r.room_type, h.hotel_name 
-       FROM bookings b 
-       LEFT JOIN rooms r ON b.room_id = r.id 
+      `SELECT b.*, r.room_number, r.room_type, h.hotel_name
+       FROM bookings b
+       LEFT JOIN rooms r ON b.room_id = r.id
        LEFT JOIN hotels h ON b.hotel_id = h.id
-       ${whereClause} 
+       ${whereClause}
        ORDER BY b.id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
     );
-    
+
     res.json(successResponse({
       list: rows,
       total,
@@ -290,6 +304,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
   try {
     await connection.beginTransaction();
     const { id } = req.params;
+    const { user_id, guest_name, guest_phone, guest_id_number, special_requests } = req.body || {};
     
     // 获取订单信息
     const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id FROM bookings WHERE id = ?', [id]);
@@ -300,9 +315,37 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     }
     const roomId = (bookingRows[0] as any).room_id;
 
+    // 构建更新字段
+    const updateFields: string[] = ['status = ?', 'check_in_time = CURRENT_TIMESTAMP'];
+    const params: any[] = ['checked_in', id];
+
+    // 如果提供了user_id，则关联用户账号
+    if (user_id) {
+      updateFields.push('user_id = ?');
+      params.splice(params.length - 1, 0, user_id); // 在id之前插入user_id
+    }
+
+    // 如果提供了其他信息，也一并更新
+    if (guest_name) {
+      updateFields.push('guest_name = ?');
+      params.splice(params.length - 1, 0, guest_name);
+    }
+    if (guest_phone) {
+      updateFields.push('guest_phone = ?');
+      params.splice(params.length - 1, 0, guest_phone);
+    }
+    if (guest_id_number) {
+      updateFields.push('guest_id_number = ?');
+      params.splice(params.length - 1, 0, guest_id_number);
+    }
+    if (special_requests !== undefined) {
+      updateFields.push('special_requests = ?');
+      params.splice(params.length - 1, 0, special_requests);
+    }
+
     await connection.query<ResultSetHeader>(
-      'UPDATE bookings SET status = ?, check_in_time = CURRENT_TIMESTAMP WHERE id = ?',
-      ['checked_in', id]
+      `UPDATE bookings SET ${updateFields.join(', ')} WHERE id = ?`,
+      params
     );
 
     // 同步更新房间状态为“在住”
