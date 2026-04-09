@@ -132,33 +132,13 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         r.room_status,
         r.facilities,
         r.images as image_url,
-        COUNT(DISTINCT r.id) as total_rooms,
-        COUNT(DISTINCT b.id) as booked_rooms,
-        (COUNT(DISTINCT r.id) - COUNT(DISTINCT b.id)) as available_count
+        (SELECT COUNT(*) FROM rooms r2 WHERE r2.hotel_id = r.hotel_id AND r2.room_type = r.room_type AND r2.room_status = 'available') as available_count
       FROM rooms r
-      LEFT JOIN bookings b ON r.id = b.room_id 
-        AND b.status IN ('confirmed', 'checked_in')
-        AND (
-          (b.check_in_date <= ? AND b.check_out_date >= ?)
-          OR (b.check_in_date <= ? AND b.check_out_date >= ?)
-          OR (b.check_in_date >= ? AND b.check_out_date <= ?)
-        )
       WHERE r.hotel_id = ? AND r.room_status = 'available'
-      GROUP BY r.id, r.room_number, r.room_name, r.room_type, 
-               r.room_price, r.floor, r.area, r.bed_type, r.max_guests,
-               r.room_status, r.facilities, r.images
-      HAVING available_count > 0
+      GROUP BY r.room_type
     `;
 
-    const params = [
-      checkInDate.format('YYYY-MM-DD'),
-      checkInDate.format('YYYY-MM-DD'),
-      checkOutDate.format('YYYY-MM-DD'),
-      checkOutDate.format('YYYY-MM-DD'),
-      checkInDate.format('YYYY-MM-DD'),
-      checkOutDate.format('YYYY-MM-DD'),
-      hotelId
-    ];
+    const params = [hotelId];
 
     const [rooms]: any = await db.execute(sql, params);
 
