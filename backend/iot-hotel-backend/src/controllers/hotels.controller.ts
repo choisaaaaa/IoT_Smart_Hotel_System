@@ -55,7 +55,7 @@ export async function search(req: AuthRequest, res: Response) {
       hotels: hotels.map((h: any) => ({
         id: h.id,
         name: h.hotel_name,
-        location: h.hotel_address,
+        location: h.hotel_address, // 这里将数据库的 hotel_address 映射给前端需要的 location 字段
         star: h.hotel_star,
         rating: 4.5,
         reviewCount: 100,
