@@ -740,15 +740,17 @@ window.addEventListener('beforeunload', () => {
 }
 
 .reject-btn { 
-  background: #ff4d4f !important; 
+  background: #fff !important; 
   border-color: #ff4d4f !important;
+  color: #ff4d4f !important;
   height: 44px;
   font-size: 16px;
 }
 
 .reject-btn:hover { 
-  background: #ff7875 !important; 
+  background: #fff1f0 !important; 
   border-color: #ff7875 !important; 
+  color: #ff7875 !important;
 }
 
 /* 通话中悬浮窗 */
