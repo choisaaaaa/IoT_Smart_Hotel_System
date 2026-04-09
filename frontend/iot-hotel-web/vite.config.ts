@@ -16,26 +16,25 @@ export default defineConfig({
       '@assets': resolve(__dirname, 'src/assets')
     }
   },
-  server: {
-    port: 5173,
-    host: '127.0.0.1',
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:9000',
-        changeOrigin: true
-      },
-      '/uploads': {
-        target: 'http://127.0.0.1:9000',
-        changeOrigin: true
-      },
-      '/socket.io': {
-        target: 'http://127.0.0.1:9000',
-        ws: true,
-        changeOrigin: true
-      }
+server: {
+  port: 5173,
+  host: '0.0.0.0',  // 改为监听所有地址
+  proxy: {
+    '/api': {
+      target: 'http://127.0.0.1:9000',
+      changeOrigin: true
     },
-    open: false
-  },
+    '/uploads': {
+      target: 'http://127.0.0.1:9000',
+      changeOrigin: true
+    },
+    '/socket.io': {
+      target: 'http://127.0.0.1:9000',
+      ws: true,
+      changeOrigin: true
+    }
+  }
+},
   css: {
     preprocessorOptions: {
       less: {
