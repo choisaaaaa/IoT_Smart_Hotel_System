@@ -21,10 +21,10 @@ export function initWebSocket(roomId?: string): Socket {
   socket = io(socketUrl, {
     transports: ['websocket', 'polling'], // 允许回退到 polling 以提高兼容性
     reconnection: true,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: Infinity, // 无限重连
     reconnectionDelay: 1000,
-    timeout: 10000, // 增加超时时间到 10s
-    autoConnect: true
+    reconnectionDelayMax: 5000, // 最大重连间隔 5 秒
+    timeout: 10000 // 增加超时时间到 10s
   })
 
   const deviceStore = useDeviceStore()
@@ -37,11 +37,40 @@ export function initWebSocket(roomId?: string): Socket {
     if (roomId && socket) {
       socket.emit('join_room', roomId)
     }
+
+    // 自动注册客户端上线
+    const userInfo = appStore.userInfo
+    if (userInfo && userInfo.username && socket) {
+      console.log('[WS] 自动注册客户端:', userInfo.username)
+      socket.emit('register_client', { clientType: 'front_desk', clientId: userInfo.username })
+      socket.once('registered', (data: any) => {
+        console.log('[WS] 自动注册成功:', data)
+        appStore.setRegistration(true, data.clientName)
+      })
+    }
   })
 
-  socket.on('disconnect', () => {
-    console.log('[WS] 与服务器断开连接')
+  socket.on('disconnect', (reason: string) => {
+    console.log('[WS] 与服务器断开连接:', reason)
     appStore.setConnected(false)
+    // 注意：不要在这里清除注册状态，因为会自动重连
+    // 重连后会在 connect 事件中自动重新注册
+  })
+
+  socket.on('reconnect', (attemptNumber: number) => {
+    console.log('[WS] 重连成功，第', attemptNumber, '次尝试')
+  })
+
+  socket.on('reconnect_attempt', (attemptNumber: number) => {
+    console.log('[WS] 尝试重连... 第', attemptNumber, '次')
+  })
+
+  socket.on('reconnect_error', (error: any) => {
+    console.error('[WS] 重连失败:', error)
+  })
+
+  socket.on('reconnect_failed', () => {
+    console.error('[WS] 重连最终失败')
   })
 
   socket.on('device_status_changed', (data: any) => {
