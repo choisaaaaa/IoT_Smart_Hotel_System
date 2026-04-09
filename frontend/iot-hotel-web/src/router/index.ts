@@ -53,7 +53,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/hotel-admin',
     component: () => import('@/components/layout/AdminLayout.vue'),
-    meta: { title: '管理端', icon: 'SettingOutlined', requiresAuth: true, roles: ['admin'] },
+    meta: { title: '管理端', icon: 'SettingOutlined', requiresAuth: true, roles: ['admin', 'manager'] },
     children: [
       {
         path: '',
@@ -63,56 +63,56 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'AdminDashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
-        meta: { title: '总览仪表盘', icon: 'DashboardOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '总览仪表盘', icon: 'DashboardOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'devices',
         name: 'DeviceMonitor',
         component: () => import('@/views/admin/DeviceMonitor.vue'),
-        meta: { title: '设备监控', icon: 'MonitorOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '设备监控', icon: 'MonitorOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'rooms/edit',
         name: 'RoomEdit',
         component: () => import('@/views/admin/RoomEdit.vue'),
-        meta: { title: '房间管理', icon: 'HomeOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '房间管理', icon: 'HomeOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'rooms/types',
         name: 'RoomTypeManage',
         component: () => import('@/views/admin/RoomTypeManage.vue'),
-        meta: { title: '房型维护', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '房型维护', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'rooms/floors',
         name: 'FloorManage',
         component: () => import('@/views/admin/FloorManage.vue'),
-        meta: { title: '楼层管理', icon: 'BarsOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '楼层管理', icon: 'BarsOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'hotel/info',
         name: 'HotelInfoEdit',
         component: () => import('@/views/admin/HotelInfoEdit.vue'),
-        meta: { title: '酒店信息编辑', icon: 'BankOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '酒店信息编辑', icon: 'BankOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'reports',
         name: 'AdminReports',
         component: () => import('@/views/admin/AdminReports.vue'),
-        meta: { title: '账单报表', icon: 'FileTextOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '账单报表', icon: 'FileTextOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
         path: 'users',
         name: 'AdminUserManagement',
         component: () => import('@/views/system/UserManagement.vue'),
-        meta: { title: '用户管理', icon: 'UserOutlined', requiresAuth: true, roles: ['admin'] }
+        meta: { title: '用户管理', icon: 'UserOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       }
     ]
   },
   {
     path: '/reception',
     component: () => import('@/components/layout/ReceptionLayout.vue'),
-    meta: { title: '前台端', icon: 'CustomerServiceOutlined', requiresAuth: true, roles: ['admin', 'staff'] },
+    meta: { title: '前台端', icon: 'CustomerServiceOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] },
     children: [
       {
         path: '',
@@ -122,55 +122,55 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'ReceptionDashboard',
         component: () => import('@/views/reception/Dashboard.vue'),
-        meta: { title: '前台总览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '前台总览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'checkinout',
         name: 'CheckInOut',
         component: () => import('@/views/reception/CheckInOut.vue'),
-        meta: { title: '入住退房', icon: 'LoginOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '入住退房', icon: 'LoginOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'bookings',
         name: 'ReceptionBookings',
         component: () => import('@/views/reception/Bookings.vue'),
-        meta: { title: '预订管理', icon: 'CalendarOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '预订管理', icon: 'CalendarOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'room-availability',
         name: 'RoomAvailability',
         component: () => import('@/views/reception/RoomAvailability.vue'),
-        meta: { title: '客房余量', icon: 'ApartmentOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '客房余量', icon: 'ApartmentOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'workorders',
         name: 'WorkOrders',
         component: () => import('@/views/reception/WorkOrders.vue'),
-        meta: { title: '工单处理', icon: 'ToolOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '工单处理', icon: 'ToolOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'delivery',
         name: 'DeliveryOrders',
         component: () => import('@/views/reception/DeliveryOrders.vue'),
-        meta: { title: '客房送物', icon: 'SendOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '客房送物', icon: 'SendOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'voice-calls',
         name: 'VoiceCalls',
         component: () => import('@/views/reception/VoiceCalls.vue'),
-        meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'price-settings',
         name: 'PriceSettings',
         component: () => import('@/views/reception/PriceSettings.vue'),
-        meta: { title: '房价设置', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '房价设置', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'bills',
         name: 'Bills',
         component: () => import('@/views/reception/Bills.vue'),
-        meta: { title: '账单报表', icon: 'DollarOutlined', requiresAuth: true, roles: ['admin', 'staff'] }
+        meta: { title: '账单报表', icon: 'DollarOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       }
     ]
   },
@@ -238,6 +238,9 @@ router.beforeEach((to, from, next) => {
         case 'admin':
           next('/hotel-admin/dashboard')
           break
+        case 'manager':
+          next('/hotel-admin/dashboard')
+          break
         case 'staff':
           next('/reception/dashboard')
           break
@@ -278,6 +281,7 @@ router.beforeEach((to, from, next) => {
         next('/system/dashboard')
         break
       case 'admin':
+      case 'manager':
         next('/hotel-admin/dashboard')
         break
       case 'staff':

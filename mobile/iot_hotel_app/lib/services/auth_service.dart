@@ -123,7 +123,8 @@ class AuthService {
       final response = await _dioClient.get(ApiConstants.authMe);
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'] as Map<String, dynamic>;
-        await _localStorage.save(AppConstants.userInfoKey, jsonEncode(data));
+        final userData = data['user'] as Map<String, dynamic>? ?? data;
+        await _localStorage.save(AppConstants.userInfoKey, jsonEncode(userData));
         return ApiResult.success(data);
       }
       return ApiResult.failure(response.data['message'] ?? '获取用户信息失败');

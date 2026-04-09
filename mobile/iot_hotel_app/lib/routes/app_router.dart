@@ -41,9 +41,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (isLoggedIn && isLoggingIn) {
         switch (authState.currentMode) {
-          case AppMode.reception:
-            return '/reception';
           case AppMode.manager:
+            return '/admin';
+          case AppMode.reception:
             return '/reception';
           default:
             return '/';

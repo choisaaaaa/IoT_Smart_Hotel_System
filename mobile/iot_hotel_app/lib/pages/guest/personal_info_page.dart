@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../core/network/dio_client.dart';
@@ -19,6 +18,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   User? _user;
   List<Map<String, dynamic>> _applications = [];
   List<Map<String, dynamic>> _hotels = [];
+  List<Map<String, dynamic>> _allHotels = [];
   bool _isLoading = true;
 
   @override
@@ -45,6 +45,12 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       final appResponse = await dio.get('${ApiConstants.baseUrl}auth/role-applications');
       if (appResponse.statusCode == 200 && appResponse.data['code'] == 200) {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
+      }
+
+      final hotelResponse = await dio.get(ApiConstants.hotels, queryParameters: {'pageSize': 100});
+      if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
+        final list = hotelResponse.data['data']?['list'] ?? hotelResponse.data['data'] ?? [];
+        setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
       }
     } catch (e) {
       debugPrint('Error loading data: $e');
@@ -266,33 +272,34 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   void _showBindEmployeeDialog() {
     final reasonCtrl = TextEditingController();
     int? selectedHotelId;
-    List<Map<String, dynamic>> hotelsList = [];
+
+    if (_allHotels.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('暂无可选酒店，请稍后再试')));
+      return;
+    }
 
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            if (hotelsList.isEmpty) {
-              DioClient().get('${ApiConstants.hotels}', queryParameters: {'pageSize': 100}).then((response) {
-                if (response.statusCode == 200 && response.data['code'] == 200) {
-                  final list = response.data['data']?['list'] ?? response.data['data'] ?? [];
-                  setDialogState(() => hotelsList = List<Map<String, dynamic>>.from(list));
-                }
-              });
-            }
-
             return AlertDialog(
               title: const Text('申请绑定酒店员工'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<int>(
-                    value: selectedHotelId,
-                    decoration: const InputDecoration(labelText: '选择酒店', prefixIcon: Icon(Icons.hotel_outlined)),
-                    items: hotelsList.map((h) => DropdownMenuItem(value: h['id'] as int, child: Text(h['hotel_name'] ?? '酒店${h['id']}'))).toList(),
+                    initialValue: selectedHotelId,
+                    decoration: const InputDecoration(
+                      labelText: '选择酒店',
+                      prefixIcon: Icon(Icons.hotel_outlined),
+                      hintText: '请选择要绑定的酒店',
+                    ),
+                    items: _allHotels.map((h) => DropdownMenuItem<int>(
+                      value: h['id'] as int,
+                      child: Text(h['hotel_name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
+                    )).toList(),
                     onChanged: (v) => setDialogState(() => selectedHotelId = v),
-                    validator: (v) => v == null ? '请选择酒店' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(controller: reasonCtrl, decoration: const InputDecoration(labelText: '申请理由 (可选)', prefixIcon: Icon(Icons.description_outlined)), maxLines: 2),
@@ -327,7 +334,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         if (hotelId != null) 'hotel_id': hotelId,
         if (hotelName != null) 'hotel_name': hotelName,
         if (hotelAddress != null) 'hotel_address': hotelAddress,
-        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        'reason': reason?.isNotEmpty == true ? reason : null,
       });
 
       if (response.statusCode == 200 && response.data['code'] == 200) {

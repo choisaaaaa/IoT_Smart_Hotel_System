@@ -14,6 +14,12 @@ export function normalizeRole(role?: string): string {
   if (value === 'staff' || value === 'receptionist' || compact === 'frontdesk') {
     return 'staff'
   }
+  if (value === 'manager' || value === 'hotelmanager' || value === 'hoteladmin') {
+    return 'manager'
+  }
+  if (value === 'admin') {
+    return 'admin'
+  }
   return value
 }
 
@@ -26,15 +32,17 @@ export interface RegisterParams {
   username: string
   password: string
   email?: string
-  hotel_id: number
+  phone: string
 }
 
 export interface UserInfo {
   id: number
   username: string
   email?: string
+  phone?: string
+  uid?: string
   role: string
-  hotel_id: number
+  hotel_id?: number
   hotel_name?: string
   permissions: string[]
 }

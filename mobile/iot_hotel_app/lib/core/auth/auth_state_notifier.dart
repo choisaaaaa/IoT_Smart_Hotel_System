@@ -9,6 +9,8 @@ enum AppMode {
 
 int roleToLevel(String? role) {
   switch (role) {
+    case 'admin':
+    case 'system':
     case 'manager': return 3;
     case 'staff': return 2;
     case 'user': return 1;
@@ -85,6 +87,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }) {
     AppMode initialMode;
     switch (role) {
+      case 'admin':
+      case 'system':
       case 'manager': initialMode = AppMode.manager; break;
       case 'staff': initialMode = AppMode.reception; break;
       case 'user': initialMode = AppMode.customer; break;
