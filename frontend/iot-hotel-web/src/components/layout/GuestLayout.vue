@@ -17,6 +17,11 @@
             :class="{ active: isActive('/guest/room') }"
             @click="$router.push('/guest/room')"
           >客房服务</a-button>
+          <a-button
+            type="text"
+            :class="{ active: isActive('/guest/ai-butler') }"
+            @click="$router.push('/guest/ai-butler')"
+          >AI管家</a-button>
         </div>
         <div class="header-right">
           <a-tag :color="appStore.connected ? 'success' : 'default'" size="small">

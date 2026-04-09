@@ -32,6 +32,30 @@
       </a-col>
     </a-row>
 
+    <!-- 当前通话 -->
+    <div v-if="appStore.currentCall" class="current-call-section">
+      <a-card size="small" class="current-call-card" :class="appStore.currentCall.status">
+        <div class="current-call-header">
+          <PhoneOutlined class="call-icon" />
+          <span class="call-title">当前通话</span>
+          <a-tag :color="appStore.currentCall.status === 'connected' ? 'success' : 'processing'">
+            {{ appStore.currentCall.status === 'connected' ? '通话中' : '连接中...' }}
+          </a-tag>
+        </div>
+        <div class="current-call-info">
+          <div class="caller-name">{{ appStore.currentCall.caller_name || appStore.currentCall.caller_id }}</div>
+          <div class="call-duration" v-if="appStore.currentCall.status === 'connected'">
+            通话时长: {{ currentCallDuration }}
+          </div>
+        </div>
+        <div class="current-call-actions">
+          <a-button danger size="small" @click="hangupCurrentCall">
+            <CloseOutlined /> 挂断
+          </a-button>
+        </div>
+      </a-card>
+    </div>
+
     <!-- 呼叫网格 -->
     <a-tabs v-model:activeKey="activeTab" class="call-tabs">
       <a-tab-pane key="all" title="全部">
@@ -149,6 +173,11 @@ const outgoingCallModal = reactive({
   callId: '',
   status: 'calling' as 'calling' | 'connected'
 })
+
+// 当前通话时长
+const currentCallDuration = ref('00:00')
+const callDurationTimer = ref<NodeJS.Timeout | null>(null)
+const callStartTime = ref<number | null>(null)
 
 // 组合可呼叫目标
 const callableTargets = computed(() => {
@@ -294,6 +323,43 @@ function handleOutgoingCancel() {
   appStore.clearCurrentCall()
 }
 
+// 挂断当前通话
+function hangupCurrentCall() {
+  if (appStore.currentCall?.call_id) {
+    callApi.hangup(appStore.currentCall.call_id)
+    // 发送挂断事件
+    const socket = getSocket()
+    if (socket) {
+      socket.emit('hangup_call', { call_id: appStore.currentCall.call_id })
+    }
+  }
+  appStore.clearCurrentCall()
+  stopCallDurationTimer()
+}
+
+// 启动通话时长计时
+function startCallDurationTimer() {
+  callStartTime.value = Date.now()
+  callDurationTimer.value = setInterval(() => {
+    if (callStartTime.value) {
+      const elapsed = Math.floor((Date.now() - callStartTime.value) / 1000)
+      const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0')
+      const seconds = (elapsed % 60).toString().padStart(2, '0')
+      currentCallDuration.value = `${minutes}:${seconds}`
+    }
+  }, 1000)
+}
+
+// 停止通话时长计时
+function stopCallDurationTimer() {
+  if (callDurationTimer.value) {
+    clearInterval(callDurationTimer.value)
+    callDurationTimer.value = null
+  }
+  callStartTime.value = null
+  currentCallDuration.value = '00:00'
+}
+
 async function toggleRegister() {
   const socket = getSocket()
   if (!socket || !socket.connected) {
@@ -323,20 +389,26 @@ const handleOnlineStatus = (data: any) => {
 }
 
 const handleCallAnswered = (data: any) => {
+  console.log('[VoiceCalls] 收到call_answered:', data)
+  
+  // 处理外呼通话
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
     message.success('对方已接听')
-    
-    // 更新全局通话状态为已连接
-    if (appStore.currentCall) {
-      appStore.setCurrentCall({
-        ...appStore.currentCall,
-        status: 'connected'
-      })
-    }
-    
-    fetchCalls()
   }
+  
+  // 更新全局通话状态为已连接（包括来电）
+  if (appStore.currentCall?.call_id === data.call_id) {
+    appStore.setCurrentCall({
+      ...appStore.currentCall,
+      status: 'connected'
+    })
+    // 启动通话时长计时
+    startCallDurationTimer()
+    message.success('通话已连接')
+  }
+  
+  fetchCalls()
 }
 
 const handleCallRejected = (data: any) => {
@@ -355,7 +427,30 @@ const handleCallHungup = (data: any) => {
     message.info('通话已挂断')
     // 清除全局通话状态
     appStore.clearCurrentCall()
+    stopCallDurationTimer()
     fetchCalls()
+  }
+}
+
+// 处理来电（包括AI转接）
+const handleIncomingCall = (data: any) => {
+  console.log('[VoiceCalls] 收到来电:', data)
+  
+  // 设置来电信息
+  appStore.setIncomingCall({
+    call_id: data.call_id,
+    caller_id: data.caller_id,
+    caller_type: data.caller_type,
+    caller_name: data.caller_name || data.caller_id,
+    callee_id: data.callee_id,
+    callee_type: data.callee_type,
+    isTransfer: data.isTransfer,
+    transferReason: data.transferReason
+  })
+  
+  // 显示来电提醒
+  if (data.isTransfer) {
+    message.info(`AI管家转接: ${data.transferReason || '客人要求转人工'}`)
   }
 }
 
@@ -368,12 +463,14 @@ function setupSignalingListeners() {
   socket.off('call_answered', handleCallAnswered)
   socket.off('call_rejected', handleCallRejected)
   socket.off('call_hungup', handleCallHungup)
+  socket.off('incoming_call', handleIncomingCall)
 
   // 添加新的监听器
   socket.on('online_status', handleOnlineStatus)
   socket.on('call_answered', handleCallAnswered)
   socket.on('call_rejected', handleCallRejected)
   socket.on('call_hungup', handleCallHungup)
+  socket.on('incoming_call', handleIncomingCall)
 }
 
 onMounted(async () => {
@@ -426,6 +523,52 @@ const historyColumns = [
 .registration-status { display: flex; flex-direction: column; gap: 8px; }
 .reg-info { font-size: 12px; }
 .reg-info .value { font-weight: bold; margin-left: 4px; color: #1890ff; }
+
+/* 当前通话区域 */
+.current-call-section {
+  margin-bottom: 16px;
+}
+.current-call-card {
+  border: 2px solid #1890ff;
+  border-radius: 8px;
+}
+.current-call-card.connected {
+  border-color: #52c41a;
+}
+.current-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.current-call-header .call-icon {
+  color: #1890ff;
+  font-size: 18px;
+}
+.current-call-card.connected .call-icon {
+  color: #52c41a;
+}
+.current-call-header .call-title {
+  font-weight: 500;
+  flex: 1;
+}
+.current-call-info {
+  margin-bottom: 12px;
+}
+.current-call-info .caller-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+.current-call-info .call-duration {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+}
+.current-call-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 
 .call-grid {
   display: grid;

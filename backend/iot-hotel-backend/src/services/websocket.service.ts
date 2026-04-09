@@ -146,6 +146,7 @@ class WebSocketService {
                 break;
               case 'front_desk':
                 socket.join('front_desk');
+                socket.join(`front_desk_${data.clientId}`); // 同时加入个人房间，用于接收定向来电
                 break;
               case 'ai':
                 socket.join('ai');
@@ -322,17 +323,58 @@ class WebSocketService {
         offer: any;
         call_id: string;
       }) => {
-        logger.info(`转发 WebRTC Offer: ${socket.id} -> ${data.target_type}_${data.target_id}`);
+        logger.info(`[WebRTC] 收到Offer: ${socket.id} -> ${data.target_type}_${data.target_id}, call_id: ${data.call_id}`);
         
         if (data.target_type === 'room') {
-          // 如果目标是房间硬件，转发到 MQTT
-          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
-            from_type: this.clients.get(socket.id)?.clientType,
-            from_id: this.clients.get(socket.id)?.clientId,
-            type: 'offer',
-            offer: data.offer,
-            target_type: 'room',
-            target_id: data.target_id
+          // 检查房间是否有WebSocket客户端在线
+          const roomClients = Array.from(this.clients.entries()).filter(
+            ([_, client]) => client.clientType === 'room' && client.clientId === data.target_id
+          );
+          
+          logger.info(`[WebRTC] 房间${data.target_id}的WebSocket客户端数量: ${roomClients.length}`);
+          
+          // 打印所有已注册的客户端，用于调试
+          const allClients = Array.from(this.clients.entries()).map(([id, client]) => ({
+            socketId: id,
+            clientType: client.clientType,
+            clientId: client.clientId,
+            roomId: client.roomId
+          }));
+          logger.info(`[WebRTC] 所有已注册客户端: ${JSON.stringify(allClients)}`);
+          
+          if (roomClients.length > 0) {
+            // 通过WebSocket转发给房间的Web端
+            const targetRoom = `room_${data.target_id}`;
+            this.io?.to(targetRoom).emit('webrtc_offer', {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              offer: data.offer,
+              call_id: data.call_id
+            });
+            logger.info(`[WebRTC] Offer通过WebSocket发送给房间: ${targetRoom}`);
+          } else {
+            // 通过MQTT转发给硬件
+            mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              type: 'offer',
+              offer: data.offer,
+              target_type: 'room',
+              target_id: data.target_id
+            });
+            logger.info(`[WebRTC] Offer通过MQTT发送给硬件房间: ${data.target_id}`);
+          }
+        } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
+          // 集体呼叫模式：广播给所有在线前台
+          this.clients.forEach((client, socketId) => {
+            if (client.clientType === 'front_desk') {
+              this.io?.to(socketId).emit('webrtc_offer', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                offer: data.offer,
+                call_id: data.call_id
+              });
+            }
           });
         } else {
           // 否则通过 WebSocket 转发
@@ -354,13 +396,43 @@ class WebSocketService {
         logger.info(`转发 WebRTC Answer: ${socket.id} -> ${data.target_type}_${data.target_id}`);
         
         if (data.target_type === 'room') {
-          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
-            from_type: this.clients.get(socket.id)?.clientType,
-            from_id: this.clients.get(socket.id)?.clientId,
-            type: 'answer',
-            answer: data.answer,
-            target_type: 'room',
-            target_id: data.target_id
+          // 检查房间是否有WebSocket客户端在线
+          const roomClients = Array.from(this.clients.entries()).filter(
+            ([_, client]) => client.clientType === 'room' && client.clientId === data.target_id
+          );
+          
+          if (roomClients.length > 0) {
+            // 通过WebSocket转发给房间的Web端
+            this.io?.to(`room_${data.target_id}`).emit('webrtc_answer', {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              answer: data.answer,
+              call_id: data.call_id
+            });
+            logger.info(`WebRTC Answer通过WebSocket发送给房间: room_${data.target_id}`);
+          } else {
+            // 通过MQTT转发给硬件
+            mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              type: 'answer',
+              answer: data.answer,
+              target_type: 'room',
+              target_id: data.target_id
+            });
+            logger.info(`WebRTC Answer通过MQTT发送给硬件房间: ${data.target_id}`);
+          }
+        } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
+          // 集体呼叫模式：广播给所有在线前台
+          this.clients.forEach((client, socketId) => {
+            if (client.clientType === 'front_desk') {
+              this.io?.to(socketId).emit('webrtc_answer', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                answer: data.answer,
+                call_id: data.call_id
+              });
+            }
           });
         } else {
           this.io?.to(`${data.target_type}_${data.target_id}`).emit('webrtc_answer', {
@@ -379,13 +451,41 @@ class WebSocketService {
         call_id: string;
       }) => {
         if (data.target_type === 'room') {
-          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
-            from_type: this.clients.get(socket.id)?.clientType,
-            from_id: this.clients.get(socket.id)?.clientId,
-            type: 'ice_candidate',
-            candidate: data.candidate,
-            target_type: 'room',
-            target_id: data.target_id
+          // 检查房间是否有WebSocket客户端在线
+          const roomClients = Array.from(this.clients.entries()).filter(
+            ([_, client]) => client.clientType === 'room' && client.clientId === data.target_id
+          );
+          
+          if (roomClients.length > 0) {
+            // 通过WebSocket转发给房间的Web端
+            this.io?.to(`room_${data.target_id}`).emit('webrtc_ice_candidate', {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              candidate: data.candidate,
+              call_id: data.call_id
+            });
+          } else {
+            // 通过MQTT转发给硬件
+            mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              type: 'ice_candidate',
+              candidate: data.candidate,
+              target_type: 'room',
+              target_id: data.target_id
+            });
+          }
+        } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
+          // 集体呼叫模式：广播给所有在线前台
+          this.clients.forEach((client, socketId) => {
+            if (client.clientType === 'front_desk') {
+              this.io?.to(socketId).emit('webrtc_ice_candidate', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                candidate: data.candidate,
+                call_id: data.call_id
+              });
+            }
           });
         } else {
           this.io?.to(`${data.target_type}_${data.target_id}`).emit('webrtc_ice_candidate', {
@@ -461,6 +561,7 @@ class WebSocketService {
             });
           }
           
+          // 通知主叫方
           this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_answered', answerData);
           
           logger.info(`通话接听: ${callId}`);
@@ -509,6 +610,7 @@ class WebSocketService {
             });
           }
           
+          // 通知主叫方
           this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_rejected', rejectData);
           
           logger.info(`通话拒接: ${callId}`);
@@ -760,6 +862,24 @@ class WebSocketService {
   // 获取 io 实例（用于从外部发送事件）
   getIO(): Server | null {
     return this.io;
+  }
+
+  // 通知前台有AI转接的来电（定向）
+  notifyIncomingCall(callData: any) {
+    if (!this.io) return;
+    
+    const targetRoom = `${callData.callee_type}_${callData.callee_id}`;
+    this.io.to(targetRoom).emit('incoming_call', callData);
+    logger.info(`AI转接通知已发送: ${targetRoom}`);
+  }
+
+  // 广播AI转接来电给所有前台（集体呼叫模式）
+  broadcastIncomingCall(callData: any) {
+    if (!this.io) return;
+    
+    // 广播到所有前台
+    this.io.to('front_desk').emit('incoming_call', callData);
+    logger.info(`AI转接广播已发送: 所有前台, 呼叫ID: ${callData.call_id}`);
   }
 }
 

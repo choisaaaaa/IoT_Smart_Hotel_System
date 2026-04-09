@@ -20,8 +20,8 @@ async function startServer() {
       logger.warn('清理通话记录失败:', cleanupError);
     }
 
-    const server = app.listen(PORT, async () => {
-      logger.info(`服务器启动成功: http://127.0.0.1:${PORT}`);
+    const server = app.listen(PORT, '0.0.0.0', async () => {
+      logger.info(`服务器启动成功: http://0.0.0.0:${PORT}`);
       logger.info(`API前缀: ${config.app.apiPrefix}`);
       logger.info(`环境: ${config.app.env}`);
 

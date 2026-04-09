@@ -118,8 +118,35 @@ async function handleAcceptCall() {
       await callApi.answer(callToAccept.call_id)
       appStore.setCurrentCall(callToAccept)
       appStore.clearIncomingCall()
-      // 初始化 WebRTC
+      // 初始化 WebRTC（被叫方接听后立即初始化并创建offer）
       await initWebRTC(callToAccept.call_id, callToAccept.caller_type, callToAccept.caller_id)
+      
+      // 被叫方创建并发送offer
+      if (peerConnection.value) {
+        try {
+          const offer = await peerConnection.value.createOffer()
+          await peerConnection.value.setLocalDescription(offer)
+          console.log('[WebRTC] 被叫方已创建并设置 local description (offer)')
+          
+          const socket = getSocket()
+          if (socket) {
+            console.log('[WebRTC] 发送offer:', {
+              target_type: callToAccept.caller_type,
+              target_id: callToAccept.caller_id,
+              call_id: callToAccept.call_id
+            })
+            socket.emit('webrtc_offer', {
+              target_type: callToAccept.caller_type,
+              target_id: callToAccept.caller_id,
+              offer: offer,
+              call_id: callToAccept.call_id
+            })
+            console.log('[WebRTC] 被叫方已发送offer给主叫方')
+          }
+        } catch (e) {
+          console.error('[WebRTC] 被叫方创建offer失败:', e)
+        }
+      }
     } catch (error) {
       console.error('[Global] 接听失败:', error)
       message.error('接听失败')
@@ -353,12 +380,30 @@ async function initWebRTC(callId: string, targetType: string, targetId: string) 
 
     // 监听远程流
     peerConnection.value.ontrack = (event) => {
-      console.log('[WebRTC] 收到远程流')
-      if (remoteAudioRef.value) {
-        remoteAudioRef.value.srcObject = event.streams[0]
-        // 启动输出音量检测
-        if (event.streams[0]) {
-          initOutputVolumeDetection(event.streams[0])
+      console.log('[WebRTC] 收到远程流:', event.streams)
+      
+      if (event.streams && event.streams[0]) {
+        const remoteStream = event.streams[0]
+        console.log('[WebRTC] 远程流轨道数:', remoteStream.getTracks().length)
+        
+        if (remoteAudioRef.value) {
+          remoteAudioRef.value.srcObject = remoteStream
+          console.log('[WebRTC] 已设置srcObject')
+          
+          // 尝试播放（处理自动播放策略）
+          const playPromise = remoteAudioRef.value.play()
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              console.log('[WebRTC] 远程音频播放成功')
+            }).catch(e => {
+              console.error('[WebRTC] 自动播放失败:', e)
+              // 显示提示让用户点击
+              message.info('请点击页面任意位置以启用通话音频')
+            })
+          }
+          
+          // 启动输出音量检测
+          initOutputVolumeDetection(remoteStream)
         }
       }
     }
@@ -552,14 +597,19 @@ const handleWebRTCAnswer = async (data: any) => {
 }
 
 const handleWebRTCIceCandidate = async (data: any) => {
-  console.log('[WebRTC] 收到 ICE 候选')
+  console.log('[WebRTC] 收到 ICE 候选:', data.candidate)
+  console.log('[WebRTC] 当前连接状态:', peerConnection.value?.connectionState)
+  console.log('[WebRTC] remoteDescription是否存在:', !!peerConnection.value?.remoteDescription)
+  
   if (peerConnection.value && peerConnection.value.remoteDescription) {
     try {
       await peerConnection.value.addIceCandidate(new RTCIceCandidate(data.candidate))
+      console.log('[WebRTC] ICE候选添加成功')
     } catch (e) {
       console.error('[WebRTC] 添加 ICE 候选失败:', e)
     }
   } else {
+    console.log('[WebRTC] ICE候选已缓存，等待remoteDescription')
     pendingIceCandidates.value.push(data.candidate)
   }
 }

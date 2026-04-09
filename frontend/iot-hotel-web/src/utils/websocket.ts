@@ -9,14 +9,8 @@ export function initWebSocket(roomId?: string): Socket {
     return socket
   }
 
-  // 使用相对路径以便通过 Vite/Nginx 代理，或显式指定后端端口
-  const isDev = import.meta.env.DEV
-  // 开发环境：本地开发使用 localhost，云服务器开发使用实际IP
-  const socketUrl = isDev
-    ? (window.location.hostname === 'localhost'
-        ? 'http://localhost:9000'
-        : 'http://8.134.166.69:9000')
-    : window.location.origin
+  // 使用相对路径，让Vite代理处理WebSocket连接
+  const socketUrl = window.location.origin
 
   socket = io(socketUrl, {
     transports: ['websocket', 'polling'], // 允许回退到 polling 以提高兼容性

@@ -224,13 +224,19 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
       
       // 通知主叫方
       const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
-      logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom}`);
+      logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom}, call_id: ${call_id}`);
       io.to(callerRoom).emit('call_answered', answeredData);
       
       // 通知被叫方
       const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
-      logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom}`);
+      logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom}, call_id: ${call_id}`);
       io.to(calleeRoom).emit('call_answered', answeredData);
+      
+      // 额外：广播到所有客户端确保收到
+      io.emit('call_answered', answeredData);
+      logger.info(`[HTTP API] 广播 call_answered 到所有客户端`);
+    } else {
+      logger.error(`[HTTP API] WebSocket服务不可用，无法发送call_answered事件`);
     }
     
     res.json(successResponse({

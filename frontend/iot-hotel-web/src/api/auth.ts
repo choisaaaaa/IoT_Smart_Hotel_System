@@ -43,8 +43,8 @@ class AuthService {
   private api: AxiosInstance
 
   constructor() {
-    const isDev = import.meta.env.DEV
-    const baseURL = isDev ? 'http://localhost:9000/api/v1' : '/api/v1'
+    // 使用相对路径，让Vite代理处理请求
+    const baseURL = '/api/v1'
 
     this.api = axios.create({
       baseURL,
