@@ -81,10 +81,10 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
 
         // 如果是走廊灯控
         if (strcmp(cmd_type, "light_on") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, true);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
             exec_success = true;
         } else if (strcmp(cmd_type, "light_off") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, false);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
             exec_success = true;
         }
 

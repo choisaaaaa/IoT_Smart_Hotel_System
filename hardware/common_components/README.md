@@ -39,7 +39,7 @@
 
 ### 3.2 硬件抽象层 (HAL 层) - 业务逻辑控制
 * **`hal_actuators` (强电执行单元)**
-  * **核心 API**: `hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true)`
+  * **核心 API**: `hal_actuators_set_state(ACTUATOR_RELAY_CH4, true)`
   * **功能**: 屏蔽高低电平反转与光耦隔离逻辑，提供基于业务语义的灯光、门锁、窗帘控制接口。
 * **`hal_sensors` (环境感知传感器)**
   * **核心 API**: `hal_sensors_read_all(&sensor_data_struct)`

@@ -6,6 +6,7 @@
 #include "global_config.h"
 
 static const char *TAG = "HAL_INTERACTIVE";
+static const TickType_t k_button_debounce_ticks = pdMS_TO_TICKS(30);
 
 // 定义6个按键引脚，按 interactive_button_id_t 枚举顺序
 static const int button_pins[] = {
@@ -17,6 +18,9 @@ static const int button_pins[] = {
     GLOBAL_BTN_FLOOR_1_PIN   // 5: 楼控复位
 };
 #define NUM_BUTTONS (sizeof(button_pins) / sizeof(button_pins[0]))
+static bool s_debounced_pressed[NUM_BUTTONS] = {0};
+static TickType_t s_last_change_tick[NUM_BUTTONS] = {0};
+static int s_last_raw_level[NUM_BUTTONS] = {1, 1, 1, 1, 1, 1};
 
 esp_err_t hal_interactive_init(void) {
     ESP_LOGI(TAG, "初始化交互设备 (按键、RGB灯带、蜂鸣器)");
@@ -33,7 +37,15 @@ esp_err_t hal_interactive_init(void) {
                 .pull_down_en = GPIO_PULLDOWN_DISABLE,
                 .intr_type = GPIO_INTR_DISABLE,
             };
-            gpio_config(&btn_cfg);
+            esp_err_t err = gpio_config(&btn_cfg);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "按键 GPIO%d 配置失败: %s", pin, esp_err_to_name(err));
+                return err;
+            }
+
+            s_last_raw_level[i] = gpio_get_level(pin);
+            s_debounced_pressed[i] = (s_last_raw_level[i] == 0);
+            s_last_change_tick[i] = xTaskGetTickCount();
         }
     }
 
@@ -62,7 +74,7 @@ esp_err_t hal_interactive_set_led_color(uint16_t led_index, uint8_t r, uint8_t g
 }
 
 bool hal_interactive_is_button_pressed(interactive_button_id_t button) {
-    if (button < 0 || button >= NUM_BUTTONS) {
+    if ((int)button < 0 || (size_t)button >= NUM_BUTTONS) {
         return false;
     }
     
@@ -71,6 +83,18 @@ bool hal_interactive_is_button_pressed(interactive_button_id_t button) {
         return false;
     }
 
-    // 所有按键均规定为“低电平有效”，按下时读取到 0
-    return (gpio_get_level(pin) == 0);
+    int raw_level = gpio_get_level(pin);
+    TickType_t now = xTaskGetTickCount();
+
+    if (raw_level != s_last_raw_level[button]) {
+        s_last_raw_level[button] = raw_level;
+        s_last_change_tick[button] = now;
+    }
+
+    if ((now - s_last_change_tick[button]) >= k_button_debounce_ticks) {
+        // 所有按键均规定为“低电平有效”，按下时读取到 0
+        s_debounced_pressed[button] = (s_last_raw_level[button] == 0);
+    }
+
+    return s_debounced_pressed[button];
 }

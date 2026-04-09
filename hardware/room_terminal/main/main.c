@@ -22,6 +22,9 @@
 static const char *TAG = "ROOM_TERMINAL_MAIN";
 static char current_room_id[16] = "UNKNOWN";
 static char device_id[32] = "room_UNKNOWN";
+static bool is_on_call = false;
+static char current_call_id[64] = "";
+static char remote_id[32] = "";
 
 // --- 辅助组包函数 (规范化数据上报) ---
 
@@ -118,13 +121,13 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
 
         // 简单清晰的指令分发逻辑 (查阅文档 A. 常用命令类型)
         if (strcmp(cmd_type, "light_on") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, true);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
             exec_success = true;
         } else if (strcmp(cmd_type, "light_off") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, false);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
             exec_success = true;
         } else if (strcmp(cmd_type, "door_unlock") == 0) {
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH4, true);
             exec_success = true;
         } else if (strcmp(cmd_type, "incoming_call") == 0) {
             cJSON *call_id = cJSON_GetObjectItem(root, "call_id");
@@ -220,10 +223,6 @@ void task_sensor_monitor(void *pvParameters) {
 
 // --- 语音通话相关任务 (新) ---
 
-static bool is_on_call = false;
-static char current_call_id[64] = "";
-static char remote_id[32] = "";
-
 void task_voice_call(void *pvParameters) {
     uint8_t audio_buffer[1024];
     size_t read_len = 0;
@@ -295,7 +294,7 @@ void app_main(void)
         uint8_t key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         
         if (driver_rc522_read_sector(1, key, sector_data) == ESP_OK) {
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true); // 开门
+            hal_actuators_set_state(ACTUATOR_RELAY_CH4, true); // 开门
             hal_interactive_beep(1, 200); // 短鸣1声
             hal_interactive_set_led_color(0, 0, 255, 0); // 亮绿灯
             
@@ -303,7 +302,7 @@ void app_main(void)
             publish_security_door_event();
             
             vTaskDelay(pdMS_TO_TICKS(3000));
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, false); // 3秒后关门锁
+            hal_actuators_set_state(ACTUATOR_RELAY_CH4, false); // 3秒后关门锁
         }
     }
 }

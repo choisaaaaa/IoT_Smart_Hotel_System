@@ -31,6 +31,12 @@ esp_err_t hal_actuators_init(void);
  */
 esp_err_t hal_actuators_set_state(actuator_type_t type, bool state);
 
+/**
+ * @brief 设置继电器有效电平
+ * @param active_low true: 低电平吸合, false: 高电平吸合
+ */
+void hal_actuators_set_active_level(bool active_low);
+
 #ifdef __cplusplus
 }
 #endif

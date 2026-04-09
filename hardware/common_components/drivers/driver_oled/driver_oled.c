@@ -43,11 +43,8 @@ static void fb_set_pixel(int x, int y, bool on)
 
 static void draw_char_5x7(int x, int y, char ch)
 {
-    unsigned char uc = (unsigned char)ch;
-    if (uc >= DRIVER_OLED_FONT5_CHARS) {
-        uc = '?';
-    }
-    size_t base = (size_t)uc * (size_t)DRIVER_OLED_FONT5_BYTES;
+    size_t uc = (unsigned char)ch;
+    size_t base = uc * (size_t)DRIVER_OLED_FONT5_BYTES;
     for (int col = 0; col < 5; col++) {
         uint8_t bits = g_oled_font_5x7[base + (size_t)col];
         for (int row = 0; row < 7; row++, bits >>= 1) {
