@@ -270,13 +270,21 @@ router.post('/register', async (req, res) => {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
+    let charCount = 0;
+    for (const ch of username) {
+      charCount += /[\u4e00-\u9fa5]/.test(ch) ? 1 : 0.5;
+    }
+    if (charCount < 2 || charCount > 8) {
+      return sendError(res, errorResponse('用户名需2-8个字符（1个中文字=1字符，2个字母=1字符）', 400));
+    }
+
     if (!phone) {
       return sendError(res, errorResponse('手机号不能为空', 400));
     }
 
     const phoneRegex = /^1[3-9]\d{9}$/;
     if (!phoneRegex.test(phone)) {
-      return sendError(res, errorResponse('手机号格式不正确', 400));
+      return sendError(res, errorResponse('请输入11位手机号', 400));
     }
 
     const [existingUsers]: any = await db.execute(

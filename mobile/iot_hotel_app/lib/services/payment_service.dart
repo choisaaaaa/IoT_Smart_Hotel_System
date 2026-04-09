@@ -41,6 +41,30 @@ class PaymentService {
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
+      try {
+        final bookingResponse = await _dioClient.get(
+          ApiConstants.bookings,
+          queryParameters: {'pageSize': 50},
+        );
+        if (bookingResponse.statusCode == 200 && bookingResponse.data['code'] == 200) {
+          final data = bookingResponse.data['data'];
+          List<dynamic> bookings = [];
+          if (data is Map && data.containsKey('list')) {
+            bookings = List<dynamic>.from(data['list'] ?? []);
+          } else if (data is List) {
+            bookings = List<dynamic>.from(data);
+          }
+          for (final b in bookings) {
+            if (b['payment_id']?.toString() == paymentId || b['id']?.toString() == paymentId) {
+              return ApiResult.success({
+                'id': b['payment_id'] ?? b['id'],
+                'status': b['payment_status'] ?? b['status'] == 'confirmed' ? 'paid' : 'pending',
+                'amount': b['total_price'],
+              });
+            }
+          }
+        }
+      } catch (_) {}
       return ApiResult.failure(response.data['message'] ?? '获取支付状态失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
@@ -67,6 +91,35 @@ class PaymentService {
         if (data is List) return ApiResult.success(List<dynamic>.from(data));
         return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
       }
+
+      try {
+        final bookingResponse = await _dioClient.get(
+          ApiConstants.bookings,
+          queryParameters: {'page': page, 'pageSize': pageSize},
+        );
+        if (bookingResponse.statusCode == 200 && bookingResponse.data['code'] == 200) {
+          final data = bookingResponse.data['data'];
+          List<dynamic> bookings = [];
+          if (data is Map && data.containsKey('list')) {
+            bookings = List<dynamic>.from(data['list'] ?? []);
+          } else if (data is List) {
+            bookings = List<dynamic>.from(data);
+          }
+          return ApiResult.success(bookings.where((b) {
+            if (status != null && b['payment_status'] != status && b['status'] != status) return false;
+            return b['total_price'] != null;
+          }).map((b) => {
+            'id': b['payment_id'] ?? b['id'],
+            'order_type': 'booking',
+            'order_id': b['id'],
+            'amount': b['total_price'],
+            'status': b['payment_status'] ?? (b['status'] == 'confirmed' ? 'paid' : 'pending'),
+            'payment_method': b['payment_method'],
+            'created_at': b['created_at'],
+          }).toList());
+        }
+      } catch (_) {}
+
       return ApiResult.failure(response.data['message'] ?? '获取支付历史失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');

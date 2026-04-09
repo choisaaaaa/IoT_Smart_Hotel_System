@@ -122,9 +122,19 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             decoration: const InputDecoration(
                               labelText: '用户名',
                               prefixIcon: Icon(Icons.person_outline_rounded),
-                              hintText: '请输入用户名',
+                              hintText: '1中文=1字符，2字母=1字符',
                             ),
-                            validator: (v) => v!.isEmpty ? '请输入用户名' : null,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return '请输入用户名';
+                              double charCount = 0;
+                              for (final ch in v.runes) {
+                                final code = ch;
+                                charCount += (code >= 0x4e00 && code <= 0x9fa5) ? 1 : 0.5;
+                              }
+                              if (charCount < 2) return '用户名至少2个字符';
+                              if (charCount > 8) return '用户名最多8个字符';
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
@@ -137,7 +147,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             keyboardType: TextInputType.phone,
                             validator: (v) {
                               if (v == null || v.isEmpty) return '请输入手机号';
-                              if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '手机号格式不正确';
+                              if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '请输入11位手机号';
                               return null;
                             },
                           ),

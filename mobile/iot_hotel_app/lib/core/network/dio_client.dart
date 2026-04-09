@@ -23,6 +23,7 @@ class DioClient {
 
     dio.interceptors.addAll([
       AuthInterceptor(),
+      _ResponseNormalizer(),
       LogInterceptor(
         requestHeader: true,
         requestBody: true,
@@ -66,5 +67,20 @@ class DioClient {
     Options? options,
   }) async {
     return await dio.delete(path, data: data, queryParameters: queryParameters, options: options);
+  }
+}
+
+class _ResponseNormalizer extends Interceptor {
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final data = response.data;
+    if (data is Map<String, dynamic> && data['success'] == true && data['code'] == null) {
+      response.data = {
+        'code': 200,
+        'data': data['data'],
+        'message': data['message'] ?? '操作成功',
+      };
+    }
+    handler.next(response);
   }
 }

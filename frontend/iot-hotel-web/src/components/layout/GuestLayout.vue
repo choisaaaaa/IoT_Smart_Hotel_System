@@ -309,7 +309,19 @@ const registerForm = reactive({
 const registerRules: Record<string, Rule[]> = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3-20 个字符', trigger: 'blur' }
+    {
+      validator: (_rule: Rule, value: string) => {
+        if (!value) return Promise.reject('请输入用户名')
+        let charCount = 0
+        for (const ch of value) {
+          charCount += /[\u4e00-\u9fa5]/.test(ch) ? 1 : 0.5
+        }
+        if (charCount < 2) return Promise.reject('用户名至少2个字符（1个中文字=1字符，2个字母=1字符）')
+        if (charCount > 8) return Promise.reject('用户名最多8个字符（1个中文字=1字符，2个字母=1字符）')
+        return Promise.resolve()
+      },
+      trigger: 'blur'
+    }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -329,7 +341,7 @@ const registerRules: Record<string, Rule[]> = {
   ],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入11位手机号', trigger: 'blur' }
   ]
 }
 

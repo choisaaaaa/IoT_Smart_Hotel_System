@@ -29,22 +29,41 @@ class ApiResult<T> {
     );
   }
 
+  static bool isResponseSuccess(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    final code = data['code'];
+    if (code == 200 || code == 201) return true;
+    if (data['success'] == true) return true;
+    return false;
+  }
+
+  static String? getResponseMessage(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    return data['message']?.toString();
+  }
+
   factory ApiResult.fromResponse(Response response) {
-    final data = response.data as Map<String, dynamic>;
+    final data = response.data as Map<String, dynamic>?;
+    if (data == null) {
+      return ApiResult<T>.failure('响应数据为空');
+    }
+
     final code = data['code'] ?? response.statusCode ?? 200;
     final message = data['message']?.toString() ?? '';
     final resultData = data['data'];
 
-    if (code == 200 || code == 201) {
+    final isSuccess = (code == 200 || code == 201) || data['success'] == true;
+
+    if (isSuccess) {
       if (resultData is T) {
-        return ApiResult<T>.success(resultData, code: code);
+        return ApiResult<T>.success(resultData, code: code is int ? code : 200);
       }
       try {
-        return ApiResult<T>.success(resultData as T, code: code);
+        return ApiResult<T>.success(resultData as T, code: code is int ? code : 200);
       } catch (e) {
-        return ApiResult<T>.failure('数据类型转换失败', code: code);
+        return ApiResult<T>.failure('数据类型转换失败', code: code is int ? code : 200);
       }
     }
-    return ApiResult<T>.failure(message, code: code);
+    return ApiResult<T>.failure(message.isNotEmpty ? message : '操作失败', code: code is int ? code : -1);
   }
 }
