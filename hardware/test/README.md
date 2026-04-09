@@ -5,6 +5,7 @@
 ## 目录结构
 *   `unit_test/`: 存放纯软件层逻辑的单元测试 (Unit Test)，如 MQTT 报文打包、字符串拼接解析等。无需下发到实际物理板，可在本地或 CI 服务器环境运行。
 *   `hil_test/`: 硬件在环测试 (Hardware-in-the-loop Test)。用于验证引脚的高低电平输出、传感器 I2C 总线读写。需物理烧录到连接了对应模块（如 RC522）的测试用机上运行。
+*   `mqtt_simulator/`: 三端最小联调用脚本与验证记录（不接实体硬件）。
 
 ## ESP-IDF Unity 框架测试指南
 本项目推荐采用 ESP-IDF 原生的 `unity` 测试框架：
@@ -13,3 +14,8 @@
 3. 通过 `TEST_ASSERT_EQUAL(...)` 等断言判定结果
 
 *注：目前尚未引入完整的自动化 CI 管道。但在 Phase 2 或 Phase 3 演进阶段，此目录将作为自动代码评审通过的强制依据。*
+
+## MQTT 最小联调入口
+
+- 验证脚本目录：`test/mqtt_simulator/`
+- 验证记录文档：`test/mqtt_simulator/最小联调验证记录_三端.md`

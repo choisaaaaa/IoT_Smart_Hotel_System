@@ -22,11 +22,116 @@
 static const char *TAG = "ROOM_TERMINAL_MAIN";
 static char current_room_id[16] = "UNKNOWN";
 static char device_id[32] = "room_UNKNOWN";
+static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
+static bool is_on_call = false;
+static char current_call_id[64] = "";
+static char remote_id[32] = "";
+static volatile bool s_network_ready = false;
+
+// 统一任务周期配置，避免散落魔法数字
+static const TickType_t SENSOR_TASK_PERIOD = pdMS_TO_TICKS(15000);
+static const TickType_t VOICE_TASK_PERIOD = pdMS_TO_TICKS(100);
+static const TickType_t MAIN_GUARD_PERIOD = pdMS_TO_TICKS(30000);
+static const TickType_t DOOR_UNLOCK_HOLD_PERIOD = pdMS_TO_TICKS(3000);
+
+static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
+    if (dst == NULL || dst_size == 0) {
+        return;
+    }
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+    strncpy(dst, src, dst_size - 1);
+    dst[dst_size - 1] = '\0';
+}
+
+static void load_nvs_string_with_fallback(const char *key, char *out, size_t out_size, const char *fallback) {
+    if (service_network_read_nvs_string(key, out, out_size) != ESP_OK) {
+        copy_str_safe(out, out_size, fallback);
+    } else {
+        out[out_size - 1] = '\0';
+    }
+}
+
+static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_success, const char *result_msg) {
+    if (!s_network_ready) {
+        ESP_LOGW(TAG, "网络未就绪，跳过指令回执上报: %s", cmd_type);
+        return;
+    }
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *reply = cJSON_CreateObject();
+    cJSON_AddStringToObject(reply, "device_id", device_id);
+    cJSON_AddNumberToObject(reply, "command_id", cmd_id);
+    cJSON_AddStringToObject(reply, "command_type", cmd_type);
+    cJSON_AddStringToObject(reply, "status", exec_success ? "success" : "failed");
+    cJSON_AddStringToObject(reply, "result", result_msg);
+    cJSON_AddStringToObject(reply, "timestamp", timestamp);
+
+    char *reply_str = cJSON_PrintUnformatted(reply);
+    service_mqtt_publish("hotel/device/command/result", reply_str);
+
+    free(reply_str);
+    cJSON_Delete(reply);
+}
+
+static bool execute_room_command(const char *cmd_type, cJSON *root, const char **out_result_msg) {
+    if (strcmp(cmd_type, "light_on") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "灯光控制失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "light_off") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "灯光控制失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "door_unlock") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH4, true);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "门锁控制失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "incoming_call") == 0) {
+        cJSON *call_id = cJSON_GetObjectItem(root, "call_id");
+        cJSON *caller_id = cJSON_GetObjectItem(root, "caller_id");
+        if (cJSON_IsString(call_id) && cJSON_IsString(caller_id)) {
+            copy_str_safe(current_call_id, sizeof(current_call_id), call_id->valuestring);
+            copy_str_safe(remote_id, sizeof(remote_id), caller_id->valuestring);
+            is_on_call = true;
+            *out_result_msg = "通话已建立";
+            return true;
+        }
+        *out_result_msg = "通话参数缺失";
+        return false;
+    }
+
+    if (strcmp(cmd_type, "hangup_call") == 0) {
+        is_on_call = false;
+        current_call_id[0] = '\0';
+        remote_id[0] = '\0';
+        *out_result_msg = "通话已结束";
+        return true;
+    }
+
+    *out_result_msg = "未识别的指令或设备故障";
+    return false;
+}
 
 // --- 辅助组包函数 (规范化数据上报) ---
 
 // 发布设备上线状态 (规范 6.1.1)
 void publish_device_online_status() {
+    if (!s_network_ready) {
+        ESP_LOGW(TAG, "网络未就绪，跳过上线状态上报");
+        return;
+    }
+
     char topic[128];
     snprintf(topic, sizeof(topic), "hotel/device/status/room/%s", device_id);
 
@@ -49,6 +154,10 @@ void publish_device_online_status() {
 
 // 辅助函数：上报单项传感器数据 (规范 4.2.2)
 void publish_sensor_data(const char *sensor_type, double value, const char *unit) {
+    if (!s_network_ready) {
+        return;
+    }
+
     char topic[128];
     snprintf(topic, sizeof(topic), "hotel/device/data/%s/%s", sensor_type, device_id);
 
@@ -71,6 +180,11 @@ void publish_sensor_data(const char *sensor_type, double value, const char *unit
 
 // 上报安全事件 (规范 4.2.5)
 void publish_security_door_event() {
+    if (!s_network_ready) {
+        ESP_LOGW(TAG, "网络未就绪，跳过安防事件上报");
+        return;
+    }
+
     char timestamp[32];
     service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
 
@@ -97,6 +211,7 @@ void publish_security_door_event() {
 
 // MQTT 消息接收回调 (处理云端指令，规范 4.2.3 和 4.2.4)
 void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
+    (void)topic;
     ESP_LOGI(TAG, "==== 收到云端 MQTT 指令 ====");
     
     // 解析 JSON
@@ -112,55 +227,12 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
     if (cJSON_IsNumber(cmd_id_item) && cJSON_IsString(cmd_type_item)) {
         int cmd_id = cmd_id_item->valueint;
         const char *cmd_type = cmd_type_item->valuestring;
-        bool exec_success = false;
+        const char *result_msg = "未识别的指令或设备故障";
 
         ESP_LOGI(TAG, "执行指令: %s (ID: %d)", cmd_type, cmd_id);
 
-        // 简单清晰的指令分发逻辑 (查阅文档 A. 常用命令类型)
-        if (strcmp(cmd_type, "light_on") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, true);
-            exec_success = true;
-        } else if (strcmp(cmd_type, "light_off") == 0) {
-            hal_actuators_set_state(ACTUATOR_LIGHT_MAIN, false);
-            exec_success = true;
-        } else if (strcmp(cmd_type, "door_unlock") == 0) {
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true);
-            exec_success = true;
-        } else if (strcmp(cmd_type, "incoming_call") == 0) {
-            cJSON *call_id = cJSON_GetObjectItem(root, "call_id");
-            cJSON *caller_id = cJSON_GetObjectItem(root, "caller_id");
-            if (call_id && caller_id) {
-                strncpy(current_call_id, call_id->valuestring, sizeof(current_call_id));
-                strncpy(remote_id, caller_id->valuestring, sizeof(remote_id));
-                is_on_call = true;
-                exec_success = true;
-            }
-        } else if (strcmp(cmd_type, "hangup_call") == 0) {
-            is_on_call = false;
-            exec_success = true;
-        }
-
-        // 上报执行结果回执 (规范 4.2.4)
-        char timestamp[32];
-        service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
-
-        cJSON *reply = cJSON_CreateObject();
-        cJSON_AddStringToObject(reply, "device_id", device_id);
-        cJSON_AddNumberToObject(reply, "command_id", cmd_id);
-        cJSON_AddStringToObject(reply, "command_type", cmd_type);
-        cJSON_AddStringToObject(reply, "status", exec_success ? "success" : "failed");
-        if (exec_success) {
-            cJSON_AddStringToObject(reply, "result", "执行成功");
-        } else {
-            cJSON_AddStringToObject(reply, "result", "未识别的指令或设备故障");
-        }
-        cJSON_AddStringToObject(reply, "timestamp", timestamp);
-
-        char *reply_str = cJSON_PrintUnformatted(reply);
-        service_mqtt_publish("hotel/device/command/result", reply_str);
-        
-        free(reply_str);
-        cJSON_Delete(reply);
+        bool exec_success = execute_room_command(cmd_type, root, &result_msg);
+        publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
         
         // 界面及声音反馈
         driver_oled_show_text_line(2, cmd_type);
@@ -174,12 +246,13 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
 // 网络连接状态回调
 void on_network_status_changed(bool connected, const char* ip_address) {
     if (connected) {
+        s_network_ready = true;
         char msg[32];
         snprintf(msg, sizeof(msg), "IP:%s", ip_address);
         driver_oled_show_text_line(1, msg);
         
         // 连上网后，使用统一的宏地址启动 MQTT
-        service_mqtt_start(GLOBAL_MQTT_BROKER_URI, device_id);
+        service_mqtt_start(mqtt_broker_uri, device_id);
         
         // 订阅房间专属控制指令 (规范 11.4)
         char sub_topic[128];
@@ -191,6 +264,9 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         
         // 发布规范的上线状态
         publish_device_online_status();
+    } else {
+        s_network_ready = false;
+        ESP_LOGW(TAG, "网络已断开，进入离线降级模式");
     }
 }
 
@@ -198,11 +274,15 @@ void on_network_status_changed(bool connected, const char* ip_address) {
 
 // 定_时传感器采集任务
 void task_sensor_monitor(void *pvParameters) {
+    (void)pvParameters;
     ESP_LOGI(TAG, "传感器监控任务启动...");
     sensor_data_t env_data;
     
     while(1) {
-        vTaskDelay(pdMS_TO_TICKS(15000)); // 每15秒采一次，避免刷屏
+        vTaskDelay(SENSOR_TASK_PERIOD); // 每15秒采一次，避免刷屏
+        if (!s_network_ready) {
+            continue;
+        }
         
         // 读取真实的传感器层数据 (在没插真外设时是 Mock 的固定值)
         hal_sensors_read_all(&env_data);
@@ -220,11 +300,8 @@ void task_sensor_monitor(void *pvParameters) {
 
 // --- 语音通话相关任务 (新) ---
 
-static bool is_on_call = false;
-static char current_call_id[64] = "";
-static char remote_id[32] = "";
-
 void task_voice_call(void *pvParameters) {
+    (void)pvParameters;
     uint8_t audio_buffer[1024];
     size_t read_len = 0;
     
@@ -236,7 +313,7 @@ void task_voice_call(void *pvParameters) {
                 ESP_LOGD(TAG, "正在通话中，录制并发送音频块: %zu Bytes", read_len);
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(100)); 
+        vTaskDelay(VOICE_TASK_PERIOD);
     }
 }
 
@@ -266,9 +343,8 @@ void app_main(void)
     driver_oled_show_text_line(0, "System Booting...");
 
     // 3. 从 NVS 读取当前房号，严格拼接规范的 Client ID
-    if (service_network_read_nvs_string("Room_ID", current_room_id, sizeof(current_room_id)) != ESP_OK) {
-        strncpy(current_room_id, "301", sizeof(current_room_id));
-    }
+    load_nvs_string_with_fallback("Room_ID", current_room_id, sizeof(current_room_id), "301");
+    load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);
     snprintf(device_id, sizeof(device_id), "room_%s", current_room_id);
     
     char boot_msg[32];
@@ -279,14 +355,16 @@ void app_main(void)
     ESP_LOGI(TAG, "--- 启动网络服务 ---");
     service_network_provisioning_start(on_network_status_changed);
 
-    // 5. 挂载持续运行的业务逻辑任务 (双核分配)
+    // 5. 挂载持续运行的业务逻辑任务
     ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 ---");
-    xTaskCreatePinnedToCore(task_sensor_monitor, "Sensor_Task", 4096, NULL, 5, NULL, 1);
-    xTaskCreate(task_voice_call, "voice_call_task", 4096, NULL, 5, NULL);
+    // sensor_task: 只负责采集+上报
+    xTaskCreatePinnedToCore(task_sensor_monitor, "sensor_task", 4096, NULL, 5, NULL, 1);
+    // voice_task: 只负责通话态音频处理
+    xTaskCreate(task_voice_call, "voice_task", 4096, NULL, 5, NULL);
 
-    // 6. 主线程死循环 (模拟突发的安防事件：刷卡开门)
+    // 6. main 仅做守护与轻量模拟事件
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(30000)); // 每30秒模拟一次开门 
+        vTaskDelay(MAIN_GUARD_PERIOD); // 每30秒模拟一次开门
         
         ESP_LOGI(TAG, "--- (主线程模拟) 突发事件：住客刷房卡！ ---");
         uint8_t sector_data[16];
@@ -295,15 +373,15 @@ void app_main(void)
         uint8_t key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         
         if (driver_rc522_read_sector(1, key, sector_data) == ESP_OK) {
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true); // 开门
+            hal_actuators_set_state(ACTUATOR_RELAY_CH4, true); // 开门
             hal_interactive_beep(1, 200); // 短鸣1声
             hal_interactive_set_led_color(0, 0, 255, 0); // 亮绿灯
             
             // 按规范上报带时间戳和 event_data 嵌套的安防 JSON 报文
             publish_security_door_event();
             
-            vTaskDelay(pdMS_TO_TICKS(3000));
-            hal_actuators_set_state(ACTUATOR_DOOR_LOCK, false); // 3秒后关门锁
+            vTaskDelay(DOOR_UNLOCK_HOLD_PERIOD);
+            hal_actuators_set_state(ACTUATOR_RELAY_CH4, false); // 3秒后关门锁
         }
     }
 }

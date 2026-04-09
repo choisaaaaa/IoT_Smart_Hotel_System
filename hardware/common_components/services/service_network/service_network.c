@@ -31,12 +31,30 @@ esp_err_t service_network_provisioning_start(network_status_cb_t cb) {
 }
 
 esp_err_t service_network_read_nvs_string(const char* key, char* out_value, size_t max_len) {
-    if (key == NULL || out_value == NULL) return ESP_ERR_INVALID_ARG;
+    if (key == NULL || out_value == NULL || max_len == 0) return ESP_ERR_INVALID_ARG;
 
-    // 假设业务层想读取 "Room_ID"
     if (strcmp(key, "Room_ID") == 0) {
-        strncpy(out_value, "301", max_len);
+        strncpy(out_value, "301", max_len - 1);
+        out_value[max_len - 1] = '\0';
         ESP_LOGI(TAG, "[MOCK] NVS 虚拟读取: 查找到键值 %s，返回固定房号: 301", key);
+        return ESP_OK;
+    }
+    if (strcmp(key, "Floor_ID") == 0) {
+        strncpy(out_value, "03", max_len - 1);
+        out_value[max_len - 1] = '\0';
+        ESP_LOGI(TAG, "[MOCK] NVS 虚拟读取: 查找到键值 %s，返回固定楼层: 03", key);
+        return ESP_OK;
+    }
+    if (strcmp(key, "FrontDesk_ID") == 0) {
+        strncpy(out_value, "01", max_len - 1);
+        out_value[max_len - 1] = '\0';
+        ESP_LOGI(TAG, "[MOCK] NVS 虚拟读取: 查找到键值 %s，返回固定前台编号: 01", key);
+        return ESP_OK;
+    }
+    if (strcmp(key, "MQTT_BROKER_URI") == 0) {
+        strncpy(out_value, "mqtt://192.168.1.100:1883", max_len - 1);
+        out_value[max_len - 1] = '\0';
+        ESP_LOGI(TAG, "[MOCK] NVS 虚拟读取: 查找到键值 %s，返回固定 Broker 地址", key);
         return ESP_OK;
     }
 

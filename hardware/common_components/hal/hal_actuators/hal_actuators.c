@@ -4,6 +4,7 @@
 #include "global_config.h"
 
 static const char *TAG = "HAL_ACTUATORS";
+static bool s_relay_active_low = true;
 
 // 配置数组，按 actuator_type_t 顺序映射
 static const int relay_pins[] = {
@@ -12,6 +13,14 @@ static const int relay_pins[] = {
     GLOBAL_RELAY_CH3_PIN,
     GLOBAL_RELAY_CH4_PIN
 };
+
+static int relay_level_from_state(bool state_on)
+{
+    if (s_relay_active_low) {
+        return state_on ? 0 : 1;
+    }
+    return state_on ? 1 : 0;
+}
 
 esp_err_t hal_actuators_init(void) {
     ESP_LOGI(TAG, "初始化 4路继电器控制");
@@ -26,10 +35,18 @@ esp_err_t hal_actuators_init(void) {
                 .pull_down_en = GPIO_PULLDOWN_DISABLE,
                 .intr_type = GPIO_INTR_DISABLE,
             };
-            gpio_config(&cfg);
-            // 继电器默认关闭 (低有效控制时，输出高电平断开)
-            // 假设默认继电器模块是低电平有效，初始化时拉高
-            gpio_set_level(pin, 1);
+            esp_err_t err = gpio_config(&cfg);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "继电器 GPIO%d 配置失败: %s", pin, esp_err_to_name(err));
+                return err;
+            }
+
+            // 默认关闭继电器，按当前有效电平策略计算 GPIO 电平
+            err = gpio_set_level(pin, relay_level_from_state(false));
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "继电器 GPIO%d 默认电平设置失败: %s", pin, esp_err_to_name(err));
+                return err;
+            }
         }
     }
     return ESP_OK;
@@ -46,10 +63,19 @@ esp_err_t hal_actuators_set_state(actuator_type_t type, bool state) {
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    // 假设继电器为低电平吸合(Active Low): state=true 时输出0, state=false 时输出1
-    int level = state ? 0 : 1;
-    gpio_set_level(pin, level);
+    int level = relay_level_from_state(state);
+    esp_err_t err = gpio_set_level(pin, level);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "继电器 CH%d(GPIO %d) 设置失败: %s", type + 1, pin, esp_err_to_name(err));
+        return err;
+    }
     
     ESP_LOGI(TAG, "设置继电器 CH%d (GPIO %d) -> %s", type + 1, pin, state ? "ON" : "OFF");
     return ESP_OK;
+}
+
+void hal_actuators_set_active_level(bool active_low)
+{
+    s_relay_active_low = active_low;
+    ESP_LOGI(TAG, "继电器有效电平已更新: %s", active_low ? "LOW_ACTIVE" : "HIGH_ACTIVE");
 }

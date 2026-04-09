@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
+import { initWebSocket, disconnectWebSocket } from '@/utils/websocket'
 import type { ApiResponse } from '@/types'
 
 export function normalizeRole(role?: string): string {
@@ -98,12 +99,15 @@ class AuthService {
     )
     const { token: jwtToken, user } = res.data!
     const normalizedUser = { ...user, role: normalizeRole(user.role) }
-    
+
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
     const appStore = useAppStore()
     appStore.setUserInfo(normalizedUser)
-    
+
+    // 初始化 WebSocket 并自动上线
+    initWebSocket()
+
     return { token: jwtToken, user: normalizedUser }
   }
 
@@ -115,12 +119,15 @@ class AuthService {
     )
     const { token: jwtToken, user } = res.data!
     const normalizedUser = { ...user, role: normalizeRole(user.role) }
-    
+
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
     const appStore = useAppStore()
     appStore.setUserInfo(normalizedUser)
-    
+
+    // 初始化 WebSocket 并自动上线
+    initWebSocket()
+
     return { token: jwtToken, user: normalizedUser }
   }
 
@@ -136,9 +143,12 @@ class AuthService {
     } catch (error) {
       console.error('登出失败:', error)
     } finally {
+      // 断开 WebSocket 连接
+      disconnectWebSocket()
       // 清除本地存储
       const appStore = useAppStore()
       appStore.setUserInfo(null)
+      appStore.setRegistration(false, '')
     }
   }
 

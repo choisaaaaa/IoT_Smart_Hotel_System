@@ -1,7 +1,7 @@
 #include "driver_ir_tx.h"
 #include "hal_log.h"
 #include "driver/gpio.h"
-#include "esp_rom/ets_sys.h"
+#include "esp_rom_sys.h"
 
 static const char *TAG = "DRIVER_IR_TX";
 
@@ -12,9 +12,9 @@ static int s_pin = -1;
 static inline void carrier_half_cycle(void)
 {
     gpio_set_level(s_pin, 1);
-    ets_delay_us(13);
+    esp_rom_delay_us(13);
     gpio_set_level(s_pin, 0);
-    ets_delay_us(13);
+    esp_rom_delay_us(13);
 }
 
 static void send_mark_us(int duration_us)
@@ -29,7 +29,7 @@ static void send_mark_us(int duration_us)
 static void send_space_us(int duration_us)
 {
     gpio_set_level(s_pin, 0);
-    ets_delay_us((uint32_t)duration_us);
+    esp_rom_delay_us((uint32_t)duration_us);
 }
 
 static void send_nec_bit(bool bit1)

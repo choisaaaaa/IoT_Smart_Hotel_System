@@ -35,9 +35,10 @@ app.use(expressWinston.logger({
 // 静态资源服务
 app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
+// 请求频率限制（已放宽）
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000, // 增加限制到 1000 次每 15 分钟，避免管理端高频操作触发 429
+  windowMs: 1 * 60 * 1000, // 1分钟窗口
+  max: 1000, // 每分钟最多1000个请求
   message: '请求过于频繁，请稍后再试',
   validate: false
 });
