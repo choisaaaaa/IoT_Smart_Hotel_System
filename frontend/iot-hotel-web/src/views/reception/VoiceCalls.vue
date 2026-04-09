@@ -102,21 +102,40 @@
       width="320px"
     >
       <div class="incoming-call-content">
-        <div class="pulse-container">
-          <div class="pulse-ring"></div>
-          <PhoneOutlined class="call-icon" />
-        </div>
-        <h2 class="caller-name">{{ incomingCallModal.callerName }}</h2>
-        <p class="caller-id">{{ incomingCallModal.callerId }} 正在呼叫...</p>
+        <!-- 响铃中状态 -->
+        <template v-if="incomingCallModal.status === 'ringing'">
+          <div class="pulse-container">
+            <div class="pulse-ring"></div>
+            <PhoneOutlined class="call-icon" />
+          </div>
+          <h2 class="caller-name">{{ incomingCallModal.callerName }}</h2>
+          <p class="caller-id">{{ incomingCallModal.callerId }} 正在呼叫...</p>
+          
+          <div class="modal-actions">
+            <a-button type="primary" shape="round" size="large" block @click="handleIncomingAccept" class="accept-btn">
+              <template #icon><PhoneOutlined /></template> 接听
+            </a-button>
+            <a-button danger shape="round" size="large" block @click="handleIncomingReject" class="reject-btn" style="margin-top: 12px">
+              <template #icon><CloseOutlined /></template> 挂断
+            </a-button>
+          </div>
+        </template>
         
-        <div class="modal-actions">
-          <a-button type="primary" shape="round" size="large" block @click="handleIncomingAccept" class="accept-btn">
-            <template #icon><PhoneOutlined /></template> 接听
-          </a-button>
-          <a-button danger shape="round" size="large" block @click="handleIncomingReject" class="reject-btn" style="margin-top: 12px">
-            <template #icon><CloseOutlined /></template> 挂断
-          </a-button>
-        </div>
+        <!-- 通话中状态 -->
+        <template v-else-if="incomingCallModal.status === 'connected'">
+          <div class="pulse-container">
+            <PhoneOutlined class="call-icon" style="color: #52c41a;" />
+          </div>
+          <h2 class="caller-name">{{ incomingCallModal.callerName }}</h2>
+          <p class="caller-id">通话中...</p>
+          <p class="call-duration">{{ currentDuration }}</p>
+          
+          <div class="modal-actions">
+            <a-button danger shape="round" size="large" block @click="handleIncomingReject" class="reject-btn">
+              <template #icon><CloseOutlined /></template> 挂断
+            </a-button>
+          </div>
+        </template>
       </div>
     </a-modal>
 
@@ -163,6 +182,8 @@ const stats = reactive({
   avg_duration_sec: 0
 })
 const users = ref<any[]>([])
+const durationTimer = ref<NodeJS.Timeout | null>(null)
+const currentDuration = ref('00:00')
 const activeTab = ref('all')
 const onlineStatus = ref<{ web: any[], rooms: any[] }>({ web: [], rooms: [] })
 
@@ -171,11 +192,13 @@ const clientDisplayName = ref('')
 const socketConnected = ref(false)
 
 const incomingCallModal = reactive({
-  visible: false, // 本地不再使用，改用全局
+  visible: false,
   callId: '',
   callerId: '',
   callerName: '',
-  callerType: ''
+  callerType: '',
+  status: 'ringing' as 'ringing' | 'connected' | 'ended',
+  startTime: null as number | null
 })
 
 // 监听全局通话状态变化
@@ -395,6 +418,8 @@ function setupSignalingListeners() {
     incomingCallModal.callerId = data.caller_id
     incomingCallModal.callerName = data.caller_name || data.caller_id
     incomingCallModal.callerType = data.caller_type
+    incomingCallModal.status = 'ringing'
+    incomingCallModal.startTime = null
     incomingCallModal.visible = true
     fetchCalls()
   })
@@ -403,11 +428,13 @@ function setupSignalingListeners() {
     onlineStatus.value = data
   })
   socket.on('webrtc_offer', async (data) => {
-    if (!peerConnection.value) await initWebRTC(data.call_id, data.from_type, data.from_id)
-    await peerConnection.value?.setRemoteDescription(new RTCSessionDescription(data.offer))
-    const answer = await peerConnection.value?.createAnswer()
-    await peerConnection.value?.setLocalDescription(answer)
-    socket.emit('webrtc_answer', { target_type: data.from_type, target_id: data.from_id, answer, call_id: data.call_id })
+    // 只有在已创建 peerConnection 的情况下才处理（即用户已点击接听）
+    if (peerConnection.value) {
+      await peerConnection.value?.setRemoteDescription(new RTCSessionDescription(data.offer))
+      const answer = await peerConnection.value?.createAnswer()
+      await peerConnection.value?.setLocalDescription(answer)
+      socket.emit('webrtc_answer', { target_type: data.from_type, target_id: data.from_id, answer, call_id: data.call_id })
+    }
   })
   socket.on('webrtc_answer', async (data) => {
     if (peerConnection.value) await peerConnection.value.setRemoteDescription(new RTCSessionDescription(data.answer))
@@ -416,9 +443,30 @@ function setupSignalingListeners() {
   socket.on('webrtc_ice_candidate', async (data) => {
     if (peerConnection.value) try { await peerConnection.value.addIceCandidate(new RTCIceCandidate(data.candidate)) } catch (e) {}
   })
-  socket.on('call_answered', () => { message.success('通话已接通'); fetchCalls(); })
-  socket.on('call_rejected', () => { message.warning('通话被拒接'); cleanupWebRTC(); incomingCallModal.visible = false; fetchCalls(); })
-  socket.on('call_hungup', () => { message.info('通话已挂断'); cleanupWebRTC(); incomingCallModal.visible = false; fetchCalls(); })
+  socket.on('call_answered', () => { 
+    message.success('通话已接通')
+    incomingCallModal.status = 'connected'
+    incomingCallModal.startTime = Date.now()
+    // 启动定时器更新通话时长
+    durationTimer.value = setInterval(() => {
+      currentDuration.value = formatDuration(incomingCallModal.startTime)
+    }, 1000)
+    fetchCalls()
+  })
+  socket.on('call_rejected', () => { 
+    message.warning('通话被拒接')
+    if (durationTimer.value) { clearInterval(durationTimer.value); durationTimer.value = null }
+    cleanupWebRTC()
+    incomingCallModal.visible = false
+    fetchCalls()
+  })
+  socket.on('call_hungup', () => { 
+    message.info('通话已挂断')
+    if (durationTimer.value) { clearInterval(durationTimer.value); durationTimer.value = null }
+    cleanupWebRTC()
+    incomingCallModal.visible = false
+    fetchCalls()
+  })
 }
 
 async function handleIncomingAccept() {
@@ -468,6 +516,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cleanupWebRTC()
+  if (durationTimer.value) { clearInterval(durationTimer.value); durationTimer.value = null }
   const socket = getSocket()
   if (socket) {
     socket.off('incoming_call'); socket.off('webrtc_offer'); socket.off('webrtc_answer');
@@ -486,8 +535,18 @@ const historyColumns = [
 function statusColor(status: string) {
   return ({ calling: 'processing', connected: 'success', ended: 'default', rejected: 'error' } as any)[status] || 'default'
 }
+
 function statusText(status: string) {
   return ({ calling: '呼叫中', connected: '已接通', ended: '已结束', rejected: '已拒接' } as any)[status] || status
+}
+
+// 格式化通话时长
+function formatDuration(startTime: number | null): string {
+  if (!startTime) return '00:00'
+  const elapsed = Math.floor((Date.now() - startTime) / 1000)
+  const minutes = Math.floor(elapsed / 60)
+  const seconds = elapsed % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 </script>
 
