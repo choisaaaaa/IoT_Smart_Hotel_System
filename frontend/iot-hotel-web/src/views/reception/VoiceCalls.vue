@@ -18,16 +18,36 @@
       </a-col>
     </a-row>
 
-    <a-card title="发起语音通话" style="margin-top: 16px;">
+    <a-card title="前台分机设置" style="margin-bottom: 16px;">
       <a-form layout="inline">
-        <a-form-item label="前台分机">
-          <a-input v-model:value="callForm.caller_id" placeholder="例如 FD-01" style="width: 160px;" />
-        </a-form-item>
-        <a-form-item label="目标房间">
-          <a-input v-model:value="callForm.callee_id" placeholder="输入房号或 room_id" style="width: 180px;" />
+        <a-form-item label="当前分机 ID">
+          <a-input v-model:value="callForm.caller_id" placeholder="例如 FD-01" style="width: 160px;" :disabled="isRegistered" />
         </a-form-item>
         <a-form-item>
-          <a-button type="primary" @click="startCall" :loading="calling">发起呼叫</a-button>
+          <a-button :type="isRegistered ? 'default' : 'primary'" @click="toggleRegister">
+            {{ isRegistered ? '退出/修改' : '上线注册' }}
+          </a-button>
+          <a-tag v-if="isRegistered" color="success" style="margin-left: 8px;">
+            在线: {{ clientDisplayName }}
+          </a-tag>
+        </a-form-item>
+      </a-form>
+    </a-card>
+
+    <a-card title="发起语音通话">
+      <a-form layout="inline">
+        <a-form-item label="目标类型">
+          <a-select v-model:value="callForm.callee_type" style="width: 120px;">
+            <a-select-option value="room">客房硬件</a-select-option>
+            <a-select-option value="front_desk">前台管理</a-select-option>
+            <a-select-option value="app">手机APP</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="目标 ID">
+          <a-input v-model:value="callForm.callee_id" placeholder="输入房号或用户ID" style="width: 180px;" />
+        </a-form-item>
+        <a-form-item>
+          <a-button type="primary" @click="startCall" :loading="calling" :disabled="!isRegistered">发起呼叫</a-button>
         </a-form-item>
       </a-form>
     </a-card>
@@ -35,6 +55,9 @@
     <a-card title="当前通话" style="margin-top: 16px;">
       <a-table :columns="activeColumns" :data-source="activeCalls" :pagination="false" row-key="call_id" size="middle">
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'caller'">
+            {{ record.caller_name || record.caller_id }}
+          </template>
           <template v-if="column.key === 'status'">
             <a-tag :color="statusColor(record.status)">{{ statusText(record.status) }}</a-tag>
           </template>
@@ -64,9 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { callApi } from '@/api/call'
+import { getSocket } from '@/utils/websocket'
 
 const calling = ref(false)
 const activeCalls = ref<any[]>([])
@@ -78,12 +102,56 @@ const stats = reactive({
 
 const callForm = reactive({
   caller_id: 'FD-01',
-  callee_id: ''
+  callee_id: '',
+  callee_type: 'front_desk' // 默认改为前台，方便测试
 })
+
+const isRegistered = ref(false)
+const clientDisplayName = ref('')
+
+function toggleRegister() {
+  const socket = getSocket()
+  if (!socket) {
+    message.error('WebSocket 未连接')
+    return
+  }
+
+  if (isRegistered.value) {
+    isRegistered.value = false
+    clientDisplayName.value = ''
+    message.info('已下线，分机号已释放')
+  } else {
+    if (!callForm.caller_id) {
+      message.warning('请输入分机 ID 或用户名')
+      return
+    }
+    // 向后端发送注册请求
+    socket.emit('register_client', {
+      clientType: 'front_desk',
+      clientId: callForm.caller_id
+    })
+    
+    // 监听注册结果
+    socket.once('registered', (data: any) => {
+      isRegistered.value = true
+      clientDisplayName.value = data.clientName
+      message.success(`欢迎回来，${data.clientName}`)
+    })
+
+    socket.once('error', (err: any) => {
+      message.error(err.message || '注册失败')
+    })
+  }
+}
+
+// WebRTC 状态
+const peerConnection = ref<RTCPeerConnection | null>(null)
+const localStream = ref<MediaStream | null>(null)
+const remoteAudio = ref<HTMLAudioElement | null>(null)
 
 const activeColumns = [
   { title: '通话 ID', dataIndex: 'call_id', width: 200 },
-  { title: '主叫', dataIndex: 'caller_id', width: 120 },
+  { title: '主叫', key: 'caller', width: 150 },
   { title: '被叫', dataIndex: 'callee_id', width: 120 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '开始时间', dataIndex: 'started_at', width: 180 },
@@ -137,20 +205,86 @@ async function fetchCalls() {
   }
 }
 
+// --- WebRTC Logic ---
+
+const iceServers = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+}
+
+async function initWebRTC(callId: string, targetType: string, targetId: string) {
+  if (peerConnection.value) {
+    peerConnection.value.close()
+  }
+
+  peerConnection.value = new RTCPeerConnection(iceServers)
+
+  // 获取本地音频
+  try {
+    localStream.value = await navigator.mediaDevices.getUserMedia({ audio: true })
+    localStream.value.getTracks().forEach(track => {
+      peerConnection.value?.addTrack(track, localStream.value!)
+    })
+  } catch (err) {
+    message.error('无法访问麦克风，请检查权限设置')
+    return false
+  }
+
+  // 接收远程音频流
+  peerConnection.value.ontrack = (event) => {
+    if (!remoteAudio.value) {
+      remoteAudio.value = new Audio()
+    }
+    remoteAudio.value.srcObject = event.streams[0]
+    remoteAudio.value.play().catch(e => console.error('音频播放失败:', e))
+  }
+
+  // 转发 ICE 候选
+  peerConnection.value.onicecandidate = (event) => {
+    if (event.candidate) {
+      const socket = getSocket()
+      socket?.emit('webrtc_ice_candidate', {
+        target_type: targetType,
+        target_id: targetId,
+        candidate: event.candidate,
+        call_id: callId
+      })
+    }
+  }
+
+  return true
+}
+
 async function startCall() {
   if (!callForm.caller_id || !callForm.callee_id) {
-    message.warning('请输入前台分机和目标房间')
+    message.warning('请输入前台分机和目标 ID')
     return
   }
   calling.value = true
   try {
-    await callApi.outbound({
+    const res = await callApi.outbound({
       caller_id: callForm.caller_id,
-      callee_type: 'room',
+      callee_type: callForm.callee_type,
       callee_id: callForm.callee_id,
       caller_type: 'front_desk'
     })
+    
+    const callData = (res as any).data
     message.success('已发起语音呼叫')
+    
+    // 初始化 WebRTC 并发送 Offer
+    if (await initWebRTC(callData.call_id, callForm.callee_type, callData.callee_id)) {
+      const offer = await peerConnection.value?.createOffer()
+      await peerConnection.value?.setLocalDescription(offer)
+      
+      const socket = getSocket()
+      socket?.emit('webrtc_offer', {
+        target_type: 'room',
+        target_id: callData.callee_id,
+        offer,
+        call_id: callData.call_id
+      })
+    }
+    
     callForm.callee_id = ''
     await fetchCalls()
   } catch (error) {
@@ -164,6 +298,13 @@ async function answer(callId: string) {
   try {
     await callApi.answer(callId)
     message.success('已接听')
+    
+    const call = activeCalls.value.find(c => c.call_id === callId)
+    if (call) {
+      // 被叫接听，初始化 WebRTC 等待 Offer
+      await initWebRTC(callId, call.caller_type, call.caller_id)
+    }
+    
     await fetchCalls()
   } catch (error) {
     message.error('接听失败')
@@ -173,6 +314,7 @@ async function answer(callId: string) {
 async function hangup(callId: string) {
   try {
     await callApi.hangup(callId)
+    cleanupWebRTC()
     message.success('已挂断')
     await fetchCalls()
   } catch (error) {
@@ -180,5 +322,102 @@ async function hangup(callId: string) {
   }
 }
 
-onMounted(fetchCalls)
+function cleanupWebRTC() {
+  if (peerConnection.value) {
+    peerConnection.value.close()
+    peerConnection.value = null
+  }
+  if (localStream.value) {
+    localStream.value.getTracks().forEach(track => track.stop())
+    localStream.value = null
+  }
+  if (remoteAudio.value) {
+    remoteAudio.value.pause()
+    remoteAudio.value.srcObject = null
+    remoteAudio.value = null
+  }
+}
+
+// 注册信令监听
+function setupSignalingListeners() {
+  const socket = getSocket()
+  if (!socket) return
+
+  socket.on('incoming_call', (data) => {
+    message.info(`收到来自 ${data.caller_name || data.caller_id} 的呼叫`)
+    fetchCalls()
+  })
+
+  socket.on('webrtc_offer', async (data) => {
+    console.log('收到 WebRTC Offer:', data)
+    if (!peerConnection.value) {
+      await initWebRTC(data.call_id, data.from_type, data.from_id)
+    }
+    
+    await peerConnection.value?.setRemoteDescription(new RTCSessionDescription(data.offer))
+    const answer = await peerConnection.value?.createAnswer()
+    await peerConnection.value?.setLocalDescription(answer)
+    
+    socket.emit('webrtc_answer', {
+      target_type: data.from_type,
+      target_id: data.from_id,
+      answer,
+      call_id: data.call_id
+    })
+  })
+
+  socket.on('webrtc_answer', async (data) => {
+    console.log('收到 WebRTC Answer:', data)
+    if (peerConnection.value) {
+      await peerConnection.value.setRemoteDescription(new RTCSessionDescription(data.answer))
+    }
+  })
+
+  socket.on('webrtc_ice_candidate', async (data) => {
+    console.log('收到 WebRTC ICE Candidate:', data)
+    if (peerConnection.value) {
+      try {
+        await peerConnection.value.addIceCandidate(new RTCIceCandidate(data.candidate))
+      } catch (e) {
+        console.error('添加 ICE Candidate 失败:', e)
+      }
+    }
+  })
+
+  socket.on('call_answered', (data) => {
+    message.success('通话已接通')
+    fetchCalls()
+  })
+
+  socket.on('call_rejected', (data) => {
+    message.warning('通话被拒接')
+    cleanupWebRTC()
+    fetchCalls()
+  })
+
+  socket.on('call_hungup', (data) => {
+    message.info('通话已挂断')
+    cleanupWebRTC()
+    fetchCalls()
+  })
+}
+
+onMounted(() => {
+  fetchCalls()
+  setupSignalingListeners()
+})
+
+onUnmounted(() => {
+  cleanupWebRTC()
+  const socket = getSocket()
+  if (socket) {
+    socket.off('incoming_call')
+    socket.off('webrtc_offer')
+    socket.off('webrtc_answer')
+    socket.off('webrtc_ice_candidate')
+    socket.off('call_answered')
+    socket.off('call_rejected')
+    socket.off('call_hungup')
+  }
+})
 </script>

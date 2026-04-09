@@ -126,6 +126,18 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
         } else if (strcmp(cmd_type, "door_unlock") == 0) {
             hal_actuators_set_state(ACTUATOR_DOOR_LOCK, true);
             exec_success = true;
+        } else if (strcmp(cmd_type, "incoming_call") == 0) {
+            cJSON *call_id = cJSON_GetObjectItem(root, "call_id");
+            cJSON *caller_id = cJSON_GetObjectItem(root, "caller_id");
+            if (call_id && caller_id) {
+                strncpy(current_call_id, call_id->valuestring, sizeof(current_call_id));
+                strncpy(remote_id, caller_id->valuestring, sizeof(remote_id));
+                is_on_call = true;
+                exec_success = true;
+            }
+        } else if (strcmp(cmd_type, "hangup_call") == 0) {
+            is_on_call = false;
+            exec_success = true;
         }
 
         // 上报执行结果回执 (规范 4.2.4)
@@ -184,7 +196,7 @@ void on_network_status_changed(bool connected, const char* ip_address) {
 
 // --- 独立业务任务 (FreeRTOS) ---
 
-// 定时传感器采集任务
+// 定_时传感器采集任务
 void task_sensor_monitor(void *pvParameters) {
     ESP_LOGI(TAG, "传感器监控任务启动...");
     sensor_data_t env_data;
@@ -203,6 +215,28 @@ void task_sensor_monitor(void *pvParameters) {
         // 分拆 Topic，按照规范格式发送
         publish_sensor_data("temperature", env_data.temperature, "℃");
         publish_sensor_data("humidity", env_data.humidity, "%");
+    }
+}
+
+// --- 语音通话相关任务 (新) ---
+
+static bool is_on_call = false;
+static char current_call_id[64] = "";
+static char remote_id[32] = "";
+
+void task_voice_call(void *pvParameters) {
+    uint8_t audio_buffer[1024];
+    size_t read_len = 0;
+    
+    while(1) {
+        if (is_on_call) {
+            // 1. 录制一段音频
+            if (hal_audio_record_chunk(audio_buffer, sizeof(audio_buffer), &read_len) == ESP_OK) {
+                // 2. 通过 MQTT 发送音频数据块 (演示用)
+                ESP_LOGD(TAG, "正在通话中，录制并发送音频块: %zu Bytes", read_len);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(100)); 
     }
 }
 
@@ -248,6 +282,7 @@ void app_main(void)
     // 5. 挂载持续运行的业务逻辑任务 (双核分配)
     ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 ---");
     xTaskCreatePinnedToCore(task_sensor_monitor, "Sensor_Task", 4096, NULL, 5, NULL, 1);
+    xTaskCreate(task_voice_call, "voice_call_task", 4096, NULL, 5, NULL);
 
     // 6. 主线程死循环 (模拟突发的安防事件：刷卡开门)
     while (1) {

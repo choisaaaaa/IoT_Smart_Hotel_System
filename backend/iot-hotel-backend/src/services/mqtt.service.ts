@@ -96,10 +96,10 @@ class MQTTService {
         
         try {
           const data = JSON.parse(msgStr);
-          await this.handleMessage(topic, data);
+          await this.handleMessage(topic, data, message);
         } catch (parseError) {
           logger.warn(`MQTT消息解析失败 [${topic}]: ${msgStr}`);
-          await this.handleMessage(topic, { raw: msgStr });
+          await this.handleMessage(topic, { raw: msgStr }, message);
         }
       });
     });
@@ -130,7 +130,9 @@ class MQTTService {
       'hotel/device/data/+',
       'hotel/device/command/result',
       'hotel/security/event',
-      'hotel/room/control/result'
+      'hotel/room/control/result',
+      'hotel/call/signaling/+',
+      'hotel/call/audio/+'
     ];
 
     topics.forEach((topic) => {
@@ -138,7 +140,17 @@ class MQTTService {
     });
   }
 
-  async handleMessage(topic: string, data: any) {
+  async handleMessage(topic: string, data: any, message: Buffer) {
+    // 处理通话相关的消息（可能没有标准的 device_id 字段）
+    if (topic.startsWith('hotel/call/signaling/')) {
+      await this.handleCallSignaling(topic, data);
+      return;
+    }
+    if (topic.startsWith('hotel/call/audio/')) {
+      await this.handleCallAudio(topic, message);
+      return;
+    }
+
     const deviceId = data.device_id;
     if (!deviceId) {
       logger.warn(`收到缺少 device_id 的消息 [${topic}]`);
@@ -215,6 +227,44 @@ class MQTTService {
       }
     } catch (error) {
       logger.error(`处理MQTT消息时发生错误: ${error}`);
+    }
+  }
+
+  async handleCallSignaling(topic: string, data: any) {
+    const callId = topic.split('/').pop();
+    logger.info(`收到硬件通话信令 [${callId}]: ${JSON.stringify(data)}`);
+    
+    if (this.wsInstance) {
+      // 将硬件发出的信令转发给对应的 Web/App 客户端
+      // 硬件通常发给与其通话的对象，data 中应包含 target_type 和 target_id
+      if (data.target_type && data.target_id) {
+        this.wsInstance.emitToClient(data.target_type, data.target_id, 'webrtc_signal', {
+          call_id: callId,
+          ...data
+        });
+      }
+    }
+  }
+
+  async handleCallAudio(topic: string, message: Buffer) {
+    const callId = topic.split('/').pop();
+    // 硬件发送的是原始音频二进制流
+    if (this.wsInstance) {
+      // 查找该通话的参与者并转发音频流
+      // 这里需要从数据库或内存中查找 callId 对应的接收者
+      const [rows] = await pool.query<RowDataPacket[]>(
+        'SELECT caller_type, caller_id, callee_type, callee_id FROM calls WHERE call_id = ?',
+        [callId]
+      );
+      
+      if (rows.length > 0) {
+        const call = rows[0];
+        // 假设硬件是 callee (房间)，发给 caller (前台/App)
+        this.wsInstance.emitToClient(call.caller_type, call.caller_id, 'audio_chunk', {
+          call_id: callId,
+          chunk: message
+        });
+      }
     }
   }
 
@@ -349,6 +399,24 @@ class MQTTService {
           resolve(false);
         } else {
           logger.debug(`发送MQTT消息成功 [${topic}]`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  async publishBinary(topic: string, message: Buffer): Promise<boolean> {
+    if (!this.connected || !this.client) {
+      logger.warn(`MQTT未连接，无法发送二进制消息到 ${topic}`);
+      return false;
+    }
+
+    return new Promise((resolve) => {
+      this.client!.publish(topic, message, { qos: 0, retain: false }, (err) => {
+        if (err) {
+          logger.error(`发送MQTT二进制消息失败 [${topic}]:`, err.message);
+          resolve(false);
+        } else {
           resolve(true);
         }
       });

@@ -11,6 +11,7 @@ interface ClientInfo {
   role?: string;
   clientType?: 'room' | 'front_desk' | 'ai' | 'app';
   clientId?: string;
+  clientName?: string; // 新增：客户端显示名称
   connectedAt: Date;
 }
 
@@ -103,11 +104,35 @@ class WebSocketService {
             socket.emit('error', { message: `无效的clientType，支持的值: ${validTypes.join(', ')}` });
             return;
           }
+
+          let displayName = data.clientId;
+
+          // 人员识别逻辑：如果是前台或APP，从数据库验证并获取用户名
+          if (data.clientType === 'front_desk' || data.clientType === 'app') {
+            const [rows] = await pool.query<RowDataPacket[]>(
+              'SELECT username, role FROM users WHERE id = ? OR username = ?',
+              [data.clientId, data.clientId]
+            );
+            if (rows.length === 0) {
+              socket.emit('error', { message: '身份验证失败：未找到该员工/用户' });
+              return;
+            }
+            displayName = rows[0].username;
+          } else if (data.clientType === 'room') {
+            const [rows] = await pool.query<RowDataPacket[]>(
+              'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+              [data.clientId, data.clientId]
+            );
+            if (rows.length > 0) {
+              displayName = `客房 ${rows[0].room_number}`;
+            }
+          }
           
           const info = this.clients.get(socket.id);
           if (info) {
             info.clientType = data.clientType;
             info.clientId = data.clientId;
+            info.clientName = displayName;
             
             switch (data.clientType) {
               case 'room':
@@ -128,10 +153,11 @@ class WebSocketService {
           socket.emit('registered', {
             clientType: data.clientType,
             clientId: data.clientId,
+            clientName: displayName,
             timestamp: new Date().toISOString()
           });
           
-          logger.info(`客户端 ${socket.id} 注册为: ${data.clientType}/${data.clientId}`);
+          logger.info(`客户端 ${socket.id} 注册为: ${data.clientType}/${displayName}`);
         } catch (error) {
           logger.error('注册客户端失败:', error);
           socket.emit('error', { message: '注册失败' });
@@ -254,6 +280,7 @@ class WebSocketService {
             call_id: callId,
             caller_type,
             caller_id,
+            caller_name: clientInfo?.clientName || caller_id, // 新增：主叫名称
             callee_type,
             callee_id,
             status: 'calling',
@@ -269,6 +296,114 @@ class WebSocketService {
         } catch (error) {
           logger.error('发起语音通话失败:', error);
           socket.emit('call_error', { message: '发起语音通话失败' });
+        }
+      });
+
+      // --- WebRTC 信令转发 ---
+      
+      socket.on('webrtc_offer', (data: { 
+        target_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+        target_id: string; 
+        offer: any;
+        call_id: string;
+      }) => {
+        logger.info(`转发 WebRTC Offer: ${socket.id} -> ${data.target_type}_${data.target_id}`);
+        
+        if (data.target_type === 'room') {
+          // 如果目标是房间硬件，转发到 MQTT
+          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            type: 'offer',
+            offer: data.offer,
+            target_type: 'room',
+            target_id: data.target_id
+          });
+        } else {
+          // 否则通过 WebSocket 转发
+          this.io?.to(`${data.target_type}_${data.target_id}`).emit('webrtc_offer', {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            offer: data.offer,
+            call_id: data.call_id
+          });
+        }
+      });
+
+      socket.on('webrtc_answer', (data: { 
+        target_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+        target_id: string; 
+        answer: any;
+        call_id: string;
+      }) => {
+        logger.info(`转发 WebRTC Answer: ${socket.id} -> ${data.target_type}_${data.target_id}`);
+        
+        if (data.target_type === 'room') {
+          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            type: 'answer',
+            answer: data.answer,
+            target_type: 'room',
+            target_id: data.target_id
+          });
+        } else {
+          this.io?.to(`${data.target_type}_${data.target_id}`).emit('webrtc_answer', {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            answer: data.answer,
+            call_id: data.call_id
+          });
+        }
+      });
+
+      socket.on('webrtc_ice_candidate', (data: { 
+        target_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+        target_id: string; 
+        candidate: any;
+        call_id: string;
+      }) => {
+        if (data.target_type === 'room') {
+          mqttService.publish(`hotel/call/signaling/${data.call_id}`, {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            type: 'ice_candidate',
+            candidate: data.candidate,
+            target_type: 'room',
+            target_id: data.target_id
+          });
+        } else {
+          this.io?.to(`${data.target_type}_${data.target_id}`).emit('webrtc_ice_candidate', {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            candidate: data.candidate,
+            call_id: data.call_id
+          });
+        }
+      });
+
+      // --- 硬件音频流转发 (WebSocket Binary) ---
+      
+      socket.on('audio_chunk', (data: { 
+        target_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+        target_id: string; 
+        chunk: Buffer | ArrayBuffer;
+        call_id: string;
+      }) => {
+        if (data.target_type === 'room') {
+          // Web/App 发出的音频流，通过 MQTT 转发给硬件
+          const audioBuffer = Buffer.isBuffer(data.chunk) 
+            ? data.chunk 
+            : Buffer.from(data.chunk as ArrayBuffer);
+          mqttService.publishBinary(`hotel/call/audio/${data.call_id}`, audioBuffer);
+        } else {
+          // 转发给其他 Web/App 终端
+          this.io?.to(`${data.target_type}_${data.target_id}`).emit('audio_chunk', {
+            from_type: this.clients.get(socket.id)?.clientType,
+            from_id: this.clients.get(socket.id)?.clientId,
+            chunk: data.chunk,
+            call_id: data.call_id
+          });
         }
       });
 
@@ -301,6 +436,15 @@ class WebSocketService {
           };
           
           socket.emit('call_answered', answerData);
+          
+          // 如果是拨给房间，通知硬件接通
+          if (callData.callee_type === 'room') {
+            mqttService.publish(`hotel/device/command/room/${callData.callee_id}`, {
+              command_id: Date.now(),
+              command_type: 'answer_call',
+              call_id: callId
+            });
+          }
           
           this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_answered', answerData);
           
@@ -340,6 +484,15 @@ class WebSocketService {
           };
           
           socket.emit('call_rejected', rejectData);
+          
+          // 如果是拨给房间，通知硬件拒接
+          if (callData.callee_type === 'room') {
+            mqttService.publish(`hotel/device/command/room/${callData.callee_id}`, {
+              command_id: Date.now(),
+              command_type: 'reject_call',
+              call_id: callId
+            });
+          }
           
           this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_rejected', rejectData);
           
@@ -386,8 +539,26 @@ class WebSocketService {
           
           socket.emit('call_hungup', hangupData);
           
-          this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_hungup', hangupData);
-          this.io?.to(`${callData.callee_type}_${callData.callee_id}`).emit('call_hungup', hangupData);
+          // 通知双方挂断，如果是房间则发 MQTT
+          if (callData.caller_type === 'room') {
+            mqttService.publish(`hotel/device/command/room/${callData.caller_id}`, {
+              command_id: Date.now(),
+              command_type: 'hangup_call',
+              call_id: callId
+            });
+          } else {
+            this.io?.to(`${callData.caller_type}_${callData.caller_id}`).emit('call_hungup', hangupData);
+          }
+
+          if (callData.callee_type === 'room') {
+            mqttService.publish(`hotel/device/command/room/${callData.callee_id}`, {
+              command_id: Date.now(),
+              command_type: 'hangup_call',
+              call_id: callId
+            });
+          } else {
+            this.io?.to(`${callData.callee_type}_${callData.callee_id}`).emit('call_hungup', hangupData);
+          }
           
           logger.info(`通话挂断: ${callId}, 时长: ${durationSec}秒`);
         } catch (error) {
