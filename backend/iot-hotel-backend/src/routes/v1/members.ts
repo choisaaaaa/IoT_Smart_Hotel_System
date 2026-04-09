@@ -4,7 +4,8 @@ import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), memberController.get);
+router.get('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), memberController.get);
+router.get('/me', authenticate as any, memberController.getMe);
 router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), memberController.getById);
 router.post('/', authenticate as any, authorize(['admin', 'system']), memberController.create);
 router.put('/:id', authenticate as any, authorize(['admin', 'system']), memberController.update);

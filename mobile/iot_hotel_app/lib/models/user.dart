@@ -4,6 +4,7 @@ class User {
   final int id;
   final String username;
   final String? email;
+  final String? phone;
   final String role;
   @JsonKey(name: 'avatar')
   final String? avatar;
@@ -16,6 +17,7 @@ class User {
     required this.id,
     required this.username,
     this.email,
+    this.phone,
     this.role = 'guest',
     this.avatar,
     this.permissions,
@@ -26,6 +28,7 @@ class User {
         id: json['id'] ?? 0,
         username: json['username'] ?? '',
         email: json['email'],
+        phone: json['phone'],
         role: json['role'] ?? 'guest',
         avatar: json['avatar'],
         permissions: json['permissions'] != null ? List<String>.from(json['permissions']) : null,
@@ -33,7 +36,7 @@ class User {
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'username': username, 'email': email, 'role': role,
+        'id': id, 'username': username, 'email': email, 'phone': phone, 'role': role,
         'avatar': avatar, 'permissions': permissions, 'created_at': createdAt?.toIso8601String(),
       };
 }

@@ -1,16 +1,21 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
 
 class MemberService {
   final DioClient _dioClient = DioClient();
+  Map<String, dynamic>? _assets;
+  Map<String, dynamic>? get assets => _assets;
 
   Future<ApiResult<Map<String, dynamic>>> getMyAssets() async {
     try {
-      // 获取会员信息和资产
-      final response = await _dioClient.get(ApiConstants.members);
+      final response = await _dioClient.get('${ApiConstants.members}me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        _assets = response.data['data'] as Map<String, dynamic>;
+        return ApiResult.success(_assets!);
       }
       return ApiResult.failure(response.data['message'] ?? '获取资产失败');
     } catch (e) {
@@ -20,7 +25,7 @@ class MemberService {
 
   Future<ApiResult<List<dynamic>>> getMyCoupons() async {
     try {
-      final response = await _dioClient.get(ApiConstants.coupons);
+      final response = await _dioClient.get('${ApiConstants.coupons}me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(List<dynamic>.from(response.data['data']));
       }
@@ -29,4 +34,53 @@ class MemberService {
       return ApiResult.failure('网络错误：$e');
     }
   }
+
+  Future<CheckinResult> checkin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final lastCheckin = prefs.getString('last_checkin_date') ?? '';
+    if (lastCheckin == today) {
+      return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: '');
+    }
+
+    final expGain = 10 + (DateTime.now().weekday == 7 ? 20 : 0);
+    final currentExp = prefs.getInt('checkin_experience') ?? 0;
+    await prefs.setInt('checkin_experience', currentExp + expGain);
+    await prefs.setString('last_checkin_date', today);
+
+    final checkinDays = prefs.getInt('checkin_streak') ?? 0;
+    final lastDate = lastCheckin.isNotEmpty ? DateTime.tryParse(lastCheckin) : null;
+    if (lastDate != null && DateTime.now().difference(lastDate).inDays == 1) {
+      await prefs.setInt('checkin_streak', checkinDays + 1);
+    } else {
+      await prefs.setInt('checkin_streak', 1);
+    }
+
+    String? couponName;
+    final streak = prefs.getInt('checkin_streak') ?? 1;
+    if (streak % 7 == 0) {
+      couponName = '满200减30优惠券';
+      final raw = prefs.getString('checkin_coupons') ?? '[]';
+      final List<dynamic> coupons = jsonDecode(raw);
+      coupons.add({'name': couponName, 'discount': 30, 'min_spend': 200, 'earned_at': today});
+      await prefs.setString('checkin_coupons', jsonEncode(coupons));
+    }
+
+    return CheckinResult(alreadyCheckedIn: false, experience: expGain, couponName: couponName);
+  }
+
+  bool hasCheckedInToday(String? lastCheckinDate) {
+    if (lastCheckinDate == null || lastCheckinDate.isEmpty) return false;
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    return lastCheckinDate == today;
+  }
 }
+
+class CheckinResult {
+  final bool alreadyCheckedIn;
+  final int experience;
+  final String? couponName;
+  CheckinResult({required this.alreadyCheckedIn, required this.experience, this.couponName});
+}
+
+final memberServiceProvider = Provider<MemberService>((ref) => MemberService());

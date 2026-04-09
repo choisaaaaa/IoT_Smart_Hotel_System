@@ -108,15 +108,46 @@ export class PaymentService {
   }
 
   static async payPayment(id: number, transaction_no: string): Promise<boolean> {
+    const connection = await pool.getConnection();
     try {
-      const [result] = await pool.query<ResultSetHeader>(
+      await connection.beginTransaction();
+
+      // 1. 获取支付记录以确定 order_type 和 order_id
+      const [rows] = await connection.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ?', [id]);
+      if (rows.length === 0) {
+        await connection.rollback();
+        return false;
+      }
+      const payment = rows[0] as Payment;
+
+      // 2. 更新支付状态
+      const [result] = await connection.query<ResultSetHeader>(
         'UPDATE payments SET status = ?, transaction_no = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?',
         ['paid', transaction_no, id]
       );
-      return result.affectedRows > 0;
+
+      if (result.affectedRows === 0) {
+        await connection.rollback();
+        return false;
+      }
+
+      // 3. 根据 order_type 更新关联表的状态
+      if (payment.order_type === 'booking') {
+        await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
+      } else if (payment.order_type === 'delivery') {
+        await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ?', ['paid', payment.order_id]);
+      } else if (payment.order_type === 'maintenance') {
+        await connection.query('UPDATE maintenance_requests SET status = ? WHERE id = ?', ['paid', payment.order_id]);
+      }
+
+      await connection.commit();
+      return true;
     } catch (error) {
+      await connection.rollback();
       logger.error('支付失败:', error);
       throw new Error('支付失败');
+    } finally {
+      connection.release();
     }
   }
 }

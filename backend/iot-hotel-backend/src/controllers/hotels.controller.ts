@@ -28,12 +28,13 @@ export async function search(req: AuthRequest, res: Response) {
   try {
     const { destination, check_in, check_out, rooms = 1, guests = 2 } = req.query;
 
-    // 查询酒店列表（包含可用房间数）
+    // 查询酒店列表
+    // 为了防止获取不到数据，暂时移除 ra.available_rooms > 0 的硬性过滤，改为在结果中显示
     const sql = `
       SELECT
         h.*,
         IFNULL(ra.available_rooms, 0) AS available_rooms,
-        ra.min_price
+        IFNULL(ra.min_price, h.hotel_star * 100) AS min_price
       FROM hotels h
       LEFT JOIN (
         SELECT
@@ -44,22 +45,22 @@ export async function search(req: AuthRequest, res: Response) {
         WHERE r.room_status = 'available'
         GROUP BY r.hotel_id
       ) ra ON ra.hotel_id = h.id
-      WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ?)
+      WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ? OR h.location LIKE ?)
     `;
 
     const keyword = `%${destination || ''}%`;
-    const [hotels]: any = await db.execute(sql, [keyword, keyword]);
+    const [hotels]: any = await db.execute(sql, [keyword, keyword, keyword]);
 
     sendSuccess(res, {
       hotels: hotels.map((h: any) => ({
         id: h.id,
-        name: h.hotel_name,
-        location: h.hotel_address, // 这里将数据库的 hotel_address 映射给前端需要的 location 字段
-        star: h.hotel_star,
-        rating: 4.5,
-        reviewCount: 100,
+        name: h.hotel_name || h.name || '智联酒店',
+        location: h.hotel_address || h.location || '酒店地址',
+        star: h.hotel_star || h.star_rating || 5,
+        rating: h.rating || 4.5,
+        reviewCount: h.review_count || 100,
         price: h.min_price || 299,
-        image: h.logo || '/hotel-placeholder.jpg',
+        image: h.logo || h.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
         availableRooms: h.available_rooms
       }))
     });
@@ -88,12 +89,12 @@ export async function detail(req: AuthRequest, res: Response) {
     sendSuccess(res, {
       hotel: {
         id: hotel.id,
-        name: hotel.hotel_name,
-        location: hotel.hotel_address,
-        star: hotel.hotel_star,
-        rating: 4.5,
-        reviewCount: 100,
-        image: hotel.logo
+        name: hotel.hotel_name || hotel.name,
+        location: hotel.hotel_address || hotel.location,
+        star: hotel.hotel_star || hotel.star_rating,
+        rating: hotel.rating || 4.5,
+        reviewCount: hotel.review_count || 100,
+        image: hotel.logo || hotel.image_url
       }
     });
   } catch (error) {

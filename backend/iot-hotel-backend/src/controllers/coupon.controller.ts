@@ -55,6 +55,33 @@ export const getById = async (req: Request, res: Response) => {
   }
 };
 
+export const getMe = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    
+    // 查找会员ID
+    const [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE user_id = ? OR phone = ?', [req.user.id, req.user.username]);
+    
+    if (members.length === 0) {
+      return res.json(successResponse([], '获取优惠券成功'));
+    }
+    
+    const memberId = members[0].id;
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT c.*, mc.status as my_status, mc.created_at as received_at 
+       FROM member_coupons mc
+       JOIN coupons c ON mc.coupon_id = c.id
+       WHERE mc.member_id = ? AND mc.status = 'unused' AND c.valid_to >= NOW()`,
+      [memberId]
+    );
+    
+    res.json(successResponse(rows, '获取优惠券成功'));
+  } catch (error) {
+    logger.error('获取会员优惠券失败:', error);
+    res.status(500).json(errorResponse('获取优惠券失败'));
+  }
+};
+
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const { coupon_name, coupon_type, discount_value, min_amount, total_count, valid_from, valid_to } = req.body;

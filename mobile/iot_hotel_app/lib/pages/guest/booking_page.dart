@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../routes/app_router.dart';
+import '../../services/auth_service.dart';
 
 class BookingPage extends ConsumerStatefulWidget {
   const BookingPage({super.key});

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../routes/app_router.dart';
+import '../../services/booking_service.dart';
 
 class OrderListPage extends ConsumerStatefulWidget {
   const OrderListPage({super.key});
@@ -26,11 +26,22 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
   Future<void> _fetchOrders() async {
     setState(() => _isLoading = true);
     try {
-      final result = await ref.read(bookingServiceProvider).getBookings();
+      final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
       if (result.success) {
         setState(() {
-          _orders = result.data?['list'] ?? [];
+          final dynamic data = result.data;
+          if (data is Map && data.containsKey('list')) {
+            _orders = List<dynamic>.from(data['list'] ?? []);
+          } else if (data is List) {
+            _orders = List<dynamic>.from(data);
+          } else if (data is Map && data.containsKey('bookings')) {
+            _orders = List<dynamic>.from(data['bookings'] ?? []);
+          } else {
+            _orders = [];
+          }
         });
+      } else {
+        debugPrint('Fetch orders failed: ${result.message}');
       }
     } catch (e) {
       debugPrint('Error fetching orders: $e');
@@ -54,7 +65,13 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
         title: const Row(
           mainAxisSize: MainAxisSize.min,
@@ -91,40 +108,57 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
         : TabBarView(
             controller: _tabController,
             children: [
-              _buildOrderList(),
-              const Center(child: Text('暂无待支付订单')),
-              const Center(child: Text('暂无待入住订单')),
-              const Center(child: Text('暂无待评价订单')),
-              const Center(child: Text('暂无取消订单')),
+              _buildOrderList('all'),
+              _buildOrderList('pending'),
+              _buildOrderList('confirmed'),
+              _buildOrderList('checked_in'), // 待评价通常是已退房但未评价，这里简化为已入住
+              _buildOrderList('cancelled'),
             ],
           ),
     );
   }
 
-  Widget _buildOrderList() {
-    if (_orders.isEmpty) {
-      return const Center(child: Text('暂无订单'));
+  Widget _buildOrderList(String filterStatus) {
+    final filteredOrders = filterStatus == 'all' 
+        ? _orders 
+        : _orders.where((o) => o['status'] == filterStatus).toList();
+
+    if (filteredOrders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            const Text('暂无相关订单', style: TextStyle(color: AppColors.textSecondary)),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(
       onRefresh: _fetchOrders,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        itemCount: _orders.length + 2,
+        itemCount: filteredOrders.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) return _buildNoticeBar();
           if (index == 1) return _buildSortBar();
           
-          final order = _orders[index - 2];
-          return _buildOrderItem(
-            hotelName: '智联酒店 (珠海店)',
-            status: _getStatusText(order['status']),
-            dateRange: '${_formatDate(order['check_in_date'])} - ${_formatDate(order['check_out_date'])}',
-            nights: _calculateNights(order['check_in_date'], order['check_out_date']),
-            roomType: order['room_type'] ?? '标准间',
-            rooms: order['guest_count'] ?? 1,
-            price: order['total_price']?.toString() ?? '0.00',
-            isCompleted: order['status'] == 'checked_out',
+          final order = filteredOrders[index - 2];
+          return GestureDetector(
+            onTap: () => context.push('/order-detail/${order['id']}'),
+            child: _buildOrderItem(
+              orderId: order['id'] ?? 0,
+              hotelName: order['hotel_name'] ?? '智联酒店',
+              status: _getStatusText(order['status']),
+              dateRange: '${_formatDate(order['check_in_date'])} - ${_formatDate(order['check_out_date'])}',
+              nights: _calculateNights(order['check_in_date'], order['check_out_date']),
+              roomType: order['room_type'] ?? '标准间',
+              rooms: order['guest_count'] ?? 1,
+              price: order['total_price']?.toString() ?? '0.00',
+              isCompleted: order['status'] == 'checked_out',
+            ),
           );
         },
       ),
@@ -220,6 +254,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
   }
 
   Widget _buildOrderItem({
+    required int orderId,
     required String hotelName,
     required String status,
     required String dateRange,

@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../routes/app_router.dart';
+import '../../services/auth_service.dart';
+import '../../services/hotel_service.dart';
+import '../../services/room_service.dart';
 import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
@@ -100,75 +103,135 @@ class NavigationItem {
   const NavigationItem({required this.icon, required this.label});
 }
 
-class _DashboardContent extends StatelessWidget {
+class _DashboardContent extends ConsumerStatefulWidget {
   const _DashboardContent();
 
   @override
+  ConsumerState<_DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends ConsumerState<_DashboardContent> {
+  Map<String, dynamic>? _stats;
+  Map<String, dynamic>? _roomDistribution;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
+      final distResult = await ref.read(roomServiceProvider).getRoomStatusDistribution();
+
+      if (mounted) {
+        setState(() {
+          _stats = statsResult.success ? statsResult.data : null;
+          _roomDistribution = distResult.success ? distResult.data : null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dashboard data: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _navigateToTab(int tabIndex) {
+    final parent = context.findAncestorStateOfType<_AdminDashboardPageState>();
+    parent?.setState(() => parent._selectedIndex = tabIndex);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('数据概览', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-          const SizedBox(height: 16),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.5,
-            children: [
-              _buildStatCard(context, '总房间数', '120', Icons.door_back_door, Colors.blue),
-              _buildStatCard(context, '入住率', '78%', Icons.trending_up, Colors.green),
-              _buildStatCard(context, '在线设备', '45', Icons.devices, Colors.indigo),
-              _buildStatCard(context, '今日预订', '18', Icons.calendar_today, Colors.orange),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildChartSection(context),
-          const SizedBox(height: 24),
-          _buildActivitySection(context),
-          const SizedBox(height: 20),
-        ],
+    if (_isLoading) {
+      return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
+    }
+
+    final totalRooms = _stats?['total_rooms']?.toString() ?? '0';
+    final occupancyRateVal = _stats?['occupancy_rate'];
+    final rateDouble = occupancyRateVal != null ? (double.tryParse(occupancyRateVal.toString()) ?? 0) : 0;
+    final occupancyRate = '${(rateDouble * 100).toStringAsFixed(0)}%';
+    final onlineDevices = _stats?['online_devices']?.toString() ?? '0';
+    final todayBookings = _stats?['today_bookings']?.toString() ?? '0';
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('数据概览', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.5,
+              children: [
+                _buildStatCard(context, '总房间数', totalRooms, Icons.door_back_door, Colors.blue, onTap: () => _navigateToTab(2)),
+                _buildStatCard(context, '入住率', occupancyRate, Icons.trending_up, Colors.green, onTap: () => _navigateToTab(2)),
+                _buildStatCard(context, '在线设备', onlineDevices, Icons.devices, Colors.indigo, onTap: () => _navigateToTab(1)),
+                _buildStatCard(context, '今日预订', todayBookings, Icons.calendar_today, Colors.orange, onTap: () => _navigateToTab(4)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildChartSection(context),
+            const SizedBox(height: 24),
+            _buildActivitySection(context),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        border: Border.all(color: color.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, size: 20, color: color)),
-              const Icon(Icons.more_horiz, size: 16, color: AppColors.textHint),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: GoogleFonts.notoSansSc(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              Text(title, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
-            ],
-          ),
-        ],
+  Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          border: Border.all(color: color.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, size: 20, color: color)),
+                if (onTap != null) const Icon(Icons.chevron_right, size: 16, color: AppColors.textHint),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: GoogleFonts.notoSansSc(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                Text(title, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildChartSection(BuildContext context) {
+    final available = _roomDistribution?['available'] ?? 60;
+    final occupied = _roomDistribution?['occupied'] ?? 30;
+    final cleaning = _roomDistribution?['cleaning'] ?? 10;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -190,9 +253,9 @@ class _DashboardContent extends StatelessWidget {
                 sectionsSpace: 4,
                 centerSpaceRadius: 40,
                 sections: [
-                  PieChartSectionData(value: 60, color: AppColors.roomAvailable, title: '空闲', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                  PieChartSectionData(value: 30, color: AppColors.roomOccupied, title: '已入', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                  PieChartSectionData(value: 10, color: AppColors.roomCleaning, title: '清扫', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (available > 0) PieChartSectionData(value: available.toDouble(), color: AppColors.roomAvailable, title: '空闲', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (occupied > 0) PieChartSectionData(value: occupied.toDouble(), color: AppColors.roomOccupied, title: '已入', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (cleaning > 0) PieChartSectionData(value: cleaning.toDouble(), color: AppColors.roomCleaning, title: '清扫', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                 ],
               ),
             ),
@@ -228,7 +291,7 @@ class _DashboardContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('最近活动', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              GestureDetector(onTap: () => _navigateToTab(4), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
             ],
           ),
           const SizedBox(height: 16),

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
-import '../../routes/app_router.dart';
 import '../../core/logic/member_logic.dart';
+import '../../services/auth_service.dart';
+import '../../services/member_service.dart';
+import '../../core/network/api_result.dart';
+import '../../models/user.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -52,7 +57,7 @@ class ProfilePage extends ConsumerWidget {
               _buildAssetStats(ref),
               _buildPointsBanner(),
               _buildOrderSection(context),
-              _buildFavoritesRow(),
+              _buildFavoritesRow(context),
               _buildToolsGrid(),
               const SizedBox(height: 40),
             ],
@@ -80,7 +85,7 @@ class ProfilePage extends ConsumerWidget {
             child: FutureBuilder(
               future: authService.getCurrentUser(),
               builder: (context, snapshot) {
-                final user = snapshot.data;
+                final user = snapshot.data as User?;
                 final displayName = user?.username ?? '未登录';
                 return Text('$displayName >', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
               },
@@ -111,13 +116,17 @@ class ProfilePage extends ConsumerWidget {
 
   Widget _buildMemberCard(WidgetRef ref) {
     final memberService = ref.watch(memberServiceProvider);
-    
+
     return FutureBuilder(
       future: memberService.getMyAssets(),
       builder: (context, snapshot) {
-        final assets = snapshot.data?.data;
+        if (!snapshot.hasData || snapshot.data == null) return const SizedBox.shrink();
+        final apiResult = snapshot.data as ApiResult<Map<String, dynamic>>;
+        if (!apiResult.success) return const SizedBox.shrink();
+        final result = apiResult.data ?? {};
+        final assets = result;
         // 使用 total_spent 作为经验值，如果没有则默认为 0
-        final double totalSpent = double.tryParse(assets?['total_spent']?.toString() ?? '0') ?? 0;
+        final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
         final int currentExp = totalSpent.floor();
         
         // 根据后端返回的 member_level 字符串映射等级，或者根据经验值重新计算
@@ -193,19 +202,9 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildBenefitItem(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: const Color(0xFFD84315)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFFD84315))),
-      ],
-    );
-  }
-
   Widget _buildAssetStats(WidgetRef ref) {
     final memberService = ref.watch(memberServiceProvider);
-    
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -213,9 +212,32 @@ class ProfilePage extends ConsumerWidget {
       child: FutureBuilder(
         future: memberService.getMyAssets(),
         builder: (context, snapshot) {
-          final assets = snapshot.data?.data;
-          final points = assets?['points'] ?? '3522';
-          final coupons = assets?['coupons_count'] ?? '12';
+          if (!snapshot.hasData || snapshot.data == null) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildAssetItem('0', '优惠券'),
+                _buildAssetItem('0', '积分'),
+                _buildAssetItem('0.00', '余额'),
+                _buildAssetItem('0', '礼品卡'),
+              ],
+            );
+          }
+          final apiResult = snapshot.data as ApiResult<Map<String, dynamic>>;
+          if (!apiResult.success) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildAssetItem('0', '优惠券'),
+                _buildAssetItem('0', '积分'),
+                _buildAssetItem('0.00', '余额'),
+                _buildAssetItem('0', '礼品卡'),
+              ],
+            );
+          }
+          final assets = apiResult.data ?? {};
+          final points = assets['points'] ?? '0';
+          final coupons = assets['coupons_count'] ?? '0';
           
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -319,7 +341,7 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildFavoritesRow() {
+  Widget _buildFavoritesRow(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -330,13 +352,22 @@ class ProfilePage extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.star_border_rounded, size: 18, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                const Text('我收藏的 0 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ],
+            child: GestureDetector(
+              onTap: () => context.push('/favorites'),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.star_border_rounded, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  FutureBuilder<int>(
+                    future: _getFavoritesCount(),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data ?? 0;
+                      return Text('我收藏的 $count >', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary));
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           Container(width: 1, height: 16, color: AppColors.divider),
@@ -353,6 +384,17 @@ class ProfilePage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<int> _getFavoritesCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('hotel_favorites') ?? '[]';
+      final List<dynamic> decoded = jsonDecode(raw);
+      return decoded.length;
+    } catch (e) {
+      return 0;
+    }
   }
 
   Widget _buildToolsGrid() {

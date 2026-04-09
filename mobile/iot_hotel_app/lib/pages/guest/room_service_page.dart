@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../routes/app_router.dart';
 import '../../../core/mqtt/mqtt_service.dart';
+import '../../../services/device_service.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
   const RoomServicePage({super.key});
@@ -122,10 +122,10 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text('房间设备控制', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
             ),
-            _isLoading 
+            _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _devices.isEmpty
-                ? _buildStaticDeviceGrid()
+                ? _buildEmptyDevices()
                 : GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -165,19 +165,22 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage> {
     }
   }
 
-  Widget _buildStaticDeviceGrid() {
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 0.8,
-      children: const [
-        _DeviceControlTile(icon: Icons.light_mode_rounded, name: '灯光', status: '开启', isOn: true),
-        _DeviceControlTile(icon: Icons.ac_unit_rounded, name: '空调', status: '24°C 制冷', isOn: true),
-        _DeviceControlTile(icon: Icons.curtains_rounded, name: '窗帘', status: '关闭', isOn: false),
-      ],
+  Widget _buildEmptyDevices() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      child: Column(
+        children: [
+          Icon(Icons.devices_other_rounded, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
+          const SizedBox(height: 16),
+          Text('暂无房间设备', style: GoogleFonts.notoSansSc(fontSize: 16, color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          Text(
+            '您当前没有入住房间，或房间暂未配置智能设备',
+            style: GoogleFonts.notoSansSc(fontSize: 13, color: AppColors.textHint),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 

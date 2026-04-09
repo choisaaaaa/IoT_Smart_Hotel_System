@@ -21,12 +21,24 @@ export const get = async (req: AuthRequest, res: Response) => {
       whereClause += ' AND b.guest_name LIKE ?';
       params.push(`%${guest_name}%`);
     }
+
+    // 如果是普通用户，只返回自己的订单
+    if (req.user?.role === 'user') {
+      whereClause += ' AND (b.guest_phone = ? OR b.user_id = ?)';
+      params.push(req.user.username); // 假设 username 是手机号
+      params.push(req.user.id);
+    }
     
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, params);
     const total = (totalRows[0] as any).total;
     
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.*, r.room_number, r.room_type FROM bookings b LEFT JOIN rooms r ON b.room_id = r.id ${whereClause} ORDER BY b.id DESC LIMIT ? OFFSET ?`,
+      `SELECT b.*, r.room_number, r.room_type, h.hotel_name 
+       FROM bookings b 
+       LEFT JOIN rooms r ON b.room_id = r.id 
+       LEFT JOIN hotels h ON b.hotel_id = h.id
+       ${whereClause} 
+       ORDER BY b.id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
     );
     
@@ -87,10 +99,11 @@ export const create = async (req: AuthRequest, res: Response) => {
     
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     const bookingStatus = status || 'pending';
+    const userId = req.user?.id || null;
     
     const [result] = await connection.query<ResultSetHeader>(
-      'INSERT INTO bookings (booking_number, hotel_id, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [bookingNumber, hotelId, room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, bookingStatus]
+      'INSERT INTO bookings (booking_number, hotel_id, room_id, user_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, total_price, deposit, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [bookingNumber, hotelId, room_id, userId, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, totalPrice, 0, bookingStatus]
     );
 
     // 同步更新房间状态

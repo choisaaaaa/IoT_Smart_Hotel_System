@@ -5,15 +5,24 @@ import logger from '../utils/logger';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, pageSize = 10, order_type } = req.query;
+    const { page = 1, pageSize = 10, hotel_id } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
     
+    // 检查 reviews 表是否存在
+    const [tables]: any = await pool.query("SHOW TABLES LIKE 'reviews'");
+    if (tables.length === 0) {
+      // 表不存在时返回空列表，避免 500 错误
+      return res.json(successResponse({
+        list: [], total: 0, page: Number(page), pageSize: Number(pageSize), totalPages: 0
+      }, '获取评价列表成功(暂无评价数据)'));
+    }
+
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
-    if (order_type) {
-      whereClause += ' AND r.order_type = ?';
-      params.push(order_type);
+    if (hotel_id) {
+      whereClause += ' AND r.hotel_id = ?';
+      params.push(hotel_id);
     }
     
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM reviews r ${whereClause}`, params);

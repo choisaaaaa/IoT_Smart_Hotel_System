@@ -4,6 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../routes/app_router.dart';
+import '../../services/auth_service.dart';
+import '../../services/hotel_service.dart';
+import '../../services/maintenance_service.dart';
+import '../../services/booking_service.dart';
+import '../../services/room_service.dart';
+import '../../services/delivery_service.dart';
+import '../../services/payment_service.dart';
 
 class ReceptionDashboardPage extends ConsumerStatefulWidget {
   const ReceptionDashboardPage({super.key});
@@ -88,43 +95,99 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
   }
 }
 
-class _ReceptionHomeContent extends StatelessWidget {
+class _ReceptionHomeContent extends ConsumerStatefulWidget {
   const _ReceptionHomeContent();
 
   @override
+  ConsumerState<_ReceptionHomeContent> createState() => _ReceptionHomeContentState();
+}
+
+class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
+  Map<String, dynamic>? _dashboardStats;
+  List<dynamic> _workOrders = [];
+  List<dynamic> _arrivals = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    setState(() => _isLoading = true);
+    try {
+      final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
+      final workOrdersResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 5);
+      final arrivalsResult = await ref.read(hotelServiceProvider).getTodayArrivals();
+
+      if (mounted) {
+        setState(() {
+          _dashboardStats = statsResult.success ? statsResult.data : null;
+          _workOrders = workOrdersResult.success ? (workOrdersResult.data ?? []) : [];
+          _arrivals = arrivalsResult.success ? (arrivalsResult.data ?? []) : [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dashboard: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _navigateToTab(int tabIndex) {
+    final parent = context.findAncestorStateOfType<_ReceptionDashboardPageState>();
+    parent?.setState(() => parent._selectedIndex = tabIndex);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('今日概况', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
-            children: [
-              _QuickStatCard(title: '今日入住', value: '12', icon: Icons.login_rounded, color: AppColors.success),
-              _QuickStatCard(title: '今日退房', value: '8', icon: Icons.logout_rounded, color: AppColors.error),
-              _QuickStatCard(title: '在住客人', value: '86', icon: Icons.people_rounded, color: AppColors.info),
-              _QuickStatCard(title: '待处理事项', value: '5', icon: Icons.pending_actions_rounded, color: AppColors.warning),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildTaskCard(context),
-          const SizedBox(height: 24),
-          _buildArrivalCard(context),
-          const SizedBox(height: 20),
-        ],
+    if (_isLoading) {
+      return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
+    }
+
+    final todayCheckIn = _dashboardStats?['today_checkin']?.toString() ?? '0';
+    final todayCheckOut = _dashboardStats?['today_checkout']?.toString() ?? '0';
+    final currentGuests = _dashboardStats?['current_guests']?.toString() ?? '0';
+    final pendingTasks = _dashboardStats?['pending_tasks']?.toString() ?? '0';
+
+    return RefreshIndicator(
+      onRefresh: _loadDashboardData,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('今日概况', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.6,
+              children: [
+                _QuickStatCard(title: '今日入住', value: todayCheckIn, icon: Icons.login_rounded, color: AppColors.success, onTap: () => _navigateToTab(1)),
+                _QuickStatCard(title: '今日退房', value: todayCheckOut, icon: Icons.logout_rounded, color: AppColors.error, onTap: () => _navigateToTab(1)),
+                _QuickStatCard(title: '在住客人', value: currentGuests, icon: Icons.people_rounded, color: AppColors.info, onTap: () => _navigateToTab(3)),
+                _QuickStatCard(title: '待处理事项', value: pendingTasks, icon: Icons.pending_actions_rounded, color: AppColors.warning, onTap: () => _navigateToTab(4)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildTaskCard(context),
+            const SizedBox(height: 24),
+            _buildArrivalCard(context),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildTaskCard(BuildContext context) {
+    final urgentCount = _workOrders.where((w) => w['is_urgent'] == true || w['priority'] == 'high').length;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -135,18 +198,47 @@ class _ReceptionHomeContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('待处理工单', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text('3个加急', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold))),
+              Row(children: [
+                if (urgentCount > 0)
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text('$urgentCount个加急', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold))),
+                const SizedBox(width: 8),
+                GestureDetector(onTap: () => _navigateToTab(4), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
+              ]),
             ],
           ),
           const SizedBox(height: 16),
-          _WorkOrderItem(room: '305房', type: '维修', desc: '空调不制冷', time: '10分钟前', urgent: true),
-          const Divider(height: 1),
-          _WorkOrderItem(room: '102房', type: '清洁', desc: '退房清洁', time: '30分钟前', urgent: false),
-          const Divider(height: 1),
-          _WorkOrderItem(room: '201房', type: '送物', desc: '毛巾+矿泉水', time: '1小时前', urgent: false),
+          if (_workOrders.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: Text('暂无待处理工单', style: TextStyle(color: AppColors.textSecondary))),
+            )
+          else
+            ..._workOrders.take(3).expand((order) => [
+              _WorkOrderItem(
+                room: '${order['room_number'] ?? ''}房',
+                type: order['type'] ?? '其他',
+                desc: order['description'] ?? '待处理',
+                time: _formatTime(order['created_at']),
+                urgent: order['is_urgent'] == true || order['priority'] == 'high',
+              ),
+              const Divider(height: 1),
+            ]),
         ],
       ),
     );
+  }
+
+  String _formatTime(dynamic dateTime) {
+    if (dateTime == null) return '';
+    try {
+      final date = DateTime.parse(dateTime.toString());
+      final diff = DateTime.now().difference(date);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
+      if (diff.inHours < 24) return '${diff.inHours}小时前';
+      return '${diff.inDays}天前';
+    } catch (e) {
+      return dateTime.toString();
+    }
   }
 
   Widget _buildArrivalCard(BuildContext context) {
@@ -160,19 +252,25 @@ class _ReceptionHomeContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('今日预订到店', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              GestureDetector(onTap: () => _navigateToTab(2), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
             ],
           ),
           const SizedBox(height: 12),
-          ...['张三 · 101房 · 14:00', '李四 · 203房 · 15:00', '王五 · 302房 · 18:00'].map(
-            (b) => ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(radius: 14, backgroundColor: AppColors.background, child: Icon(Icons.person_outline, size: 16)),
-              title: Text(b, style: GoogleFonts.notoSansSc(fontSize: 14)),
-              trailing: const Icon(Icons.chevron_right, size: 16),
+          if (_arrivals.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: Text('暂无今日到店预订', style: TextStyle(color: AppColors.textSecondary))),
+            )
+          else
+            ..._arrivals.take(3).map(
+              (b) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(radius: 14, backgroundColor: AppColors.background, child: Icon(Icons.person_outline, size: 16)),
+                title: Text('${b['guest_name'] ?? '-'} · ${b['room_type'] ?? '-'} · ${b['check_in_date'] ?? ''}', style: GoogleFonts.notoSansSc(fontSize: 14)),
+                trailing: const Icon(Icons.chevron_right, size: 16),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -184,28 +282,33 @@ class _QuickStatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  const _QuickStatCard({required this.title, required this.value, required this.icon, required this.color});
+  final VoidCallback? onTap;
+  const _QuickStatCard({required this.title, required this.value, required this.icon, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.1))),
-      child: Row(
-        children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(value, style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                Text(title, style: GoogleFonts.notoSansSc(fontSize: 10, color: AppColors.textSecondary)),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.1))),
+        child: Row(
+          children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(value, style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  Text(title, style: GoogleFonts.notoSansSc(fontSize: 10, color: AppColors.textSecondary)),
+                ],
+              ),
             ),
-          ),
-        ],
+            if (onTap != null) const Icon(Icons.chevron_right, size: 16, color: AppColors.textHint),
+          ],
+        ),
       ),
     );
   }
@@ -246,9 +349,559 @@ class _WorkOrderItem extends StatelessWidget {
 
 class _NavItem { final IconData icon; final String label; const _NavItem({required this.icon, required this.label}); }
 
-class CheckInOutPage extends StatelessWidget { const CheckInOutPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('入住退房')), body: Center(child: Text('入住退房功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
-class BookingsPage extends StatelessWidget { const BookingsPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('预订管理')), body: Center(child: Text('预订管理功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
-class RoomAvailabilityPage extends StatelessWidget { const RoomAvailabilityPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('客房余量')), body: Center(child: Text('客房余量功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
-class WorkOrdersPage extends StatelessWidget { const WorkOrdersPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('工单处理')), body: Center(child: Text('工单处理功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
-class DeliveryOrdersPage extends StatelessWidget { const DeliveryOrdersPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('客房送物')), body: Center(child: Text('送物订单功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
-class BillsPage extends StatelessWidget { const BillsPage({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('账单报表')), body: Center(child: Text('账单报表功能开发中...', style: TextStyle(color: AppColors.textSecondary)))); }
+class CheckInOutPage extends ConsumerStatefulWidget {
+  const CheckInOutPage({super.key});
+  @override
+  ConsumerState<CheckInOutPage> createState() => _CheckInOutPageState();
+}
+
+class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
+  List<dynamic> _todayBookings = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
+      if (result.success && mounted) {
+        final list = (result.data?['list'] as List<dynamic>?) ?? [];
+        setState(() => _todayBookings = list);
+      }
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final checkIns = _todayBookings.where((b) => b['status'] == 'confirmed').toList();
+    final checkOuts = _todayBookings.where((b) => b['status'] == 'checked_in').toList();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('入住退房')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: DefaultTabController(
+                length: 2,
+                child: Column(
+                  children: [
+                    const TabBar(tabs: [Tab(text: '待入住'), Tab(text: '待退房')]),
+                    Expanded(child: TabBarView(children: [
+                      _buildBookingList(checkIns, 'checkin'),
+                      _buildBookingList(checkOuts, 'checkout'),
+                    ])),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildBookingList(List<dynamic> bookings, String action) {
+    if (bookings.isEmpty) return Center(child: Text('暂无${action == 'checkin' ? '待入住' : '待退房'}订单', style: TextStyle(color: AppColors.textSecondary)));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookings.length,
+      itemBuilder: (context, index) {
+        final b = bookings[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('${b['room_number'] ?? b['room_id'] ?? '-'}号房 · ${b['room_type'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: (action == 'checkin' ? AppColors.success : AppColors.warning).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(action == 'checkin' ? '待入住' : '在住', style: TextStyle(fontSize: 12, color: action == 'checkin' ? AppColors.success : AppColors.warning))),
+              ]),
+              const SizedBox(height: 8),
+              Text('客人：${b['guest_name'] ?? '-'}  ${b['guest_phone'] ?? ''}', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              const SizedBox(height: 12),
+              SizedBox(width: double.infinity, height: 40, child: FilledButton(
+                onPressed: () => _handleAction(b, action),
+                style: FilledButton.styleFrom(backgroundColor: action == 'checkin' ? AppColors.success : AppColors.error),
+                child: Text(action == 'checkin' ? '办理入住' : '办理退房'),
+              )),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleAction(Map<String, dynamic> booking, String action) async {
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(action == 'checkin' ? '确认入住' : '确认退房'),
+      content: Text('客人：${booking['guest_name'] ?? '-'}，房间：${booking['room_number'] ?? booking['room_id'] ?? '-'}号房'),
+      actions: [TextButton(onPressed: () => ctx.pop(false), child: const Text('取消')), FilledButton(onPressed: () => ctx.pop(true), child: const Text('确认'))],
+    ));
+    if (confirm != true) return;
+
+    try {
+      final result = action == 'checkin'
+          ? await ref.read(bookingServiceProvider).checkin(booking['id'])
+          : await ref.read(bookingServiceProvider).checkout(booking['id']);
+      if (result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(action == 'checkin' ? '入住办理成功' : '退房办理成功')));
+        _loadData();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '操作失败')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
+  }
+}
+
+class BookingsPage extends ConsumerStatefulWidget {
+  const BookingsPage({super.key});
+  @override
+  ConsumerState<BookingsPage> createState() => _BookingsPageState();
+}
+
+class _BookingsPageState extends ConsumerState<BookingsPage> {
+  List<dynamic> _bookings = [];
+  bool _isLoading = true;
+  String _filterStatus = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBookings();
+  }
+
+  Future<void> _loadBookings() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(bookingServiceProvider).getBookings(status: _filterStatus == 'all' ? null : _filterStatus, pageSize: 50);
+      if (result.success && mounted) setState(() => _bookings = (result.data?['list'] as List<dynamic>?) ?? []);
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _statusText(String? s) => switch (s) { 'pending' => '待支付', 'confirmed' => '待入住', 'checked_in' => '已入住', 'checked_out' => '已完成', 'cancelled' => '已取消', 'paid' => '已支付', _ => s ?? '未知' };
+  Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'confirmed' => AppColors.primary, 'checked_in' => AppColors.success, 'checked_out' => AppColors.textSecondary, 'cancelled' => AppColors.error, 'paid' => AppColors.success, _ => AppColors.textHint };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('预订管理')),
+      body: Column(children: [
+        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: ['all', 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadBookings(); })))).toList())),
+        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _bookings.isEmpty ? Center(child: Text('暂无预订', style: TextStyle(color: AppColors.textSecondary))) : RefreshIndicator(onRefresh: _loadBookings, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _bookings.length, itemBuilder: (context, i) {
+          final b = _bookings[i];
+          return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
+            title: Text('${b['guest_name'] ?? '-'} · ${b['room_type'] ?? ''}'),
+            subtitle: Text('${b['check_in_date'] ?? ''} ~ ${b['check_out_date'] ?? ''}'),
+            trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(b['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(b['status']), style: TextStyle(color: _statusColor(b['status']), fontSize: 12))),
+          ));
+        }))),
+      ]),
+    );
+  }
+}
+
+class RoomAvailabilityPage extends ConsumerStatefulWidget {
+  const RoomAvailabilityPage({super.key});
+  @override
+  ConsumerState<RoomAvailabilityPage> createState() => _RoomAvailabilityPageState();
+}
+
+class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
+  List<dynamic> _rooms = [];
+  bool _isLoading = true;
+  String _filterStatus = 'all';
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRooms();
+  }
+
+  Future<void> _loadRooms() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(roomServiceProvider).getRooms(status: _filterStatus == 'all' ? null : _filterStatus);
+      if (result.success && mounted) setState(() => _rooms = result.data ?? []);
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Color _statusColor(String s) => switch (s) { 'available' => AppColors.roomAvailable, 'occupied' => AppColors.roomOccupied, 'cleaning' => AppColors.roomCleaning, 'maintenance' => AppColors.roomMaintenance, 'reserved' => Colors.orange, _ => AppColors.textHint };
+  String _statusText(String s) => switch (s) { 'available' => '空闲', 'occupied' => '已住', 'cleaning' => '清洁中', 'maintenance' => '维修中', 'reserved' => '已预订', _ => s };
+
+  List<dynamic> get _filteredRooms {
+    if (_searchQuery.isEmpty) return _rooms;
+    return _rooms.where((r) {
+      final roomNum = (r['room_number'] ?? r['id']?.toString() ?? '').toString().toLowerCase();
+      return roomNum.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredRooms;
+    return Scaffold(
+      appBar: AppBar(title: const Text('客房管理')),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: '搜索房间号...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              isDense: true,
+            ),
+            onChanged: (v) => setState(() => _searchQuery = v),
+          ),
+        ),
+        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: Row(children: ['all', 'available', 'occupied', 'reserved', 'cleaning', 'maintenance'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadRooms(); })))).toList())),
+        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : filtered.isEmpty ? Center(child: Text('暂无房间', style: TextStyle(color: AppColors.textSecondary))) : RefreshIndicator(onRefresh: _loadRooms, child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 1.0), itemCount: filtered.length, itemBuilder: (context, i) {
+          final r = filtered[i];
+          final status = r['room_status']?.toString() ?? r['status']?.toString() ?? 'available';
+          return GestureDetector(
+            onTap: () => _showRoomDetail(r),
+            child: Card(
+              color: _statusColor(status).withValues(alpha: 0.05),
+              child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text('${r['room_number'] ?? r['id']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 4),
+                Text(r['room_type'] ?? r['room_type_name'] ?? '', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _statusColor(status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)), child: Text(_statusText(status), style: TextStyle(fontSize: 10, color: _statusColor(status), fontWeight: FontWeight.bold))),
+                if (status == 'reserved' || status == 'occupied') ...[
+                  const SizedBox(height: 4),
+                  Text('不可分配', style: TextStyle(fontSize: 9, color: AppColors.error)),
+                ],
+              ])),
+            ),
+          );
+        }))),
+      ]),
+    );
+  }
+
+  void _showRoomDetail(Map<String, dynamic> room) {
+    final status = room['room_status']?.toString() ?? room['status']?.toString() ?? 'available';
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text('${room['room_number'] ?? room['id']}号房', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('房型：${room['room_type'] ?? room['room_type_name'] ?? '-'}', style: const TextStyle(color: AppColors.textSecondary)),
+            Text('楼层：${room['floor'] ?? '-'}楼', style: const TextStyle(color: AppColors.textSecondary)),
+            Text('当前状态：${_statusText(status)}', style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text('修改房间状态', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: ['available', 'occupied', 'reserved', 'cleaning', 'maintenance'].map((s) => ChoiceChip(
+                label: Text(_statusText(s)),
+                selected: status == s,
+                onSelected: status == s ? null : (_) => _updateRoomStatus(room, s),
+              )).toList(),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateRoomStatus(Map<String, dynamic> room, String newStatus) async {
+    final roomId = room['id'] as int?;
+    if (roomId == null) return;
+
+    final currentStatus = room['room_status']?.toString() ?? room['status']?.toString() ?? 'available';
+    if ((currentStatus == 'reserved' || currentStatus == 'occupied') && newStatus == 'available') {
+      final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('确认释放房间'),
+        content: Text('${room['room_number'] ?? roomId}号房当前状态为${_statusText(currentStatus)}，确定要释放为空闲吗？'),
+        actions: [TextButton(onPressed: () => ctx.pop(false), child: const Text('取消')), FilledButton(onPressed: () => ctx.pop(true), child: const Text('确认释放'))],
+      ));
+      if (confirm != true) return;
+    }
+
+    try {
+      final result = await ref.read(roomServiceProvider).updateRoom(roomId, {'room_status': newStatus});
+      if (result.success && mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间状态已更新')));
+        _loadRooms();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '更新失败')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
+  }
+}
+
+class WorkOrdersPage extends ConsumerStatefulWidget {
+  const WorkOrdersPage({super.key});
+  @override
+  ConsumerState<WorkOrdersPage> createState() => _WorkOrdersPageState();
+}
+
+class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage> {
+  List<dynamic> _orders = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(maintenanceServiceProvider).getWorkOrders(pageSize: 50);
+      if (result.success && mounted) setState(() => _orders = result.data ?? []);
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('工单处理')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _orders.isEmpty
+              ? Center(child: Text('暂无工单', style: TextStyle(color: AppColors.textSecondary)))
+              : RefreshIndicator(onRefresh: _loadOrders, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _orders.length, itemBuilder: (context, i) {
+                  final o = _orders[i];
+                  final isUrgent = o['is_urgent'] == true || o['priority'] == 'high';
+                  return Card(margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Row(children: [Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房', style: const TextStyle(fontWeight: FontWeight.bold)), if (isUrgent) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(4)), child: const Text('加急', style: TextStyle(color: Colors.white, fontSize: 9)))]],),
+                      Text(o['type'] ?? '其他', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(o['description'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                    const SizedBox(height: 12),
+                    if (o['status'] == 'pending') Row(children: [
+                      Expanded(child: OutlinedButton(onPressed: () => _updateStatus(o['id'], 'in_progress'), child: const Text('接单'))),
+                      const SizedBox(width: 8),
+                      Expanded(child: FilledButton(onPressed: () => _updateStatus(o['id'], 'completed'), child: const Text('完成'))),
+                    ]),
+                    if (o['status'] == 'in_progress') SizedBox(width: double.infinity, child: FilledButton(onPressed: () => _updateStatus(o['id'], 'completed'), child: const Text('标记完成'))),
+                  ])));
+                })),
+    );
+  }
+
+  Future<void> _updateStatus(int id, String status) async {
+    try {
+      final result = await ref.read(maintenanceServiceProvider).updateWorkOrderStatus(id, status);
+      if (result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('状态更新成功')));
+        _loadOrders();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
+  }
+}
+
+class DeliveryOrdersPage extends ConsumerStatefulWidget {
+  const DeliveryOrdersPage({super.key});
+  @override
+  ConsumerState<DeliveryOrdersPage> createState() => _DeliveryOrdersPageState();
+}
+
+class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
+  List<dynamic> _orders = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(deliveryServiceProvider).getDeliveryOrders(pageSize: 50);
+      if (result.success && mounted) setState(() => _orders = result.data ?? []);
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'delivering' => AppColors.primary, 'delivered' => AppColors.success, _ => AppColors.textHint };
+  String _statusText(String? s) => switch (s) { 'pending' => '待配送', 'delivering' => '配送中', 'delivered' => '已送达', _ => s ?? '未知' };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('客房送物')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _orders.isEmpty
+              ? Center(child: Text('暂无送物订单', style: TextStyle(color: AppColors.textSecondary)))
+              : RefreshIndicator(onRefresh: _loadOrders, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _orders.length, itemBuilder: (context, i) {
+                  final o = _orders[i];
+                  return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
+                    title: Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房 · ${o['item_name'] ?? o['items'] ?? '送物品'}'),
+                    subtitle: Text('${o['guest_name'] ?? ''} · ${o['note'] ?? ''}'),
+                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(o['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(o['status']), style: TextStyle(color: _statusColor(o['status']), fontSize: 11))),
+                      if (o['status'] == 'pending') TextButton(onPressed: () => _updateStatus(o['id'], 'delivering'), child: const Text('接单', style: TextStyle(fontSize: 12))),
+                      if (o['status'] == 'delivering') TextButton(onPressed: () => _updateStatus(o['id'], 'delivered'), child: const Text('送达', style: TextStyle(fontSize: 12))),
+                    ]),
+                  ));
+                })),
+    );
+  }
+
+  Future<void> _updateStatus(int id, String status) async {
+    try {
+      final result = await ref.read(deliveryServiceProvider).updateDeliveryStatus(id, status);
+      if (result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('状态更新成功')));
+        _loadOrders();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
+  }
+}
+
+class BillsPage extends ConsumerStatefulWidget {
+  const BillsPage({super.key});
+  @override
+  ConsumerState<BillsPage> createState() => _BillsPageState();
+}
+
+class _BillsPageState extends ConsumerState<BillsPage> {
+  List<dynamic> _payments = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPayments();
+  }
+
+  Future<void> _loadPayments() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(paymentServiceProvider).getPaymentHistory(pageSize: 50);
+      if (result.success && mounted) setState(() => _payments = result.data ?? []);
+    } catch (e) {
+      debugPrint('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Color _statusColor(String? s) => switch (s) { 'paid' => AppColors.success, 'pending' => Colors.orange, 'refunded' => AppColors.textSecondary, _ => AppColors.textHint };
+  String _statusText(String? s) => switch (s) { 'paid' => '已支付', 'pending' => '待支付', 'refunded' => '已退款', _ => s ?? '未知' };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('账单报表')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _payments.isEmpty
+              ? Center(child: Text('暂无账单记录', style: TextStyle(color: AppColors.textSecondary)))
+              : RefreshIndicator(onRefresh: _loadPayments, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _payments.length, itemBuilder: (context, i) {
+                  final p = _payments[i];
+                  return GestureDetector(
+                    onTap: () => _showPaymentDetail(p),
+                    child: Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
+                    leading: CircleAvatar(backgroundColor: _statusColor(p['status']).withValues(alpha: 0.1), child: Icon(Icons.receipt_long, color: _statusColor(p['status']), size: 20)),
+                    title: Text('${p['guest_name'] ?? '客人'} · ${p['room_number'] ?? ''}号房'),
+                    subtitle: Text('${p['created_at'] ?? ''} · ${p['payment_method'] ?? ''}'),
+                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('¥${p['amount'] ?? '0'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(_statusText(p['status']), style: TextStyle(color: _statusColor(p['status']), fontSize: 11)),
+                    ]),
+                  )),
+                  );
+                })),
+    );
+  }
+
+  void _showPaymentDetail(Map<String, dynamic> payment) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('账单详情', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(payment['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(payment['status']), style: TextStyle(color: _statusColor(payment['status']), fontSize: 12))),
+            ]),
+            const Divider(height: 24),
+            _buildDetailRow('客人姓名', '${payment['guest_name'] ?? '-'}'),
+            _buildDetailRow('房间号', '${payment['room_number'] ?? '-'}'),
+            _buildDetailRow('金额', '¥${payment['amount'] ?? '0'}'),
+            _buildDetailRow('支付方式', '${payment['payment_method'] ?? '-'}'),
+            _buildDetailRow('订单类型', '${payment['order_type'] ?? '-'}'),
+            _buildDetailRow('交易号', '${payment['transaction_no'] ?? '-'}'),
+            _buildDetailRow('创建时间', '${payment['created_at'] ?? '-'}'),
+            if (payment['paid_at'] != null) _buildDetailRow('支付时间', '${payment['paid_at']}'),
+            if (payment['note'] != null || payment['remark'] != null) _buildDetailRow('备注', '${payment['note'] ?? payment['remark'] ?? '-'}'),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+        ],
+      ),
+    );
+  }
+}

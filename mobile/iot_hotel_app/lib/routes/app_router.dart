@@ -9,15 +9,10 @@ import '../pages/guest/hotel_list_page.dart';
 import '../pages/guest/hotel_detail_page.dart';
 import '../pages/guest/booking_flow_page.dart';
 import '../pages/guest/order_list_page.dart';
+import '../pages/guest/order_detail_page.dart';
+import '../pages/guest/favorites_page.dart';
+import '../pages/guest/online_checkin_page.dart';
 import '../services/auth_service.dart';
-import '../services/booking_service.dart';
-import '../services/device_service.dart';
-import '../services/member_service.dart';
-
-final authServiceProvider = Provider((ref) => AuthService());
-final bookingServiceProvider = Provider((ref) => BookingService());
-final deviceServiceProvider = Provider((ref) => DeviceService());
-final memberServiceProvider = Provider((ref) => MemberService());
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authService = ref.watch(authServiceProvider);
@@ -31,9 +26,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (!isLoggedIn && !isLoggingIn) {
         return '/login';
       }
+
       if (isLoggedIn && isLoggingIn) {
-        return '/';
+        final userRole = await authService.getUserRole();
+        switch (userRole) {
+          case 'admin':
+            return '/admin';
+          case 'staff':
+            return '/reception';
+          default:
+            return '/';
+        }
       }
+
+      if (isLoggedIn && !isLoggingIn) {
+        final userRole = await authService.getUserRole();
+        final currentPath = state.matchedLocation;
+
+        if (userRole == 'admin' && currentPath != '/admin' && !currentPath.startsWith('/admin')) {
+          return '/admin';
+        }
+        if (userRole == 'staff' && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
+          return '/reception';
+        }
+      }
+
       return null;
     },
     routes: [
@@ -43,9 +60,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin', builder: (context, state) => const AdminDashboardPage()),
       GoRoute(path: '/reception', builder: (context, state) => const ReceptionDashboardPage()),
       GoRoute(path: '/hotel-list', builder: (context, state) => const HotelListPage()),
-      GoRoute(path: '/hotel-detail', builder: (context, state) => const HotelDetailPage()),
       GoRoute(
-        path: '/booking-flow', 
+        path: '/hotel-detail',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return HotelDetailPage(hotelId: extra['hotelId']);
+        },
+      ),
+      GoRoute(
+        path: '/booking-flow',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           return BookingFlowPage(
@@ -53,10 +76,27 @@ final routerProvider = Provider<GoRouter>((ref) {
             roomType: extra['roomType'] ?? '标准间',
             price: extra['price'] ?? 0.0,
             roomId: extra['roomId'] ?? 0,
+            checkInDate: extra['checkInDate'] ?? DateTime.now(),
+            checkOutDate: extra['checkOutDate'] ?? DateTime.now().add(const Duration(days: 1)),
           );
         },
       ),
       GoRoute(path: '/orders', builder: (context, state) => const OrderListPage()),
+      GoRoute(
+        path: '/order-detail/:orderId',
+        builder: (context, state) {
+          final orderId = int.tryParse(state.pathParameters['orderId'] ?? '0') ?? 0;
+          return OrderDetailPage(orderId: orderId);
+        },
+      ),
+      GoRoute(path: '/favorites', builder: (context, state) => const FavoritesPage()),
+      GoRoute(
+        path: '/online-checkin',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return OnlineCheckinPage(bookingId: extra['bookingId'] as int?);
+        },
+      ),
     ],
   );
 });

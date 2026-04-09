@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/device.dart';
+import '../../../services/device_service.dart';
 
-class DeviceMonitorPage extends StatefulWidget {
+class DeviceMonitorPage extends ConsumerStatefulWidget {
   const DeviceMonitorPage({super.key});
 
   @override
-  State<DeviceMonitorPage> createState() => _DeviceMonitorPageState();
+  ConsumerState<DeviceMonitorPage> createState() => _DeviceMonitorPageState();
 }
 
-class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
+class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
   bool _isLoading = true;
-  List<Device> _devices = [];
+  List<dynamic> _devices = [];
+  String? _filterStatus;
 
   @override
   void initState() {
@@ -20,20 +23,38 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
   }
 
   Future<void> _loadDevices() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() {
-      _devices = [
-        Device(id: 1, deviceName: '主灯', deviceType: 'light', deviceCode: 'LIGHT_001', roomId: 101, isOnline: true, status: 'on'),
-        Device(id: 2, deviceName: '空调', deviceType: 'ac', deviceCode: 'AC_001', roomId: 101, isOnline: true, status: 'on'),
-        Device(id: 3, deviceName: '窗帘', deviceType: 'curtain', deviceCode: 'CURTAIN_001', roomId: 101, isOnline: true, status: 'off'),
-        Device(id: 4, deviceName: '门锁', deviceType: 'lock', deviceCode: 'LOCK_001', roomId: 101, isOnline: true, status: 'locked'),
-        Device(id: 5, deviceName: '温湿度传感器', deviceType: 'sensor', deviceCode: 'SENSOR_TEMP_001', roomId: 101, isOnline: true, status: 'normal'),
-        Device(id: 6, deviceName: '主灯', deviceType: 'light', deviceCode: 'LIGHT_002', roomId: 102, isOnline: false, status: 'offline'),
-        Device(id: 7, deviceName: '空调', deviceType: 'ac', deviceCode: 'AC_002', roomId: 102, isOnline: false, status: 'offline'),
-        Device(id: 8, deviceName: '电视', deviceType: 'tv', deviceCode: 'TV_001', roomId: 201, isOnline: true, status: 'off'),
-      ];
-      _isLoading = false;
-    });
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(deviceServiceProvider).getMyRoomDevices();
+      if (result.success && mounted) {
+        final List<dynamic> deviceList = result.data ?? [];
+        setState(() {
+          _devices = deviceList.map((d) => Device(
+            id: d['id'] ?? 0,
+            deviceName: d['device_name'] ?? '未知设备',
+            deviceType: d['type'] ?? d['device_type'] ?? 'unknown',
+            deviceCode: d['device_code'] ?? '',
+            roomId: d['room_id'] ?? 0,
+            isOnline: d['is_online'] ?? true,
+            status: d['status'] ?? 'offline',
+          )).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading devices: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载设备失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Device> get filteredDevices {
+    if (_filterStatus == null || _filterStatus == 'all') return _devices.cast<Device>();
+    if (_filterStatus == 'online') return _devices.where((d) => (d as Device).isOnline).cast<Device>().toList();
+    if (_filterStatus == 'offline') return _devices.where((d) => !(d as Device).isOnline).cast<Device>().toList();
+    return _devices.where((d) => (d as Device).status == _filterStatus).cast<Device>().toList();
   }
 
   Color getDeviceColor(Device d) {
@@ -61,16 +82,36 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('设备监控')),
+      appBar: AppBar(
+        title: const Text('设备监控'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                FilterChip(label: const Text('全部'), selected: _filterStatus == null || _filterStatus == 'all', onSelected: (_) => setState(() => _filterStatus = 'all')),
+                FilterChip(label: const Text('在线'), selected: _filterStatus == 'online', onSelected: (_) => setState(() => _filterStatus = 'online')),
+                FilterChip(label: const Text('离线'), selected: _filterStatus == 'offline', onSelected: (_) => setState(() => _filterStatus = 'offline')),
+                FilterChip(label: const Text('异常'), selected: _filterStatus == 'error', onSelected: (_) => setState(() => _filterStatus = 'error')),
+              ],
+            ),
+          ),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _loadDevices,
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _devices.length,
-                itemBuilder: (context, index) => _buildDeviceCard(_devices[index]),
-              ),
+            : filteredDevices.isEmpty
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.devices_other, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)), const SizedBox(height: 16), Text('暂无设备数据', style: TextStyle(color: AppColors.textSecondary))]))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredDevices.length,
+                    itemBuilder: (context, index) => _buildDeviceCard(filteredDevices[index]),
+                  ),
       ),
     );
   }
@@ -120,7 +161,21 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonal(
-                    onPressed: () { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('指令已发送'))); },
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      final newStatus = device.status == 'on' ? 'off' : 'on';
+                      try {
+                        final result = await ref.read(deviceServiceProvider).controlDevice(device.id, 'toggle', newStatus);
+                        if (result.success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('指令发送成功')));
+                          _loadDevices();
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+                        }
+                      }
+                    },
                     child: Text(device.status == 'on' || device.status == 'unlocked' ? '关闭${device.typeName}' : '打开${device.typeName}'),
                   ),
                 ),

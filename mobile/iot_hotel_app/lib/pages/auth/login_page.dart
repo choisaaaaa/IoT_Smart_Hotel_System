@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/theme/app_colors.dart';
 import '../../routes/app_router.dart';
+import '../../services/auth_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -162,25 +163,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          const Row(
-                            children: [
-                              Expanded(child: Divider()),
-                              Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('快捷登录', style: TextStyle(color: AppColors.textHint, fontSize: 12))),
-                              Expanded(child: Divider()),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildRoleChip('管理员', 'admin', Colors.blue),
-                              const SizedBox(width: 8),
-                              _buildRoleChip('前台', 'reception', Colors.orange),
-                              const SizedBox(width: 8),
-                              _buildRoleChip('住客', 'guest', Colors.green),
-                            ],
-                          ),
                         ],
                       ),
                     ),
@@ -191,18 +173,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRoleChip(String label, String role, Color color) {
-    return ActionChip(
-      label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-      backgroundColor: color.withValues(alpha: 0.1),
-      side: BorderSide(color: color.withValues(alpha: 0.2)),
-      onPressed: () {
-        _usernameController.text = role == 'admin' ? 'admin' : role == 'reception' ? 'reception' : 'guest';
-        _passwordController.text = '123456';
-      },
     );
   }
 }

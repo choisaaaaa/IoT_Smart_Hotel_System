@@ -6,13 +6,13 @@ const router = Router();
 
 router.get('/lookup', bookingController.lookupForGuest);
 router.post('/:id/checkin-online', bookingController.checkinOnline);
-router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.get);
-router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.getById);
+router.get('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.get);
+router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.getById);
 router.post('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.create);
 router.put('/:id/confirm', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.confirm);
 router.put('/:id/checkin', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkin);
 router.put('/:id/checkout', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkout);
-router.put('/:id/cancel', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.cancel);
+router.put('/:id/cancel', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.cancel);
 router.patch('/:id/status', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.updateStatus);
 
 export default router;

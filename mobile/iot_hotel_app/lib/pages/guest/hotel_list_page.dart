@@ -1,9 +1,74 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/hotel_service.dart';
+import '../../services/member_service.dart';
+import '../../core/logic/member_logic.dart';
 
-class HotelListPage extends StatelessWidget {
+class HotelListPage extends ConsumerStatefulWidget {
   const HotelListPage({super.key});
+
+  @override
+  ConsumerState<HotelListPage> createState() => _HotelListPageState();
+}
+
+class _HotelListPageState extends ConsumerState<HotelListPage> {
+  List<dynamic> _hotels = [];
+  bool _isLoading = true;
+  Map<String, dynamic>? _assets;
+  String _selectedCity = '全部';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHotels();
+    _fetchAssets();
+  }
+
+  Future<void> _fetchHotels() async {
+    setState(() => _isLoading = true);
+    try {
+      final city = _selectedCity == '全部' ? null : _selectedCity;
+      final result = await ref.read(hotelServiceProvider).getHotels(
+        city: _searchController.text.isNotEmpty ? _searchController.text : city,
+      );
+      if (result.success && mounted) {
+        setState(() => _hotels = result.data ?? []);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '获取酒店列表失败')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error fetching hotels: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('网络错误：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchAssets() async {
+    try {
+      final result = await ref.read(memberServiceProvider).getMyAssets();
+      if (result.success && mounted) {
+        setState(() => _assets = result.data);
+      }
+    } catch (e) {
+      debugPrint('Error fetching assets: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,15 +87,41 @@ class HotelListPage extends StatelessWidget {
             color: AppColors.background,
             borderRadius: BorderRadius.circular(20),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              SizedBox(width: 12),
-              Text('珠海', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-              Icon(Icons.keyboard_arrow_down, size: 16),
-              VerticalDivider(indent: 10, endIndent: 10),
-              Text('住 04.08 / 离 04.09', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
-              VerticalDivider(indent: 10, endIndent: 10),
-              Expanded(child: Text('位置/酒店/关键词', style: TextStyle(color: AppColors.textHint, fontSize: 12))),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _showCityPicker,
+                child: Row(
+                  children: [
+                    Text(_selectedCity, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                    const Icon(Icons.keyboard_arrow_down, size: 16),
+                  ],
+                ),
+              ),
+              const VerticalDivider(indent: 10, endIndent: 10),
+              const Text('04.08 - 04.09', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+              const VerticalDivider(indent: 10, endIndent: 10),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _fetchHotels(),
+                  onChanged: (v) => setState(() {}),
+                  onEditingComplete: _fetchHotels,
+                  textInputAction: TextInputAction.search,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: '位置/酒店/关键词',
+                    hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 12),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () { _searchController.clear(); setState(() {}); _fetchHotels(); })
+                        : IconButton(icon: const Icon(Icons.search, size: 16), onPressed: _fetchHotels),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -43,10 +134,57 @@ class HotelListPage extends StatelessWidget {
           _buildFilterBar(),
           _buildQuickFilters(),
           _buildPointsInfo(),
-          Expanded(child: _buildHotelList(context)),
+          Expanded(
+            child: _isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : _hotels.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.hotel_outlined, size: 64, color: AppColors.textHint),
+                            const SizedBox(height: 16),
+                            Text(_selectedCity == '全部' ? '暂无酒店数据' : '$_selectedCity 暂无酒店数据', style: const TextStyle(color: AppColors.textSecondary)),
+                            TextButton(onPressed: () {
+                              setState(() {
+                                _selectedCity = '全部';
+                                _searchController.clear();
+                              });
+                              _fetchHotels();
+                            }, child: const Text('查看全部酒店')),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _fetchHotels,
+                        child: _buildHotelList(context),
+                      ),
+          ),
         ],
       ),
     );
+  }
+
+  void _showCityPicker() async {
+    final cities = ['全部', '北京', '上海', '广州', '深圳', '珠海', '杭州', '成都'];
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 300,
+        child: ListView.builder(
+          itemCount: cities.length,
+          itemBuilder: (context, i) => ListTile(
+            title: Text(cities[i]),
+            onTap: () => Navigator.pop(context, cities[i]),
+          ),
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _selectedCity = result);
+      _fetchHotels();
+    }
   }
 
   Widget _buildFilterBar() {
@@ -94,6 +232,9 @@ class HotelListPage extends StatelessWidget {
   }
 
   Widget _buildPointsInfo() {
+    final points = _assets?['points'] ?? '0';
+    final discount = (int.tryParse(points.toString()) ?? 0) / 100;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -104,7 +245,7 @@ class HotelListPage extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('我的积分 3522 | 可抵 ¥35', style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          Text('我的积分 $points | 可抵 ¥${discount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           Row(
             children: [
               const Text('看抵扣价', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
@@ -120,14 +261,23 @@ class HotelListPage extends StatelessWidget {
   Widget _buildHotelList(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: 5,
-      itemBuilder: (context, i) => _buildHotelCard(context, i),
+      itemCount: _hotels.length,
+      itemBuilder: (context, i) => _buildHotelCard(context, _hotels[i]),
     );
   }
 
-  Widget _buildHotelCard(BuildContext context, int i) {
+  Widget _buildHotelCard(BuildContext context, dynamic hotel) {
+    final totalSpent = double.tryParse(_assets?['total_spent']?.toString() ?? '0') ?? 0;
+    final level = MemberLevel.fromExperience(totalSpent.floor());
+    
+    final originalPrice = double.tryParse((hotel['price'] ?? 299).toString()) ?? 299.0;
+    final discountedPrice = originalPrice * level.discount;
+
+    final hotelName = hotel['name'] as String? ?? '智联酒店';
+    final shortName = hotelName.split('酒店').first;
+
     return GestureDetector(
-      onTap: () => context.push('/hotel-detail'),
+      onTap: () => context.push('/hotel-detail', extra: {'hotelId': hotel['id']}),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -141,10 +291,11 @@ class HotelListPage extends StatelessWidget {
             Stack(
               children: [
                 Image.network(
-                  'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+                  hotel['image'] ?? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  errorBuilder: (ctx, _, __) => Container(height: 200, color: AppColors.divider, child: const Icon(Icons.hotel, size: 48, color: AppColors.textHint)),
                 ),
                 Positioned(
                   top: 12,
@@ -155,7 +306,7 @@ class HotelListPage extends StatelessWidget {
                       color: AppColors.primary.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('星程酒店 · 旗舰店', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text('$shortName · 旗舰店', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -165,23 +316,23 @@ class HotelListPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('星程珠海金湾机场酒店', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(hotelName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Row(
+                  Row(
                     children: [
-                      Text('4.8', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
-                      SizedBox(width: 4),
-                      Text('很棒 连续281条好评', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                      const Text('4.8', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(width: 4),
+                      Text('很棒 ${_hotels.length > 1 ? "连续281条" : "新开业"}好评', style: const TextStyle(color: AppColors.primary, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text('珠海金湾机场附近 | 近珠海金湾机场 T1 航站楼', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  Text(hotel['location'] ?? '酒店地址加载中...', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     children: [
                       _buildTag('2.5倍积分', AppColors.gold.withValues(alpha: 0.1), AppColors.gold),
-                      _buildTag('新品·星程3.0', Colors.blue.withValues(alpha: 0.1), Colors.blue),
+                      _buildTag('智慧客控', Colors.blue.withValues(alpha: 0.1), Colors.blue),
                       _buildTag('免费停车', AppColors.background, AppColors.textSecondary),
                     ],
                   ),
@@ -190,20 +341,21 @@ class HotelListPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('低价房仅剩2间', style: TextStyle(color: AppColors.error, fontSize: 12)),
+                      Text(hotel['availableRooms'] != null ? '低价房仅剩${hotel['availableRooms']}间' : '火热预订中', style: const TextStyle(color: AppColors.error, fontSize: 12)),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Row(
                             children: [
-                              Text('¥289', style: TextStyle(color: AppColors.textHint, decoration: TextDecoration.lineThrough, fontSize: 14)),
+                              if (originalPrice > discountedPrice)
+                                Text('¥${originalPrice.toStringAsFixed(0)}', style: const TextStyle(color: AppColors.textHint, decoration: TextDecoration.lineThrough, fontSize: 14)),
                               const SizedBox(width: 4),
                               const Text('¥', style: TextStyle(color: AppColors.secondary, fontSize: 14, fontWeight: FontWeight.bold)),
-                              const Text('255', style: TextStyle(color: AppColors.secondary, fontSize: 24, fontWeight: FontWeight.bold)),
+                              Text(discountedPrice.toStringAsFixed(0), style: const TextStyle(color: AppColors.secondary, fontSize: 24, fontWeight: FontWeight.bold)),
                               const Text('起', style: TextStyle(color: AppColors.secondary, fontSize: 12)),
                             ],
                           ),
-                          const Text('金会员 | 优惠34', style: TextStyle(color: AppColors.secondary, fontSize: 11)),
+                          Text('${level.label} | 优惠¥${(originalPrice - discountedPrice).toStringAsFixed(0)}', style: const TextStyle(color: AppColors.secondary, fontSize: 11)),
                         ],
                       ),
                     ],

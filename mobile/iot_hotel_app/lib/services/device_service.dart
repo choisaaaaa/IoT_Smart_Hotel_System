@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
@@ -23,9 +24,8 @@ class DeviceService {
   Future<ApiResult<void>> controlDevice(int deviceId, String command, dynamic value) async {
     try {
       final response = await _dioClient.post(
-        '${ApiConstants.devices}/control',
+        '${ApiConstants.devices}$deviceId/command',
         data: {
-          'deviceId': deviceId,
           'command': command,
           'value': value,
         },
@@ -39,4 +39,24 @@ class DeviceService {
       return ApiResult.failure('网络错误：$e');
     }
   }
+
+  Future<ApiResult<List<dynamic>>> getAllDevices({String? status, int? roomId}) async {
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.devices,
+        queryParameters: {
+          'status': status,
+          'room_id': roomId,
+        }..removeWhere((key, value) => value == null),
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(List<dynamic>.from(response.data['data']));
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取设备列表失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
 }
+
+final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService());

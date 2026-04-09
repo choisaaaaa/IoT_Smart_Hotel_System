@@ -5,6 +5,8 @@ class AppConstants {
   static const String tokenKey = 'access_token';
   static const String sessionTokenKey = 'session_token';
   static const String userInfoKey = 'user_info';
+  static const String guestCheckinInfoKey = 'guest_checkin_info';
+  static const String favoriteHotelsKey = 'favorite_hotels';
 
   static const List<String> userRoles = ['admin', 'reception', 'guest'];
 

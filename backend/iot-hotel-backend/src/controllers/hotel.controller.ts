@@ -113,3 +113,41 @@ export const remove = async (req: AuthRequest, res: Response) => {
     res.status(500).json(errorResponse('删除酒店失败'));
   }
 };
+
+/**
+ * 获取酒店统计数据
+ */
+export const getStatistics = async (req: AuthRequest, res: Response) => {
+  try {
+    const hotelId = req.user?.hotel_id;
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权，缺少酒店信息'));
+    }
+
+    // 这里可以根据实际需求从各个表统计数据
+    // 示例：统计房间状态、今日预订、待处理报修等
+    const [roomStats] = await pool.query<RowDataPacket[]>(
+      'SELECT room_status, COUNT(*) as count FROM rooms WHERE hotel_id = ? GROUP BY room_status',
+      [hotelId]
+    );
+
+    const [bookingStats] = await pool.query<RowDataPacket[]>(
+      'SELECT status, COUNT(*) as count FROM bookings WHERE hotel_id = ? AND DATE(check_in_date) = CURDATE() GROUP BY status',
+      [hotelId]
+    );
+
+    const [maintenanceStats] = await pool.query<RowDataPacket[]>(
+      'SELECT status, COUNT(*) as count FROM maintenance_tickets WHERE hotel_id = ? AND status = "pending"',
+      [hotelId]
+    );
+
+    res.json(successResponse({
+      rooms: roomStats,
+      bookings: bookingStats,
+      pending_maintenance: maintenanceStats[0]?.count || 0
+    }, '获取统计数据成功'));
+  } catch (error) {
+    logger.error('获取统计数据失败:', error);
+    res.status(500).json(errorResponse('获取统计数据失败'));
+  }
+};

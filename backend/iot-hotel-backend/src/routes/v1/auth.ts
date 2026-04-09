@@ -264,8 +264,8 @@ router.post('/register', async (req, res) => {
   try {
     const { username, password, email, hotel_id } = req.body;
 
-    if (!username || !password || !hotel_id) {
-      return sendError(res, errorResponse('用户名、密码和酒店ID不能为空', 400));
+    if (!username || !password) {
+      return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
     // 检查用户名是否已存在
@@ -281,11 +281,20 @@ router.post('/register', async (req, res) => {
     // 加密密码
     const hashedPassword = await hashPassword(password);
 
+    // 如果未提供 hotel_id，则尝试获取默认酒店（第一个酒店）
+    let targetHotelId = hotel_id;
+    if (!targetHotelId) {
+      const [hotels]: any = await db.execute('SELECT id FROM hotels LIMIT 1');
+      if (hotels.length > 0) {
+        targetHotelId = hotels[0].id;
+      }
+    }
+
     // 创建用户 (默认为 user 角色)
     const [result]: any = await db.execute(
       `INSERT INTO users (username, password, email, role, hotel_id) 
        VALUES (?, ?, ?, 'user', ?)`,
-      [username, hashedPassword, email || null, hotel_id]
+      [username, hashedPassword, email || null, targetHotelId || null]
     );
 
     const userId = result.insertId;

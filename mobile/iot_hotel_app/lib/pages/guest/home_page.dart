@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../routes/app_router.dart';
+import '../../services/auth_service.dart';
+import '../../services/member_service.dart';
+import '../../core/logic/member_logic.dart';
+import '../../models/user.dart';
+import '../../core/network/api_result.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -17,9 +23,9 @@ class HomePage extends ConsumerWidget {
           children: [
             _buildHeader(context, ref),
             _buildSearchCard(context),
-            _buildQuickActions(),
+            _buildQuickActions(context),
             _buildBanner(),
-            _buildMemberPrivilege(),
+            _buildMemberPrivilege(ref),
             const SizedBox(height: 20),
           ],
         ),
@@ -29,6 +35,7 @@ class HomePage extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final authService = ref.watch(authServiceProvider);
+    final memberService = ref.watch(memberServiceProvider);
     
     return Container(
       width: double.infinity,
@@ -55,17 +62,26 @@ class HomePage extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 FutureBuilder(
-                  future: authService.getCurrentUser(),
+                  future: Future.wait([
+                    authService.getCurrentUser(),
+                    memberService.getMyAssets(),
+                  ]),
                   builder: (context, snapshot) {
-                    final user = snapshot.data;
+                    if (!snapshot.hasData) return const SizedBox.shrink();
+                    final user = snapshot.data?[0] as User?;
+                    final assetsResult = snapshot.data?[1] as ApiResult?;
+                    final assets = assetsResult?.data ?? {};
+                    
                     final displayName = user?.username ?? '游客';
                     final roleName = user?.role == 'admin' ? '系统管理员' : user?.role == 'staff' ? '金会员' : '普通会员';
+                    final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
+                    final level = MemberLevel.fromExperience(totalSpent.floor());
                     
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('早上好,', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 16)),
-                        Text('$roleName $displayName 先生', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text('${level.label} $displayName ${user != null ? '先生/女士' : ''}', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                       ],
                     );
                   },
@@ -86,6 +102,10 @@ class HomePage extends ConsumerWidget {
   }
 
   Widget _buildSearchCard(BuildContext context) {
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+    final format = DateFormat('M月d日');
+
     return Transform.translate(
       offset: const Offset(0, -40),
       child: Container(
@@ -124,24 +144,24 @@ class HomePage extends ConsumerWidget {
               ],
             ),
             const Divider(height: 32),
-            const Row(
+            Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('今天入住', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      Text('4月8日', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text('今天入住', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      Text(format.format(now), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
-                Text('1晚', style: TextStyle(color: AppColors.textHint)),
+                const Text('1晚', style: TextStyle(color: AppColors.textHint)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('明天离店', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      Text('4月9日', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text('明天离店', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      Text(format.format(tomorrow), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -166,29 +186,39 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions() {
+  Widget _buildQuickActions(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20),
       color: Colors.white,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildActionItem(Icons.calendar_today_outlined, '会员签到'),
-          _buildActionItem(Icons.business_outlined, '企业预订'),
-          _buildActionItem(Icons.shopping_cart_outlined, '华住商城'),
-          _buildActionItem(Icons.bookmark_outline, '收藏/足迹'),
+          _buildActionItem(Icons.calendar_today_outlined, '会员签到', onTap: () => context.push('/member')),
+          _buildActionItem(Icons.business_outlined, '企业预订', onTap: () => _showComingSoon(context, '企业预订')),
+          _buildActionItem(Icons.shopping_cart_outlined, '华住商城', onTap: () => _showComingSoon(context, '华住商城')),
+          _buildActionItem(Icons.bookmark_outline, '收藏/足迹', onTap: () => context.push('/favorites')),
         ],
       ),
     );
   }
 
-  Widget _buildActionItem(IconData icon, String label) {
-    return Column(
-      children: [
-        Icon(icon, size: 28, color: AppColors.textPrimary),
-        const SizedBox(height: 8),
-        Text(label, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textPrimary)),
-      ],
+  void _showComingSoon(BuildContext context, String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$feature功能即将上线，敬请期待'),
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
+  Widget _buildActionItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, size: 28, color: AppColors.textPrimary),
+          const SizedBox(height: 8),
+          Text(label, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textPrimary)),
+        ],
+      ),
     );
   }
 
@@ -216,46 +246,57 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMemberPrivilege() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildMemberPrivilege(WidgetRef ref) {
+    final memberService = ref.watch(memberServiceProvider);
+
+    return FutureBuilder(
+      future: memberService.getMyAssets(),
+      builder: (context, snapshot) {
+        final assets = (snapshot.data as ApiResult?)?.data ?? {};
+        final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
+        final level = MemberLevel.fromExperience(totalSpent.floor());
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+          ),
+          child: Column(
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.gold),
-                    child: const Text('H', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.gold),
+                        child: const Text('H', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(level.label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF795548))),
+                      const SizedBox(width: 8),
+                      Text('您可享受${level.index * 20 + 5}项特权', style: TextStyle(fontSize: 12, color: Colors.brown.withValues(alpha: 0.7))),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const Text('金会员', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF795548))),
-                  const SizedBox(width: 8),
-                  Text('您可享受85项特权', style: TextStyle(fontSize: 12, color: Colors.brown.withValues(alpha: 0.7))),
+                  const Text('更多玩法 >', style: TextStyle(fontSize: 12, color: Colors.brown)),
                 ],
               ),
-              const Text('更多玩法 >', style: TextStyle(fontSize: 12, color: Colors.brown)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _buildPrivilegeItem('月月领券', '每月1号见'),
+                  _buildPrivilegeItem('积分游乐园', '抽10000积分'),
+                  _buildPrivilegeItem('超值特权卡', '积分间夜限时加倍'),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildPrivilegeItem('月月领券', '每月1号见'),
-              _buildPrivilegeItem('积分游乐园', '抽10000积分'),
-              _buildPrivilegeItem('超值特权卡', '积分间夜限时加倍'),
-            ],
-          ),
-        ],
-      ),
+        );
+      }
     );
   }
 
