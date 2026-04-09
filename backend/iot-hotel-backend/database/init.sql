@@ -106,6 +106,7 @@ CREATE TABLE bookings (
     booking_number VARCHAR(50) NOT NULL,
     hotel_id INT NOT NULL DEFAULT 1,
     room_id INT NOT NULL,
+    user_id INT DEFAULT NULL,
     guest_name VARCHAR(100) NOT NULL,
     guest_phone VARCHAR(20) NOT NULL,
     guest_id_number VARCHAR(50) DEFAULT NULL,
@@ -124,6 +125,7 @@ CREATE TABLE bookings (
     cancelled_at DATETIME DEFAULT NULL,
     UNIQUE KEY uk_booking_number (booking_number),
     INDEX idx_room_id (room_id),
+    INDEX idx_user_id (user_id),
     INDEX idx_status (status),
     INDEX idx_check_in_date (check_in_date),
     INDEX idx_check_out_date (check_out_date)
@@ -196,6 +198,8 @@ CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
     password VARCHAR(255) NOT NULL,
+    phone VARCHAR(20) DEFAULT NULL,
+    uid VARCHAR(50) DEFAULT NULL,
     email VARCHAR(100) DEFAULT NULL,
     role VARCHAR(20) NOT NULL DEFAULT 'user',
     permissions JSON DEFAULT NULL,
@@ -203,7 +207,23 @@ CREATE TABLE users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_username (username),
-    INDEX idx_username (username)
+    UNIQUE KEY uk_phone (phone),
+    UNIQUE KEY uk_uid (uid),
+    INDEX idx_username (username),
+    INDEX idx_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. 用户-酒店关联表（多对多）
+CREATE TABLE user_hotels (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    hotel_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_hotel (user_id, hotel_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_hotel_id (hotel_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 初始演示数据插入 (略，保持与 README 同步即可)

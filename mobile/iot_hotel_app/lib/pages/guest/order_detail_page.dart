@@ -120,7 +120,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       const SizedBox(height: 12),
                       _buildPriceDetailCard(),
                       const SizedBox(height: 12),
-                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending')
+                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending' || _order!['status'] == 'checked_in' || _order!['status'] == 'checked_out')
                         _buildActionButtons(),
                       const SizedBox(height: 32),
                     ],
@@ -299,6 +299,41 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               ),
             ),
           ],
+          if (_order!['status'] == 'checked_in') ...[
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: () => context.push('/checkout', extra: {'bookingId': widget.orderId}),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                child: const Text('自助退房', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/extend-stay', extra: {'bookingId': widget.orderId}),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                child: const Text('在线续住'),
+              ),
+            ),
+          ],
+          if (_order!['status'] == 'checked_out')
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/review-submit', extra: {
+                  'bookingId': widget.orderId,
+                  'hotelId': _order?['hotel_id'],
+                  'hotelName': _order?['hotel_name'],
+                }),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                child: const Text('去评价'),
+              ),
+            ),
         ],
       ),
     );

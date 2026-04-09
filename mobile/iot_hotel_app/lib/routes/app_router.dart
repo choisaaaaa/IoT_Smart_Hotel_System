@@ -12,6 +12,12 @@ import '../pages/guest/order_list_page.dart';
 import '../pages/guest/order_detail_page.dart';
 import '../pages/guest/favorites_page.dart';
 import '../pages/guest/online_checkin_page.dart';
+import '../pages/guest/notification_center_page.dart';
+import '../pages/guest/review_submit_page.dart';
+import '../pages/guest/checkout_page.dart';
+import '../pages/guest/coupon_center_page.dart';
+import '../pages/guest/extend_stay_page.dart';
+import '../pages/guest/frequent_guest_page.dart';
 import '../services/auth_service.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -35,6 +41,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             return '/admin';
           case 'staff':
           case 'receptionist':
+          case 'reception':
             return '/reception';
           default:
             return '/';
@@ -48,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         if ((userRole == 'admin' || userRole == 'system') && currentPath != '/admin' && !currentPath.startsWith('/admin')) {
           return '/admin';
         }
-        if ((userRole == 'staff' || userRole == 'receptionist') && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
+        if ((userRole == 'staff' || userRole == 'receptionist' || userRole == 'reception') && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
           return '/reception';
         }
       }
@@ -98,6 +105,43 @@ final routerProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           return OnlineCheckinPage(bookingId: extra['bookingId'] as int?);
         },
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationCenterPage(),
+      ),
+      GoRoute(
+        path: '/review-submit',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return ReviewSubmitPage(
+            bookingId: extra['bookingId'] as int? ?? 0,
+            hotelId: extra['hotelId'] as int?,
+            hotelName: extra['hotelName'] as String?,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/checkout',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return CheckoutPage(bookingId: extra['bookingId'] as int? ?? 0);
+        },
+      ),
+      GoRoute(
+        path: '/coupons',
+        builder: (context, state) => const CouponCenterPage(),
+      ),
+      GoRoute(
+        path: '/extend-stay',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return ExtendStayPage(bookingId: extra['bookingId'] as int? ?? 0);
+        },
+      ),
+      GoRoute(
+        path: '/frequent-guests',
+        builder: (context, state) => const FrequentGuestPage(),
       ),
     ],
   );

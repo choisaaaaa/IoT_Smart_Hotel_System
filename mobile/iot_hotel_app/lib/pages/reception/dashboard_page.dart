@@ -1065,12 +1065,13 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
         final data = response.data['data'];
         if (mounted) {
           setState(() {
-            _callHistory = data is List ? data : (data is Map ? (data['items'] ?? data['list'] ?? []) : []);
+            _callHistory = data is List ? data : (data is Map ? (data['items'] ?? data['list'] ?? data['records'] ?? []) : []);
           });
         }
       }
     } catch (e) {
       debugPrint('Error loading call history: $e');
+      if (mounted) setState(() => _callHistory = []);
     }
   }
 
@@ -1082,6 +1083,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading rooms: $e');
+      if (mounted) setState(() => _rooms = []);
     }
   }
 
@@ -1098,6 +1100,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading users: $e');
+      if (mounted) setState(() => _users = []);
     }
   }
 
@@ -1111,6 +1114,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading call stats: $e');
+      if (mounted) setState(() => _stats = {});
     }
   }
 

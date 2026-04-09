@@ -40,20 +40,26 @@ export class PaymentService {
       const paramsArray: any[] = [];
       
       if (status) {
-        whereClause += ' AND status = ?';
+        whereClause += ' AND p.status = ?';
         paramsArray.push(status);
       }
       
       if (order_type) {
-        whereClause += ' AND order_type = ?';
+        whereClause += ' AND p.order_type = ?';
         paramsArray.push(order_type);
       }
       
-      const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM payments ${whereClause}`, paramsArray);
+      const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, paramsArray);
       const total = (totalRows[0] as any).total;
       
       const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT * FROM payments ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        `SELECT p.*, b.guest_name, b.guest_phone, b.room_id, r.room_number, r.room_type, r.room_name, h.hotel_name
+         FROM payments p
+         LEFT JOIN bookings b ON p.order_type = 'booking' AND p.order_id = b.id
+         LEFT JOIN rooms r ON b.room_id = r.id
+         LEFT JOIN hotels h ON b.hotel_id = h.id
+         ${whereClause} 
+         ORDER BY p.id DESC LIMIT ? OFFSET ?`,
         [...paramsArray, Number(pageSize), offset]
       );
       
@@ -134,6 +140,17 @@ export class PaymentService {
       // 3. 根据 order_type 更新关联表的状态
       if (payment.order_type === 'booking') {
         await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
+
+        const [bookingRows] = await connection.query<RowDataPacket[]>(
+          'SELECT room_id FROM bookings WHERE id = ?',
+          [payment.order_id]
+        );
+        if (bookingRows.length > 0) {
+          const roomId = (bookingRows[0] as any).room_id;
+          if (roomId) {
+            await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['reserved', roomId]);
+          }
+        }
       } else if (payment.order_type === 'delivery') {
         await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ?', ['paid', payment.order_id]);
       } else if (payment.order_type === 'maintenance') {

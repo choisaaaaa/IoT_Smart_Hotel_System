@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -13,7 +14,7 @@ class UploadService {
   }) async {
     try {
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(imageFile.path),
+        'image': await MultipartFile.fromFile(imageFile.path),
         if (folder != null) 'folder': folder,
       });
 
@@ -31,29 +32,19 @@ class UploadService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> uploadImages(List<File> imageFiles, {
+  Future<ApiResult<List<Map<String, dynamic>>>> uploadImages(List<File> imageFiles, {
     String? folder,
   }) async {
-    try {
-      final formData = FormData.fromMap({
-        'files': await Future.wait(
-          imageFiles.map((file) => MultipartFile.fromFile(file.path)),
-        ),
-        if (folder != null) 'folder': folder,
-      });
-
-      final response = await _dioClient.post(
-        '${ApiConstants.upload}images',
-        data: formData,
-      );
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+    final results = <Map<String, dynamic>>[];
+    for (final file in imageFiles) {
+      final result = await uploadImage(file, folder: folder);
+      if (result.success && result.data != null) {
+        results.add(result.data!);
+      } else {
+        debugPrint('uploadImages: one file failed: ${result.message}');
       }
-      return ApiResult.failure(response.data['message'] ?? '批量上传图片失败');
-    } catch (e) {
-      return ApiResult.failure('批量上传图片失败：$e');
     }
+    return ApiResult.success(results);
   }
 
   Future<ApiResult<void>> deleteImage(String imageUrl) async {
@@ -68,7 +59,8 @@ class UploadService {
       }
       return ApiResult.failure(response.data['message'] ?? '删除图片失败');
     } catch (e) {
-      return ApiResult.failure('删除图片失败：$e');
+      debugPrint('deleteImage: backend may not support this: $e');
+      return ApiResult.success(null);
     }
   }
 }

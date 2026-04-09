@@ -9,7 +9,6 @@ export const get = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
     
-    // 如果是 system 角色，允许通过查询参数指定酒店，否则必须有绑定的 hotel_id
     if (isSystemRole(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
@@ -17,6 +16,18 @@ export const get = async (req: AuthRequest, res: Response) => {
       } else if (!hotelId) {
         const hotels = await HotelService.getAllHotels();
         hotelId = hotels[0]?.id;
+      }
+    } else if (req.user?.role === 'staff' || req.user?.role === 'manager') {
+      const [hotelRows]: any = await (await import('../config/database')).default.execute(
+        'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
+        [req.user?.id]
+      );
+      if (hotelRows.length > 0) {
+        hotelId = hotelRows[0].hotel_id;
+      }
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
       }
     }
 

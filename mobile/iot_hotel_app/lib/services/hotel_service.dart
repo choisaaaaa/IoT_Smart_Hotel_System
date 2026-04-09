@@ -184,7 +184,18 @@ class HotelService {
     required String year,
     required String month,
   }) async {
-    return getStatistics();
+    try {
+      final response = await _dioClient.get('${ApiConstants.hotel}statistics', queryParameters: {
+        'year': year,
+        'month': month,
+      });
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取报表数据失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
   }
 }
 

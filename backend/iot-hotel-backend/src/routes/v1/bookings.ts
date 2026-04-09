@@ -11,8 +11,9 @@ router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system', '
 router.post('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.create);
 router.put('/:id/confirm', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.confirm);
 router.put('/:id/checkin', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkin);
-router.put('/:id/checkout', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.checkout);
+router.put('/:id/checkout', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.checkout);
 router.put('/:id/cancel', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.cancel);
+router.put('/:id/extend', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.extendStay);
 router.patch('/:id/status', authenticate as any, authorize(['admin', 'staff', 'system']), bookingController.updateStatus);
 
 export default router;

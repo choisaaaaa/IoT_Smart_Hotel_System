@@ -16,7 +16,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  String _selectedRole = 'user';
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -24,6 +26,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _phoneController.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -37,6 +40,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         _usernameController.text.trim(),
         _passwordController.text,
         _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        role: _selectedRole,
       );
       
       if (!mounted) return;
@@ -119,9 +124,24 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             decoration: const InputDecoration(
                               labelText: '用户名',
                               prefixIcon: Icon(Icons.person_outline_rounded),
-                              hintText: '建议使用手机号或邮箱',
+                              hintText: '请输入用户名',
                             ),
                             validator: (v) => v!.isEmpty ? '请输入用户名' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _phoneController,
+                            decoration: const InputDecoration(
+                              labelText: '手机号',
+                              prefixIcon: Icon(Icons.phone_outlined),
+                              hintText: '请输入手机号',
+                            ),
+                            keyboardType: TextInputType.phone,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return '请输入手机号';
+                              if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '手机号格式不正确';
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
@@ -132,6 +152,20 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                               hintText: '用于找回密码',
                             ),
                             keyboardType: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _selectedRole,
+                            decoration: const InputDecoration(
+                              labelText: '角色类型',
+                              prefixIcon: Icon(Icons.badge_outlined),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 'user', child: Text('顾客')),
+                              DropdownMenuItem(value: 'staff', child: Text('前台员工')),
+                              DropdownMenuItem(value: 'manager', child: Text('酒店经理')),
+                            ],
+                            onChanged: (v) => setState(() => _selectedRole = v ?? 'user'),
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
