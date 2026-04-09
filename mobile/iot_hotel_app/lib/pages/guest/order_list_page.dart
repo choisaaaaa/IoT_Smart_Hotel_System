@@ -24,6 +24,12 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
     _fetchOrders();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _fetchOrders();
+  }
+
   Future<void> _fetchOrders() async {
     setState(() => _isLoading = true);
     try {
@@ -438,7 +444,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                 ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: () {},
+                onPressed: () => context.push('/hotel-detail', extra: {'hotelId': orderData?['hotel_id'] ?? 1}),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.divider),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

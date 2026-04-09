@@ -113,11 +113,6 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('请选择入住和退房日期', 400));
     }
 
-    const checkInDate = dayjs(check_in as string);
-    const checkOutDate = dayjs(check_out as string);
-
-    // 查询在指定日期范围内可用的房间
-    // 可用房间 = 总房间 - 已预订房间
     const sql = `
       SELECT 
         r.id,
@@ -132,15 +127,19 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         r.room_status,
         r.facilities,
         r.images as image_url,
-        (SELECT COUNT(*) FROM rooms r2 WHERE r2.hotel_id = r.hotel_id AND r2.room_type = r.room_type AND r2.room_status = 'available') as available_count
+        rt.available_count
       FROM rooms r
+      INNER JOIN (
+        SELECT room_type, COUNT(*) as available_count
+        FROM rooms
+        WHERE hotel_id = ? AND room_status = 'available'
+        GROUP BY room_type
+      ) rt ON rt.room_type = r.room_type
       WHERE r.hotel_id = ? AND r.room_status = 'available'
-      GROUP BY r.room_type
+      GROUP BY r.room_type, r.id
     `;
 
-    const params = [hotelId];
-
-    const [rooms]: any = await db.execute(sql, params);
+    const [rooms]: any = await db.execute(sql, [hotelId, hotelId]);
 
     sendSuccess(res, {
       rooms: rooms.map((r: any) => {
