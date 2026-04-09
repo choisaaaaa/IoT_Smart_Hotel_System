@@ -32,11 +32,11 @@ export async function list(req: AuthRequest, res: Response) {
     const params: any[] = [];
     
     // 权限过滤逻辑
-    if (currentUser.role === 'admin') {
-      // Admin 只能看到自己门店的用户
+    if (currentUser.role === 'admin' || currentUser.role === 'staff') {
+      // Admin 和 Staff 只能看到自己门店的用户
       conditions.push('u.hotel_id = ?');
       params.push(currentUser.hotel_id);
-      // Admin 不能看到 system 用户
+      // 不能看到 system 用户
       conditions.push('u.role != ?');
       params.push('system');
     } else if (currentUser.role === 'system') {

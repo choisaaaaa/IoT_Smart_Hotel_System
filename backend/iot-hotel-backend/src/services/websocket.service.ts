@@ -158,10 +158,17 @@ class WebSocketService {
           });
           
           logger.info(`客户端 ${socket.id} 注册为: ${data.clientType}/${displayName}`);
+          
+          // 广播更新在线列表
+          this.broadcastOnlineStatus();
         } catch (error) {
           logger.error('注册客户端失败:', error);
           socket.emit('error', { message: '注册失败' });
         }
+      });
+
+      socket.on('get_online_status', () => {
+        this.sendOnlineStatus(socket);
       });
 
       socket.on('send_message', (data: { roomId?: string; content: string; type?: string }) => {
@@ -243,7 +250,7 @@ class WebSocketService {
               calleeExists = room.length > 0;
               break;
             case 'front_desk':
-              const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM employees WHERE id = ?', [callee_id]);
+              const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
               calleeExists = employee.length > 0;
               break;
             case 'ai':
@@ -606,6 +613,7 @@ class WebSocketService {
       socket.on('disconnect', (reason) => {
         this.clients.delete(socket.id);
         logger.info(`WebSocket客户端断开: ${socket.id}, 原因: ${reason} (当前在线: ${this.clients.size})`);
+        this.broadcastOnlineStatus();
       });
 
       socket.on('error', (error) => {
@@ -665,6 +673,74 @@ class WebSocketService {
 
   getIO(): Server | null {
     return this.io;
+  }
+
+  async sendOnlineStatus(socket: Socket) {
+    try {
+      // 1. 获取在线的 WebSocket 客户端
+      const onlineWebClients: any[] = [];
+      this.clients.forEach((info) => {
+        if (info.clientType && info.clientId) {
+          onlineWebClients.push({
+            type: info.clientType,
+            id: info.clientId,
+            name: info.clientName
+          });
+        }
+      });
+
+      // 2. 获取在线的 MQTT 硬件设备
+      const onlineMqttDevices = await mqttService.getOnlineDevices();
+      const onlineRooms = onlineMqttDevices
+        .filter(d => d.device_type === 'room_terminal') // 只看房间终端
+        .map(d => ({
+          type: 'room',
+          id: d.device_id.startsWith('R') ? d.device_id.substring(1) : d.device_id,
+          name: d.device_name
+        }));
+
+      socket.emit('online_status', {
+        web: onlineWebClients,
+        rooms: onlineRooms,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('获取在线状态失败:', error);
+    }
+  }
+
+  async broadcastOnlineStatus() {
+    if (!this.io) return;
+    
+    try {
+      const onlineWebClients: any[] = [];
+      this.clients.forEach((info) => {
+        if (info.clientType && info.clientId) {
+          onlineWebClients.push({
+            type: info.clientType,
+            id: info.clientId,
+            name: info.clientName
+          });
+        }
+      });
+
+      const onlineMqttDevices = await mqttService.getOnlineDevices();
+      const onlineRooms = onlineMqttDevices
+        .filter(d => d.device_type === 'room_terminal')
+        .map(d => ({
+          type: 'room',
+          id: d.device_id.startsWith('R') ? d.device_id.substring(1) : d.device_id,
+          name: d.device_name
+        }));
+
+      this.io.emit('online_status', {
+        web: onlineWebClients,
+        rooms: onlineRooms,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('广播在线状态失败:', error);
+    }
   }
 
   close() {

@@ -28,7 +28,7 @@ export class CallService {
           calleeExists = room.length > 0;
           break;
         case 'front_desk':
-          const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM employees WHERE id = ?', [data.callee_id]);
+          const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
           calleeExists = employee.length > 0;
           break;
         case 'ai':
@@ -92,7 +92,7 @@ export class CallService {
           calleeExists = room.length > 0;
           break;
         case 'front_desk':
-          const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM employees WHERE id = ?', [data.callee_id]);
+          const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
           calleeExists = employee.length > 0;
           break;
         case 'ai':

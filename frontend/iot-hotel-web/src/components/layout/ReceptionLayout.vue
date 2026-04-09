@@ -96,22 +96,52 @@
         智慧酒店物联网控制系统 ©2026 - 前台端
       </a-layout-footer>
     </a-layout>
+
+    <!-- 全局来电弹窗 -->
+    <a-modal
+      v-model:visible="incomingCallVisible"
+      :footer="null"
+      :closable="false"
+      :maskClosable="false"
+      centered
+      width="320px"
+    >
+      <div class="incoming-call-content">
+        <div class="pulse-container">
+          <div class="pulse-ring"></div>
+          <PhoneOutlined class="call-icon" />
+        </div>
+        <h2 class="caller-name">{{ appStore.incomingCall?.caller_name || appStore.incomingCall?.caller_id }}</h2>
+        <p class="caller-id">正在呼叫...</p>
+        
+        <div class="modal-actions">
+          <a-button type="primary" shape="round" size="large" block @click="handleAcceptCall" class="accept-btn">
+            <template #icon><PhoneOutlined /></template> 接听
+          </a-button>
+          <a-button danger shape="round" size="large" block @click="handleRejectCall" class="reject-btn" style="margin-top: 12px">
+            <template #icon><CloseOutlined /></template> 拒绝
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
   </a-layout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
   PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, LogoutOutlined
+  BellOutlined, LogoutOutlined, CloseOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
+import { getSocket, initWebSocket } from '@/utils/websocket'
+import { callApi } from '@/api/call'
 
 const route = useRoute()
 const router = useRouter()
@@ -167,12 +197,85 @@ async function loadPending() {
   }
 }
 
-onMounted(loadPending)
+const incomingCallVisible = computed({
+  get: () => !!appStore.incomingCall,
+  set: (val) => { if (!val) appStore.clearIncomingCall() }
+})
+
+async function handleAcceptCall() {
+  if (appStore.incomingCall) {
+    const callToAccept = { ...appStore.incomingCall }
+    appStore.setCurrentCall(callToAccept)
+    appStore.clearIncomingCall()
+    
+    if (route.path !== '/reception/voice-calls') {
+      await router.push('/reception/voice-calls')
+    }
+  }
+}
+
+async function handleRejectCall() {
+  if (appStore.incomingCall) {
+    try {
+      await callApi.hangup(appStore.incomingCall.call_id)
+    } catch (e) {}
+    appStore.clearIncomingCall()
+  }
+}
+
+function setupGlobalSignaling() {
+  const socket = getSocket() || initWebSocket()
+  
+  socket.on('connect', () => {
+    appStore.setConnected(true)
+    // 自动重新注册身份 (如果之前注册过)
+    if (appStore.userInfo?.username) {
+      socket.emit('register_client', {
+        clientType: 'front_desk',
+        clientId: appStore.userInfo.username
+      })
+    }
+  })
+
+  socket.on('registered', (data: any) => {
+    appStore.setRegistration(true, data.clientName)
+  })
+
+  socket.on('disconnect', () => {
+    appStore.setConnected(false)
+    appStore.setRegistration(false)
+  })
+
+  socket.on('incoming_call', (data) => {
+    console.log('[Global] 收到来电:', data)
+    appStore.setIncomingCall(data)
+    // 播放铃声逻辑可在此添加
+  })
+
+  socket.on('call_hungup', (data) => {
+    if (appStore.incomingCall?.call_id === data.call_id) {
+      appStore.clearIncomingCall()
+    }
+  })
+}
+
+onMounted(() => {
+  loadPending()
+  setupGlobalSignaling()
+})
+
+onUnmounted(() => {
+  const socket = getSocket()
+  if (socket) {
+    socket.off('incoming_call')
+    socket.off('call_hungup')
+  }
+})
 </script>
 
 <style scoped>
 .reception-layout { min-height: 100vh; background: #f5f7fa; }
-.reception-sider { position: fixed; left: 0; top: 0; bottom: 0; z-index: 10; box-shadow: 2px 0 6px rgba(0,21,41,.04); }
+.reception-sider { position: fixed; left: 0; top: 0; bottom: 0; z-index: 10; box-shadow: 2px 0 6px rgba(0,21,41,.04); overflow-y: auto; }
 .logo {
   height: 56px;
   display: flex;

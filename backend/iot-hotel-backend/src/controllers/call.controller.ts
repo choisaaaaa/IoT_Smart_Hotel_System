@@ -34,7 +34,7 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
         calleeExists = room.length > 0;
         break;
       case 'front_desk':
-        const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM employees WHERE employee_id = ?', [callee_id]);
+        const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
         calleeExists = employee.length > 0;
         break;
       case 'ai':
@@ -114,7 +114,7 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
         calleeExists = room.length > 0;
         break;
       case 'front_desk':
-        const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM employees WHERE id = ?', [callee_id]);
+        const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
         calleeExists = employee.length > 0;
         break;
       case 'ai':

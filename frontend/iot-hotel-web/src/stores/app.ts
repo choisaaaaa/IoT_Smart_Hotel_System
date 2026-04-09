@@ -63,6 +63,33 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // --- 语音通话全局状态 ---
+  const incomingCall = ref<any>(null)
+  const currentCall = ref<any>(null) // 新增：当前正在进行的通话
+  const isRegistered = ref(false)
+  const clientDisplayName = ref('')
+
+  function setIncomingCall(call: any) {
+    incomingCall.value = call
+  }
+
+  function clearIncomingCall() {
+    incomingCall.value = null
+  }
+
+  function setCurrentCall(call: any) {
+    currentCall.value = call
+  }
+
+  function clearCurrentCall() {
+    currentCall.value = null
+  }
+
+  function setRegistration(status: boolean, name: string = '') {
+    isRegistered.value = status
+    clientDisplayName.value = name
+  }
+
   return {
     sidebarCollapsed,
     currentTier,
@@ -71,6 +98,10 @@ export const useAppStore = defineStore('app', () => {
     showLoginModal,
     notifications,
     notificationCount,
+    incomingCall,
+    currentCall,
+    isRegistered,
+    clientDisplayName,
     toggleSidebar,
     setCurrentTier,
     setConnected,
@@ -78,6 +109,11 @@ export const useAppStore = defineStore('app', () => {
     removeNotification,
     clearNotifications,
     initUserInfo,
-    setUserInfo
+    setUserInfo,
+    setIncomingCall,
+    clearIncomingCall,
+    setCurrentCall,
+    clearCurrentCall,
+    setRegistration
   }
 })

@@ -6,15 +6,20 @@ let socket: Socket | null = null
 
 export function initWebSocket(roomId?: string): Socket {
   if (socket?.connected) {
-    socket.disconnect()
+    return socket
   }
 
-  socket = io('/', {
-    transports: ['websocket'],
+  // 使用相对路径以便通过 Vite/Nginx 代理，或显式指定后端端口
+  const isDev = import.meta.env.DEV
+  const socketUrl = isDev ? 'http://localhost:9000' : window.location.origin
+
+  socket = io(socketUrl, {
+    transports: ['websocket', 'polling'], // 允许回退到 polling 以提高兼容性
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
-    timeout: 5000
+    timeout: 10000, // 增加超时时间到 10s
+    autoConnect: true
   })
 
   const deviceStore = useDeviceStore()

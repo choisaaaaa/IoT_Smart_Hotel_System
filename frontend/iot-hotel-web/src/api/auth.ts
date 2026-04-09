@@ -42,8 +42,11 @@ class AuthService {
   private api: AxiosInstance
 
   constructor() {
+    const isDev = import.meta.env.DEV
+    const baseURL = isDev ? 'http://localhost:9000/api/v1' : '/api/v1'
+
     this.api = axios.create({
-      baseURL: 'http://localhost:9000/api/v1',
+      baseURL,
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json'

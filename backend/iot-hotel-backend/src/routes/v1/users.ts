@@ -4,8 +4,8 @@ import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize(['admin', 'system']), list);
-router.get('/:id', authenticate as any, authorize(['admin', 'system']), detail);
+router.get('/', authenticate as any, authorize(['admin', 'system', 'staff']), list);
+router.get('/:id', authenticate as any, authorize(['admin', 'system', 'staff']), detail);
 router.post('/', authenticate as any, authorize(['admin', 'system']), create);
 router.put('/:id', authenticate as any, authorize(['admin', 'system']), update);
 router.delete('/:id', authenticate as any, authorize(['admin', 'system']), remove);
