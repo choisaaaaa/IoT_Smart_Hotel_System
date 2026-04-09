@@ -309,8 +309,7 @@ router.post('/register', async (req, res) => {
 
     const uid = `UID${Date.now()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-    const allowedRoles = ['user', 'staff', 'manager', 'admin'];
-    const userRole = allowedRoles.includes(role) ? role : 'user';
+    const userRole = 'user';
 
     const [result]: any = await db.execute(
       `INSERT INTO users (username, password, phone, uid, email, role, hotel_id) 
@@ -418,7 +417,7 @@ router.get('/me', async (req: AuthRequest, res) => {
     }
 
     const [users]: any = await db.execute(
-      `SELECT id, username, email, role, phone, uid, created_at FROM users WHERE id = ?`,
+      `SELECT id, username, email, role, phone, uid, hotel_id, created_at FROM users WHERE id = ?`,
       [decoded.id]
     );
 
@@ -427,17 +426,238 @@ router.get('/me', async (req: AuthRequest, res) => {
     }
 
     const normalizedRole = normalizeRole(decoded.role);
+
+    const [hotelRows]: any = await db.execute(
+      'SELECT h.id, h.hotel_name FROM user_hotels uh JOIN hotels h ON uh.hotel_id = h.id WHERE uh.user_id = ?',
+      [decoded.id]
+    );
+
     sendSuccess(res, {
       user: {
         ...users[0],
         role: normalizedRole
       },
       role: normalizedRole,
-      permissions: decoded.permissions
+      permissions: decoded.permissions,
+      managed_hotels: hotelRows
     });
   } catch (error) {
     console.error('获取用户信息失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// 角色升级申请
+router.post('/role-application', async (req: AuthRequest, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return sendError(res, errorResponse('未提供认证令牌', 401));
+
+    const token = authHeader.replace(/Bearer /i, '').trim();
+    const decoded = verifyToken(token);
+    if (!decoded) return sendError(res, errorResponse('令牌无效', 401));
+
+    const { application_type, hotel_id, hotel_name, hotel_address, reason } = req.body;
+
+    if (!application_type || !['create_hotel', 'bind_employee'].includes(application_type)) {
+      return sendError(res, errorResponse('申请类型无效', 400));
+    }
+
+    if (application_type === 'create_hotel' && (!hotel_name || !hotel_address)) {
+      return sendError(res, errorResponse('酒店名称和地址不能为空', 400));
+    }
+
+    if (application_type === 'bind_employee' && !hotel_id) {
+      return sendError(res, errorResponse('请选择要绑定的酒店', 400));
+    }
+
+    const [existing]: any = await db.execute(
+      'SELECT * FROM role_applications WHERE user_id = ? AND status = ?',
+      [decoded.id, 'pending']
+    );
+
+    if (existing.length > 0) {
+      return sendError(res, errorResponse('您已有待审核的申请', 400));
+    }
+
+    const [result]: any = await db.execute(
+      `INSERT INTO role_applications (user_id, application_type, hotel_id, hotel_name, hotel_address, reason, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+      [
+        decoded.id,
+        application_type,
+        application_type === 'bind_employee' ? hotel_id : null,
+        application_type === 'create_hotel' ? hotel_name : null,
+        application_type === 'create_hotel' ? hotel_address : null,
+        reason || null
+      ]
+    );
+
+    sendSuccess(res, {
+      application_id: result.insertId,
+      message: '申请已提交，请等待审核'
+    });
+  } catch (error) {
+    console.error('角色申请失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// 获取角色申请列表（管理端/系统管理员）
+router.get('/role-applications', async (req: AuthRequest, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return sendError(res, errorResponse('未提供认证令牌', 401));
+
+    const token = authHeader.replace(/Bearer /i, '').trim();
+    const decoded = verifyToken(token);
+    if (!decoded) return sendError(res, errorResponse('令牌无效', 401));
+
+    const role = normalizeRole(decoded.role);
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (role === 'manager') {
+      whereClause += ' AND ra.application_type = ? AND ra.hotel_id IN (SELECT hotel_id FROM user_hotels WHERE user_id = ?)';
+      params.push('bind_employee', decoded.id);
+    }
+
+    if (role === 'user') {
+      whereClause += ' AND ra.user_id = ?';
+      params.push(decoded.id);
+    }
+
+    const status = req.query.status as string;
+    if (status) {
+      whereClause += ' AND ra.status = ?';
+      params.push(status);
+    }
+
+    const [rows]: any = await db.execute(
+      `SELECT ra.*, u.username, u.phone, u.uid, h.hotel_name as target_hotel_name
+       FROM role_applications ra
+       LEFT JOIN users u ON ra.user_id = u.id
+       LEFT JOIN hotels h ON ra.hotel_id = h.id
+       ${whereClause}
+       ORDER BY ra.created_at DESC`,
+      params
+    );
+
+    sendSuccess(res, rows);
+  } catch (error) {
+    console.error('获取角色申请列表失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// 审核角色申请
+router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
+  const connection = await (await import('../../config/database')).default.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader) { await connection.rollback(); return sendError(res, errorResponse('未提供认证令牌', 401)); }
+
+    const token = authHeader.replace(/Bearer /i, '').trim();
+    const decoded = verifyToken(token);
+    if (!decoded) { await connection.rollback(); return sendError(res, errorResponse('令牌无效', 401)); }
+
+    const { id } = req.params;
+    const { status, review_note } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      await connection.rollback();
+      return sendError(res, errorResponse('审核状态无效', 400));
+    }
+
+    const [apps]: any = await connection.execute(
+      'SELECT * FROM role_applications WHERE id = ? AND status = ?',
+      [id, 'pending']
+    );
+
+    if (apps.length === 0) {
+      await connection.rollback();
+      return sendError(res, errorResponse('申请不存在或已审核', 404));
+    }
+
+    const app = apps[0];
+
+    await connection.execute(
+      'UPDATE role_applications SET status = ?, reviewed_by = ?, reviewed_at = NOW(), review_note = ? WHERE id = ?',
+      [status, decoded.id, review_note || null, id]
+    );
+
+    if (status === 'approved') {
+      if (app.application_type === 'create_hotel') {
+        const [hotelResult]: any = await connection.execute(
+          'INSERT INTO hotels (hotel_name, address, hotel_type, star_rating, contact_phone, description) VALUES (?, ?, ?, ?, ?, ?)',
+          [app.hotel_name, app.hotel_address, '商务酒店', 3, '', '']
+        );
+        const newHotelId = hotelResult.insertId;
+
+        await connection.execute(
+          'UPDATE users SET role = ? WHERE id = ?',
+          ['manager', app.user_id]
+        );
+
+        await connection.execute(
+          'INSERT IGNORE INTO user_hotels (user_id, hotel_id) VALUES (?, ?)',
+          [app.user_id, newHotelId]
+        );
+
+        const [managerRole]: any = await connection.execute(
+          'SELECT id FROM roles WHERE role_name = ?',
+          ['manager']
+        );
+        if (managerRole.length > 0) {
+          await connection.execute(
+            'DELETE FROM user_roles WHERE user_id = ?',
+            [app.user_id]
+          );
+          await connection.execute(
+            'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
+            [app.user_id, managerRole[0].id]
+          );
+        }
+      } else if (app.application_type === 'bind_employee') {
+        await connection.execute(
+          'UPDATE users SET role = ? WHERE id = ?',
+          ['staff', app.user_id]
+        );
+
+        if (app.hotel_id) {
+          await connection.execute(
+            'INSERT IGNORE INTO user_hotels (user_id, hotel_id) VALUES (?, ?)',
+            [app.user_id, app.hotel_id]
+          );
+        }
+
+        const [staffRole]: any = await connection.execute(
+          'SELECT id FROM roles WHERE role_name = ?',
+          ['staff']
+        );
+        if (staffRole.length > 0) {
+          await connection.execute(
+            'DELETE FROM user_roles WHERE user_id = ?',
+            [app.user_id]
+          );
+          await connection.execute(
+            'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
+            [app.user_id, staffRole[0].id]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+    sendSuccess(res, { message: status === 'approved' ? '申请已通过' : '申请已拒绝' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('审核角色申请失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  } finally {
+    connection.release();
   }
 });
 

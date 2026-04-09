@@ -10,6 +10,7 @@ import '../../core/constants/app_constants.dart';
 import '../../services/review_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
+import '../../services/auth_service.dart';
 import '../../core/logic/member_logic.dart';
 
 class HotelDetailPage extends ConsumerStatefulWidget {
@@ -494,14 +495,28 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                           height: 36,
                           width: 60,
                           child: FilledButton(
-                            onPressed: () => context.push('/booking-flow', extra: {
-                              'hotelName': _hotelInfo?['name'] ?? '智联酒店',
-                              'roomType': roomName,
-                              'price': discountedPrice,
-                              'roomId': room['id'],
-                              'checkInDate': _checkInDate,
-                              'checkOutDate': _checkOutDate,
-                            }),
+                            onPressed: () async {
+                              final isLoggedIn = await ref.read(authServiceProvider).isLoggedIn();
+                              if (!isLoggedIn) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('请先登录后再预订'), backgroundColor: AppColors.warning),
+                                  );
+                                  context.push('/login');
+                                }
+                                return;
+                              }
+                              if (mounted) {
+                                context.push('/booking-flow', extra: {
+                                  'hotelName': _hotelInfo?['name'] ?? '智联酒店',
+                                  'roomType': roomName,
+                                  'price': discountedPrice,
+                                  'roomId': room['id'],
+                                  'checkInDate': _checkInDate,
+                                  'checkOutDate': _checkOutDate,
+                                });
+                              }
+                            },
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               padding: EdgeInsets.zero,

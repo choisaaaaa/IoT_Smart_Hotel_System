@@ -115,29 +115,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
       if (result.success) {
         if (!context.mounted) return;
-        final user = result.data?['user'];
-        if (user == null) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('登录返回数据异常'), behavior: SnackBarBehavior.floating));
-          return;
-        }
-        final role = user['role'] ?? 'user';
-        switch (role) {
-          case 'admin':
-          case 'system':
-            context.go('/admin');
-            break;
-          case 'staff':
-          case 'receptionist':
-          case 'reception':
-            context.go('/reception');
-            break;
-          case 'manager':
-            context.go('/reception');
-            break;
-          default:
-            context.go('/guest');
-            break;
-        }
+        context.go('/');
       } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '登录失败'), behavior: SnackBarBehavior.floating)); }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录异常：$e'), behavior: SnackBarBehavior.floating));

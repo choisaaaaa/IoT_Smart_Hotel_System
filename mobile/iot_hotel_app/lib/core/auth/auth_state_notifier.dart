@@ -1,5 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+enum AppMode {
+  guest,
+  customer,
+  reception,
+  manager,
+}
+
+int roleToLevel(String? role) {
+  switch (role) {
+    case 'manager': return 3;
+    case 'staff': return 2;
+    case 'user': return 1;
+    default: return 0;
+  }
+}
+
 class AuthState {
   final bool isAuthenticated;
   final String? token;
@@ -8,6 +24,7 @@ class AuthState {
   final String? role;
   final String? phone;
   final String? uid;
+  final AppMode currentMode;
 
   const AuthState({
     this.isAuthenticated = false,
@@ -17,7 +34,20 @@ class AuthState {
     this.role,
     this.phone,
     this.uid,
+    this.currentMode = AppMode.guest,
   });
+
+  int get roleLevel => roleToLevel(role);
+
+  bool canSwitchTo(AppMode mode) {
+    if (!isAuthenticated) return mode == AppMode.guest;
+    switch (mode) {
+      case AppMode.guest: return true;
+      case AppMode.customer: return roleLevel >= 1;
+      case AppMode.reception: return roleLevel >= 2;
+      case AppMode.manager: return roleLevel >= 3;
+    }
+  }
 
   AuthState copyWith({
     bool? isAuthenticated,
@@ -27,6 +57,7 @@ class AuthState {
     String? role,
     String? phone,
     String? uid,
+    AppMode? currentMode,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -36,6 +67,7 @@ class AuthState {
       role: role ?? this.role,
       phone: phone ?? this.phone,
       uid: uid ?? this.uid,
+      currentMode: currentMode ?? this.currentMode,
     );
   }
 }
@@ -51,6 +83,13 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     String? phone,
     String? uid,
   }) {
+    AppMode initialMode;
+    switch (role) {
+      case 'manager': initialMode = AppMode.manager; break;
+      case 'staff': initialMode = AppMode.reception; break;
+      case 'user': initialMode = AppMode.customer; break;
+      default: initialMode = AppMode.guest;
+    }
     state = AuthState(
       isAuthenticated: true,
       token: token,
@@ -59,7 +98,14 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       role: role,
       phone: phone,
       uid: uid,
+      currentMode: initialMode,
     );
+  }
+
+  void switchMode(AppMode mode) {
+    if (state.canSwitchTo(mode)) {
+      state = state.copyWith(currentMode: mode);
+    }
   }
 
   void clearAuth() {

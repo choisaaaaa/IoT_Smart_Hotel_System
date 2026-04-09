@@ -18,7 +18,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  String _selectedRole = 'user';
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -41,7 +40,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         _passwordController.text,
         _emailController.text.trim(),
         phone: _phoneController.text.trim(),
-        role: _selectedRole,
       );
       
       if (!mounted) return;
@@ -152,20 +150,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                               hintText: '用于找回密码',
                             ),
                             keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedRole,
-                            decoration: const InputDecoration(
-                              labelText: '角色类型',
-                              prefixIcon: Icon(Icons.badge_outlined),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: 'user', child: Text('顾客')),
-                              DropdownMenuItem(value: 'staff', child: Text('前台员工')),
-                              DropdownMenuItem(value: 'manager', child: Text('酒店经理')),
-                            ],
-                            onChanged: (v) => setState(() => _selectedRole = v ?? 'user'),
                           ),
                           const SizedBox(height: 16),
                           TextFormField(

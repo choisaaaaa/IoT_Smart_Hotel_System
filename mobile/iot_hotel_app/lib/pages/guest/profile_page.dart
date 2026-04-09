@@ -7,6 +7,7 @@ import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logic/member_logic.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
 import '../../core/network/api_result.dart';
@@ -74,6 +75,7 @@ class ProfilePage extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final authService = ref.watch(authServiceProvider);
+    final authState = ref.watch(authStateProvider);
     
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -92,18 +94,125 @@ class ProfilePage extends ConsumerWidget {
               builder: (context, snapshot) {
                 final user = snapshot.data as User?;
                 final displayName = user?.username ?? '未登录';
-                return Text('$displayName >', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
+                return GestureDetector(
+                  onTap: () => context.push('/personal-info'),
+                  child: Row(
+                    children: [
+                      Flexible(child: Text(displayName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+                    ],
+                  ),
+                );
               },
             ),
           ),
-          _buildHeaderIcon(Icons.grid_view_rounded, '会员码'),
-          const SizedBox(width: 20),
+          _buildModeSwitchButton(context, ref),
+          const SizedBox(width: 12),
           _buildHeaderIcon(Icons.settings_outlined, '设置', onTap: () => _showLogoutConfirmation(context, ref)),
-          const SizedBox(width: 20),
+          const SizedBox(width: 12),
           _buildHeaderIcon(Icons.headset_mic_outlined, '客服'),
         ],
       ),
     );
+  }
+
+  Widget _buildModeSwitchButton(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    final currentMode = authState.currentMode;
+    final roleLevel = authState.roleLevel;
+
+    String modeLabel;
+    IconData modeIcon;
+    switch (currentMode) {
+      case AppMode.guest:
+        modeLabel = '游客';
+        modeIcon = Icons.visibility_outlined;
+        break;
+      case AppMode.customer:
+        modeLabel = '顾客';
+        modeIcon = Icons.person_outline;
+        break;
+      case AppMode.reception:
+        modeLabel = '前台';
+        modeIcon = Icons.desktop_windows_outlined;
+        break;
+      case AppMode.manager:
+        modeLabel = '管理';
+        modeIcon = Icons.admin_panel_settings_outlined;
+        break;
+    }
+
+    return InkResponse(
+      onTap: () => _showModeSwitchDialog(context, ref),
+      radius: 30,
+      highlightColor: AppColors.primary.withValues(alpha: 0.1),
+      splashColor: AppColors.primary.withValues(alpha: 0.2),
+      child: Column(
+        children: [
+          Icon(Icons.swap_horiz, size: 24, color: AppColors.primary),
+          const SizedBox(height: 4),
+          Text(modeLabel, style: const TextStyle(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  void _showModeSwitchDialog(BuildContext context, WidgetRef ref) {
+    final authState = ref.read(authStateProvider);
+    final modes = [
+      if (authState.canSwitchTo(AppMode.guest)) AppMode.guest,
+      if (authState.canSwitchTo(AppMode.customer)) AppMode.customer,
+      if (authState.canSwitchTo(AppMode.reception)) AppMode.reception,
+      if (authState.canSwitchTo(AppMode.manager)) AppMode.manager,
+    ];
+
+    final modeLabels = {
+      AppMode.guest: {'label': '游客模式', 'desc': '浏览酒店和房型信息', 'icon': Icons.visibility_outlined},
+      AppMode.customer: {'label': '顾客端', 'desc': '预订、入住、客房服务', 'icon': Icons.person_outline},
+      AppMode.reception: {'label': '前台端', 'desc': '前台接待、客房管理', 'icon': Icons.desktop_windows_outlined},
+      AppMode.manager: {'label': '管理端', 'desc': '酒店管理、数据报表', 'icon': Icons.admin_panel_settings_outlined},
+    };
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('切换模式'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: modes.map((mode) {
+            final info = modeLabels[mode]!;
+            final isCurrent = authState.currentMode == mode;
+            return ListTile(
+              leading: Icon(info['icon'] as IconData, color: isCurrent ? AppColors.primary : AppColors.textSecondary),
+              title: Text(info['label'] as String, style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal, color: isCurrent ? AppColors.primary : AppColors.textPrimary)),
+              subtitle: Text(info['desc'] as String, style: const TextStyle(fontSize: 12)),
+              trailing: isCurrent ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
+              onTap: () {
+                ref.read(authStateProvider.notifier).switchMode(mode);
+                Navigator.pop(ctx);
+                _navigateToCurrentMode(context, mode);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToCurrentMode(BuildContext context, AppMode mode) {
+    switch (mode) {
+      case AppMode.guest:
+      case AppMode.customer:
+        context.go('/');
+        break;
+      case AppMode.reception:
+        context.go('/reception');
+        break;
+      case AppMode.manager:
+        context.go('/reception');
+        break;
+    }
   }
 
   Widget _buildHeaderIcon(IconData icon, String label, {VoidCallback? onTap}) {

@@ -18,7 +18,9 @@ import '../pages/guest/checkout_page.dart';
 import '../pages/guest/coupon_center_page.dart';
 import '../pages/guest/extend_stay_page.dart';
 import '../pages/guest/frequent_guest_page.dart';
+import '../pages/guest/personal_info_page.dart';
 import '../services/auth_service.dart';
+import '../core/auth/auth_state_notifier.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authService = ref.watch(authServiceProvider);
@@ -28,36 +30,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) async {
       final isLoggedIn = await authService.isLoggedIn();
       final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final currentPath = state.matchedLocation;
 
-      if (!isLoggedIn && !isLoggingIn) {
-        return '/login';
+      final publicPaths = ['/', '/hotel-list', '/hotel-detail', '/login', '/register'];
+
+      if (!isLoggedIn && !publicPaths.any((p) => currentPath == p || currentPath.startsWith('$p/'))) {
+        if (currentPath != '/login') return '/login';
       }
 
       if (isLoggedIn && isLoggingIn) {
-        final userRole = await authService.getUserRole();
-        switch (userRole) {
-          case 'admin':
-          case 'system':
-            return '/admin';
-          case 'staff':
-          case 'receptionist':
-          case 'reception':
-            return '/reception';
-          default:
-            return '/';
-        }
-      }
-
-      if (isLoggedIn && !isLoggingIn) {
-        final userRole = await authService.getUserRole();
-        final currentPath = state.matchedLocation;
-
-        if ((userRole == 'admin' || userRole == 'system') && currentPath != '/admin' && !currentPath.startsWith('/admin')) {
-          return '/admin';
-        }
-        if ((userRole == 'staff' || userRole == 'receptionist' || userRole == 'reception') && currentPath != '/reception' && !currentPath.startsWith('/reception')) {
-          return '/reception';
-        }
+        return '/';
       }
 
       return null;
@@ -142,6 +124,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/frequent-guests',
         builder: (context, state) => const FrequentGuestPage(),
+      ),
+      GoRoute(
+        path: '/personal-info',
+        builder: (context, state) => const PersonalInfoPage(),
       ),
     ],
   );
