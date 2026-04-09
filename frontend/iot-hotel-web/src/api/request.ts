@@ -2,6 +2,42 @@ import axios from 'axios'
 import type { ApiResponse } from '@/types'
 import { message } from 'ant-design-vue'
 
+function shouldClearAuth(error: any): boolean {
+  const msg = String(error?.response?.data?.message || '').toLowerCase()
+  if (!msg) {
+    return false
+  }
+  return (
+    msg.includes('认证令牌') ||
+    msg.includes('令牌验证失败') ||
+    msg.includes('未提供认证令牌') ||
+    msg.includes('token') ||
+    msg.includes('unauthorized')
+  )
+}
+
+function getAuthToken(): string {
+  const rawToken = localStorage.getItem('auth_token')
+  if (rawToken && rawToken !== 'null' && rawToken !== 'undefined') {
+    return rawToken
+  }
+  const rawUserInfo = localStorage.getItem('user_info')
+  if (!rawUserInfo) {
+    return ''
+  }
+  try {
+    const parsed = JSON.parse(rawUserInfo)
+    const fallback = parsed?.token
+    if (fallback && fallback !== 'null' && fallback !== 'undefined') {
+      localStorage.setItem('auth_token', fallback)
+      return fallback
+    }
+  } catch (_) {
+    return ''
+  }
+  return ''
+}
+
 const request = axios.create({
   baseURL: '/api/v1',
   timeout: 15000,
@@ -12,7 +48,7 @@ const request = axios.create({
 
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token')
+    const token = getAuthToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -35,9 +71,12 @@ request.interceptors.response.use(
       const status = error.response.status
       switch (status) {
         case 401:
-          message.error('未授权，请重新登录')
-          localStorage.removeItem('auth_token')
-          window.location.href = '/login'
+          message.error(error.response?.data?.message || '未授权')
+          if (shouldClearAuth(error)) {
+            localStorage.removeItem('auth_token')
+            localStorage.removeItem('user_info')
+            window.location.href = '/login'
+          }
           break
         case 403:
           message.error('拒绝访问')

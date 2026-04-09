@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { normalizeRole } from '@/api/auth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -48,15 +49,15 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
-  // 酒店管理员路由
+  // 酒店管理端路由
   {
-    path: '/admin',
+    path: '/hotel-admin',
     component: () => import('@/components/layout/AdminLayout.vue'),
     meta: { title: '管理端', icon: 'SettingOutlined', requiresAuth: true, roles: ['admin'] },
     children: [
       {
         path: '',
-        redirect: '/admin/dashboard'
+        redirect: '/hotel-admin/dashboard'
       },
       {
         path: 'dashboard',
@@ -224,17 +225,18 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('auth_token')
   const userInfoStr = localStorage.getItem('user_info')
   const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null
+  const normalizedRole = normalizeRole(userInfo?.role)
 
   // 如果不需要认证，直接放行
   if (!requiresAuth) {
     // 如果已登录且访问登录页，重定向到对应角色的首页
     if (to.path === '/login' && token && userInfo) {
-      switch (userInfo.role) {
+      switch (normalizedRole) {
         case 'system':
           next('/system/dashboard')
           break
         case 'admin':
-          next('/admin/dashboard')
+          next('/hotel-admin/dashboard')
           break
         case 'staff':
           next('/reception/dashboard')
@@ -268,14 +270,15 @@ router.beforeEach((to, from, next) => {
     }
   })
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(userInfo.role)) {
+  const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role))
+  if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(normalizedRole)) {
     // 角色权限不足，重定向到对应角色的首页
-    switch (userInfo.role) {
+    switch (normalizedRole) {
       case 'system':
         next('/system/dashboard')
         break
       case 'admin':
-        next('/admin/dashboard')
+        next('/hotel-admin/dashboard')
         break
       case 'staff':
         next('/reception/dashboard')

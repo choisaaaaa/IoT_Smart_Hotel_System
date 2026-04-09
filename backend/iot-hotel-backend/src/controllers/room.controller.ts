@@ -1,20 +1,22 @@
 import { Request, Response } from 'express';
 import { successResponse, errorResponse, AuthRequest } from '../types';
 import { RoomService } from '../services/room.service';
+import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
+import { isSystemRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
     
     // 如果是 system 角色，允许通过查询参数指定酒店，否则必须有绑定的 hotel_id
-    if (req.user?.role === 'system') {
+    if (isSystemRole(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
       } else if (!hotelId) {
-        // 如果系统管理员既没有绑定酒店，也没有传参，则默认获取全部或第一个（此处要求显式传参更安全）
-        return res.status(400).json(errorResponse('系统管理员必须指定 hotel_id 参数'));
+        const hotels = await HotelService.getAllHotels();
+        hotelId = hotels[0]?.id;
       }
     }
 
@@ -48,13 +50,15 @@ export const get = async (req: AuthRequest, res: Response) => {
 export const getById = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (req.user?.role === 'system') {
+    if (isSystemRole(req.user?.role)) {
       const queryHotelId = req.query.hotel_id || req.body.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
       }
     }
-    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
 
     const id = Number(req.params.id);
     const room = await RoomService.getRoomById(id, hotelId);
@@ -74,10 +78,12 @@ export const getById = async (req: AuthRequest, res: Response) => {
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (req.user?.role === 'system') {
+    if (isSystemRole(req.user?.role)) {
       hotelId = req.body.hotel_id;
     }
-    if (!hotelId) return res.status(401).json(errorResponse('未授权，必须提供酒店 ID'));
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权，必须提供酒店 ID'));
+    }
 
     const id = await RoomService.createRoom({ ...req.body, hotel_id: hotelId });
     res.json(successResponse({ id }, '创建房间成功'));
@@ -90,10 +96,12 @@ export const create = async (req: AuthRequest, res: Response) => {
 export const update = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (req.user?.role === 'system') {
+    if (isSystemRole(req.user?.role)) {
       hotelId = req.body.hotel_id || req.query.hotel_id;
     }
-    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
 
     const id = Number(req.params.id);
     const success = await RoomService.updateRoom(id, hotelId, req.body);
@@ -113,10 +121,12 @@ export const update = async (req: AuthRequest, res: Response) => {
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (req.user?.role === 'system') {
+    if (isSystemRole(req.user?.role)) {
       hotelId = req.query.hotel_id || req.body.hotel_id;
     }
-    if (!hotelId) return res.status(401).json(errorResponse('未授权'));
+    if (!hotelId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
 
     const id = Number(req.params.id);
     const success = await RoomService.deleteRoom(id, hotelId);

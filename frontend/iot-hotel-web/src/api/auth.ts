@@ -4,6 +4,18 @@ import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
 import type { ApiResponse } from '@/types'
 
+export function normalizeRole(role?: string): string {
+  const value = String(role || '').trim().toLowerCase()
+  const compact = value.replace(/[\s_-]+/g, '')
+  if (value === 'system' || compact === 'systemadmin' || compact === 'sysadmin' || compact === 'superadmin' || compact === 'platformadmin') {
+    return 'system'
+  }
+  if (value === 'staff' || value === 'receptionist' || compact === 'frontdesk') {
+    return 'staff'
+  }
+  return value
+}
+
 export interface LoginParams {
   username: string
   password: string
@@ -82,13 +94,14 @@ class AuthService {
       { token }
     )
     const { token: jwtToken, user } = res.data!
+    const normalizedUser = { ...user, role: normalizeRole(user.role) }
     
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
     const appStore = useAppStore()
-    appStore.setUserInfo(user)
+    appStore.setUserInfo(normalizedUser)
     
-    return { token: jwtToken, user }
+    return { token: jwtToken, user: normalizedUser }
   }
 
   // 用户名密码登录
@@ -98,13 +111,14 @@ class AuthService {
       params
     )
     const { token: jwtToken, user } = res.data!
+    const normalizedUser = { ...user, role: normalizeRole(user.role) }
     
     // 保存 token 和用户信息
     localStorage.setItem('auth_token', jwtToken)
     const appStore = useAppStore()
-    appStore.setUserInfo(user)
+    appStore.setUserInfo(normalizedUser)
     
-    return { token: jwtToken, user }
+    return { token: jwtToken, user: normalizedUser }
   }
 
   // 用户注册
@@ -130,7 +144,13 @@ class AuthService {
     const res = await this.api.get<any, ApiResponse<{ user: UserInfo; role: string; permissions: string[] }>>(
       '/auth/me'
     )
-    return res.data! as any
+    const payload: any = res.data
+    const normalizedRole = normalizeRole(payload?.role || payload?.user?.role)
+    return {
+      ...(payload?.user || {}),
+      role: normalizedRole,
+      permissions: payload?.permissions || payload?.user?.permissions || []
+    } as UserInfo
   }
 
   // 检查是否已登录
@@ -149,8 +169,8 @@ class AuthService {
     const user = this.getUserInfo()
     if (!user) return false
     
-    const roles = Array.isArray(role) ? role : [role]
-    return roles.includes(user.role)
+    const roles = (Array.isArray(role) ? role : [role]).map(normalizeRole)
+    return roles.includes(normalizeRole(user.role))
   }
 
   // 检查用户权限

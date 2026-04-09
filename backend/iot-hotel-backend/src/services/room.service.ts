@@ -32,6 +32,23 @@ export interface RoomListResponse {
 }
 
 export class RoomService {
+  private static tableCache = new Map<string, boolean>();
+
+  private static async hasTable(tableName: string): Promise<boolean> {
+    if (this.tableCache.has(tableName)) {
+      return this.tableCache.get(tableName) as boolean;
+    }
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total
+       FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [tableName]
+    );
+    const exists = Number((rows[0] as any)?.total || 0) > 0;
+    this.tableCache.set(tableName, exists);
+    return exists;
+  }
+
   static async getRooms(params: {
     page?: number;
     pageSize?: number;
@@ -43,6 +60,7 @@ export class RoomService {
     try {
       const { page = 1, pageSize = 10, status, type, floor, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
+      const hasRoomTypesTable = await this.hasTable('room_types');
       
       let whereClause = 'WHERE r.hotel_id = ?';
       const paramsArray: any[] = [hotelId];
@@ -53,8 +71,13 @@ export class RoomService {
       }
       
       if (type) {
-        whereClause += ' AND (r.room_type = ? OR rt.code = ?)';
-        paramsArray.push(type, type);
+        if (hasRoomTypesTable) {
+          whereClause += ' AND (r.room_type = ? OR rt.code = ?)';
+          paramsArray.push(type, type);
+        } else {
+          whereClause += ' AND r.room_type = ?';
+          paramsArray.push(type);
+        }
       }
 
       if (floor) {
@@ -62,24 +85,30 @@ export class RoomService {
         paramsArray.push(Number(floor));
       }
       
-      const [totalRows] = await pool.query<RowDataPacket[]>(`
-        SELECT COUNT(*) as total 
-        FROM rooms r 
-        LEFT JOIN room_types rt ON r.room_type_id = rt.id 
-        ${whereClause}`, 
-        paramsArray
-      );
+      const totalSql = hasRoomTypesTable
+        ? `SELECT COUNT(*) as total
+           FROM rooms r
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           ${whereClause}`
+        : `SELECT COUNT(*) as total
+           FROM rooms r
+           ${whereClause}`;
+      const [totalRows] = await pool.query<RowDataPacket[]>(totalSql, paramsArray);
       const total = (totalRows[0] as any).total;
       
-      const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
-         FROM rooms r 
-         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
-         ${whereClause} 
-         ORDER BY r.floor ASC, r.room_number ASC 
-         LIMIT ? OFFSET ?`,
-        [...paramsArray, Number(pageSize), offset]
-      );
+      const listSql = hasRoomTypesTable
+        ? `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
+           FROM rooms r
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           ${whereClause}
+           ORDER BY r.floor ASC, r.room_number ASC
+           LIMIT ? OFFSET ?`
+        : `SELECT r.*, r.room_type as room_type_name, r.room_type as room_type_code
+           FROM rooms r
+           ${whereClause}
+           ORDER BY r.floor ASC, r.room_number ASC
+           LIMIT ? OFFSET ?`;
+      const [rows] = await pool.query<RowDataPacket[]>(listSql, [...paramsArray, Number(pageSize), offset]);
       
       return {
         list: rows as Room[],
@@ -96,14 +125,18 @@ export class RoomService {
 
   static async getRoomsByFloor(hotelId: number): Promise<any> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
-         FROM rooms r 
-         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
-         WHERE r.hotel_id = ?
-         ORDER BY r.floor ASC, r.room_number ASC`,
-        [hotelId]
-      );
+      const hasRoomTypesTable = await this.hasTable('room_types');
+      const listByFloorSql = hasRoomTypesTable
+        ? `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
+           FROM rooms r
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           WHERE r.hotel_id = ?
+           ORDER BY r.floor ASC, r.room_number ASC`
+        : `SELECT r.*, r.room_type as room_type_name, r.room_type as room_type_code
+           FROM rooms r
+           WHERE r.hotel_id = ?
+           ORDER BY r.floor ASC, r.room_number ASC`;
+      const [rows] = await pool.query<RowDataPacket[]>(listByFloorSql, [hotelId]);
 
       const grouped: Record<number, Room[]> = {};
       rows.forEach((row) => {
@@ -126,13 +159,16 @@ export class RoomService {
 
   static async getRoomById(id: number, hotelId: number): Promise<Room | null> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code 
-         FROM rooms r 
-         LEFT JOIN room_types rt ON r.room_type_id = rt.id 
-         WHERE r.id = ? AND r.hotel_id = ?`, 
-        [id, hotelId]
-      );
+      const hasRoomTypesTable = await this.hasTable('room_types');
+      const getByIdSql = hasRoomTypesTable
+        ? `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
+           FROM rooms r
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           WHERE r.id = ? AND r.hotel_id = ?`
+        : `SELECT r.*, r.room_type as room_type_name, r.room_type as room_type_code
+           FROM rooms r
+           WHERE r.id = ? AND r.hotel_id = ?`;
+      const [rows] = await pool.query<RowDataPacket[]>(getByIdSql, [id, hotelId]);
       return (rows[0] as Room) || null;
     } catch (error) {
       logger.error('获取房间详情失败:', error);

@@ -3,10 +3,20 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { HotelService } from '../services/hotel.service';
 import pool, { ResultSetHeader, RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
+import { isSystemRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
+    if (!hotelId && isSystemRole(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      } else {
+        const hotels = await HotelService.getAllHotels();
+        hotelId = hotels[0]?.id;
+      }
+    }
     if (!hotelId) {
       return res.status(401).json(errorResponse('未授权，缺少酒店绑定信息'));
     }
@@ -28,7 +38,7 @@ export const get = async (req: AuthRequest, res: Response) => {
  */
 export const getAll = async (req: AuthRequest, res: Response) => {
   try {
-    if (req.user?.role !== 'system') {
+    if (!isSystemRole(req.user?.role)) {
       return res.status(403).json(errorResponse('无权访问所有酒店列表'));
     }
     const hotels = await HotelService.getAllHotels();
@@ -44,7 +54,7 @@ export const getAll = async (req: AuthRequest, res: Response) => {
  */
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    if (req.user?.role !== 'system') {
+    if (!isSystemRole(req.user?.role)) {
       return res.status(403).json(errorResponse('无权创建酒店'));
     }
     const id = await HotelService.createHotel(req.body);
@@ -60,7 +70,7 @@ export const update = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     
     // 如果是 system 角色，允许指定修改哪个酒店
-    if (req.user?.role === 'system' && req.params.id) {
+    if (isSystemRole(req.user?.role) && req.params.id) {
       hotelId = parseInt(req.params.id);
     }
 
@@ -87,7 +97,7 @@ export const update = async (req: AuthRequest, res: Response) => {
  */
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
-    if (req.user?.role !== 'system') {
+    if (!isSystemRole(req.user?.role)) {
       return res.status(403).json(errorResponse('无权删除酒店'));
     }
     const id = parseInt(req.params.id);

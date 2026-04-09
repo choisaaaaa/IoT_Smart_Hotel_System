@@ -4,10 +4,10 @@ import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), roomController.get);
-router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), roomController.getById);
-router.post('/', authenticate as any, authorize(['admin', 'system']), roomController.create);
-router.put('/:id', authenticate as any, authorize(['admin', 'system']), roomController.update);
-router.delete('/:id', authenticate as any, authorize(['admin', 'system']), roomController.remove);
+router.get('/', authenticate as any, authorize(['admin', 'manager', 'receptionist', 'system']), roomController.get);
+router.get('/:id', authenticate as any, authorize(['admin', 'manager', 'receptionist', 'system']), roomController.getById);
+router.post('/', authenticate as any, authorize(['admin', 'manager', 'system']), roomController.create);
+router.put('/:id', authenticate as any, authorize(['admin', 'manager', 'system']), roomController.update);
+router.delete('/:id', authenticate as any, authorize(['admin', 'manager', 'system']), roomController.remove);
 
 export default router;

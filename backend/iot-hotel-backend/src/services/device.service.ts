@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 export interface DeviceData {
   id?: number;
-  hotel_id: number;
+  hotel_id?: number;
   device_id: string;
   device_type: string;
   device_name: string;
@@ -20,6 +20,24 @@ export interface DeviceData {
 }
 
 class DeviceService {
+  private columnCache = new Map<string, boolean>();
+
+  private async hasColumn(table: string, column: string): Promise<boolean> {
+    const key = `${table}.${column}`;
+    if (this.columnCache.has(key)) {
+      return this.columnCache.get(key) as boolean;
+    }
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [table, column]
+    );
+    const exists = Number((rows[0] as any)?.total || 0) > 0;
+    this.columnCache.set(key, exists);
+    return exists;
+  }
+
   /**
    * 硬件设备上报注册/连接信息
    */
@@ -148,12 +166,36 @@ class DeviceService {
    */
   async getAllDevices(hotelId?: number, filters?: { status?: string; audit_status?: string; room_id?: number }) {
     try {
-      let query = 'SELECT d.*, r.room_number, h.hotel_name FROM devices d LEFT JOIN rooms r ON d.room_id = r.id LEFT JOIN hotels h ON d.hotel_id = h.id WHERE 1=1';
+      const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
+      const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
+      const hasDeviceAuditStatus = await this.hasColumn('devices', 'audit_status');
+      const selectFields = ['d.*'];
+      if (hasDeviceRoomId) {
+        selectFields.push('r.room_number');
+      }
+      selectFields.push('h.hotel_name');
+      let query = `SELECT ${selectFields.join(', ')} FROM devices d`;
+      if (hasDeviceRoomId) {
+        query += ' LEFT JOIN rooms r ON d.room_id = r.id';
+      }
+      if (hasDeviceHotelId) {
+        query += ' LEFT JOIN hotels h ON d.hotel_id = h.id';
+      } else if (hasDeviceRoomId) {
+        query += ' LEFT JOIN hotels h ON r.hotel_id = h.id';
+      } else {
+        query += ' LEFT JOIN hotels h ON 1 = 0';
+      }
+      query += ' WHERE 1=1';
       const params: any[] = [];
 
       if (hotelId) {
-        query += ' AND d.hotel_id = ?';
-        params.push(hotelId);
+        if (hasDeviceHotelId) {
+          query += ' AND d.hotel_id = ?';
+          params.push(hotelId);
+        } else if (hasDeviceRoomId) {
+          query += ' AND r.hotel_id = ?';
+          params.push(hotelId);
+        }
       }
 
       if (filters?.status) {
@@ -161,12 +203,16 @@ class DeviceService {
         params.push(filters.status);
       }
       if (filters?.audit_status) {
-        query += ' AND d.audit_status = ?';
-        params.push(filters.audit_status);
+        if (hasDeviceAuditStatus) {
+          query += ' AND d.audit_status = ?';
+          params.push(filters.audit_status);
+        }
       }
       if (filters?.room_id) {
-        query += ' AND d.room_id = ?';
-        params.push(filters.room_id);
+        if (hasDeviceRoomId) {
+          query += ' AND d.room_id = ?';
+          params.push(filters.room_id);
+        }
       }
 
       query += ' ORDER BY d.updated_at DESC';
@@ -184,10 +230,26 @@ class DeviceService {
    */
   async getDeviceById(id: number, hotelId: number) {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT d.*, r.room_number FROM devices d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ? AND d.hotel_id = ?',
-        [id, hotelId]
-      );
+      const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
+      const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
+      let query = 'SELECT d.*';
+      if (hasDeviceRoomId) {
+        query += ', r.room_number';
+      }
+      query += ' FROM devices d';
+      if (hasDeviceRoomId) {
+        query += ' LEFT JOIN rooms r ON d.room_id = r.id';
+      }
+      query += ' WHERE d.id = ?';
+      const params: any[] = [id];
+      if (hasDeviceHotelId) {
+        query += ' AND d.hotel_id = ?';
+        params.push(hotelId);
+      } else if (hasDeviceRoomId) {
+        query += ' AND r.hotel_id = ?';
+        params.push(hotelId);
+      }
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
       return rows.length > 0 ? (rows[0] as DeviceData) : null;
     } catch (error) {
       logger.error('Error getting device by id:', error);
@@ -200,7 +262,20 @@ class DeviceService {
    */
   async deleteDevice(id: number, hotelId: number) {
     try {
-      await pool.query<ResultSetHeader>('DELETE FROM devices WHERE id = ? AND hotel_id = ?', [id, hotelId]);
+      const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
+      const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
+      if (hasDeviceHotelId) {
+        await pool.query<ResultSetHeader>('DELETE FROM devices WHERE id = ? AND hotel_id = ?', [id, hotelId]);
+      } else if (hasDeviceRoomId) {
+        await pool.query<ResultSetHeader>(
+          `DELETE d FROM devices d
+           LEFT JOIN rooms r ON d.room_id = r.id
+           WHERE d.id = ? AND r.hotel_id = ?`,
+          [id, hotelId]
+        );
+      } else {
+        await pool.query<ResultSetHeader>('DELETE FROM devices WHERE id = ?', [id]);
+      }
       return true;
     } catch (error) {
       logger.error('Error deleting device:', error);

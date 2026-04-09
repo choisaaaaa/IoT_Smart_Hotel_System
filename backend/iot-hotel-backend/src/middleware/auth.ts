@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
+import { verifyToken } from '../utils/jwt';
+import { hasRole, normalizeRole } from '../utils/role';
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
@@ -13,7 +15,7 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     return;
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace(/Bearer /i, '').trim();
   
   if (!token) {
     res.status(401).json({
@@ -25,16 +27,21 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   }
 
   try {
-    const jwt = require('jsonwebtoken');
-    const secret = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
-    const decoded = jwt.verify(token, secret);
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      throw new Error('Token verification failed');
+    }
     
-    req.user = decoded;
+    req.user = {
+      ...decoded,
+      role: normalizeRole(decoded.role)
+    };
     next();
-  } catch (error) {
+  } catch (error: any) {
+    console.error('JWT验证失败原因:', error.message);
     res.status(401).json({
       code: 401,
-      message: '令牌验证失败',
+      message: '令牌验证失败: ' + (error.message || 'Unauthorized'),
       timestamp: Date.now()
     });
   }
@@ -54,7 +61,7 @@ export function authorize(roles: string[]): any {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!hasRole(req.user.role, roles)) {
       return res.status(403).json({
         code: 403,
         message: '权限不足',

@@ -5,6 +5,7 @@ import { generateToken, verifyToken, JwtPayload } from '../../utils/jwt';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../../types';
 import crypto from 'crypto';
 import db from '../../config/database';
+import { normalizeRole } from '../../utils/role';
 
 const router = Router();
 
@@ -109,10 +110,11 @@ router.post('/scan-login', async (req, res) => {
     const user = users[0];
 
     // 生成 JWT
+    const role = normalizeRole(user.role);
     const jwtPayload: JwtPayload = {
       id: user.id,
       username: user.username,
-      role: user.role,
+      role,
       hotel_id: user.hotel_id,
       permissions: [] // 后续可以加上
     };
@@ -141,7 +143,7 @@ router.post('/scan-login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role,
+        role,
         permissions: [],
         email: user.email,
         hotel_id: user.hotel_id,
@@ -206,7 +208,10 @@ router.post('/login', async (req, res) => {
       return [];
     };
 
-    const role = userRoles.length > 0 ? userRoles[0].role_name : user.role;
+    const isSystemAccount = normalizeRole(user.role) === 'system';
+    const role = isSystemAccount
+      ? 'system'
+      : normalizeRole(userRoles.length > 0 ? userRoles[0].role_name : user.role);
     const permissions = userRoles.length > 0 
       ? parsePermissions(userRoles[0].permissions) 
       : parsePermissions(user.permissions);
@@ -338,7 +343,7 @@ router.get('/me', async (req: AuthRequest, res) => {
       return sendError(res, errorResponse('未提供认证令牌', 401));
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace(/Bearer /i, '').trim();
     const decoded = verifyToken(token);
 
     if (!decoded) {
@@ -354,9 +359,13 @@ router.get('/me', async (req: AuthRequest, res) => {
       return sendError(res, errorResponse('用户不存在', 404));
     }
 
+    const normalizedRole = normalizeRole(decoded.role);
     sendSuccess(res, {
-      user: users[0],
-      role: decoded.role,
+      user: {
+        ...users[0],
+        role: normalizedRole
+      },
+      role: normalizedRole,
       permissions: decoded.permissions
     });
   } catch (error) {

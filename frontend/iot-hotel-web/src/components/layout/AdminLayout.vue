@@ -8,7 +8,7 @@
       theme="dark"
       class="admin-sider"
     >
-      <div class="logo" @click="$router.push('/admin/dashboard')">
+      <div class="logo" @click="$router.push('/hotel-admin/dashboard')">
         <SettingOutlined style="font-size: 24px;" />
         <span v-show="!collapsed" class="logo-text">智联酒店 · 管理端</span>
       </div>
@@ -18,29 +18,29 @@
         theme="dark"
         @click="handleMenuClick"
       >
-        <a-menu-item key="/admin/dashboard">
+        <a-menu-item key="/hotel-admin/dashboard">
           <template #icon><DashboardOutlined /></template>
           <span>总览仪表盘</span>
         </a-menu-item>
-        <a-menu-item key="/admin/devices">
+        <a-menu-item key="/hotel-admin/devices">
           <template #icon><MonitorOutlined /></template>
           <span>设备监控</span>
         </a-menu-item>
         <a-sub-menu key="info-manage">
           <template #title><EditOutlined /><span v-show="!collapsed">房间管理</span></template>
-          <a-menu-item key="/admin/rooms/edit"><HomeOutlined /> 房间列表</a-menu-item>
-          <a-menu-item key="/admin/rooms/types"><TagsOutlined /> 房型维护</a-menu-item>
-          <a-menu-item key="/admin/rooms/floors"><BarsOutlined /> 楼层管理</a-menu-item>
+          <a-menu-item key="/hotel-admin/rooms/edit"><HomeOutlined /> 房间列表</a-menu-item>
+          <a-menu-item key="/hotel-admin/rooms/types"><TagsOutlined /> 房型维护</a-menu-item>
+          <a-menu-item key="/hotel-admin/rooms/floors"><BarsOutlined /> 楼层管理</a-menu-item>
         </a-sub-menu>
-        <a-menu-item key="/admin/hotel/info">
+        <a-menu-item key="/hotel-admin/hotel/info">
           <template #icon><BankOutlined /></template>
           <span>酒店信息</span>
         </a-menu-item>
-        <a-menu-item key="/admin/reports">
+        <a-menu-item key="/hotel-admin/reports">
           <template #icon><FileTextOutlined /></template>
           <span>账单报表</span>
         </a-menu-item>
-        <a-menu-item key="/admin/users">
+        <a-menu-item key="/hotel-admin/users">
           <template #icon><UserOutlined /></template>
           <span>用户管理</span>
         </a-menu-item>
@@ -58,9 +58,11 @@
           </a-breadcrumb>
         </div>
         <div class="header-right">
-          <span v-if="appStore.userInfo?.hotel_name" class="hotel-tag">
-            <BankOutlined /> {{ appStore.userInfo.hotel_name }}
-          </span>
+          <a-tag v-if="hotelInfoLoading" color="processing" class="hotel-tag">分店信息加载中</a-tag>
+          <a-tag v-else-if="resolvedHotelName" color="blue" class="hotel-tag">
+            <BankOutlined /> {{ resolvedHotelName }}
+          </a-tag>
+          <a-tag v-else color="warning" class="hotel-tag">未绑定分店</a-tag>
           <a-badge :count="appStore.notificationCount" :offset="[-2, 4]">
             <BellOutlined class="header-icon" />
           </a-badge>
@@ -95,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   SettingOutlined, DashboardOutlined, MonitorOutlined,
@@ -106,6 +108,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'
+import { hotelManageApi } from '@/api/hotel-manage'
 
 const route = useRoute()
 const router = useRouter()
@@ -116,8 +119,11 @@ appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
+const hotelInfoLoading = ref(false)
+const hotelName = ref('')
 
 const currentTitle = computed(() => (route.meta.title as string) || '')
+const resolvedHotelName = computed(() => hotelName.value || appStore.userInfo?.hotel_name || '')
 
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]
@@ -126,6 +132,30 @@ watch(() => route.path, (path) => {
 function handleMenuClick({ key }: { key: string }) {
   router.push(key)
 }
+
+async function loadHotelInfo() {
+  if (appStore.userInfo?.role !== 'admin') {
+    return
+  }
+  hotelInfoLoading.value = true
+  try {
+    const res: any = await hotelManageApi.getHotelInfo()
+    const data = res?.data
+    if (data?.hotel_name) {
+      hotelName.value = data.hotel_name
+      appStore.setUserInfo({
+        ...appStore.userInfo,
+        hotel_name: data.hotel_name
+      })
+    }
+  } finally {
+    hotelInfoLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadHotelInfo()
+})
 
 async function handleLogout() {
   await authService.logout()
@@ -166,6 +196,7 @@ async function handleLogout() {
 .breadcrumb { font-size: 14px; }
 .header-icon { font-size: 18px; cursor: pointer; }
 .ws-status { border-radius: 12px; }
+.hotel-tag { display: inline-flex; align-items: center; gap: 6px; border-radius: 12px; }
 .admin-content {
   margin: 16px;
   margin-left: 256px;

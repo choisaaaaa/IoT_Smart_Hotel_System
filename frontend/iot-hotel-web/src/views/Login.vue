@@ -193,7 +193,7 @@ import {
   LockOutlined,
   MailOutlined
 } from '@ant-design/icons-vue'
-import { authService } from '@/api/auth'
+import { authService, normalizeRole } from '@/api/auth'
 import type { Rule } from 'ant-design-vue/es/form'
 
 const router = useRouter()
@@ -259,6 +259,26 @@ const registerRules: Record<string, Rule[]> = {
   ]
 }
 
+function redirectByRole(rawRole?: string) {
+  const role = normalizeRole(rawRole)
+  switch (role) {
+    case 'system':
+      router.push('/system/dashboard')
+      break
+    case 'admin':
+      router.push('/hotel-admin/dashboard')
+      break
+    case 'staff':
+      router.push('/reception/dashboard')
+      break
+    case 'user':
+      router.push('/guest/booking')
+      break
+    default:
+      router.push('/guest/booking')
+  }
+}
+
 // 处理登录
 const handleLogin = async () => {
   try {
@@ -268,22 +288,7 @@ const handleLogin = async () => {
     message.success('登录成功')
     
     // 根据角色跳转到不同的页面
-    switch (user.role) {
-      case 'system':
-        router.push('/system/dashboard')
-        break
-      case 'admin':
-        router.push('/admin/dashboard')
-        break
-      case 'staff':
-        router.push('/reception/dashboard')
-        break
-      case 'user':
-        router.push('/guest/booking')
-        break
-      default:
-        router.push('/admin/dashboard')
-    }
+    redirectByRole(user.role)
   } catch (error) {
     console.error('登录失败:', error)
   } finally {
@@ -315,50 +320,14 @@ const handleGenerateToken = async () => {
 const pollScanLogin = async (token: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    // 检查 token 是否仍然有效 (未被使用)
-    const response = await fetch('http://localhost:9000/api/v1/auth/scan-login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ token })
-    })
-    
-    const result = await response.json()
-    
-    if (result.code === 200) {
-      // 扫码登录成功
-      message.success('扫码登录成功')
-      
-      // 保存用户信息
-      localStorage.setItem('user_info', JSON.stringify(result.data.user))
-      
-      // 根据角色跳转
-      const user = result.data.user
-      switch (user.role) {
-        case 'system':
-          router.push('/system/dashboard')
-          break
-        case 'admin':
-          router.push('/admin/dashboard')
-          break
-        case 'staff':
-          router.push('/reception/dashboard')
-          break
-        case 'user':
-          router.push('/guest/booking')
-          break
-        default:
-          router.push('/admin/dashboard')
-      }
-    } else if (result.code === 401) {
-      // Token 无效或已过期，继续轮询
+    const { user } = await authService.scanLogin(token)
+    message.success('扫码登录成功')
+
+    redirectByRole(user.role)
+  } catch (error: any) {
+    if (error?.response?.status === 401 || error?.response?.data?.code === 401) {
       pollScanLogin(token)
     }
-  } catch (error) {
-    // 网络错误，继续轮询
-    pollScanLogin(token)
   }
 }
 

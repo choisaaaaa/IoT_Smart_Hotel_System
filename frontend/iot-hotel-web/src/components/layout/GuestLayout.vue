@@ -242,7 +242,7 @@ import {
   LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
-import { authService } from '@/api/auth'
+import { authService, normalizeRole } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -319,6 +319,19 @@ function isActive(path: string): boolean {
   return route.path.startsWith(path)
 }
 
+function redirectByRole(rawRole?: string) {
+  const role = normalizeRole(rawRole)
+  if (role === 'system') {
+    router.push('/system/dashboard')
+  } else if (role === 'admin') {
+    router.push('/hotel-admin/dashboard')
+  } else if (role === 'staff') {
+    router.push('/reception/dashboard')
+  } else {
+    router.push('/guest/booking')
+  }
+}
+
 // 处理登录
 const handleLogin = async () => {
   try {
@@ -329,13 +342,7 @@ const handleLogin = async () => {
     appStore.showLoginModal = false
     
     // 根据角色跳转
-    if (user.role === 'system') {
-      router.push('/system/dashboard')
-    } else if (user.role === 'admin') {
-      router.push('/admin/dashboard')
-    } else if (user.role === 'staff') {
-      router.push('/reception/dashboard')
-    }
+    redirectByRole(user.role)
   } catch (error) {
     console.error('登录失败:', error)
   } finally {
@@ -367,34 +374,15 @@ const handleGenerateToken = async () => {
 const pollScanLogin = async (token: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    const response = await fetch('http://localhost:9000/api/v1/auth/scan-login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ token })
-    })
-    
-    const result = await response.json()
-    
-    if (result.code === 200) {
-      message.success('扫码登录成功')
-      appStore.showLoginModal = false
-      
-      const user = result.data.user
-      if (user.role === 'system') {
-        router.push('/system/dashboard')
-      } else if (user.role === 'admin') {
-        router.push('/admin/dashboard')
-      } else if (user.role === 'staff') {
-        router.push('/reception/dashboard')
-      }
-    } else if (result.code === 401) {
+    const { user } = await authService.scanLogin(token)
+    message.success('扫码登录成功')
+    appStore.showLoginModal = false
+
+    redirectByRole(user.role)
+  } catch (error: any) {
+    if (error?.response?.status === 401 || error?.response?.data?.code === 401) {
       pollScanLogin(token)
     }
-  } catch (error) {
-    pollScanLogin(token)
   }
 }
 

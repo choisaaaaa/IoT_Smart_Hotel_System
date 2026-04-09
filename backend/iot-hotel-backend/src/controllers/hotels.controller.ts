@@ -43,8 +43,8 @@ export async function search(req: AuthRequest, res: Response) {
         FROM rooms r
         WHERE r.room_status = 'available'
         GROUP BY r.hotel_id
-      ) ra ON ra.hotel_id = IFNULL(h.hotel_id, h.id)
-      WHERE (h.hotel_name LIKE ? OR h.location LIKE ?)
+      ) ra ON ra.hotel_id = h.id
+      WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ?)
         AND IFNULL(ra.available_rooms, 0) > 0
     `;
 
@@ -53,15 +53,14 @@ export async function search(req: AuthRequest, res: Response) {
 
     sendSuccess(res, {
       hotels: hotels.map((h: any) => ({
-        id: h.hotel_id,
+        id: h.id,
         name: h.hotel_name,
-        location: h.location,
-        star: h.star_rating,
-        rating: h.rating || 4.5,
-        reviewCount: h.review_count || 0,
+        location: h.hotel_address,
+        star: h.hotel_star,
+        rating: 4.5,
+        reviewCount: 100,
         price: h.min_price || 299,
-        image: h.image_url || '/hotel-placeholder.jpg',
-        promotion: h.promotion,
+        image: h.logo || '/hotel-placeholder.jpg',
         availableRooms: h.available_rooms
       }))
     });
@@ -77,7 +76,7 @@ export async function detail(req: AuthRequest, res: Response) {
     const { id } = req.params;
 
     const [hotels]: any = await db.execute(
-      'SELECT * FROM hotels WHERE hotel_id = ?',
+      'SELECT * FROM hotels WHERE id = ?',
       [id]
     );
 
@@ -89,14 +88,13 @@ export async function detail(req: AuthRequest, res: Response) {
 
     sendSuccess(res, {
       hotel: {
-        id: hotel.hotel_id,
+        id: hotel.id,
         name: hotel.hotel_name,
-        location: hotel.location,
-        star: hotel.star_rating,
-        rating: hotel.rating || 4.5,
-        reviewCount: hotel.review_count || 0,
-        image: hotel.image_url,
-        promotion: hotel.promotion
+        location: hotel.hotel_address,
+        star: hotel.hotel_star,
+        rating: 4.5,
+        reviewCount: 100,
+        image: hotel.logo
       }
     });
   } catch (error) {
@@ -122,7 +120,7 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
     // 可用房间 = 总房间 - 已预订房间
     const sql = `
       SELECT 
-        r.room_id,
+        r.id,
         r.room_number,
         r.room_name,
         r.room_type,
@@ -133,12 +131,12 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         r.max_guests,
         r.room_status,
         r.facilities,
-        r.image_url,
-        COUNT(DISTINCT r.room_id) as total_rooms,
-        COUNT(DISTINCT b.room_id) as booked_rooms,
-        (COUNT(DISTINCT r.room_id) - COUNT(DISTINCT b.room_id)) as available_count
+        r.images as image_url,
+        COUNT(DISTINCT r.id) as total_rooms,
+        COUNT(DISTINCT b.id) as booked_rooms,
+        (COUNT(DISTINCT r.id) - COUNT(DISTINCT b.id)) as available_count
       FROM rooms r
-      LEFT JOIN bookings b ON r.room_id = b.room_id 
+      LEFT JOIN bookings b ON r.id = b.room_id 
         AND b.status IN ('confirmed', 'checked_in')
         AND (
           (b.check_in_date <= ? AND b.check_out_date >= ?)
@@ -146,9 +144,9 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
           OR (b.check_in_date >= ? AND b.check_out_date <= ?)
         )
       WHERE r.hotel_id = ? AND r.room_status = 'available'
-      GROUP BY r.room_id, r.room_number, r.room_name, r.room_type, 
+      GROUP BY r.id, r.room_number, r.room_name, r.room_type, 
                r.room_price, r.floor, r.area, r.bed_type, r.max_guests,
-               r.room_status, r.facilities, r.image_url
+               r.room_status, r.facilities, r.images
       HAVING available_count > 0
     `;
 
@@ -168,7 +166,7 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
       rooms: rooms.map((r: any) => {
         const facilities = parseFacilities(r.facilities);
         return ({
-        id: r.room_id,
+        id: r.id,
         room_number: r.room_number,
         room_name: r.room_name,
         room_type: r.room_type,
