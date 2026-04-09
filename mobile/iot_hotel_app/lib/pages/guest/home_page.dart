@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
+import '../../services/message_service.dart';
 import '../../core/logic/member_logic.dart';
 import '../../models/user.dart';
 import '../../core/network/api_result.dart';
@@ -89,11 +90,24 @@ class HomePage extends ConsumerWidget {
                     );
                   },
                 ),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
-                    SizedBox(width: 16),
-                    Icon(Icons.notifications_none, color: Colors.white, size: 28),
+                    const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () => context.push('/notifications'),
+                      child: FutureBuilder<int>(
+                        future: ref.read(messageServiceProvider).getUnreadCount().then((r) => r.data ?? 0),
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          return Badge(
+                            isLabelVisible: count > 0,
+                            label: Text(count > 99 ? '99+' : '$count', style: const TextStyle(fontSize: 10)),
+                            child: const Icon(Icons.notifications_none, color: Colors.white, size: 28),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ],

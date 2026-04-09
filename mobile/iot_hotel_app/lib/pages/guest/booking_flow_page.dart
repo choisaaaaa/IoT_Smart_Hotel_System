@@ -196,14 +196,14 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         actions: [
           TextButton(
             onPressed: () {
-              ctx.pop();
+              Navigator.pop(ctx);
               context.go('/orders');
             },
             child: const Text('查看订单', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           ),
           FilledButton(
             onPressed: () {
-              ctx.pop();
+              Navigator.pop(ctx);
               context.push('/online-checkin', extra: {'bookingId': bookingId});
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),

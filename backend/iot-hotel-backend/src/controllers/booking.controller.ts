@@ -24,9 +24,9 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     // 如果是普通用户，只返回自己的订单
     if (req.user?.role === 'user') {
-      whereClause += ' AND (b.guest_phone = ? OR b.user_id = ?)';
-      params.push(req.user.username); // 假设 username 是手机号
-      params.push(req.user.id);
+      whereClause += ' AND (b.guest_phone = ? OR b.guest_name = ?)';
+      params.push(req.user.username);
+      params.push(req.user.username);
     }
     
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, params);

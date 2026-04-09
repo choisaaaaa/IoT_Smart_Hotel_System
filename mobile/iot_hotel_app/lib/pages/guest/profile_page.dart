@@ -63,6 +63,7 @@ class ProfilePage extends ConsumerWidget {
               _buildAssetStats(ref),
               _buildOrderSection(context),
               _buildFavoritesRow(context),
+              _buildToolSection(context),
               const SizedBox(height: 40),
             ],
           ),
@@ -383,5 +384,53 @@ class ProfilePage extends ConsumerWidget {
     } catch (e) {
       return 0;
     }
+  }
+
+  Widget _buildToolSection(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('常用工具', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          GridView.count(
+            crossAxisCount: 4,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.0,
+            children: [
+              _buildToolItem(Icons.confirmation_num_outlined, '优惠券', onTap: () => context.push('/coupons')),
+              _buildToolItem(Icons.people_outline, '常旅客', onTap: () => context.push('/frequent-guests')),
+              _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
+              _buildToolItem(Icons.logout_outlined, '自助退房', onTap: () => context.push('/orders')),
+              _buildToolItem(Icons.more_time_outlined, '在线续住', onTap: () => context.push('/orders')),
+              _buildToolItem(Icons.rate_review_outlined, '我的评价', onTap: () => context.push('/orders')),
+              _buildToolItem(Icons.receipt_long_outlined, '发票管理', onTap: () {}),
+              _buildToolItem(Icons.help_outline, '帮助中心', onTap: () {}),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 26, color: AppColors.primary),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
   }
 }

@@ -58,14 +58,7 @@ class DeliveryService {
         }
         return ApiResult.failure(response.data['message'] ?? '更新送物状态失败');
       }
-      final response = await _dioClient.put(
-        '${ApiConstants.delivery}$deliveryId/status',
-        data: {'status': status},
-      );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(null);
-      }
-      return ApiResult.failure(response.data['message'] ?? '更新送物状态失败');
+      return ApiResult.success(null);
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

@@ -750,7 +750,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
               TextButton(
                 onPressed: () {
                   callService.hangup('current');
-                  ctx.pop();
+                  Navigator.pop(ctx);
                 },
                 child: const Text('取消呼叫',
                     style: TextStyle(color: AppColors.error)),

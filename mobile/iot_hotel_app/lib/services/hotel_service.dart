@@ -16,14 +16,13 @@ class HotelService {
   }) async {
     try {
       final queryParams = <String, dynamic>{
-        'lat': lat,
-        'lng': lng,
         'page': page,
         'pageSize': pageSize,
       };
-      if (city != null) queryParams['city'] = city;
-      if (keyword != null) queryParams['keyword'] = keyword;
-      if (city == null && keyword == null) queryParams['destination'] = null;
+      if (lat != null) queryParams['lat'] = lat;
+      if (lng != null) queryParams['lng'] = lng;
+      final destination = keyword ?? city;
+      if (destination != null) queryParams['destination'] = destination;
 
       final response = await _dioClient.get(
         '${ApiConstants.hotels}search',

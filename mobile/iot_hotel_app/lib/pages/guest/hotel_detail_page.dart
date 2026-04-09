@@ -339,6 +339,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   Widget _buildDateSelector() {
     final format = DateFormat('MM月dd日');
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: _selectDates,
       child: Container(
         color: Colors.white,
