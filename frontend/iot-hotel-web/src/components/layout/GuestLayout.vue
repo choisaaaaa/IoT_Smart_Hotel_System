@@ -217,6 +217,25 @@
             </template>
           </a-input>
         </a-form-item>
+
+        <a-form-item name="phone" label="手机号">
+          <a-input
+            v-model:value="registerForm.phone"
+            placeholder="请输入手机号"
+            size="large"
+          >
+            <template #prefix>
+              <PhoneOutlined />
+            </template>
+          </a-input>
+        </a-form-item>
+
+        <a-alert
+          message="提示"
+          description="注册默认为顾客账号。如需前台员工或酒店管理权限，请在登录后通过APP端申请绑定酒店。"
+          type="info"
+          show-icon
+        />
       </a-form>
     </a-modal>
   </div>
@@ -233,6 +252,7 @@ import {
   UserOutlined,
   LockOutlined,
   MailOutlined,
+  PhoneOutlined,
   LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
@@ -283,7 +303,7 @@ const registerForm = reactive({
   password: '',
   confirmPassword: '',
   email: '',
-  hotel_id: 1
+  phone: ''
 })
 
 const registerRules: Record<string, Rule[]> = {
@@ -306,6 +326,10 @@ const registerRules: Record<string, Rule[]> = {
       },
       trigger: 'blur'
     }
+  ],
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
   ]
 }
 
@@ -317,7 +341,7 @@ function redirectByRole(rawRole?: string) {
   const role = normalizeRole(rawRole)
   if (role === 'system') {
     router.push('/system/dashboard')
-  } else if (role === 'admin') {
+  } else if (role === 'admin' || role === 'manager') {
     router.push('/hotel-admin/dashboard')
   } else if (role === 'staff') {
     router.push('/reception/dashboard')
@@ -400,7 +424,7 @@ const handleRegister = async () => {
       username: registerForm.username,
       password: registerForm.password,
       email: registerForm.email || undefined,
-      hotel_id: registerForm.hotel_id
+      phone: registerForm.phone
     })
     
     message.success('注册成功，请登录')
@@ -411,6 +435,7 @@ const handleRegister = async () => {
     registerForm.password = ''
     registerForm.confirmPassword = ''
     registerForm.email = ''
+    registerForm.phone = ''
     
     // 切换到密码登录
     activeTab.value = 'password'
