@@ -2,7 +2,7 @@
 #include "hal_log.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
-#include "esp_rom/ets_sys.h"
+#include "esp_rom_sys.h"
 #include "esp_check.h"
 
 static const char *TAG = "DRIVER_DHT11";
@@ -79,9 +79,9 @@ esp_err_t driver_dht11_read(driver_dht11_data_t *out_data)
     // 主机起始信号：拉低 >=18ms，再拉高 20~40us
     set_pin_output();
     gpio_set_level(s_pin, 0);
-    ets_delay_us(20000);
+    esp_rom_delay_us(20000);
     gpio_set_level(s_pin, 1);
-    ets_delay_us(30);
+    esp_rom_delay_us(30);
     set_pin_input();
 
     // 传感器响应：低 ~80us + 高 ~80us
