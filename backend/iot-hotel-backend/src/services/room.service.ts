@@ -178,13 +178,32 @@ export class RoomService {
 
   static async createRoom(data: Partial<Room> & { hotel_id: number }): Promise<number> {
     try {
-      const { room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id } = data;
+      const { room_number, room_type_id, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id } = data;
       
-      const [result] = await pool.query<ResultSetHeader>(
-        `INSERT INTO rooms (room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), hotel_id]
+      // 检查是否存在 room_type_id 字段
+      const [columns] = await pool.query<RowDataPacket[]>(
+        `SELECT COLUMN_NAME 
+         FROM information_schema.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'room_type_id'`
       );
+      const hasRoomTypeId = columns.length > 0;
+      
+      let sql: string;
+      let values: any[];
+      
+      if (hasRoomTypeId) {
+        // 使用 room_type_id 字段
+        sql = `INSERT INTO rooms (room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        values = [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), hotel_id];
+      } else {
+        // 使用 room_type 字段（字符串类型）
+        sql = `INSERT INTO rooms (room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images, hotel_id) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        values = [room_number, room_type || 'standard', room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), hotel_id];
+      }
+      
+      const [result] = await pool.query<ResultSetHeader>(sql, values);
       
       return result.insertId;
     } catch (error) {
@@ -195,10 +214,22 @@ export class RoomService {
 
   static async updateRoom(id: number, hotelId: number, data: Partial<Room>): Promise<boolean> {
     try {
-      const { room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = data;
+      const { room_number, room_type_id, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, facilities, images } = data;
       
-      const [result] = await pool.query<ResultSetHeader>(
-        `UPDATE rooms SET 
+      // 检查是否存在 room_type_id 字段
+      const [columns] = await pool.query<RowDataPacket[]>(
+        `SELECT COLUMN_NAME 
+         FROM information_schema.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'room_type_id'`
+      );
+      const hasRoomTypeId = columns.length > 0;
+      
+      let sql: string;
+      let values: any[];
+      
+      if (hasRoomTypeId) {
+        // 使用 room_type_id 字段
+        sql = `UPDATE rooms SET 
           room_number = COALESCE(?, room_number), 
           room_type_id = COALESCE(?, room_type_id), 
           room_name = COALESCE(?, room_name), 
@@ -212,9 +243,29 @@ export class RoomService {
           facilities = ?, 
           images = ?, 
           updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ? AND hotel_id = ?`,
-        [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id, hotelId]
-      );
+        WHERE id = ? AND hotel_id = ?`;
+        values = [room_number, room_type_id, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id, hotelId];
+      } else {
+        // 使用 room_type 字段（字符串类型）
+        sql = `UPDATE rooms SET 
+          room_number = COALESCE(?, room_number), 
+          room_type = COALESCE(?, room_type), 
+          room_name = COALESCE(?, room_name), 
+          room_price = COALESCE(?, room_price), 
+          room_status = COALESCE(?, room_status), 
+          floor = COALESCE(?, floor), 
+          area = COALESCE(?, area), 
+          bed_type = COALESCE(?, bed_type), 
+          max_guests = COALESCE(?, max_guests), 
+          description = COALESCE(?, description), 
+          facilities = ?, 
+          images = ?, 
+          updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND hotel_id = ?`;
+        values = [room_number, room_type, room_name, room_price, room_status, floor, area, bed_type, max_guests, description, JSON.stringify(facilities || []), JSON.stringify(images || []), id, hotelId];
+      }
+      
+      const [result] = await pool.query<ResultSetHeader>(sql, values);
       
       return result.affectedRows > 0;
     } catch (error) {
