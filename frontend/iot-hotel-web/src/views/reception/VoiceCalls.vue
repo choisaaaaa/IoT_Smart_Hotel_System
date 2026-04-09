@@ -100,10 +100,12 @@ const stats = reactive({
   avg_duration_sec: 0
 })
 
+type CallTargetType = 'room' | 'front_desk' | 'ai' | 'app'
+
 const callForm = reactive({
   caller_id: 'FD-01',
   callee_id: '',
-  callee_type: 'front_desk' // 默认改为前台，方便测试
+  callee_type: 'front_desk' as CallTargetType // 显式指定类型以修复 TS 错误
 })
 
 const isRegistered = ref(false)
