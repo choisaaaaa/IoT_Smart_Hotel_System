@@ -135,7 +135,9 @@ class WebSocketService {
             info.clientName = displayName;
             
             // 统一使用 {type}_{id} 格式加入房间，用于接收定向消息
-            socket.join(`${data.clientType}_${data.clientId}`);
+            const targetRoom = `${data.clientType}_${data.clientId}`;
+            socket.join(targetRoom);
+            logger.info(`客户端 ${socket.id} 加入房间: ${targetRoom}`);
             
             // 同时加入类型房间，用于接收广播消息
             switch (data.clientType) {
@@ -301,7 +303,9 @@ class WebSocketService {
           
           socket.emit('call_initiated', callData);
           
-          this.io?.to(`${callee_type}_${callee_id}`).emit('incoming_call', callData);
+          const targetRoom = `${callee_type}_${callee_id}`;
+          logger.info(`发送 incoming_call 到房间: ${targetRoom}, 数据:`, callData);
+          this.io?.to(targetRoom).emit('incoming_call', callData);
           
           logger.info(`通话发起: ${caller_type}/${caller_id} -> ${callee_type}/${callee_id} (${callId})`);
         } catch (error) {
@@ -675,10 +679,6 @@ class WebSocketService {
     return result;
   }
 
-  getIO(): Server | null {
-    return this.io;
-  }
-
   async sendOnlineStatus(socket: Socket) {
     try {
       // 1. 获取在线的 WebSocket 客户端
@@ -756,6 +756,16 @@ class WebSocketService {
     this.clients.clear();
     logger.info('WebSocket服务已关闭');
   }
+
+  // 获取 io 实例（用于从外部发送事件）
+  getIO(): Server | null {
+    return this.io;
+  }
 }
 
-export default new WebSocketService();
+const webSocketService = new WebSocketService();
+export default webSocketService;
+
+export function getWebSocketService(): WebSocketService {
+  return webSocketService;
+}

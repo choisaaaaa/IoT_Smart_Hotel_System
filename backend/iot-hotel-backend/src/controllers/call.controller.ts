@@ -3,6 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { getWebSocketService } from '../services/websocket.service';
 
 export const initiateCall = async (req: AuthRequest, res: Response) => {
   try {
@@ -147,6 +148,28 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       [callId, caller_type, caller_id, callee_type, callee_id, 'outgoing', new Date()]
     );
     
+    // 发送 WebSocket 事件通知被叫方
+    const wsService = getWebSocketService();
+    const io = wsService?.getIO();
+    if (io) {
+      const callData = {
+        call_id: callId,
+        caller_type,
+        caller_id,
+        caller_name: caller_id, // 使用 caller_id 作为名称
+        callee_type,
+        callee_id,
+        status: 'calling',
+        type,
+        started_at: new Date().toISOString()
+      };
+      
+      // 只发送到定向房间，因为前台用户已经加入了自己的定向房间
+      const targetRoom = `${callee_type}_${callee_id}`;
+      logger.info(`[HTTP API] 发送 incoming_call 到房间: ${targetRoom}`);
+      io.to(targetRoom).emit('incoming_call', callData);
+    }
+    
     res.json(successResponse({
       call_id: callId,
       caller_type,
@@ -185,6 +208,31 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
       ['connected', new Date(), call_id]
     );
     
+    // 发送 WebSocket 事件通知双方
+    const wsService = getWebSocketService();
+    const io = wsService?.getIO();
+    if (io) {
+      const answeredData = {
+        call_id,
+        caller_type: callData.caller_type,
+        caller_id: callData.caller_id,
+        callee_type: callData.callee_type,
+        callee_id: callData.callee_id,
+        status: 'connected',
+        answered_at: new Date().toISOString()
+      };
+      
+      // 通知主叫方
+      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
+      logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom}`);
+      io.to(callerRoom).emit('call_answered', answeredData);
+      
+      // 通知被叫方
+      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
+      logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom}`);
+      io.to(calleeRoom).emit('call_answered', answeredData);
+    }
+    
     res.json(successResponse({
       call_id,
       status: 'connected',
@@ -217,6 +265,17 @@ export const rejectCall = async (req: AuthRequest, res: Response) => {
       `UPDATE calls SET status = ?, ended_at = ? WHERE call_id = ?`,
       ['rejected', new Date(), call_id]
     );
+    
+    // 发送 WebSocket 事件通知对方
+    const wsService = getWebSocketService();
+    const io = wsService?.getIO();
+    if (io) {
+      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
+      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
+      io.to(callerRoom).emit('call_rejected', { call_id });
+      io.to(calleeRoom).emit('call_rejected', { call_id });
+      logger.info(`[HTTP API] 发送 call_rejected 到双方房间`);
+    }
     
     res.json(successResponse({
       call_id,
@@ -255,6 +314,17 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
       `UPDATE calls SET status = ?, ended_at = ?, duration_sec = ? WHERE call_id = ?`,
       ['ended', endedAt, durationSec, call_id]
     );
+    
+    // 发送 WebSocket 事件通知对方
+    const wsService = getWebSocketService();
+    const io = wsService?.getIO();
+    if (io) {
+      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
+      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
+      io.to(callerRoom).emit('call_hungup', { call_id });
+      io.to(calleeRoom).emit('call_hungup', { call_id });
+      logger.info(`[HTTP API] 发送 call_hungup 到双方房间`);
+    }
     
     res.json(successResponse({
       call_id,

@@ -3,12 +3,23 @@ import config from './config';
 import logger from './utils/logger';
 import mqttService from './services/mqtt.service';
 import websocketService from './services/websocket.service';
+import pool from './config/database';
 
 const PORT = config.app.port;
 const HOST = config.app.host;
 
 async function startServer() {
   try {
+    // 清理进行中的通话记录（上次异常退出时遗留的）
+    try {
+      await pool.query(
+        `UPDATE calls SET status = 'ended', ended_at = NOW() WHERE status IN ('calling', 'outgoing', 'ringing', 'connected')`
+      );
+      logger.info('已清理进行中的通话记录');
+    } catch (cleanupError) {
+      logger.warn('清理通话记录失败:', cleanupError);
+    }
+
     const server = app.listen(PORT, async () => {
       logger.info(`服务器启动成功: http://127.0.0.1:${PORT}`);
       logger.info(`API前缀: ${config.app.apiPrefix}`);
