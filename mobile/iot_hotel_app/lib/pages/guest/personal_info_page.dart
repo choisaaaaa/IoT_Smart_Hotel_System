@@ -47,9 +47,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
       }
 
-      final hotelResponse = await dio.get(ApiConstants.hotels, queryParameters: {'pageSize': 100});
+      final hotelResponse = await dio.get('${ApiConstants.hotels}search', queryParameters: {'pageSize': 100});
       if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
-        final list = hotelResponse.data['data']?['list'] ?? hotelResponse.data['data'] ?? [];
+        final list = hotelResponse.data['data']?['hotels'] ?? hotelResponse.data['data'] ?? [];
         setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
       }
     } catch (e) {
@@ -297,7 +297,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
                     ),
                     items: _allHotels.map((h) => DropdownMenuItem<int>(
                       value: h['id'] as int,
-                      child: Text(h['hotel_name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
+                      child: Text(h['name'] ?? h['hotel_name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
                     )).toList(),
                     onChanged: (v) => setDialogState(() => selectedHotelId = v),
                   ),
