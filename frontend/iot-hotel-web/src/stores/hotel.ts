@@ -4,6 +4,7 @@ import type { RoomInfo, HotelInfo } from '@/types'
 
 export const useHotelStore = defineStore('hotel', () => {
   const hotelInfo = ref<HotelInfo | null>(null)
+  const currentHotelId = ref<number | null>(null)
   const rooms = ref<RoomInfo[]>([])
   const loading = ref(false)
   const roomFetchAt = ref(0)
@@ -17,9 +18,16 @@ export const useHotelStore = defineStore('hotel', () => {
       const { hotelManageApi } = await import('@/api/hotel-manage')
       const res: any = await hotelManageApi.getHotelInfo()
       hotelInfo.value = res.data
+      if (res.data?.id) {
+        currentHotelId.value = res.data.id
+      }
     } finally {
       loading.value = false
     }
+  }
+
+  function setCurrentHotelId(hotelId: number) {
+    currentHotelId.value = hotelId
   }
 
   async function fetchRooms(params?: any) {
@@ -51,7 +59,12 @@ export const useHotelStore = defineStore('hotel', () => {
     const task = (async () => {
       const { roomApi } = await import('@/api/room')
       try {
-        const res: any = await roomApi.getRoomList(params)
+        // 自动添加当前酒店ID
+        const requestParams = {
+          ...params,
+          ...(currentHotelId.value ? { hotel_id: currentHotelId.value } : {})
+        }
+        const res: any = await roomApi.getRoomList(requestParams)
         rooms.value = res.data?.list || []
         roomFetchAt.value = Date.now()
         return res.data
@@ -108,11 +121,13 @@ export const useHotelStore = defineStore('hotel', () => {
 
   return {
     hotelInfo,
+    currentHotelId,
     rooms,
     loading,
     floors,
     groupedRooms,
     fetchHotelInfo,
+    setCurrentHotelId,
     fetchRooms,
     getRoomsByFloor,
     getAvailableRooms,

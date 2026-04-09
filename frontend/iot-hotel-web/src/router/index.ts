@@ -200,12 +200,6 @@ const routes: RouteRecordRaw[] = [
         name: 'GuestRoom',
         component: () => import('@/views/guest/GuestRoom.vue'),
         meta: { title: '客房服务', icon: 'HomeOutlined', requiresAuth: false }
-      },
-      {
-        path: 'ai-butler',
-        name: 'AIButler',
-        component: () => import('@/views/guest/AIButler.vue'),
-        meta: { title: 'AI管家', icon: 'RobotOutlined', requiresAuth: false }
       }
     ]
   }

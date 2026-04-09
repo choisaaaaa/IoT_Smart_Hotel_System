@@ -1,5 +1,6 @@
 export interface Booking {
   id: number;
+  hotel_id: number;
   booking_number: string;
   room_id: number;
   guest_name: string;
@@ -21,6 +22,7 @@ export interface Booking {
 }
 
 export interface BookingInput {
+  hotel_id: number;
   room_id: number;
   guest_name: string;
   guest_phone: string;
@@ -35,6 +37,7 @@ export interface BookingInput {
 export interface BookingQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
   guest_name?: string;
 }

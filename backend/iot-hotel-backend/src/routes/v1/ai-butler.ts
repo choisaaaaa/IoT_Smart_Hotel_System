@@ -37,8 +37,11 @@ router.post('/chat',
           // 查找在线的前台
           const onlineStaff = await getOnlineFrontDesk();
           if (onlineStaff.length > 0) {
+            // 获取房间所属酒店ID
+            const hotelId = req.user?.hotel_id || 1;
             // 发起通话 - 使用room类型，方便前台回拨
             const call = await CallService.initiateCall({
+              hotel_id: hotelId,
               caller_type: 'room',
               caller_id: room_id,
               callee_type: 'front_desk',

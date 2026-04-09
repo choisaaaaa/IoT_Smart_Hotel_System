@@ -1,5 +1,6 @@
 export interface Call {
   id: number;
+  hotel_id: number;
   call_id: string;
   caller_type: 'room' | 'front_desk' | 'ai' | 'app';
   caller_id: string;
@@ -15,6 +16,7 @@ export interface Call {
 }
 
 export interface CallInput {
+  hotel_id: number;
   caller_type: 'room' | 'front_desk' | 'ai' | 'app';
   caller_id: string;
   callee_type: 'room' | 'front_desk' | 'ai' | 'app';
@@ -33,6 +35,7 @@ export interface CallStatusUpdate {
 export interface CallQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   room_id?: string;
   start_time?: string;
   end_time?: string;

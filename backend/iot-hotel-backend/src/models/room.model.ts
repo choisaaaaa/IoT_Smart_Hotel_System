@@ -1,5 +1,6 @@
 export interface Room {
   id: number;
+  hotel_id: number;
   room_number: string;
   room_type: string;
   room_name: string;
@@ -17,6 +18,7 @@ export interface Room {
 }
 
 export interface RoomInput {
+  hotel_id: number;
   room_number: string;
   room_type?: string;
   room_name?: string;
@@ -34,6 +36,7 @@ export interface RoomInput {
 export interface RoomQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
   type?: string;
 }

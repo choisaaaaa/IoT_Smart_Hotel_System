@@ -1,5 +1,6 @@
 export interface Payment {
   id: number;
+  hotel_id: number;
   payment_no: string;
   order_type: string;
   order_id: number;
@@ -14,6 +15,7 @@ export interface Payment {
 }
 
 export interface PaymentInput {
+  hotel_id: number;
   order_type: string;
   order_id: number;
   amount: number;
@@ -24,6 +26,7 @@ export interface PaymentInput {
 export interface PaymentQuery {
   page?: number;
   pageSize?: number;
+  hotel_id?: number;
   status?: string;
   order_type?: string;
 }
