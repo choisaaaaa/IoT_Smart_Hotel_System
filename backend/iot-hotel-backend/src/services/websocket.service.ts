@@ -134,6 +134,10 @@ class WebSocketService {
             info.clientId = data.clientId;
             info.clientName = displayName;
             
+            // 统一使用 {type}_{id} 格式加入房间，用于接收定向消息
+            socket.join(`${data.clientType}_${data.clientId}`);
+            
+            // 同时加入类型房间，用于接收广播消息
             switch (data.clientType) {
               case 'room':
                 socket.join(`room_${data.clientId}`);
