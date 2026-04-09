@@ -352,8 +352,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
             decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(20)),
             child: const Text('全日房', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ),
-          const SizedBox(width: 8),
-          const Text('时租房', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ],
       ),
     );

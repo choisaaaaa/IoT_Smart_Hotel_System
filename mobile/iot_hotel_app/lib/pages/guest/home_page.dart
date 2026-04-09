@@ -18,16 +18,21 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(context, ref),
-            _buildSearchCard(context),
-            _buildQuickActions(context),
-            _buildBanner(),
-            _buildMemberPrivilege(ref),
-            const SizedBox(height: 20),
-          ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(memberServiceProvider);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              _buildHeader(context, ref),
+              _buildSearchCard(context),
+              _buildQuickActions(context),
+              _buildBanner(),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -120,11 +125,7 @@ class HomePage extends ConsumerWidget {
           children: [
             const Row(
               children: [
-                Text('国内/国际', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                SizedBox(width: 24),
-                Text('时租房', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
-                SizedBox(width: 24),
-                Text('公寓', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+                Text('酒店预订', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
               ],
             ),
             const Divider(height: 32),
@@ -194,9 +195,9 @@ class HomePage extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildActionItem(Icons.calendar_today_outlined, '会员签到', onTap: () => context.push('/member')),
-          _buildActionItem(Icons.business_outlined, '企业预订', onTap: () => _showComingSoon(context, '企业预订')),
-          _buildActionItem(Icons.shopping_cart_outlined, '华住商城', onTap: () => _showComingSoon(context, '华住商城')),
           _buildActionItem(Icons.bookmark_outline, '收藏/足迹', onTap: () => context.push('/favorites')),
+          _buildActionItem(Icons.headset_mic_outlined, '联系客服', onTap: () {}),
+          _buildActionItem(Icons.help_outline, '使用帮助', onTap: () {}),
         ],
       ),
     );

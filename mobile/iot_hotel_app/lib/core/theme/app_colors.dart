@@ -8,8 +8,8 @@ class AppColors {
   static const Color secondaryLight = Color(0xFFFF8A65);
   static const Color secondaryDark = Color(0xFFE64A19);
   
-  static const Color background = Color(0xFFFFFBE6); // 淡暖黄色背景
-  static const Color surface = Color(0xFFFFFDF0); // 表面色
+  static const Color background = Color(0xFFF5F5F7);
+  static const Color surface = Colors.white;
   static const Color error = Color(0xFFE53935);
   
   static const Color textPrimary = Color(0xFF212121);
