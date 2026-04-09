@@ -752,31 +752,25 @@ async function sendToAI(text: string) {
         messages.value.splice(loadingMsgIndex, 1)
       }
       
-      // 播放语音回复（如果有）
-      if (aiResponse.audioUrl) {
-        playAudio(aiResponse.audioUrl)
-      }
-      
-      // 使用打字机效果显示AI回复
       const aiText = aiResponse.text || '抱歉，我没有理解您的意思，请换个说法试试？'
-      
-      // 先添加占位消息
+
       messages.value.push({
         type: 'ai',
-        text: aiText,  // 完整文本保存
+        text: aiText,
         time: new Date().toLocaleTimeString(),
-        typing: true   // 标记为打字中
+        typing: true
       })
-      
-      // 启动打字机效果
+
       typeWriterEffect(aiText, () => {
-        // 打字完成后更新智能建议
         updateSuggestions(text)
-        
-        // 标记消息完成
+
         const lastMsg = messages.value[messages.value.length - 1]
         if (lastMsg) {
           lastMsg.typing = false
+        }
+
+        if (aiResponse.audioUrl) {
+          playAudio(aiResponse.audioUrl)
         }
       })
       

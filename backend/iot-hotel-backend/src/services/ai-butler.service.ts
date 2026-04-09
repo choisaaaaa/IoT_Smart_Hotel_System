@@ -262,8 +262,8 @@ export class AIButlerService {
       const response = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
         model: 'glm-4-flash',
         messages: messages,
-        temperature: 0.7,
-        max_tokens: 200,
+        temperature: 0.3,
+        max_tokens: 500,
         tools: this.tools,
         tool_choice: 'auto'
       }, {
@@ -335,12 +335,11 @@ export class AIButlerService {
   private async controlDevice(args: any, session: GuestSession): Promise<string> {
     const { device_type, action, value } = args;
 
-    // 查询房间设备
+    // 查询房间设备 (device_id 格式: room_101_light_01 等)
     const [devices] = await pool.query<RowDataPacket[]>(
       `SELECT d.* FROM devices d
-       JOIN rooms r ON d.room_id = r.id
-       WHERE r.room_number = ? AND d.device_status = 'online'`,
-      [session.roomId]
+       WHERE d.device_id LIKE ? AND d.device_status = 'online'`,
+      [`room_${session.roomId}_%`]
     );
 
     if (devices.length === 0) {
@@ -444,9 +443,8 @@ export class AIButlerService {
       const [devices] = await pool.query<RowDataPacket[]>(
         `SELECT d.device_type, d.device_name, d.device_status
          FROM devices d
-         JOIN rooms r ON d.room_id = r.id
-         WHERE r.room_number = ?`,
-        [session.roomId]
+         WHERE d.device_id LIKE ?`,
+        [`room_${session.roomId}_%`]
       );
 
       if (rooms.length === 0) {
@@ -598,20 +596,180 @@ export class AIButlerService {
   }
 
   /**
-   * 语音合成 - 讯飞超拟人TTS (WebSocket)
+   * 清理文本用于TTS语音合成（去除emoji、特殊符号、格式标记等）
+   */
+  private cleanTextForTTS(text: string): string {
+    let cleaned = text;
+
+    cleaned = cleaned.replace(/[\u{1F600}-\u{1F64F}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1F300}-\u{1F5FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1F680}-\u{1F6FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{2600}-\u{26FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{2700}-\u{27BF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{FE00}-\u{FE0F}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1F900}-\u{1F9FF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1FA00}-\u{1FA6F}]/gu, '');
+    cleaned = cleaned.replace(/[\u{1FA70}-\u{1FAFF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{200D}]/gu, '');
+    cleaned = cleaned.replace(/[\u{FEFF}]/gu, '');
+    cleaned = cleaned.replace(/[\u{200B}]/gu, '');
+
+    cleaned = cleaned.replace(/^[•·\-–—]\s*/gm, '');
+
+    cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '$1');
+    cleaned = cleaned.replace(/\*(.*?)\*/g, '$1');
+    cleaned = cleaned.replace(/`(.*?)`/g, '$1');
+
+    cleaned = cleaned.replace(/<[^>]+>/g, '');
+
+    cleaned = cleaned.replace(/\[TRANSFER:\w+\]/g, '');
+
+    cleaned = cleaned.replace(/\n{2,}/g, '。');
+    cleaned = cleaned.replace(/\n/g, '，');
+    cleaned = cleaned.replace(/[ \t]+/g, ' ');
+    cleaned = cleaned.trim();
+
+    if (cleaned.length > 500) {
+      logger.warn(`⚠️ TTS文本过长(${cleaned.length}字)，截断到500字`);
+      cleaned = cleaned.substring(0, 500);
+    }
+
+    return cleaned;
+  }
+
+  /**
+   * 语音合成 - 优先超拟人，自动降级TTS v2
    */
   async textToSpeech(text: string): Promise<string> {
+    const cleanText = this.cleanTextForTTS(text);
+    if (!cleanText.trim()) return '';
+
+    logger.info(`🎙️ [TTS] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
+
+    try {
+      const audio = await this.superHumanTTS(cleanText);
+      if (audio) return audio;
+    } catch (e) {
+      logger.warn('⚠️ 超拟人TTS失败，降级到TTS v2');
+    }
+
+    try {
+      const audio = await this.ttsV2(cleanText);
+      if (audio) return audio;
+    } catch (e) {
+      logger.error('❌ TTS v2也失败:', e.message);
+    }
+
+    return '';
+  }
+
+  /**
+   * 超拟人语音合成
+   */
+  private async superHumanTTS(text: string): Promise<string> {
     return new Promise((resolve, reject) => {
       try {
-        const cleanText = text.replace(/\[TRANSFER:\w+\]/g, '');
+        logger.info(`🎙️ [超拟人] 开始合成: "${text.substring(0, 30)}..."`);
 
-        if (!cleanText.trim()) {
-          resolve('');
-          return;
-        }
+        const url = 'wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6';
+        const host = 'cbm01.cn-huabei-1.xf-yun.com';
+        const path = '/v1/private/mcd9m97e6';
+        const date = new Date().toUTCString();
 
-        logger.info(`开始TTS合成: "${cleanText.substring(0, 50)}..."`);
-        logger.info(`使用AppID: ${this.xfyunAppId}, APIKey: ${this.xfyunApiKey?.substring(0, 10)}...`);
+        const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
+        const signatureSha = crypto
+          .createHmac('sha256', this.xfyunApiSecret)
+          .update(signatureOrigin)
+          .digest('base64');
+        const authorizationOrigin = `api_key="${this.xfyunApiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
+        const authorization = Buffer.from(authorizationOrigin).toString('base64');
+
+        const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
+
+        const ws = new WebSocket(wsUrl);
+        let audioChunks: Buffer[] = [];
+        let isResolved = false;
+
+        ws.on('open', () => {
+          const request = {
+            header: { app_id: this.xfyunAppId, status: 2 },
+            parameter: {
+              oral: { oral_level: 'mid', spark_assist: 0, stop_split: 1, remain: 1 },
+              tts: {
+                vcn: 'x5_lingyuzhao_flow',
+                speed: 50, volume: 50, pitch: 50, bgs: 0, reg: 0, rdn: 0,
+                audio: { encoding: 'lame', sample_rate: 24000, channels: 1, bit_depth: 16 }
+              }
+            },
+            payload: {
+              text: { encoding: 'utf8', compress: 'raw', format: 'plain', status: 2, seq: 0, text: Buffer.from(text).toString('base64') }
+            }
+          };
+          ws.send(JSON.stringify(request));
+        });
+
+        ws.on('message', (data: WebSocket.Data) => {
+          try {
+            const response = JSON.parse(data.toString());
+
+            if (response.header && response.header.code !== undefined && response.header.code !== 0) {
+              logger.error(`❌ [超拟人] 错误 ${response.header.code}: ${response.header.message}`);
+              if (!isResolved) { isResolved = true; reject(new Error(`${response.header.code}`)); }
+              return;
+            }
+
+            if (response.payload && response.payload.audio && response.payload.audio.audio) {
+              audioChunks.push(Buffer.from(response.payload.audio.audio, 'base64'));
+            }
+
+            if (response.header && response.header.status === 2) {
+              if (!isResolved) {
+                isResolved = true;
+                if (audioChunks.length > 0) {
+                  const fullAudio = Buffer.concat(audioChunks);
+                  logger.info(`🎉 [超拟人] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
+                  resolve(fullAudio.toString('base64'));
+                } else {
+                  reject(new Error('无音频数据'));
+                }
+              }
+              ws.close();
+            }
+          } catch (e) { /* ignore parse errors */ }
+        });
+
+        ws.on('error', (error) => {
+          if (!isResolved) { isResolved = true; reject(error); }
+        });
+
+        ws.on('close', () => {
+          if (!isResolved) {
+            isResolved = true;
+            if (audioChunks.length > 0) {
+              resolve(Buffer.concat(audioChunks).toString('base64'));
+            } else {
+              reject(new Error('连接关闭无数据'));
+            }
+          }
+        });
+
+        setTimeout(() => {
+          if (!isResolved) { isResolved = true; ws.close(); reject(new Error('超时')); }
+        }, 15000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * TTS v2 语音合成 (降级方案)
+   */
+  private async ttsV2(text: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      try {
+        logger.info(`🎙️ [TTS v2] 开始合成: "${text.substring(0, 30)}..."`);
 
         const url = 'wss://tts-api.xfyun.cn/v2/tts';
         const host = 'tts-api.xfyun.cn';
@@ -628,150 +786,80 @@ export class AIButlerService {
 
         const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
 
-        logger.info(`TTS WebSocket URL: ${url}`);
-
         const ws = new WebSocket(wsUrl);
-
         let audioChunks: Buffer[] = [];
         let isResolved = false;
 
         ws.on('open', () => {
-          logger.info('TTS WebSocket连接已建立');
-
           const request = {
-            common: {
-              app_id: this.xfyunAppId
-            },
+            common: { app_id: this.xfyunAppId },
             business: {
-              aue: 'lame',
+              aue: 'lame', sfl: 1,
+              auf: 'audio/L16;rate=16000',
               vcn: 'xiaoyan',
-              speed: 50,
-              volume: 50,
-              pitch: 50,
+              speed: 50, volume: 50, pitch: 50,
               bgs: 0,
-              sfl: 1
+              tte: 'UTF8',
+              reg: '2',
+              rdn: '0'
             },
-            data: {
-              text: Buffer.from(cleanText).toString('base64'),
-              status: 2
-            }
+            data: { text: Buffer.from(text).toString('base64'), status: 2 }
           };
-
-          logger.info(`发送TTS请求: ${JSON.stringify(request).substring(0, 200)}...`);
           ws.send(JSON.stringify(request));
-          logger.info('TTS请求已发送');
         });
 
         ws.on('message', (data: WebSocket.Data) => {
           try {
-            const rawData = data.toString();
-            logger.info(`TTS原始响应 (前500字符): ${rawData.substring(0, 500)}`);
-
-            let response;
-            try {
-              response = JSON.parse(rawData);
-            } catch (parseError) {
-              logger.error(`TTS响应JSON解析失败: ${parseError.message}`);
-              logger.error(`原始数据: ${rawData.substring(0, 200)}`);
-              if (!isResolved) {
-                isResolved = true;
-                resolve('');
-              }
-              return;
-            }
-
-            logger.info(`TTS解析后响应: code=${response.code || 'N/A'}, message=${response.message || 'none'}, sid=${response.sid || 'none'}`);
+            const response = JSON.parse(data.toString());
 
             if (response.code !== undefined && response.code !== 0) {
-              logger.error(`❌ TTS错误 [${response.code}]: ${response.message}`);
-              if (response.code === 11200) {
-                logger.error('错误11200提示: 可能原因 - 1.AppID未开通该服务 2.免费额度用完 3.API Key不匹配');
-              }
-              if (!isResolved) {
-                isResolved = true;
-                resolve('');
-              }
+              logger.error(`❌ [TTS v2] 错误 ${response.code}: ${response.message}`);
+              if (!isResolved) { isResolved = true; reject(new Error(`${response.code}`)); }
               return;
             }
 
-            // TTS v2 响应格式: data.audio (base64编码的音频)
-            let audioData = null;
-
+            // 收集所有音频块，不要提前结束！
             if (response.data && response.data.audio) {
-              audioData = Buffer.from(response.data.audio, 'base64');
-              logger.info('✓ 检测到 TTS v2 响应格式: data.audio');
-            }
-            // 备用: data 字段本身就是音频
-            else if (response.data && typeof response.data === 'string' && response.data.length > 100) {
-              audioData = Buffer.from(response.data, 'base64');
-              logger.info('✓ 检测到 TTS 响应格式: data (长字符串)');
+              audioChunks.push(Buffer.from(response.data.audio, 'base64'));
             }
 
-            if (audioData && audioData.length > 0) {
-              audioChunks.push(audioData);
-              logger.info(`✓ 收到音频块: ${audioData.length} bytes`);
-            } else {
-              logger.warn(`⚠️ 本次响应无音频数据, 完整响应keys: ${Object.keys(response).join(', ')}`);
-            }
-
-            // TTS v2: status=2 表示数据发送完成（我们一次性发送，所以收到响应就结束了）
-            // 检查是否有音频数据或者 data.status === 2
-            const isComplete = (response.data && response.data.status === 2) ||
-                              (audioData && audioData.length > 0);
-
-            if (isComplete) {
+            // 只有 status=2 才表示所有数据发送完毕
+            if (response.data && response.data.status === 2) {
               if (!isResolved) {
                 isResolved = true;
                 if (audioChunks.length > 0) {
                   const fullAudio = Buffer.concat(audioChunks);
-                  const base64Audio = fullAudio.toString('base64');
-                  logger.info(`✅ TTS合成成功！音频大小: ${fullAudio.length} bytes (${(fullAudio.length / 1024).toFixed(1)} KB)`);
-                  resolve(base64Audio);
+                  logger.info(`🎉 [TTS v2] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
+                  resolve(fullAudio.toString('base64'));
                 } else {
-                  logger.warn('⚠️ TTS完成但无音频数据');
-                  resolve('');
+                  reject(new Error('无音频数据'));
                 }
               }
               ws.close();
             }
-          } catch (e) {
-            logger.error('解析TTS响应失败:', e);
-          }
+          } catch (e) { /* ignore */ }
         });
 
         ws.on('error', (error) => {
-          logger.error('❌ TTS WebSocket错误:', error.message || error);
-          if (!isResolved) {
-            isResolved = true;
-            resolve('');
-          }
+          if (!isResolved) { isResolved = true; reject(error); }
         });
 
-        ws.on('close', (code, reason) => {
-          logger.debug(`TTS WebSocket连接已关闭 (code: ${code}, reason: ${reason})`);
+        ws.on('close', () => {
           if (!isResolved) {
             isResolved = true;
             if (audioChunks.length > 0) {
-              const fullAudio = Buffer.concat(audioChunks);
-              logger.info(`✅ TTS连接关闭但有音频数据，大小: ${fullAudio.length} bytes`);
-              resolve(fullAudio.toString('base64'));
+              resolve(Buffer.concat(audioChunks).toString('base64'));
             } else {
-              resolve('');
+              reject(new Error('连接关闭无数据'));
             }
           }
         });
 
         setTimeout(() => {
-          if (!isResolved) {
-            isResolved = true;
-            logger.warn('⏰ TTS超时（15秒），使用纯文本模式');
-            ws.close();
-            resolve('');
-          }
+          if (!isResolved) { isResolved = true; ws.close(); reject(new Error('超时')); }
         }, 15000);
       } catch (error) {
-        logger.error('❌ 讯飞TTS合成异常:', error);
-        resolve('');
+        reject(error);
       }
     });
   }
@@ -844,8 +932,8 @@ export class AIButlerService {
         const finalResponse = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           model: 'glm-4-flash',
           messages: finalMessages,
-          temperature: 0.7,
-          max_tokens: 200
+          temperature: 0.3,
+          max_tokens: 500
         }, {
           headers: {
             'Authorization': `Bearer ${this.zhipuApiKey}`,
@@ -856,7 +944,8 @@ export class AIButlerService {
 
         const finalText = finalResponse.data?.choices?.[0]?.message?.content || toolResults[0].result;
         
-        // 检查是否包含转接标记
+        logger.info(`📝 [工具调用] 最终回复文本: "${finalText.substring(0, 80)}${finalText.length > 80 ? '...' : ''}" (${finalText.length}字)`);
+
         const transferMatch = finalText.match(/\[TRANSFER:(\w+)\]/);
         if (transferMatch) {
           const cleanText = finalText.replace(/\[TRANSFER:\w+\]/g, '');
@@ -868,7 +957,6 @@ export class AIButlerService {
           };
         }
 
-        // 语音合成（容错处理）
         let audioBase64 = '';
         try {
           audioBase64 = await this.textToSpeech(finalText);
@@ -879,6 +967,8 @@ export class AIButlerService {
           logger.warn('TTS合成失败，使用纯文本模式:', ttsError.message);
         }
 
+        logger.info(`🔊 [工具调用] 返回前端: text="${finalText.substring(0, 50)}..." audio=${audioBase64 ? audioBase64.length + 'chars' : '无'}`);
+
         return {
           text: finalText,
           audioUrl: audioBase64,
@@ -886,10 +976,10 @@ export class AIButlerService {
         };
       }
 
-      // 5. 无工具调用的普通回复
       const aiReply = llmResult.content;
 
-      // 检查是否需要转接
+      logger.info(`📝 [普通回复] AI回复文本: "${aiReply.substring(0, 80)}${aiReply.length > 80 ? '...' : ''}" (${aiReply.length}字)`);
+
       const transferMatch = aiReply.match(/\[TRANSFER:(\w+)\]/);
       const action = transferMatch ? 'transfer' : 'reply';
       const target = transferMatch ? transferMatch[1] : undefined;
@@ -904,7 +994,6 @@ export class AIButlerService {
         };
       }
 
-      // 6. 语音合成（容错处理）
       let audioBase64 = '';
       try {
         audioBase64 = await this.textToSpeech(cleanText);
@@ -914,6 +1003,8 @@ export class AIButlerService {
       } catch (ttsError) {
         logger.warn('TTS合成失败，使用纯文本模式:', ttsError.message);
       }
+
+      logger.info(`🔊 [普通回复] 返回前端: text="${cleanText.substring(0, 50)}..." audio=${audioBase64 ? audioBase64.length + 'chars' : '无'}`);
 
       return {
         text: cleanText,
