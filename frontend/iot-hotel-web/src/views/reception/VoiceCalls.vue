@@ -184,6 +184,7 @@ const stats = reactive({
 const users = ref<any[]>([])
 const durationTimer = ref<NodeJS.Timeout | null>(null)
 const currentDuration = ref('00:00')
+const listenersSetup = ref(false)
 const activeTab = ref('all')
 const onlineStatus = ref<{ web: any[], rooms: any[] }>({ web: [], rooms: [] })
 
@@ -413,7 +414,13 @@ function cleanupWebRTC() {
 function setupSignalingListeners() {
   const socket = getSocket()
   if (!socket) return
+  if (listenersSetup.value) return // 防止重复设置
+  listenersSetup.value = true
+  
+  console.log('[WS] 设置信令监听器')
+  
   socket.on('incoming_call', (data) => {
+    console.log('[WS] 收到 incoming_call:', data)
     incomingCallModal.callId = data.call_id
     incomingCallModal.callerId = data.caller_id
     incomingCallModal.callerName = data.caller_name || data.caller_id
@@ -483,6 +490,10 @@ function toggleRegister() {
   let socket = getSocket()
   if (!socket || !socket.connected) socket = initWebSocket()
   if (!socket || !socket.connected) { message.error('WebSocket 连接中...'); return; }
+  
+  // 确保事件监听已设置
+  setupSignalingListeners()
+  
   if (isRegistered.value) {
     isRegistered.value = false
     clientDisplayName.value = ''
@@ -522,6 +533,7 @@ onUnmounted(() => {
     socket.off('incoming_call'); socket.off('webrtc_offer'); socket.off('webrtc_answer');
     socket.off('webrtc_ice_candidate'); socket.off('call_answered'); socket.off('call_rejected'); socket.off('call_hungup');
   }
+  listenersSetup.value = false
 })
 
 const historyColumns = [
