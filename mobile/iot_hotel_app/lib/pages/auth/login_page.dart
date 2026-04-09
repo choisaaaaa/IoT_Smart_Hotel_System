@@ -16,6 +16,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _newPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -23,7 +25,84 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _phoneController.dispose();
+    _newPasswordController.dispose();
     super.dispose();
+  }
+
+  void _showResetPasswordDialog() {
+    final phoneCtrl = TextEditingController();
+    final pwdCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重置密码'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(
+                  labelText: '手机号',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return '请输入手机号';
+                  if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '手机号格式不正确';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: pwdCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '新密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+                validator: (v) => v != null && v.length < 6 ? '密码长度不能少于6位' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                final result = await ref.read(authServiceProvider).resetPassword(
+                  phoneCtrl.text.trim(),
+                  pwdCtrl.text,
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(result.success ? '密码重置成功，请重新登录' : (result.message ?? '重置失败')),
+                      backgroundColor: result.success ? AppColors.success : AppColors.error,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('重置失败：$e')),
+                );
+              }
+            },
+            child: const Text('确认重置'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _login() async {
@@ -41,17 +120,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('登录返回数据异常'), behavior: SnackBarBehavior.floating));
           return;
         }
-        final role = user['role'] ?? 'guest';
+        final role = user['role'] ?? 'user';
         switch (role) {
           case 'admin':
+          case 'system':
             context.go('/admin');
             break;
           case 'staff':
+          case 'receptionist':
           case 'reception':
             context.go('/reception');
             break;
+          case 'manager':
+            context.go('/reception');
+            break;
           default:
-            context.go('/');
+            context.go('/guest');
             break;
         }
       } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '登录失败'), behavior: SnackBarBehavior.floating)); }
@@ -135,6 +219,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               hintText: '请输入密码',
                             ),
                             validator: (v) => v!.isEmpty ? '请输入密码' : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _showResetPasswordDialog,
+                              child: const Text('忘记密码？', style: TextStyle(color: AppColors.primary, fontSize: 13)),
+                            ),
                           ),
                           const SizedBox(height: 32),
                           SizedBox(

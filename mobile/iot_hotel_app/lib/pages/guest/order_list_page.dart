@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
+import '../../services/payment_service.dart';
 
 class OrderListPage extends ConsumerStatefulWidget {
   const OrderListPage({super.key});
@@ -111,7 +112,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
               _buildOrderList('all'),
               _buildOrderList('pending'),
               _buildOrderList('confirmed'),
-              _buildOrderList('checked_in'), // 待评价通常是已退房但未评价，这里简化为已入住
+              _buildOrderList('checked_out'),
               _buildOrderList('cancelled'),
             ],
           ),
@@ -158,6 +159,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
               rooms: order['guest_count'] ?? 1,
               price: order['total_price']?.toString() ?? '0.00',
               isCompleted: order['status'] == 'checked_out',
+              orderData: order,
             ),
           );
         },
@@ -173,6 +175,43 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
       case 'checked_out': return '已完成';
       case 'cancelled': return '已取消';
       default: return '未知状态';
+    }
+  }
+
+  Future<void> _handlePay(dynamic order) async {
+    try {
+      final totalPrice = double.tryParse(order['total_price']?.toString() ?? '0') ?? 0;
+      final createPayResult = await ref.read(paymentServiceProvider).createPayment({
+        'order_type': 'booking',
+        'order_id': order['id'],
+        'amount': totalPrice,
+        'payment_method': 'balance',
+      });
+
+      if (createPayResult.success && createPayResult.data != null) {
+        final paymentId = createPayResult.data!['id'];
+        final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
+        if (payResult.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('支付成功'), backgroundColor: AppColors.success),
+          );
+          _fetchOrders();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(payResult.message ?? '支付失败')),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(createPayResult.message ?? '创建支付订单失败')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('支付异常：$e')),
+        );
+      }
     }
   }
 
@@ -263,6 +302,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
     required int rooms,
     required String price,
     required bool isCompleted,
+    Map<String, dynamic>? orderData,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -343,7 +383,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
             children: [
               if (status == '待支付')
                 FilledButton(
-                  onPressed: () {},
+                  onPressed: () => _handlePay(orderData),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.secondary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -353,13 +393,48 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                 ),
               if (status == '待入住')
                 FilledButton(
-                  onPressed: () {},
+                  onPressed: () => context.push('/online-checkin', extra: {'bookingId': orderData?['id'] ?? orderId}),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   child: const Text('办理入住', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              if (status == '已入住') ...[
+                FilledButton(
+                  onPressed: () => context.push('/extend-stay', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('续住', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => context.push('/checkout', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('退房', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              ],
+              if (status == '已完成')
+                FilledButton(
+                  onPressed: () => context.push('/review-submit', extra: {
+                    'bookingId': orderData?['id'] ?? orderId,
+                    'hotelId': orderData?['hotel_id'],
+                    'hotelName': orderData?['hotel_name'] ?? hotelName,
+                  }),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('评价', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
               const SizedBox(width: 8),
               OutlinedButton(
@@ -371,8 +446,6 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                 ),
                 child: const Text('再次预订', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.delete_outline, color: AppColors.textHint, size: 20),
             ],
           ),
         ],

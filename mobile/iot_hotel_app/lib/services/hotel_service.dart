@@ -16,14 +16,13 @@ class HotelService {
   }) async {
     try {
       final queryParams = <String, dynamic>{
-        'lat': lat,
-        'lng': lng,
         'page': page,
         'pageSize': pageSize,
       };
-      if (city != null) queryParams['city'] = city;
-      if (keyword != null) queryParams['keyword'] = keyword;
-      if (city == null && keyword == null) queryParams['destination'] = null;
+      if (lat != null) queryParams['lat'] = lat;
+      if (lng != null) queryParams['lng'] = lng;
+      final destination = keyword ?? city;
+      if (destination != null) queryParams['destination'] = destination;
 
       final response = await _dioClient.get(
         '${ApiConstants.hotels}search',
@@ -185,7 +184,18 @@ class HotelService {
     required String year,
     required String month,
   }) async {
-    return getStatistics();
+    try {
+      final response = await _dioClient.get('${ApiConstants.hotel}statistics', queryParameters: {
+        'year': year,
+        'month': month,
+      });
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取报表数据失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
   }
 }
 

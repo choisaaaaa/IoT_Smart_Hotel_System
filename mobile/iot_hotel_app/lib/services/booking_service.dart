@@ -132,6 +132,48 @@ class BookingService {
     }
   }
 
+  Future<ApiResult<Map<String, dynamic>>> selfCheckout(int bookingId, {
+    String? invoiceTitle,
+    String? invoiceTaxNumber,
+    String? invoiceType,
+    String? remark,
+  }) async {
+    try {
+      final data = <String, dynamic>{};
+      if (invoiceTitle != null) data['invoice_title'] = invoiceTitle;
+      if (invoiceTaxNumber != null) data['invoice_tax_number'] = invoiceTaxNumber;
+      if (invoiceType != null) data['invoice_type'] = invoiceType;
+      if (remark != null) data['checkout_remark'] = remark;
+      final response = await _dioClient.put(
+        '${ApiConstants.bookings}$bookingId/checkout',
+        data: data.isNotEmpty ? data : null,
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>? ?? {});
+      }
+      return ApiResult.failure(response.data['message'] ?? '自助退房失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> extendStay(int bookingId, {
+    required DateTime newCheckOutDate,
+  }) async {
+    try {
+      final response = await _dioClient.put(
+        '${ApiConstants.bookings}$bookingId/extend',
+        data: {'check_out_date': newCheckOutDate.toIso8601String().split('T')[0]},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>? ?? {});
+      }
+      return ApiResult.failure(response.data['message'] ?? '续住申请失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<Map<String, dynamic>?>> getMyCurrentStay() async {
     List<dynamic> extractList(dynamic data) {
       if (data is Map && data.containsKey('list')) {

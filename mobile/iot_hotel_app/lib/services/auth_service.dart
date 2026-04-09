@@ -28,7 +28,15 @@ class AuthService {
           await _localStorage.saveSessionToken(data['sessionToken']);
         }
         await _localStorage.save(AppConstants.userInfoKey, jsonEncode(data['user']));
-        authStateNotifier.markAuthenticated();
+        final user = data['user'] as Map<String, dynamic>?;
+        authStateNotifier.setAuth(
+          token: data['token'] as String? ?? '',
+          userId: user?['id']?.toString() ?? '',
+          username: user?['username'] as String? ?? '',
+          role: user?['role'] as String? ?? 'user',
+          phone: user?['phone'] as String?,
+          uid: user?['uid'] as String?,
+        );
         return ApiResult.success(data as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '登录失败');
@@ -40,13 +48,38 @@ class AuthService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> register(String username, String password, String? email, {int? hotelId}) async {
+  Future<ApiResult<Map<String, dynamic>>> resetPassword(String phone, String newPassword) async {
+    try {
+      final response = await _dioClient.post(
+        ApiConstants.authResetPassword,
+        data: {
+          'phone': phone,
+          'new_password': newPassword,
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data['code'] == 200) {
+          return ApiResult.success(data['data'] ?? {'message': '密码重置成功'});
+        } else {
+          return ApiResult.failure(data['message'] ?? '重置失败');
+        }
+      }
+      return ApiResult.failure('服务器错误');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> register(String username, String password, String? email, {int? hotelId, String? phone, String? role}) async {
      try {
        final response = await _dioClient.post(ApiConstants.authRegister, data: {
          'username': username,
          'password': password,
          'email': email,
          if (hotelId != null) 'hotel_id': hotelId,
+         if (phone != null) 'phone': phone,
+         if (role != null) 'role': role,
        });
  
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -65,7 +98,7 @@ class AuthService {
     try { await _dioClient.post(ApiConstants.authLogout); } catch (_) {}
     await _localStorage.clearTokens();
     await _localStorage.remove(AppConstants.userInfoKey);
-    authStateNotifier.markUnauthenticated();
+    authStateNotifier.clearAuth();
   }
 
   Future<bool> isLoggedIn() async { final token = await _localStorage.getToken(); return token != null && token.isNotEmpty; }
@@ -102,7 +135,19 @@ class AuthService {
   Future<ApiResult<Map<String, dynamic>>> refreshCurrentUser() async {
     final result = await getMe();
     if (result.success) {
-      authStateNotifier.markAuthenticated();
+      final userInfoStr = await _localStorage.read(AppConstants.userInfoKey);
+      if (userInfoStr != null) {
+        final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
+        final token = await _localStorage.getToken();
+        authStateNotifier.setAuth(
+          token: token ?? '',
+          userId: userMap['id']?.toString() ?? '',
+          username: userMap['username'] as String? ?? '',
+          role: userMap['role'] as String? ?? 'user',
+          phone: userMap['phone'] as String?,
+          uid: userMap['uid'] as String?,
+        );
+      }
     }
     return result;
   }

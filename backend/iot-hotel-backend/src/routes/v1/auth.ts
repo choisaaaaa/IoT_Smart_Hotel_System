@@ -248,6 +248,8 @@ router.post('/login', async (req, res) => {
         role,
         permissions,
         email: user.email,
+        phone: user.phone,
+        uid: user.uid,
         hotel_id: user.hotel_id,
         hotel_name: user.hotel_name
       },
@@ -262,13 +264,21 @@ router.post('/login', async (req, res) => {
 // 用户注册
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, email, hotel_id } = req.body;
+    const { username, password, phone, email, role, hotel_id } = req.body;
 
     if (!username || !password) {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
-    // 检查用户名是否已存在
+    if (!phone) {
+      return sendError(res, errorResponse('手机号不能为空', 400));
+    }
+
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return sendError(res, errorResponse('手机号格式不正确', 400));
+    }
+
     const [existingUsers]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
       [username]
@@ -278,10 +288,17 @@ router.post('/register', async (req, res) => {
       return sendError(res, errorResponse('用户名已存在', 400));
     }
 
-    // 加密密码
+    const [existingPhones]: any = await db.execute(
+      'SELECT * FROM users WHERE phone = ?',
+      [phone]
+    );
+
+    if (existingPhones.length > 0) {
+      return sendError(res, errorResponse('该手机号已注册', 400));
+    }
+
     const hashedPassword = await hashPassword(password);
 
-    // 如果未提供 hotel_id，则尝试获取默认酒店（第一个酒店）
     let targetHotelId = hotel_id;
     if (!targetHotelId) {
       const [hotels]: any = await db.execute('SELECT id FROM hotels LIMIT 1');
@@ -290,36 +307,77 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 创建用户 (默认为 user 角色)
+    const uid = `UID${Date.now()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+    const allowedRoles = ['user', 'staff', 'manager', 'admin'];
+    const userRole = allowedRoles.includes(role) ? role : 'user';
+
     const [result]: any = await db.execute(
-      `INSERT INTO users (username, password, email, role, hotel_id) 
-       VALUES (?, ?, ?, 'user', ?)`,
-      [username, hashedPassword, email || null, targetHotelId || null]
+      `INSERT INTO users (username, password, phone, uid, email, role, hotel_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [username, hashedPassword, phone, uid, email || null, userRole, targetHotelId || null]
     );
 
     const userId = result.insertId;
 
-    // 关联 user 角色
-    const [userRole]: any = await db.execute(
+    const [roleRows]: any = await db.execute(
       'SELECT id FROM roles WHERE role_name = ?',
-      ['user']
+      [userRole]
     );
 
-    if (userRole.length > 0) {
+    if (roleRows.length > 0) {
       await db.execute(
         'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
-        [userId, userRole[0].id]
+        [userId, roleRows[0].id]
       );
     }
 
     sendSuccess(res, {
       userId,
       username,
-      role: 'user',
+      uid,
+      role: userRole,
+      phone,
       message: '注册成功'
     });
   } catch (error) {
     console.error('注册失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// 手机号找回密码
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { phone, new_password } = req.body;
+
+    if (!phone || !new_password) {
+      return sendError(res, errorResponse('手机号和新密码不能为空', 400));
+    }
+
+    if (new_password.length < 6) {
+      return sendError(res, errorResponse('密码长度不能少于6位', 400));
+    }
+
+    const [users]: any = await db.execute(
+      'SELECT * FROM users WHERE phone = ?',
+      [phone]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('该手机号未注册', 404));
+    }
+
+    const hashedPassword = await hashPassword(new_password);
+
+    await db.execute(
+      'UPDATE users SET password = ? WHERE phone = ?',
+      [hashedPassword, phone]
+    );
+
+    sendSuccess(res, { message: '密码重置成功' });
+  } catch (error) {
+    console.error('密码重置失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
 });
@@ -360,7 +418,7 @@ router.get('/me', async (req: AuthRequest, res) => {
     }
 
     const [users]: any = await db.execute(
-      'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
+      `SELECT id, username, email, role, phone, uid, created_at FROM users WHERE id = ?`,
       [decoded.id]
     );
 

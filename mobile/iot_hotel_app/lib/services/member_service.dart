@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/dio_client.dart';
@@ -35,41 +36,41 @@ class MemberService {
   }
 
   Future<CheckinResult> checkin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final lastCheckin = prefs.getString('last_checkin_date') ?? '';
+    if (lastCheckin == today) {
+      return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
+    }
+
     try {
       final response = await _dioClient.post('${ApiConstants.members}checkin');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'] as Map<String, dynamic>?;
-        return CheckinResult(
-          alreadyCheckedIn: data?['already_checked_in'] ?? false,
-          experience: data?['experience'] ?? 10,
-          couponName: data?['coupon_name'],
-        );
+        if (data != null) {
+          return CheckinResult(
+            alreadyCheckedIn: data['already_checked_in'] ?? false,
+            experience: data['experience'] ?? 10,
+            couponName: data['coupon_name'],
+          );
+        }
       }
-      final msg = response.data['message'] ?? '';
-      if (msg.contains('已签到') || msg.contains('already')) {
-        return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
-      }
-      return CheckinResult(alreadyCheckedIn: false, experience: 0, couponName: null);
     } catch (e) {
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateTime.now().toIso8601String().split('T')[0];
-      final lastCheckin = prefs.getString('last_checkin_date') ?? '';
-      if (lastCheckin == today) {
-        return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
-      }
-      final expGain = 10 + (DateTime.now().weekday == 7 ? 20 : 0);
-      final currentExp = prefs.getInt('checkin_experience') ?? 0;
-      await prefs.setInt('checkin_experience', currentExp + expGain);
-      await prefs.setString('last_checkin_date', today);
-      final checkinDays = prefs.getInt('checkin_streak') ?? 0;
-      final lastDate = lastCheckin.isNotEmpty ? DateTime.tryParse(lastCheckin) : null;
-      if (lastDate != null && DateTime.now().difference(lastDate).inDays == 1) {
-        await prefs.setInt('checkin_streak', checkinDays + 1);
-      } else {
-        await prefs.setInt('checkin_streak', 1);
-      }
-      return CheckinResult(alreadyCheckedIn: false, experience: expGain, couponName: null);
+      debugPrint('Backend checkin not available, using local fallback: $e');
     }
+
+    final expGain = 10 + (DateTime.now().weekday == 7 ? 20 : 0);
+    final currentExp = prefs.getInt('checkin_experience') ?? 0;
+    await prefs.setInt('checkin_experience', currentExp + expGain);
+    await prefs.setString('last_checkin_date', today);
+    final checkinDays = prefs.getInt('checkin_streak') ?? 0;
+    final lastDate = lastCheckin.isNotEmpty ? DateTime.tryParse(lastCheckin) : null;
+    if (lastDate != null && DateTime.now().difference(lastDate).inDays == 1) {
+      await prefs.setInt('checkin_streak', checkinDays + 1);
+    } else {
+      await prefs.setInt('checkin_streak', 1);
+    }
+    return CheckinResult(alreadyCheckedIn: false, experience: expGain, couponName: null);
   }
 
   bool hasCheckedInToday(String? lastCheckinDate) {

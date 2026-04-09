@@ -414,12 +414,12 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             actions: [
               TextButton(
                   onPressed: () {
-                    ctx.pop();
+                    Navigator.pop(ctx);
                     context.push('/orders');
                   },
                   child: const Text('查看订单')),
               FilledButton(
-                  onPressed: () => ctx.pop(), child: const Text('确定')),
+                  onPressed: () => Navigator.pop(ctx), child: const Text('确定')),
             ],
           ),
         );

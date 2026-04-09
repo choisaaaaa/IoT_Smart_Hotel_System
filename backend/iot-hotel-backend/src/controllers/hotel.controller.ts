@@ -124,12 +124,40 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
       return res.status(401).json(errorResponse('未授权，缺少酒店信息'));
     }
 
-    // 这里可以根据实际需求从各个表统计数据
-    // 示例：统计房间状态、今日预订、待处理报修等
+    const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+    const month = req.query.month ? parseInt(req.query.month as string) : new Date().getMonth() + 1;
+
     const [roomStats] = await pool.query<RowDataPacket[]>(
       'SELECT room_status, COUNT(*) as count FROM rooms WHERE hotel_id = ? GROUP BY room_status',
       [hotelId]
     );
+
+    const totalRooms = (roomStats as any[]).reduce((sum: number, r: any) => sum + (r.count as number), 0);
+    const occupiedRooms = (roomStats as any[]).filter((r: any) => r.room_status === 'occupied').reduce((sum: number, r: any) => sum + (r.count as number), 0);
+    const occupancyRate = totalRooms > 0 ? occupiedRooms / totalRooms : 0;
+
+    const [revenueResult] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(total_price), 0) as total_revenue, COUNT(*) as total_orders
+       FROM bookings WHERE hotel_id = ? AND YEAR(check_in_date) = ? AND MONTH(check_in_date) = ? AND status != 'cancelled'`,
+      [hotelId, year, month]
+    );
+
+    const [avgPriceResult] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(AVG(room_price), 0) as avg_room_price FROM rooms WHERE hotel_id = ?`,
+      [hotelId]
+    );
+
+    const [monthlyRevenue] = await pool.query<RowDataPacket[]>(
+      `SELECT MONTH(check_in_date) as m, COALESCE(SUM(total_price), 0) as revenue
+       FROM bookings WHERE hotel_id = ? AND YEAR(check_in_date) = ? AND status != 'cancelled'
+       GROUP BY MONTH(check_in_date)`,
+      [hotelId, year]
+    );
+
+    const monthlyRevenueArray = Array(12).fill(0);
+    (monthlyRevenue as any[]).forEach((r: any) => {
+      monthlyRevenueArray[(r.m as number) - 1] = parseFloat(r.revenue as string) || 0;
+    });
 
     const [bookingStats] = await pool.query<RowDataPacket[]>(
       'SELECT status, COUNT(*) as count FROM bookings WHERE hotel_id = ? AND DATE(check_in_date) = CURDATE() GROUP BY status',
@@ -142,9 +170,14 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
     );
 
     res.json(successResponse({
+      total_revenue: parseFloat((revenueResult[0] as any)?.total_revenue as string) || 0,
+      total_orders: (revenueResult[0] as any)?.total_orders || 0,
+      avg_room_price: parseFloat((avgPriceResult[0] as any)?.avg_room_price as string) || 0,
+      occupancy_rate: occupancyRate,
+      monthly_revenue: monthlyRevenueArray,
       rooms: roomStats,
       bookings: bookingStats,
-      pending_maintenance: maintenanceStats[0]?.count || 0
+      pending_maintenance: (maintenanceStats[0] as any)?.count || 0
     }, '获取统计数据成功'));
   } catch (error) {
     logger.error('获取统计数据失败:', error);

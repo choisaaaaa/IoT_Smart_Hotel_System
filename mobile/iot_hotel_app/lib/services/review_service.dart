@@ -37,6 +37,10 @@ class ReviewService {
     int? hotelId,
     int? rating,
     String? content,
+    int? serviceRating,
+    int? cleanlinessRating,
+    int? facilityRating,
+    List<String>? images,
   }) async {
     try {
       final payload = data ??
@@ -45,6 +49,10 @@ class ReviewService {
             if (hotelId != null) 'hotel_id': hotelId,
             if (rating != null) 'rating': rating,
             if (content != null) 'content': content,
+            if (serviceRating != null) 'service_rating': serviceRating,
+            if (cleanlinessRating != null) 'cleanliness_rating': cleanlinessRating,
+            if (facilityRating != null) 'facility_rating': facilityRating,
+            if (images != null && images.isNotEmpty) 'images': images,
           };
       final response = await _dioClient.post(ApiConstants.reviews, data: payload);
 

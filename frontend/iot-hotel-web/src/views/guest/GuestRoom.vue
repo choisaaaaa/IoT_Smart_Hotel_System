@@ -2,39 +2,63 @@
   <div class="guest-room">
     <a-tabs v-model:activeKey="activeTab" centered size="large">
       <a-tab-pane v-if="isCheckedIn" key="butler" tab="🤖 AI 客房管家">
-        <div class="chat-container">
+        <div class="ai-butler-container">
           <div class="chat-messages" ref="chatContainerRef">
-            <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['message', msg.role]">
+            <div v-if="chatMessages.length === 0" class="welcome-hint">
+              <p>您好，我是AI管家小智，可以帮您控制设备、查询信息、安排服务</p>
+            </div>
+            <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['message', msg.type]">
               <div class="avatar">
-                <a-avatar :style="{ backgroundColor: msg.role === 'assistant' ? '#1890ff' : '#52c41a', fontSize: 18 }">
-                  {{ msg.role === 'assistant' ? 'AI' : '我' }}
+                <a-avatar :style="{ backgroundColor: msg.type === 'ai' ? '#1890ff' : '#52c41a', fontSize: 16 }">
+                  <template #icon><RobotOutlined v-if="msg.type === 'ai'" /><UserOutlined v-else /></template>
                 </a-avatar>
               </div>
-              <div class="bubble">{{ msg.content }}</div>
+              <div class="bubble-wrapper">
+                <div class="bubble" :class="{ typing: msg.typing && isTyping && idx === chatMessages.length - 1 }">
+                  <template v-if="msg.typing && isTyping && idx === chatMessages.length - 1">
+                    {{ displayedText }}<span class="cursor">|</span>
+                  </template>
+                  <template v-else>
+                    {{ msg.text }}
+                  </template>
+                </div>
+                <div v-if="msg.type === 'ai' && idx === chatMessages.length - 1 && isPlayingAudio" class="audio-indicator">
+                  <SoundOutlined :spin="isPlayingAudio" />
+                  <span>正在播放...</span>
+                  <a-button type="link" size="small" @click="toggleAudio">{{ isPlayingAudio ? '暂停' : '播放' }}</a-button>
+                </div>
+              </div>
             </div>
-            <div v-if="aiThinking" class="message assistant">
-              <div class="avatar"><a-avatar style="background-color: #1890ff; font-size: 18px;">AI</a-avatar></div>
+            <div v-if="aiThinking" class="message ai">
+              <div class="avatar"><a-avatar style="background-color: #1890ff; font-size: 16px;"><template #icon><RobotOutlined /></template></a-avatar></div>
               <div class="bubble thinking"><a-spin size="small" /> AI 正在思考...</div>
             </div>
+            <div v-if="suggestions.length > 0 && !aiThinking && !isTyping" class="suggestions">
+              <span class="suggestion-label">💡 您可能还想问：</span>
+              <div class="suggestion-chips">
+                <span v-for="(s, sIdx) in suggestions.slice(0, 3)" :key="sIdx" class="suggestion-chip" @click="askQuick(s)">{{ s }}</span>
+              </div>
+            </div>
           </div>
-          <div class="chat-input">
-            <a-input
-              v-model:value="inputText"
-              placeholder="输入您的问题，例如：帮我开空调、送两瓶水、叫醒服务等..."
-              size="large"
-              @pressEnter="sendMessage"
-              :disabled="aiThinking"
-            >
-              <template #suffix>
-                <a-button type="primary" shape="circle" :loading="aiThinking" @click="sendMessage">
-                  <SendOutlined />
-                </a-button>
-              </template>
-            </a-input>
-            <div class="quick-actions">
-              <a-tag v-for="q in quickQuestions" :key="q" color="blue" style="cursor: pointer; margin-top: 4px;" @click="askQuick(q)">
-                {{ q }}
-              </a-tag>
+          <div class="chat-input-area">
+            <div v-if="chatMessages.length === 0" class="quick-chips">
+              <span v-for="chip in quickChips" :key="chip.text" class="chip" @click="askQuick(chip.text)">
+                {{ chip.icon }} {{ chip.label }}
+              </span>
+            </div>
+            <div class="input-row">
+              <a-input
+                v-model:value="inputText"
+                placeholder="输入您的问题，如：打开灯光、需要保洁、查询WiFi..."
+                size="large"
+                @pressEnter="sendMessage"
+                :disabled="aiThinking"
+              >
+                <template #prefix><EditOutlined style="color: #999;" /></template>
+              </a-input>
+              <a-button type="primary" size="large" class="send-btn" :loading="aiThinking" :disabled="!inputText.trim() || aiThinking" @click="sendMessage">
+                <SendOutlined />
+              </a-button>
             </div>
           </div>
         </div>
@@ -150,26 +174,59 @@
     <a-modal v-model:open="messageModalVisible" title="给前台留言" @ok="sendMsgToReception">
       <a-textarea v-model:value="msgContent" :rows="4" placeholder="请输入您想对前台说的话..." />
     </a-modal>
+
+    <a-modal
+      v-model:open="transferModal.visible"
+      :footer="null"
+      :closable="false"
+      :maskClosable="false"
+      centered
+      width="320px"
+    >
+      <div style="text-align: center; padding: 20px;">
+        <PhoneOutlined style="font-size: 36px; color: #1890ff;" />
+        <h3>{{ transferModal.statusText }}</h3>
+        <p style="color: #666;">{{ transferModal.statusDesc }}</p>
+        <a-button type="primary" danger @click="cancelTransfer">取消呼叫</a-button>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, computed, onMounted } from 'vue'
+import { ref, reactive, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   SendOutlined, PhoneOutlined, MessageOutlined,
   CarOutlined, MedicineBoxOutlined, ScissorOutlined,
-  WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined
+  WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined,
+  RobotOutlined, UserOutlined, EditOutlined, SoundOutlined
 } from '@ant-design/icons-vue'
+import { useRoute } from 'vue-router'
 import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
 import { callApi } from '@/api/call'
+import { getSocket } from '@/utils/websocket'
+import request from '@/api/request'
 
-// 检查是否已办理入住
+const route = useRoute()
+
 const isCheckedIn = computed(() => {
   const guestInfo = localStorage.getItem('guest_checkin_info')
   return !!guestInfo
 })
+
+function getRoomId(): string {
+  try {
+    const raw = localStorage.getItem('guest_checkin_info')
+    if (raw) {
+      const info = JSON.parse(raw)
+      if (info.room_number) return String(info.room_number)
+      if (info.room_id) return String(info.room_id)
+    }
+  } catch {}
+  return route.params.roomId as string || '101'
+}
 
 const hotelStore = useHotelStore()
 const activeTab = ref('butler')
@@ -180,16 +237,37 @@ const messageModalVisible = ref(false)
 const msgContent = ref('')
 const deliveryLoading = ref(false)
 
-const chatMessages = ref<{ role: string; content: string }[]>([])
+const chatMessages = ref<{ type: 'user' | 'ai'; text: string; time: string; typing?: boolean }[]>([])
+const isTyping = ref(false)
+const displayedText = ref('')
+const suggestions = ref<string[]>([])
 
-const updateInitialMessage = () => {
-  const hotelName = hotelStore.hotelInfo?.hotel_name || '智联酒店'
-  chatMessages.value = [
-    { role: 'assistant', content: `您好！我是${hotelName}的 AI 管家 🤖。我可以帮您控制房间设备、请求送物、联系前台等。请问有什么可以帮您的？` }
-  ]
+const quickChips = [
+  { icon: '💡', label: '开灯', text: '打开灯光' },
+  { icon: '🏠', label: '房间状态', text: '查询房间状态' },
+  { icon: '🧹', label: '保洁', text: '需要保洁服务' },
+  { icon: '☕', label: '送餐', text: '需要送餐服务' },
+  { icon: '📶', label: 'WiFi密码', text: '查询酒店WiFi密码' },
+  { icon: '👨‍💼', label: '转人工', text: '转接人工' }
+]
+
+const suggestionMap: Record<string, string[]> = {
+  '灯光': ['调暗一点', '关闭灯光', '打开所有灯'],
+  '空调': ['调到26度', '开启制冷模式', '关闭空调'],
+  '保洁': ['现在就来', '1小时后', '只整理床铺'],
+  '送餐': ['查看菜单', '30分钟后送达', '素食套餐'],
+  'WiFi': ['连接不上怎么办', '密码是什么', '网速太慢'],
+  '维修': ['空调不制冷', '水管漏水', '电视没信号'],
+  '默认': ['还需要什么帮助？', '查询酒店设施', '叫醒服务']
 }
 
-const quickQuestions = ['帮我打开空调', '送两瓶矿泉水', '现在几点了', '明天天气怎么样', '我想续住一晚']
+const transferModal = ref({
+  visible: false,
+  statusText: '正在为您转接前台...',
+  statusDesc: '正在呼叫前台，请稍候...',
+  frontDeskCount: 0,
+  callId: ''
+})
 
 const deliveryForm = reactive({ category: 'beverage', item_name: '', quantity: 1, note: '' })
 
@@ -208,65 +286,187 @@ const extraServices = [
   { key: 'extend', name: '续住申请', icon: '📅', desc: '延长住宿时间' }
 ]
 
-function getCheckinInfo(): any | null {
-  try {
-    const raw = localStorage.getItem('guest_checkin_info')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
+let socket: any = null
 
-// 页面加载时检查入住状态
 onMounted(async () => {
   if (!isCheckedIn.value) {
     message.info('您还未办理入住，部分功能可能受限')
   }
   await hotelStore.fetchHotelInfo()
-  updateInitialMessage()
+  initWebSocket()
 })
+
+onUnmounted(() => {
+  if (socket) {
+    socket.off('incoming_call')
+    socket.off('call_answered')
+    socket.off('call_hungup')
+  }
+})
+
+function initWebSocket() {
+  socket = getSocket()
+  if (socket && socket.connected) {
+    socket.emit('register_client', { clientType: 'room', clientId: getRoomId() })
+  }
+  if (socket) {
+    socket.on('connect', () => {
+      socket.emit('register_client', { clientType: 'room', clientId: getRoomId() })
+    })
+    socket.on('call_answered', (data: any) => {
+      if (data.call_id === transferModal.value.callId) {
+        transferModal.value.visible = false
+        message.success('前台已接听')
+      }
+    })
+    socket.on('call_hungup', () => {
+      transferModal.value.visible = false
+    })
+  }
+}
+
+function typeWriterEffect(text: string, callback?: () => void) {
+  isTyping.value = true
+  displayedText.value = ''
+  let index = 0
+  const typeChar = () => {
+    if (index < text.length) {
+      displayedText.value += text.charAt(index)
+      index++
+      scrollToBottom()
+      setTimeout(typeChar, 30 + Math.random() * 20)
+    } else {
+      isTyping.value = false
+      if (callback) callback()
+    }
+  }
+  typeChar()
+}
+
+function updateSuggestions(lastUserMessage: string) {
+  let matchedKey = '默认'
+  for (const key of Object.keys(suggestionMap)) {
+    if (lastUserMessage.includes(key)) { matchedKey = key; break }
+  }
+  suggestions.value = suggestionMap[matchedKey] || suggestionMap['默认']
+}
 
 async function sendMessage() {
   const text = inputText.value.trim()
-  if (!text) return
-  chatMessages.value.push({ role: 'user', content: text })
+  if (!text || aiThinking.value) return
   inputText.value = ''
-  aiThinking.value = true
-  await nextTick()
-  scrollToBottom()
-
-  await new Promise(r => setTimeout(r, 800 + Math.random() * 1200))
-
-  let reply = ''
-  if (text.includes('空调') || text.includes('温度')) {
-    reply = '好的，已为您将空调设置为制冷模式，温度调至 24°C。如果需要调整温度，随时告诉我哦~'
-  } else if (text.includes('水') || text.includes('饮料') || text.includes('送物')) {
-    reply = '已为您安排送物服务，矿泉水将在 5-10 分钟内送达您的房间。还需要其他东西吗？'
-  } else if (text.includes('时间') || text.includes('几点')) {
-    reply = `现在是 ${new Date().toLocaleTimeString('zh-CN')}。需要为您设置叫醒服务吗？`
-  } else if (text.includes('天气')) {
-    reply = '今天北京天气晴朗，气温 18-26°C，空气质量优。适合外出活动哦~'
-  } else if (text.includes('续住')) {
-    reply = '好的，我来帮您处理续住事宜。请问您想延长几晚呢？我可以帮您联系前台确认。'
-  } else {
-    reply = '收到您的需求，我已经转达给相关服务人员。如有其他需要，随时告诉我！😊'
-  }
-
-  aiThinking.value = false
-  chatMessages.value.push({ role: 'assistant', content: reply })
-  await nextTick()
-  scrollToBottom()
+  await sendToAI(text)
 }
 
 function askQuick(q: string) {
-  inputText.value = q
-  sendMessage()
+  inputText.value = ''
+  sendToAI(q)
+}
+
+async function sendToAI(text: string) {
+  chatMessages.value.push({ type: 'user', text, time: new Date().toLocaleTimeString() })
+  scrollToBottom()
+  aiThinking.value = true
+
+  try {
+    const res: any = await request.post('/ai-butler/chat', {
+      room_id: getRoomId(),
+      text: text,
+      session_id: `${getRoomId()}_${Date.now()}`
+    })
+
+    if (res.code === 200) {
+      const aiResponse = res.data
+      const aiText = aiResponse.text || '抱歉，我没有理解您的意思，请换个说法试试？'
+
+      chatMessages.value.push({
+        type: 'ai',
+        text: aiText,
+        time: new Date().toLocaleTimeString(),
+        typing: true
+      })
+
+      typeWriterEffect(aiText, () => {
+        updateSuggestions(text)
+        const lastMsg = chatMessages.value[chatMessages.value.length - 1]
+        if (lastMsg) lastMsg.typing = false
+        if (aiResponse.audioUrl) playAudio(aiResponse.audioUrl)
+      })
+
+      scrollToBottom()
+
+      if (aiResponse.action === 'transfer') {
+        setTimeout(() => {
+          transferModal.value.visible = true
+          transferModal.value.callId = aiResponse.callId || ''
+          chatMessages.value.push({
+            type: 'ai',
+            text: `📞 正在为您转接前台...${aiResponse.frontDeskCount ? `（${aiResponse.frontDeskCount}位前台在线）` : ''}`,
+            time: new Date().toLocaleTimeString()
+          })
+          scrollToBottom()
+        }, 1000)
+      }
+    } else {
+      throw new Error(res.data?.message || 'AI服务返回异常')
+    }
+  } catch (error) {
+    console.error('AI请求失败:', error)
+    chatMessages.value.push({
+      type: 'ai',
+      text: '🤔 我好像遇到了点问题，不过您可以继续问我其他问题哦~',
+      time: new Date().toLocaleTimeString()
+    })
+    scrollToBottom()
+  } finally {
+    aiThinking.value = false
+  }
+}
+
+const audioPlayer = ref<HTMLAudioElement | null>(null)
+const isPlayingAudio = ref(false)
+
+function playAudio(base64Audio: string) {
+  try {
+    if (audioPlayer.value) { audioPlayer.value.pause(); audioPlayer.value = null }
+    const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`)
+    audioPlayer.value = audio
+    isPlayingAudio.value = true
+    audio.onended = () => { isPlayingAudio.value = false }
+    audio.onerror = () => { isPlayingAudio.value = false }
+    const playPromise = audio.play()
+    if (playPromise !== undefined) {
+      playPromise.catch(() => { isPlayingAudio.value = false })
+    }
+  } catch { isPlayingAudio.value = false }
+}
+
+function toggleAudio() {
+  if (!audioPlayer.value) return
+  if (isPlayingAudio.value) { audioPlayer.value.pause(); isPlayingAudio.value = false }
+  else { audioPlayer.value.play(); isPlayingAudio.value = true }
+}
+
+function cancelTransfer() {
+  transferModal.value.visible = false
+  if (transferModal.value.callId) {
+    socket?.emit('hangup_call', { call_id: transferModal.value.callId })
+  }
 }
 
 function scrollToBottom() {
-  if (chatContainerRef.value) {
-    chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
-  }
+  nextTick(() => {
+    if (chatContainerRef.value) {
+      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
+    }
+  })
+}
+
+function getCheckinInfo(): any | null {
+  try {
+    const raw = localStorage.getItem('guest_checkin_info')
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
 }
 
 async function requestDelivery() {
@@ -307,6 +507,7 @@ async function callFrontDesk() {
     message.error(error?.response?.data?.message || '呼叫失败，请稍后重试')
   }
 }
+
 function showMessagePanel() { messageModalVisible.value = true }
 async function sendMsgToReception() {
   if (!msgContent.value.trim()) { message.warning('请输入留言内容'); return }
@@ -314,31 +515,44 @@ async function sendMsgToReception() {
   msgContent.value = ''
   messageModalVisible.value = false
 }
+
 function handleService(svc: any) {
-  if (svc.key === 'wake') { activeTab.value = 'butler'; inputText.value = '设置叫醒服务'; sendMessage(); return }
-  if (svc.key === 'extend') { activeTab.value = 'butler'; inputText.value = '我想续住'; sendMessage(); return }
-  if (svc.key === 'maintenance') { activeTab.value = 'butler'; inputText.value = '报修房间设施'; sendMessage(); return }
+  if (['wake', 'extend', 'maintenance'].includes(svc.key)) {
+    activeTab.value = 'butler'
+    const map: Record<string, string> = { wake: '设置叫醒服务', extend: '我想续住', maintenance: '报修房间设施' }
+    askQuick(map[svc.key])
+    return
+  }
   message.info(`${svc.name}功能：${svc.desc}`)
 }
 </script>
 
 <style scoped>
-.chat-container { display: flex; flex-direction: column; height: 500px; border: 1px solid #f0f0f0; border-radius: 8px; overflow: hidden; }
+.ai-butler-container { display: flex; flex-direction: column; height: 520px; border: 1px solid #f0f0f0; border-radius: 8px; overflow: hidden; }
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #fafafa; }
-.message { display: flex; gap: 10px; max-width: 80%; }
+.welcome-hint { text-align: center; color: #999; padding: 40px 20px; }
+.message { display: flex; gap: 10px; max-width: 85%; }
 .message.user { align-self: flex-end; flex-direction: row-reverse; }
-.bubble {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.5;
-  word-break: break-word;
-}
-.message.assistant .bubble { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px 12px 12px 4px; }
+.bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.message.ai .bubble { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px 12px 12px 4px; }
 .message.user .bubble { background: #1890ff; color: #fff; border-radius: 12px 12px 4px 12px; }
+.bubble.typing .cursor { display: inline-block; color: #1890ff; font-weight: bold; animation: blink 0.8s infinite; }
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 .thinking { color: #999; font-size: 13px; }
-.chat-input { padding: 12px 16px; border-top: 1px solid #f0f0f0; background: #fff; }
-.quick-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.bubble-wrapper { display: flex; flex-direction: column; gap: 6px; }
+.audio-indicator { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: #f0f5ff; border-radius: 20px; font-size: 12px; color: #1890ff; }
+.suggestions { margin-top: 12px; padding: 10px 14px; background: #f8f9ff; border-radius: 10px; }
+.suggestion-label { display: block; font-size: 12px; color: #666; margin-bottom: 6px; }
+.suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggestion-chip { padding: 4px 12px; background: #fff; border: 1px solid #e0e5ff; border-radius: 16px; font-size: 12px; color: #5568a3; cursor: pointer; transition: all .2s; }
+.suggestion-chip:hover { background: #1890ff; color: #fff; border-color: #1890ff; }
+.chat-input-area { padding: 12px 16px; border-top: 1px solid #f0f0f0; background: #fff; }
+.quick-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; justify-content: center; }
+.chip { padding: 4px 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-radius: 16px; font-size: 12px; cursor: pointer; transition: all .2s; }
+.chip:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,.3); }
+.input-row { display: flex; gap: 8px; align-items: center; }
+.input-row .ant-input { flex: 1; }
+.send-btn { border-radius: 50% !important; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
 .contact-card { text-align: center; cursor: pointer; transition: transform .2s; }
 .contact-card:hover { transform: translateY(-4px); }
 .contact-card h3 { margin: 12px 0 4px; }

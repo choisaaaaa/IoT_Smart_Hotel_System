@@ -18,7 +18,7 @@ class AuthInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401) {
       await _clearAuthData();
-      authStateNotifier.markUnauthenticated();
+      authStateNotifier.clearAuth();
 
       final context = AppRouter.navigatorKey.currentContext;
       if (context != null) {

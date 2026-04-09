@@ -70,6 +70,9 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
           if (!booking.containsKey('room_type') && booking.containsKey('room_name')) {
             booking['room_type'] = booking['room_name'];
           }
+          if (!booking.containsKey('room_number') && booking.containsKey('room_name')) {
+            booking['room_number'] = booking['room_name'];
+          }
           setState(() {
             _foundBooking = booking;
             _realNameController.text = booking['guest_name']?.toString() ?? '';
@@ -251,32 +254,72 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.05),
+                  color: _foundBooking!['status'] == 'checked_in'
+                      ? AppColors.info.withValues(alpha: 0.05)
+                      : AppColors.success.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: _foundBooking!['status'] == 'checked_in'
+                        ? AppColors.info.withValues(alpha: 0.2)
+                        : AppColors.success.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      const Icon(Icons.check_circle, color: AppColors.success),
+                      Icon(
+                        _foundBooking!['status'] == 'checked_in' ? Icons.info : Icons.check_circle,
+                        color: _foundBooking!['status'] == 'checked_in' ? AppColors.info : AppColors.success,
+                      ),
                       const SizedBox(width: 8),
-                      const Text('找到您的预订！', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(
+                        _foundBooking!['status'] == 'checked_in'
+                            ? '该预订已办理入住'
+                            : _foundBooking!['status'] == 'pending'
+                                ? '该预订尚未支付'
+                                : '找到您的预订！',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
                     ]),
                     const SizedBox(height: 12),
-                    Text('${_foundBooking!['guest_name'] ?? '-'} · ${_foundBooking!['room_type'] ?? '-'} · ${_foundBooking!['check_in_date'] ?? ''} 至 ${_foundBooking!['check_out_date'] ?? ''}'),
+                    Text('${_foundBooking!['guest_name'] ?? '-'} · ${_foundBooking!['room_type'] ?? _foundBooking!['room_name'] ?? '-'} · ${_foundBooking!['check_in_date'] ?? ''} 至 ${_foundBooking!['check_out_date'] ?? ''}'),
+                    if (_foundBooking!['status'] == 'checked_in') ...[
+                      const SizedBox(height: 8),
+                      Text('房间号：${_foundBooking!['room_number'] ?? _foundBooking!['room_id'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  onPressed: () => setState(() => _currentStep = 1),
-                  child: const Text('下一步：填写入住信息'),
+              if (_foundBooking!['status'] == 'confirmed') ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: () => setState(() => _currentStep = 1),
+                    child: const Text('下一步：填写入住信息'),
+                  ),
                 ),
-              ),
+              ] else if (_foundBooking!['status'] == 'checked_in') ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: () => context.go('/room-service'),
+                    child: const Text('前往客房服务'),
+                  ),
+                ),
+              ] else if (_foundBooking!['status'] == 'pending') ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: () => context.go('/orders'),
+                    child: const Text('前往订单支付'),
+                  ),
+                ),
+              ],
             ] else ...[
               Center(
                 child: Padding(

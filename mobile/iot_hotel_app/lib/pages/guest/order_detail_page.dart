@@ -120,7 +120,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       const SizedBox(height: 12),
                       _buildPriceDetailCard(),
                       const SizedBox(height: 12),
-                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending')
+                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending' || _order!['status'] == 'checked_in' || _order!['status'] == 'checked_out')
                         _buildActionButtons(),
                       const SizedBox(height: 32),
                     ],
@@ -299,6 +299,41 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               ),
             ),
           ],
+          if (_order!['status'] == 'checked_in') ...[
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: () => context.push('/checkout', extra: {'bookingId': widget.orderId}),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                child: const Text('自助退房', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/extend-stay', extra: {'bookingId': widget.orderId}),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                child: const Text('在线续住'),
+              ),
+            ),
+          ],
+          if (_order!['status'] == 'checked_out')
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/review-submit', extra: {
+                  'bookingId': widget.orderId,
+                  'hotelId': _order?['hotel_id'],
+                  'hotelName': _order?['hotel_name'],
+                }),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                child: const Text('去评价'),
+              ),
+            ),
         ],
       ),
     );
@@ -317,10 +352,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         title: const Text('确认支付'),
         content: Text('订单金额：¥${_order!['total_price']}'),
         actions: [
-          TextButton(onPressed: () => ctx.pop(), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
             onPressed: () async {
-              ctx.pop();
+              Navigator.pop(ctx);
               try {
                 // 1. 创建支付记录
                 final createResult = await ref.read(paymentServiceProvider).createPayment({
@@ -369,9 +404,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         title: const Text('取消订单'),
         content: const Text('确定要取消此订单吗？取消后可能无法恢复。'),
         actions: [
-          TextButton(onPressed: () => ctx.pop(false), child: const Text('再想想')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('再想想')),
           FilledButton(
-            onPressed: () => ctx.pop(true),
+            onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('确定取消'),
           ),

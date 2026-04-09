@@ -7,6 +7,8 @@ class User {
   @JsonKey(name: 'hotel_id')
   final int? hotelId;
   final String role;
+  final String? phone;
+  final String? uid;
   @JsonKey(name: 'avatar')
   final String? avatar;
   @JsonKey(name: 'permissions')
@@ -20,6 +22,8 @@ class User {
     this.email,
     this.hotelId,
     this.role = 'user',
+    this.phone,
+    this.uid,
     this.avatar,
     this.permissions,
     this.createdAt,
@@ -31,6 +35,8 @@ class User {
         email: json['email'],
         hotelId: json['hotel_id'],
         role: json['role'] ?? 'user',
+        phone: json['phone'],
+        uid: json['uid'],
         avatar: json['avatar'],
         permissions: json['permissions'] != null ? List<String>.from(json['permissions']) : null,
         createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
@@ -38,7 +44,7 @@ class User {
 
   Map<String, dynamic> toJson() => {
         'id': id, 'username': username, 'email': email, 'hotel_id': hotelId, 'role': role,
-        'avatar': avatar, 'permissions': permissions, 'created_at': createdAt?.toIso8601String(),
+        'phone': phone, 'uid': uid, 'avatar': avatar, 'permissions': permissions, 'created_at': createdAt?.toIso8601String(),
       };
 
   String get displayName => username;

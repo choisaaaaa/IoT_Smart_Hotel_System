@@ -521,7 +521,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: Text(action == 'checkin' ? '确认入住' : '确认退房'),
       content: Text('客人：${booking['guest_name'] ?? '-'}，房间：${booking['room_number'] ?? booking['room_id'] ?? '-'}号房'),
-      actions: [TextButton(onPressed: () => ctx.pop(false), child: const Text('取消')), FilledButton(onPressed: () => ctx.pop(true), child: const Text('确认'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认'))],
     ));
     if (confirm != true) return;
 
@@ -723,7 +723,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
       final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
         title: const Text('确认释放房间'),
         content: Text('${room['room_number'] ?? roomId}号房当前状态为${_statusText(currentStatus)}，确定要释放为空闲吗？'),
-        actions: [TextButton(onPressed: () => ctx.pop(false), child: const Text('取消')), FilledButton(onPressed: () => ctx.pop(true), child: const Text('确认释放'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认释放'))],
       ));
       if (confirm != true) return;
     }
@@ -824,7 +824,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage> {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('确认删除'),
       content: const Text('确定要删除此工单吗？删除后不可恢复。'),
-      actions: [TextButton(onPressed: () => ctx.pop(false), child: const Text('取消')), FilledButton(onPressed: () => ctx.pop(true), style: FilledButton.styleFrom(backgroundColor: AppColors.error), child: const Text('删除'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: AppColors.error), child: const Text('删除'))],
     ));
     if (confirm != true) return;
 
@@ -1065,12 +1065,13 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
         final data = response.data['data'];
         if (mounted) {
           setState(() {
-            _callHistory = data is List ? data : (data is Map ? (data['items'] ?? data['list'] ?? []) : []);
+            _callHistory = data is List ? data : (data is Map ? (data['items'] ?? data['list'] ?? data['records'] ?? []) : []);
           });
         }
       }
     } catch (e) {
       debugPrint('Error loading call history: $e');
+      if (mounted) setState(() => _callHistory = []);
     }
   }
 
@@ -1082,6 +1083,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading rooms: $e');
+      if (mounted) setState(() => _rooms = []);
     }
   }
 
@@ -1098,6 +1100,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading users: $e');
+      if (mounted) setState(() => _users = []);
     }
   }
 
@@ -1111,6 +1114,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       }
     } catch (e) {
       debugPrint('Error loading call stats: $e');
+      if (mounted) setState(() => _stats = {});
     }
   }
 
@@ -1156,7 +1160,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
       showDialog(context: context, builder: (ctx) => AlertDialog(
         title: const Text('提示'),
         content: const Text('您尚未上线，无法发起呼叫。是否现在上线？'),
-        actions: [TextButton(onPressed: () => ctx.pop(), child: const Text('取消')), FilledButton(onPressed: () { ctx.pop(); _toggleOnline(); }, child: const Text('上线'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')), FilledButton(onPressed: () { Navigator.pop(ctx); _toggleOnline(); }, child: const Text('上线'))],
       ));
       return;
     }
@@ -1188,7 +1192,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
                 FloatingActionButton(
                   onPressed: () {
                     _hangupCall();
-                    ctx.pop();
+                    Navigator.pop(ctx);
                   },
                   backgroundColor: AppColors.error,
                   child: const Icon(Icons.call_end, color: Colors.white),
@@ -1247,9 +1251,8 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
     final roomTargets = targets.where((t) => t['type'] == 'room').toList();
     final staffTargets = targets.where((t) => t['type'] != 'room').toList();
 
-    return Scaffold(
-      body: Column(
-        children: [
+    return Column(
+      children: [
           Container(
             padding: const EdgeInsets.all(12),
             color: Colors.white,
@@ -1314,8 +1317,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildStatItem(String label, String value, Color color, IconData icon) {
@@ -1651,11 +1653,11 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => ctx.pop(), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
             onPressed: () {
               final newPrice = double.tryParse(controller.text) ?? currentPrice;
-              ctx.pop();
+              Navigator.pop(ctx);
               _updatePrice(roomType['id'] as int, newPrice);
             },
             child: const Text('保存'),
