@@ -141,7 +141,7 @@
                   {{ scanToken.substring(0, 20) }}...
                 </a-typography-text>
               </div>
-              <a-countdown
+              <a-statistic-countdown
                 :value="tokenExpireTime"
                 format="mm:ss"
                 @finish="handleCountdownFinish"
