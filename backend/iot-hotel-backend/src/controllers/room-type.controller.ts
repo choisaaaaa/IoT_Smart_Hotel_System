@@ -5,9 +5,9 @@ import logger from '../utils/logger';
 type ControllerError = Error & { statusCode?: number };
 
 export class RoomTypeController {
-  static async getAllRoomTypes(req: Request, res: Response) {
+  static async getRoomTypes(req: Request, res: Response) {
     try {
-      const list = await RoomTypeService.getAllRoomTypes();
+      const list = await RoomTypeService.getRoomTypes();
       res.json({
         code: 200,
         message: '获取房型列表成功',

@@ -4,7 +4,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), FloorController.getAllFloors);
+router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), FloorController.getFloors);
 router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), FloorController.getFloorById);
 router.post('/', authenticate as any, authorize(['admin', 'system']), FloorController.createFloor);
 router.put('/:id', authenticate as any, authorize(['admin', 'system']), FloorController.updateFloor);
