@@ -177,20 +177,29 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       [member.id]
     );
     
+    // 计算等级数字 (1-5)
+    const exp = Number(member.experience || 0);
+    let level = 1;
+    if (exp >= 5000) level = 5;
+    else if (exp >= 2000) level = 4;
+    else if (exp >= 500) level = 3;
+    else if (exp >= 100) level = 2;
+
     // 显式构建结果对象，确保所有字段都包含在内
     const result = {
       id: member.id,
       phone: member.phone,
       name: member.name,
       member_level: member.member_level,
-      experience: Number(member.experience || 0),
+      level: level, // 增加数字等级字段
+      experience: exp,
       points: Number(member.points || 0),
       balance: member.balance,
       total_spent: member.total_spent,
       total_stays: member.total_stays,
       last_checkin_date: member.last_checkin_date,
       coupons_count: Number(couponRows[0]?.count || 0),
-      level_discounts: LEVEL_DISCOUNTS // 增加这一行，让前端知道各等级折扣
+      level_discounts: LEVEL_DISCOUNTS
     };
 
     logger.info(`获取会员资产成功: 手机号 ${phone}, 成长值 ${result.experience}, 等级 ${result.member_level}`);

@@ -19,16 +19,6 @@ services:
     networks:
       - iot-network
 
-  # Redis缓存
-  redis:
-    image: redis:7-alpine
-    container_name: iot-hotel-redis
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    networks:
-      - iot-network
-
   # MQTT Broker
   mqtt:
     image: eclipse-mosquitto:2.0
@@ -59,13 +49,11 @@ services:
       - DB_USER=iot_user
       - DB_PASSWORD=iot_password
       - DB_NAME=iot_hotel_system
-      - REDIS_URL=redis://redis:6379
       - MQTT_HOST=mqtt
       - MQTT_PORT=1883
       - JWT_SECRET=iot_hotel_system_jwt_secret_2024
     depends_on:
       - mysql
-      - redis
       - mqtt
     restart: unless-stopped
     networks:

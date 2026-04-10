@@ -581,31 +581,34 @@ const couponDiscountAmount = computed(() => {
 
 const memberDiscount = computed(() => {
   if (!memberInfo.value) return 1.0
-  const level = memberInfo.value.member_level
-  const discounts: Record<string, number> = {
-    'diamond': 0.80,
-    'platinum': 0.85,
-    'gold': 0.88,
-    'silver': 0.95,
-    'standard': 1.0
+  const level = memberInfo.value.level || 1
+  const discounts: Record<number, number> = {
+    5: 0.80,
+    4: 0.85,
+    3: 0.88,
+    2: 0.95,
+    1: 1.0
   }
   return discounts[level] || 1.0
 })
 
 const memberLevelLabel = computed(() => {
   if (!memberInfo.value) return ''
-  const level = memberInfo.value.member_level
-  const labels: Record<string, string> = {
-    'diamond': '钻石会员',
-    'platinum': '铂金会员',
-    'gold': '金会员',
-    'silver': '银会员',
-    'standard': '标准会员'
-  }
-  return labels[level] || ''
+  return `LEVEL ${memberInfo.value.level || 1}`
 })
 
 const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
+
+const fetchMemberInfo = async () => {
+  if (!appStore.userInfo) return
+  try {
+    const res = await request.get('/members/me')
+    memberInfo.value = res.data
+  } catch (error) {
+    console.error('获取会员信息失败:', error)
+  }
+}
+
 const fetchAvailableCoupons = async () => {
   if (!appStore.userInfo) return
   try {
@@ -850,12 +853,14 @@ const resetAll = () => {
 onMounted(() => {
   searchHotels(false)
   if (appStore.userInfo) {
+    fetchMemberInfo()
     fetchFrequentGuests()
   }
 })
 
 watch(() => appStore.userInfo, (newVal) => {
   if (newVal) {
+    fetchMemberInfo()
     fetchFrequentGuests()
   }
 })

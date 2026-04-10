@@ -34,7 +34,7 @@
                       <a-input v-model:value="checkinForm.phone" placeholder="手机号码" style="flex: 1;" />
                       <div class="member-status-info">
                         <a-tag v-if="getMemberByPhone(checkinForm.phone)" color="gold" style="margin: 0;">
-                          {{ getLevelName(getMemberByPhone(checkinForm.phone).member_level) }}
+                          {{ getLevelName(getMemberByPhone(checkinForm.phone)) }}
                         </a-tag>
                         <a-tag v-else-if="checkinForm.phone && checkinForm.phone.length >= 11" color="warning" style="margin: 0;">未注册</a-tag>
                       </div>
@@ -250,7 +250,7 @@
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'registered'">
                     <a-tag v-if="getMemberByPhone(record.guest_phone)" color="gold">
-                      {{ getLevelName(getMemberByPhone(record.guest_phone).member_level) }}
+                      {{ getLevelName(getMemberByPhone(record.guest_phone)) }}
                     </a-tag>
                     <a-tag v-else color="default">非会员</a-tag>
                   </template>
@@ -648,15 +648,19 @@ function getMemberByPhone(phone: string): any {
   return memberList.value.find(m => normalizePhone(m.phone) === key)
 }
 
-function getLevelName(level: string): string {
+function getLevelName(member: any): string {
+  if (!member) return '已注册'
+  // 优先尝试数字等级，如果没有则显示 member_level 字符串的简化版
+  if (member.level) return `LEVEL ${member.level}`
+  
   const levels: Record<string, string> = {
-    'diamond': '钻石',
-    'platinum': '铂金',
-    'gold': '金卡',
-    'silver': '银卡',
-    'standard': '普通'
+    'diamond': 'LV5',
+    'platinum': 'LV4',
+    'gold': 'LV3',
+    'silver': 'LV2',
+    'standard': 'LV1'
   }
-  return levels[level] || '已注册'
+  return levels[member.member_level] || '已注册'
 }
 
 function isPhoneRegistered(phone: string): boolean {

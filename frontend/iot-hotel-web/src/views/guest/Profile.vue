@@ -19,7 +19,7 @@
                 <div class="hotel-brand">SMART HOTEL</div>
               </div>
               <div class="member-badge-new">
-                <span class="level-text">{{ memberLevelInfo.label }}</span>
+                <span class="level-text">LEVEL {{ memberInfo.level || 1 }}</span>
               </div>
             </div>
 
@@ -446,14 +446,20 @@ const onAvatarChange = async (e: Event) => {
   }
 }
 
-// 会员等级逻辑 (对接手机端逻辑)
+// 会员等级逻辑
 const memberLevelInfo = computed(() => {
+  const level = memberInfo.value.level || 1
   const exp = memberInfo.value.experience || 0
-  if (exp >= 5000) return { label: '钻石会员', discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 }
-  if (exp >= 2000) return { label: '铂金会员', discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) }
-  if (exp >= 500) return { label: '金会员', discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) }
-  if (exp >= 100) return { label: '银会员', discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) }
-  return { label: '普通会员', discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
+  
+  const levels: any = {
+    5: { label: '钻石会员', discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 },
+    4: { label: '铂金会员', discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) },
+    3: { label: '金会员', discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) },
+    2: { label: '银会员', discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) },
+    1: { label: '普通会员', discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
+  }
+  
+  return levels[level] || levels[1]
 })
 
 // 会员与资产信息
