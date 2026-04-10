@@ -384,10 +384,10 @@ export const checkinOnline = async (req: Request, res: Response) => {
 
     // 插入到 guests 表
     await connection.query(
-      `INSERT INTO guests (booking_id, hotel_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
-      [id, real_name, guest_phone, id_number, booking.room_id, booking.hotel_id]
+      [id, real_name, guest_phone, id_number, booking.room_id]
     );
 
     // 同步更新房间状态为“在住”

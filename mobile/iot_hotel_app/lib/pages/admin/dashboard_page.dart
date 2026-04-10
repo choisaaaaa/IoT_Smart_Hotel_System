@@ -14,6 +14,8 @@ import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
 import 'reports_page.dart';
+import 'environment_monitor_page.dart';
+import 'price_calendar_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});

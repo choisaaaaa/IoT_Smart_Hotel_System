@@ -49,4 +49,6 @@ class ApiConstants {
   static const String messages = 'messages/';
   static const String health = 'health';
   static const String upload = 'upload/';
+  static const String environment = 'environment/';
+  static const String priceCalendar = 'price-calendar/';
 }
