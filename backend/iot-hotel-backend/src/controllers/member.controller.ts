@@ -207,6 +207,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
 
     const user = req.user as any;
     const phone = user.phone || user.username;
+    const userId = user.id;
 
     // 检查会员状态
     const [memberRows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
@@ -219,9 +220,10 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
        FROM guests g
        LEFT JOIN rooms r ON g.room_id = r.id
        LEFT JOIN bookings b ON g.booking_id = b.id
-       WHERE g.guest_phone = ? AND g.check_out_time IS NULL
+       WHERE (b.user_id = ? OR g.guest_phone = ?) AND g.check_out_time IS NULL
+       ORDER BY g.check_in_time DESC
        LIMIT 1`,
-      [phone]
+      [userId, phone]
     );
     const isCheckedIn = guestRows.length > 0;
     const checkinInfo = isCheckedIn ? guestRows[0] : null;
