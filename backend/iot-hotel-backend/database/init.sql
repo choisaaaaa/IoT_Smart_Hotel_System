@@ -107,7 +107,6 @@ CREATE TABLE bookings (
     hotel_id INT NOT NULL DEFAULT 1,
     user_id INT DEFAULT NULL COMMENT '关联用户ID（前台办理入住时关联）',
     room_id INT NOT NULL,
-    user_id INT DEFAULT NULL,
     guest_name VARCHAR(100) NOT NULL,
     guest_phone VARCHAR(20) NOT NULL,
     guest_id_number VARCHAR(50) DEFAULT NULL,

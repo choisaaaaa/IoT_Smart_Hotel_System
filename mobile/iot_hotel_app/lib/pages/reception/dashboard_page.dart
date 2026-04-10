@@ -1414,7 +1414,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
                         children: [
                           Text(_isOnline ? '在线' : '离线', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isOnline ? AppColors.success : AppColors.textHint)),
                           const SizedBox(height: 2),
-                          Text(_isOnline ? '点击下线' : '点击上线', style: TextStyle(fontSize: 9, color: AppColors.textSecondary)),
+                          Text(_currentCall != null ? '通话中' : (_isOnline ? '点击下线' : '点击上线'), style: TextStyle(fontSize: 9, color: _currentCall != null ? AppColors.error : AppColors.textSecondary)),
                         ],
                       ),
                     ),

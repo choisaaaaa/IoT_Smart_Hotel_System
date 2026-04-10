@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../core/constants/api_constants.dart';
 
 typedef RTCPeerConnection = dynamic;
 typedef RTCSessionDescription = dynamic;
@@ -21,7 +22,7 @@ class VoiceCallService {
   void init(String userId) {
     if (_isInitialized) return;
 
-    _socket = IO.io('http://8.134.166.69:9000', <String, dynamic>{
+    _socket = IO.io(ApiConstants.serverHost, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
     });

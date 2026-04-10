@@ -30,6 +30,7 @@ class HomePage extends ConsumerWidget {
               _buildSearchCard(context),
               _buildQuickActions(context),
               _buildBanner(),
+              _buildMemberPrivilege(ref),
               const SizedBox(height: 40),
             ],
           ),
@@ -208,8 +209,8 @@ class HomePage extends ConsumerWidget {
         children: [
           _buildActionItem(Icons.calendar_today_outlined, '会员签到', onTap: () => context.push('/member')),
           _buildActionItem(Icons.bookmark_outline, '收藏/足迹', onTap: () => context.push('/favorites')),
-          _buildActionItem(Icons.headset_mic_outlined, '联系客服', onTap: () {}),
-          _buildActionItem(Icons.help_outline, '使用帮助', onTap: () {}),
+          _buildActionItem(Icons.headset_mic_outlined, '联系客服', onTap: () => _showComingSoon(context, '联系客服')),
+          _buildActionItem(Icons.help_outline, '使用帮助', onTap: () => _showComingSoon(context, '使用帮助')),
         ],
       ),
     );

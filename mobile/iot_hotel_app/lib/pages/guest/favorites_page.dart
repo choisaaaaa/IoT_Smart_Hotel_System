@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../services/auth_service.dart';
+import '../../core/auth/auth_state_notifier.dart';
 
 class FavoritesPage extends ConsumerStatefulWidget {
   const FavoritesPage({super.key});
@@ -19,7 +20,7 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
   bool _isLoading = true;
 
   String get _favKey {
-    final userId = ref.read(authServiceProvider).currentUser?.id ?? 'guest';
+    final userId = ref.read(authStateProvider).userId ?? 'guest';
     return '${AppConstants.favoriteHotelsKey}_$userId';
   }
 

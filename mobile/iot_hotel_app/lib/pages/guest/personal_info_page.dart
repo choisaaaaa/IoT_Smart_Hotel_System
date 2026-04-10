@@ -47,7 +47,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     }
 
     try {
-      final appResponse = await dio.get('${ApiConstants.baseUrl}auth/role-applications');
+      final appResponse = await dio.get(ApiConstants.authRoleApplications);
       if (appResponse.statusCode == 200 && appResponse.data['code'] == 200) {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
       }
@@ -339,7 +339,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   Future<void> _submitApplication(String type, {int? hotelId, String? hotelName, String? hotelAddress, String? reason}) async {
     try {
       final dio = DioClient();
-      final response = await dio.post('${ApiConstants.baseUrl}auth/role-application', data: {
+      final response = await dio.post(ApiConstants.authRoleApplication, data: {
         'application_type': type,
         if (hotelId != null) 'hotel_id': hotelId,
         if (hotelName != null) 'hotel_name': hotelName,

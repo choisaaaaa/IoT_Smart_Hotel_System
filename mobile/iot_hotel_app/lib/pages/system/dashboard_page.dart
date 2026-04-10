@@ -434,7 +434,7 @@ class _ReviewTabState extends State<_ReviewTab> {
   Future<void> _loadApplications() async {
     try {
       final dio = DioClient();
-      final res = await dio.get('${ApiConstants.baseUrl}auth/role-applications');
+      final res = await dio.get(ApiConstants.authRoleApplications);
       if (res.statusCode == 200 && res.data['code'] == 200) {
         setState(() => _applications = List<Map<String, dynamic>>.from(res.data['data'] ?? []));
       }
@@ -448,7 +448,7 @@ class _ReviewTabState extends State<_ReviewTab> {
   Future<void> _reviewApplication(int id, String status, {String? note}) async {
     try {
       final dio = DioClient();
-      final res = await dio.put('${ApiConstants.baseUrl}auth/role-applications/$id/review', data: {
+      final res = await dio.put('${ApiConstants.authRoleApplications}$id/review', data: {
         'status': status,
         if (note != null) 'review_note': note,
       });
