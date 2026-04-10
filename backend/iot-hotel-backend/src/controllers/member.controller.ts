@@ -120,20 +120,57 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json(errorResponse('未认证'));
     
-    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE user_id = ? OR phone = ?', [req.user.id, req.user.username]);
+    // 如果没有对应的会员记录，先尝试通过 phone 查找
+    let [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [req.user.username]);
+    
+    // 如果没有，再尝试通过 user_id 查找 (以防 user_id 列不存在)
+    if (rows.length === 0) {
+      try {
+        const [userIdRows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
+        rows = userIdRows;
+      } catch (e) {
+        // 如果没有 user_id 列，忽略错误
+        logger.warn('members 表可能缺少 user_id 列:', e);
+      }
+    }
     
     if (rows.length === 0) {
-      // 如果没有对应的会员记录，返回默认空资产
+      // 如果仍未找到对应的会员记录，返回默认空资产，而不是 500
       return res.json(successResponse({
-        id: 0, phone: req.user.username, name: req.user.username,
-        member_level: 'standard', points: 0, balance: 0.00, total_spent: 0.00, total_stays: 0
+        id: 0,
+        phone: req.user.username,
+        name: req.user.username,
+        member_level: 'standard',
+        points: 0,
+        balance: 0.00,
+        total_spent: 0.00,
+        total_stays: 0,
+        coupons_count: 0
       }, '获取资产成功'));
     }
     
-    res.json(successResponse(rows[0], '获取资产成功'));
+    // 增加优惠券数量统计
+    const [couponRows] = await pool.query<RowDataPacket[]>(
+      'SELECT COUNT(*) as count FROM user_coupons WHERE user_id = ? AND status = "unused"',
+      [req.user.id]
+    );
+    const result = { ...rows[0], coupons_count: (couponRows[0] as any).count || 0 };
+    
+    res.json(successResponse(result, '获取资产成功'));
   } catch (error) {
     logger.error('获取会员资产失败:', error);
-    res.status(500).json(errorResponse('获取资产失败'));
+    // 降级返回默认信息，而不是 500
+    res.json(successResponse({
+      id: 0,
+      phone: req.user?.username || '',
+      name: req.user?.username || '',
+      member_level: 'standard',
+      points: 0,
+      balance: 0.00,
+      total_spent: 0.00,
+      total_stays: 0,
+      coupons_count: 0
+    }, '获取资产成功(降级)'));
   }
 };
 

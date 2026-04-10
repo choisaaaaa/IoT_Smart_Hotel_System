@@ -32,13 +32,20 @@ export class PaymentService {
     status?: string;
     order_type?: string;
     hotelId: number;
+    userId?: number;
   }): Promise<PaymentListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, order_type, hotelId } = params;
+      const { page = 1, pageSize = 10, status, order_type, hotelId, userId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
 
-      let whereClause = 'WHERE hotel_id = ?';
+      let whereClause = 'WHERE p.hotel_id = ?';
       const paramsArray: any[] = [hotelId];
+
+      // 如果指定了userId，只返回该用户的支付（通过关联的预订）
+      if (userId) {
+        whereClause += ' AND b.user_id = ?';
+        paramsArray.push(userId);
+      }
 
       if (status) {
         whereClause += ' AND p.status = ?';
@@ -76,9 +83,20 @@ export class PaymentService {
     }
   }
 
-  static async getPaymentById(id: number, hotelId: number): Promise<Payment | null> {
+  static async getPaymentById(id: number, hotelId: number, userId?: number): Promise<Payment | null> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM payments WHERE id = ? AND hotel_id = ?', [id, hotelId]);
+      let query = 'SELECT p.* FROM payments p';
+      let params: any[] = [id, hotelId];
+      
+      // 如果指定了userId，需要关联bookings表验证权限
+      if (userId) {
+        query += ' LEFT JOIN bookings b ON p.order_type = \'booking\' AND p.order_id = b.id WHERE p.id = ? AND p.hotel_id = ? AND b.user_id = ?';
+        params.push(userId);
+      } else {
+        query += ' WHERE p.id = ? AND p.hotel_id = ?';
+      }
+      
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
       return (rows[0] as Payment) || null;
     } catch (error) {
       logger.error('获取支付详情失败:', error);

@@ -7,24 +7,49 @@ import { isSystemRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    let hotelId = req.user?.hotel_id;
-
-    if (isSystemRole(req.user?.role)) {
-      const queryHotelId = req.query.hotel_id;
-      if (queryHotelId) {
-        hotelId = parseInt(queryHotelId as string);
-      }
-    }
-
-    if (!hotelId) {
-      return res.status(401).json(errorResponse('未授权'));
-    }
-
-    const { page = 1, pageSize = 10, status, guest_name } = req.query;
+    const { page = 1, pageSize = 10, status, guest_name, hotel_id: queryHotelId } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
 
-    let whereClause = 'WHERE b.hotel_id = ?';
-    const params: any[] = [hotelId];
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+
+    // 如果是普通用户，只返回自己的订单，不限定hotel_id
+    if (req.user?.role === 'user') {
+      whereClause += ' AND (b.user_id = ? OR b.guest_phone = ? OR b.guest_name = ?)';
+      params.push(req.user.id);
+      params.push(req.user.username);
+      params.push(req.user.username);
+      // 普通用户可以传hotel_id来筛选特定酒店
+      if (queryHotelId) {
+        whereClause += ' AND b.hotel_id = ?';
+        params.push(parseInt(queryHotelId as string));
+      }
+    } else {
+      // 管理员/员工/系统用户需要按hotel_id过滤
+      let hotelId = req.user?.hotel_id;
+      
+      if (isSystemRole(req.user?.role) && queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      }
+
+      if (!hotelId) {
+        return res.status(401).json(errorResponse('未授权'));
+      }
+
+      whereClause += ' AND b.hotel_id = ?';
+      params.push(hotelId);
+
+      if (req.user?.role === 'staff' || req.user?.role === 'manager') {
+        const [hotelRows]: any = await pool.execute(
+          'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
+          [req.user?.id]
+        );
+        if (hotelRows.length > 0) {
+          whereClause += ' AND b.hotel_id = ?';
+          params.push(hotelRows[0].hotel_id);
+        }
+      }
+    }
 
     if (status) {
       whereClause += ' AND b.status = ?';
@@ -34,23 +59,6 @@ export const get = async (req: AuthRequest, res: Response) => {
     if (guest_name) {
       whereClause += ' AND b.guest_name LIKE ?';
       params.push(`%${guest_name}%`);
-    }
-
-    // 如果是普通用户，只返回自己的订单
-    if (req.user?.role === 'user') {
-      whereClause += ' AND (b.user_id = ? OR b.guest_phone = ? OR b.guest_name = ?)';
-      params.push(req.user.id);
-      params.push(req.user.username);
-      params.push(req.user.username);
-    } else if (req.user?.role === 'staff' || req.user?.role === 'manager') {
-      const [hotelRows]: any = await pool.execute(
-        'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
-        [req.user?.id]
-      );
-      if (hotelRows.length > 0) {
-        whereClause += ' AND b.hotel_id = ?';
-        params.push(hotelRows[0].hotel_id);
-      }
     }
 
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, params);
