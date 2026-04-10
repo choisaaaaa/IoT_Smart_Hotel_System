@@ -643,7 +643,7 @@ class EnvironmentController {
           room_number: '501',
           title: '🔥 火警警报 - 已解除',
           description: '501房烟雾浓度异常（55.3%），经现场核查为住客烹饪引起，已恢复正常',
-          severity: 'medium',
+          severity: 'warning',
           created_at: new Date(now.getTime() - 7200000).toISOString(),
           resolved: true,
           resolved_at: new Date(now.getTime() - 3600000).toISOString(),
