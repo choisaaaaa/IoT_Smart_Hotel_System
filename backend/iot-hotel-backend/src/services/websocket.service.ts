@@ -257,8 +257,13 @@ class WebSocketService {
               calleeExists = room.length > 0;
               break;
             case 'front_desk':
-              const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
-              calleeExists = employee.length > 0;
+              // 如果是呼叫所有前台（all 或 staff），则不需要检查具体用户
+              if (callee_id === 'all' || callee_id === 'staff') {
+                calleeExists = true;
+              } else {
+                const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
+                calleeExists = employee.length > 0;
+              }
               break;
             case 'ai':
               calleeExists = true;
@@ -304,9 +309,15 @@ class WebSocketService {
           
           socket.emit('call_initiated', callData);
           
-          const targetRoom = `${callee_type}_${callee_id}`;
-          logger.info(`发送 incoming_call 到房间: ${targetRoom}, 数据:`, callData);
-          this.io?.to(targetRoom).emit('incoming_call', callData);
+          // 如果是呼叫所有前台，广播到 front_desk 房间
+          if (callee_type === 'front_desk' && (callee_id === 'all' || callee_id === 'staff')) {
+            logger.info(`发送 incoming_call 到所有前台, 数据:`, callData);
+            this.io?.to('front_desk').emit('incoming_call', callData);
+          } else {
+            const targetRoom = `${callee_type}_${callee_id}`;
+            logger.info(`发送 incoming_call 到房间: ${targetRoom}, 数据:`, callData);
+            this.io?.to(targetRoom).emit('incoming_call', callData);
+          }
           
           logger.info(`通话发起: ${caller_type}/${caller_id} -> ${callee_type}/${callee_id} (${callId})`);
         } catch (error) {
