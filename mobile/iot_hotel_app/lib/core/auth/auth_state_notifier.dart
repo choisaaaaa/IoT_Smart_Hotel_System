@@ -13,7 +13,8 @@ int roleToLevel(String? role) {
     case 'admin':
     case 'system': return 4;
     case 'manager': return 3;
-    case 'staff': return 2;
+    case 'staff':
+    case 'receptionist': return 2;
     case 'user': return 1;
     default: return 0;
   }
@@ -92,7 +93,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       case 'admin':
       case 'system': initialMode = AppMode.system; break;
       case 'manager': initialMode = AppMode.manager; break;
-      case 'staff': initialMode = AppMode.reception; break;
+      case 'staff':
+      case 'receptionist': initialMode = AppMode.reception; break;
       case 'user': initialMode = AppMode.customer; break;
       default: initialMode = AppMode.guest;
     }

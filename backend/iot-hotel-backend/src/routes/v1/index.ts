@@ -17,6 +17,7 @@ import devices from './devices';
 import users from './users';
 import upload from './upload';
 import aiButler from './ai-butler';
+import environment from './environment';
 
 const router = Router();
 
@@ -37,6 +38,7 @@ router.use('/devices', devices);
 router.use('/users', users);
 router.use('/upload', upload);
 router.use('/ai-butler', aiButler);
+router.use('/environment', environment);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({

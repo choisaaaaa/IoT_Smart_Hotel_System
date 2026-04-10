@@ -49,16 +49,27 @@ class DeliveryService {
 
   Future<ApiResult<void>> updateDeliveryStatus(int deliveryId, String status) async {
     try {
-      if (status == 'completed' || status == 'delivered') {
+      if (status == 'delivering') {
+        // 开始配送 - 调用接单接口
+        final response = await _dioClient.put(
+          '${ApiConstants.delivery}$deliveryId/status',
+          data: {'status': 'delivering'},
+        );
+        if (response.statusCode == 200 && response.data['code'] == 200) {
+          return ApiResult.success(null);
+        }
+        return ApiResult.failure(response.data['message'] ?? '接单配送失败');
+      } else if (status == 'completed' || status == 'delivered') {
+        // 完成配送
         final response = await _dioClient.put(
           '${ApiConstants.delivery}$deliveryId/complete',
         );
         if (response.statusCode == 200 && response.data['code'] == 200) {
           return ApiResult.success(null);
         }
-        return ApiResult.failure(response.data['message'] ?? '更新送物状态失败');
+        return ApiResult.failure(response.data['message'] ?? '完成配送失败');
       }
-      return ApiResult.success(null);
+      return ApiResult.failure('不支持的状态: $status');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

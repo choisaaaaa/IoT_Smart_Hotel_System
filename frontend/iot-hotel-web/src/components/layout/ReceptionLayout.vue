@@ -46,6 +46,10 @@
           <template #icon><PhoneOutlined /></template>
           <span>语音通话</span>
         </a-menu-item>
+        <a-menu-item key="/reception/environment">
+          <template #icon><EnvironmentOutlined /></template>
+          <span>环境监测</span>
+        </a-menu-item>
         <a-menu-item key="/reception/price-settings">
           <template #icon><TagsOutlined /></template>
           <span>房价设置</span>
@@ -106,7 +110,7 @@ import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
   PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, LogoutOutlined
+  BellOutlined, LogoutOutlined, EnvironmentOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'

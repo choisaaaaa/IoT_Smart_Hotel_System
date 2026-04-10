@@ -57,6 +57,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           return '/login';
         }
 
+        // 根据当前模式强制跳转到对应页面
+        if (currentPath == '/') {
+          switch (authState.currentMode) {
+            case AppMode.system:
+              return '/system';
+            case AppMode.manager:
+              return '/admin';
+            case AppMode.reception:
+              return '/reception';
+            default:
+              break;
+          }
+        }
+
         if (currentPath.startsWith('/reception') && !authState.canSwitchTo(AppMode.reception)) {
           return '/';
         }

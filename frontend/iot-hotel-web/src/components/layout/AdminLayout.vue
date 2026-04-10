@@ -26,6 +26,10 @@
           <template #icon><MonitorOutlined /></template>
           <span>设备监控</span>
         </a-menu-item>
+        <a-menu-item key="/hotel-admin/environment">
+          <template #icon><EnvironmentOutlined /></template>
+          <span>环境监测</span>
+        </a-menu-item>
         <a-sub-menu key="info-manage">
           <template #title><EditOutlined /><span v-show="!collapsed">房间管理</span></template>
           <a-menu-item key="/hotel-admin/rooms/edit"><HomeOutlined /> 房间列表</a-menu-item>
@@ -104,7 +108,8 @@ import {
   HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined,
-  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined
+  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
+  EnvironmentOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'

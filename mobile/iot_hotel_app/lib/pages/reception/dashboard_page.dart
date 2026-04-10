@@ -161,7 +161,7 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
             onPressed: () {
               Navigator.pop(ctx);
               ref.read(authStateProvider.notifier).switchMode(e.key);
-              context.go('/');
+              _navigateToMode(e.key);
             },
             child: Row(children: [
               Icon(_modeIcon(e.key), color: AppColors.primary),
@@ -181,6 +181,24 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
       case AppMode.reception: return Icons.support_agent_outlined;
       case AppMode.manager: return Icons.admin_panel_settings_outlined;
       case AppMode.system: return Icons.security_outlined;
+    }
+  }
+
+  void _navigateToMode(AppMode mode) {
+    switch (mode) {
+      case AppMode.guest:
+      case AppMode.customer:
+        context.go('/');
+        break;
+      case AppMode.reception:
+        context.go('/reception');
+        break;
+      case AppMode.manager:
+        context.go('/admin');
+        break;
+      case AppMode.system:
+        context.go('/system');
+        break;
     }
   }
 
@@ -776,7 +794,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
     }
 
     try {
-      final result = await ref.read(roomServiceProvider).updateRoom(roomId, {'room_status': newStatus});
+      final result = await ref.read(roomServiceProvider).updateRoomStatus(roomId, newStatus);
       if (result.success && mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间状态已更新')));
@@ -930,15 +948,73 @@ class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
               ? Center(child: Text('暂无送物订单', style: TextStyle(color: AppColors.textSecondary)))
               : RefreshIndicator(onRefresh: _loadOrders, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _orders.length, itemBuilder: (context, i) {
                   final o = _orders[i];
-                  return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
-                    title: Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房 · ${o['item_name'] ?? o['items'] ?? '送物品'}'),
-                    subtitle: Text('${o['guest_name'] ?? ''} · ${o['note'] ?? ''}'),
-                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(o['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(o['status']), style: TextStyle(color: _statusColor(o['status']), fontSize: 11))),
-                      if (o['status'] == 'pending') TextButton(onPressed: () => _updateStatus(o['id'], 'delivering'), child: const Text('接单', style: TextStyle(fontSize: 12))),
-                      if (o['status'] == 'delivering') TextButton(onPressed: () => _updateStatus(o['id'], 'completed'), child: const Text('送达', style: TextStyle(fontSize: 12))),
-                    ]),
-                  ));
+                  final status = o['status']?.toString() ?? 'pending';
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.room_rounded, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                              Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: _statusColor(status).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                                child: Text(_statusText(status), style: TextStyle(color: _statusColor(status), fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(o['item_name'] ?? o['items'] ?? '送物品', style: const TextStyle(fontSize: 14)),
+                          if ((o['guest_name']?.toString() ?? '').isNotEmpty || (o['note']?.toString() ?? '').isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text('${o['guest_name'] ?? ''}${o['note'] != null && o['note'].toString().isNotEmpty ? ' · ${o['note']}' : ''}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          if (status == 'pending' || status == 'delivering') ...[
+                            const Divider(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (status == 'pending')
+                                  OutlinedButton.icon(
+                                    onPressed: () => _updateStatus(o['id'], 'delivering'),
+                                    icon: const Icon(Icons.local_shipping_outlined, size: 16),
+                                    label: const Text('接单配送'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                if (status == 'delivering') ...[
+                                  OutlinedButton.icon(
+                                    onPressed: () => _updateStatus(o['id'], 'completed'),
+                                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                                    label: const Text('确认送达'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.success,
+                                      side: BorderSide(color: AppColors.success),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
                 })),
     );
   }
@@ -1112,17 +1188,48 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
 
   Future<void> _loadCallHistory() async {
     try {
-      final response = await DioClient().get('${ApiConstants.calls}history', queryParameters: {'limit': 50});
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      final response = await DioClient().get('${ApiConstants.calls}history', queryParameters: {'limit': 50, 'page': 1});
+      debugPrint('VoiceCalls history response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200) {
+        final code = response.data['code'];
         final data = response.data['data'];
-        if (mounted) {
-          setState(() {
-            _callHistory = data is List ? data : (data is Map ? (data['items'] ?? data['list'] ?? data['records'] ?? []) : []);
-          });
+        
+        List<dynamic> historyList = [];
+        
+        if (data != null) {
+          if (data is List) {
+            historyList = data;
+          } else if (data is Map) {
+            historyList = List<dynamic>.from(
+              data['items'] ?? 
+              data['list'] ?? 
+              data['records'] ?? 
+              data['calls'] ?? 
+              data['history'] ?? 
+              []
+            );
+            
+            if (historyList.isEmpty && data.isNotEmpty) {
+              debugPrint('VoiceCalls history data keys: ${data.keys.toList()}');
+            }
+          }
         }
+        
+        if (code == 200 || code == 0) {
+          if (mounted) setState(() => _callHistory = historyList);
+          debugPrint('VoiceCalls loaded ${historyList.length} call records');
+        } else {
+          debugPrint('VoiceCalls history error code: $code, message: ${response.data['message']}');
+          if (mounted) setState(() => _callHistory = []);
+        }
+      } else {
+        debugPrint('VoiceCalls history HTTP error: ${response.statusCode}');
+        if (mounted) setState(() => _callHistory = []);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Error loading call history: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) setState(() => _callHistory = []);
     }
   }
@@ -1504,78 +1611,83 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
         final isOnline = target['isOnline'] == true;
         final status = target['status']?.toString() ?? '';
 
+        final borderColor = isRoom ? _roomStatusColor(status) : AppColors.primary;
+        
         return GestureDetector(
           onTap: () => _makeCall(target),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border(
-                left: BorderSide(color: isRoom ? _roomStatusColor(status) : AppColors.primary, width: 4),
-                top: BorderSide(color: isRoom ? _roomStatusColor(status).withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.2), width: 1),
-                right: BorderSide(color: isRoom ? _roomStatusColor(status).withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.2), width: 1),
-                bottom: BorderSide(color: isRoom ? _roomStatusColor(status).withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.2), width: 1),
-              ),
+              border: Border.all(color: borderColor.withValues(alpha: 0.3), width: 1),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
             ),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isRoom ? Icons.door_back_door_rounded : Icons.person_rounded,
-                        color: isRoom ? AppColors.info : AppColors.primary,
-                        size: 28,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        target['name'],
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        target['desc'] ?? '',
-                        style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (isRoom && status.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: _roomStatusColor(status).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _roomStatusText(status),
-                            style: TextStyle(fontSize: 9, color: _roomStatusColor(status), fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                    ],
-                  ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(left: BorderSide(color: borderColor, width: 4)),
                 ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isOnline ? AppColors.success : AppColors.textHint,
-                      boxShadow: isOnline ? [BoxShadow(color: AppColors.success.withValues(alpha: 0.6), blurRadius: 4)] : null,
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isRoom ? Icons.door_back_door_rounded : Icons.person_rounded,
+                            color: isRoom ? AppColors.info : AppColors.primary,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            target['name'],
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            target['desc'] ?? '',
+                            style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          if (isRoom && status.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: _roomStatusColor(status).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _roomStatusText(status),
+                                style: TextStyle(fontSize: 9, color: _roomStatusColor(status), fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isOnline ? AppColors.success : AppColors.textHint,
+                          boxShadow: isOnline ? [BoxShadow(color: AppColors.success.withValues(alpha: 0.6), blurRadius: 4)] : null,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -1593,6 +1705,12 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
   };
 
   Widget _buildCallHistory() {
+    debugPrint('_buildCallHistory: _callHistory.length = ${_callHistory.length}, _isLoading = $_isLoading');
+    
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
     if (_callHistory.isEmpty) {
       return Center(
         child: Column(
@@ -1613,7 +1731,15 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
         itemCount: _callHistory.length,
         itemBuilder: (context, i) {
           final call = _callHistory[i];
+          debugPrint('Building call history item $i: $call');
           final isOutbound = call['direction'] == 'outbound' || call['caller_type'] == 'front_desk';
+          final callerId = call['caller_id']?.toString() ?? '';
+          final calleeId = call['callee_id']?.toString() ?? '';
+          final displayId = isOutbound ? calleeId : callerId;
+          final startedAt = call['started_at']?.toString() ?? '';
+          final duration = call['duration_sec'] ?? call['duration'] ?? 0;
+          final status = call['status']?.toString() ?? 'unknown';
+          
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -1627,15 +1753,15 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
                   size: 18,
                 ),
               ),
-              title: Text('${call['callee_id'] ?? call['caller_id'] ?? '-'}', style: const TextStyle(fontSize: 14)),
-              subtitle: Text('${call['started_at'] ?? ''} · ${call['duration_sec'] ?? call['duration'] ?? '0'}秒', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              title: Text(displayId.isEmpty ? '未知' : displayId, style: const TextStyle(fontSize: 14)),
+              subtitle: Text('$startedAt · $duration秒', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _callStatusColor(call['status']).withValues(alpha: 0.1),
+                  color: _callStatusColor(status).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(_callStatusText(call['status']), style: TextStyle(fontSize: 10, color: _callStatusColor(call['status']), fontWeight: FontWeight.bold)),
+                child: Text(_callStatusText(status), style: TextStyle(fontSize: 10, color: _callStatusColor(status), fontWeight: FontWeight.bold)),
               ),
             ),
           );

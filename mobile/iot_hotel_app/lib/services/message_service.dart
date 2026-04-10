@@ -37,16 +37,18 @@ class MessageService {
   }
 
   Future<ApiResult<int>> getUnreadCount() async {
-    try {
-      final response = await _dioClient.get('${ApiConstants.messages}unread/count');
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data']['count'] as int);
-      }
-      return ApiResult.failure(response.data['message'] ?? '获取未读数失败');
-    } catch (e) {
-      return ApiResult.failure('网络错误：$e');
-    }
+    // 后端暂未实现消息接口，直接返回0
+    return ApiResult.success(0);
+    // try {
+    //   final response = await _dioClient.get('${ApiConstants.messages}unread/count');
+    //
+    //   if (response.statusCode == 200 && response.data['code'] == 200) {
+    //     return ApiResult.success(response.data['data']['count'] as int);
+    //   }
+    //   return ApiResult.failure(response.data['message'] ?? '获取未读数失败');
+    // } catch (e) {
+    //   return ApiResult.failure('网络错误：$e');
+    // }
   }
 
   Future<ApiResult<void>> markAsRead(int messageId) async {

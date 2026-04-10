@@ -120,7 +120,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
             onPressed: () {
               Navigator.pop(ctx);
               ref.read(authStateProvider.notifier).switchMode(e.key);
-              context.go('/');
+              _navigateToMode(e.key);
             },
             child: Row(children: [
               Icon(_modeIcon(e.key), color: AppColors.primary),
@@ -140,6 +140,24 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       case AppMode.reception: return Icons.support_agent_outlined;
       case AppMode.manager: return Icons.admin_panel_settings_outlined;
       case AppMode.system: return Icons.security_outlined;
+    }
+  }
+
+  void _navigateToMode(AppMode mode) {
+    switch (mode) {
+      case AppMode.guest:
+      case AppMode.customer:
+        context.go('/');
+        break;
+      case AppMode.reception:
+        context.go('/reception');
+        break;
+      case AppMode.manager:
+        context.go('/admin');
+        break;
+      case AppMode.system:
+        context.go('/system');
+        break;
     }
   }
 }
@@ -385,7 +403,7 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
   Future<void> _reviewApplication(int id, String status, {String? note}) async {
     try {
       final dio = DioClient();
-      final res = await dio.put('${ApiConstants.authRoleApplications}$id/review', data: {
+      final res = await dio.put('${ApiConstants.authRoleApplications}/$id/review', data: {
         'status': status,
         if (note != null) 'review_note': note,
       });

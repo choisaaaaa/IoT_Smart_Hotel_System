@@ -79,6 +79,22 @@ class RoomService {
     }
   }
 
+  Future<ApiResult<void>> updateRoomStatus(int roomId, String status) async {
+    try {
+      final response = await _dioClient.patch(
+        '${ApiConstants.rooms}$roomId/status',
+        data: {'status': status},
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '更新房间状态失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<void>> deleteRoom(int roomId) async {
     try {
       final response = await _dioClient.delete('${ApiConstants.rooms}$roomId');

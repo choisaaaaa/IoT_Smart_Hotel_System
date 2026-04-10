@@ -90,7 +90,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
             onPressed: () {
               Navigator.pop(ctx);
               ref.read(authStateProvider.notifier).switchMode(e.key);
-              context.go('/');
+              _navigateToMode(e.key);
             },
             child: Row(children: [Icon(_modeIcon(e.key), color: AppColors.primary), const SizedBox(width: 12), Text(e.value, style: const TextStyle(fontSize: 16))]),
           );
@@ -106,6 +106,24 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
       case AppMode.reception: return Icons.support_agent_outlined;
       case AppMode.manager: return Icons.admin_panel_settings_outlined;
       case AppMode.system: return Icons.security_outlined;
+    }
+  }
+
+  void _navigateToMode(AppMode mode) {
+    switch (mode) {
+      case AppMode.guest:
+      case AppMode.customer:
+        context.go('/');
+        break;
+      case AppMode.reception:
+        context.go('/reception');
+        break;
+      case AppMode.manager:
+        context.go('/admin');
+        break;
+      case AppMode.system:
+        context.go('/system');
+        break;
     }
   }
 }

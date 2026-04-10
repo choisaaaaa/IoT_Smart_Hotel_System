@@ -197,8 +197,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           const SizedBox(height: 40),
                           TextFormField(
                             controller: _usernameController,
-                            decoration: const InputDecoration(labelText: '用户名', prefixIcon: Icon(Icons.person_outline_rounded), hintText: '请输入用户名'),
-                            validator: (v) => v!.isEmpty ? '请输入用户名' : null,
+                            decoration: const InputDecoration(labelText: '手机号', prefixIcon: Icon(Icons.phone_outlined), hintText: '请输入手机号'),
+                            validator: (v) => v!.isEmpty ? '请输入手机号' : null,
                           ),
                           const SizedBox(height: 16),
                           TextFormField(

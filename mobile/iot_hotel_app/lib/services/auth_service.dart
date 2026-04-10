@@ -17,7 +17,7 @@ class AuthService {
   Future<ApiResult<Map<String, dynamic>>> login(String username, String password) async {
     try {
       final response = await _dioClient.post(ApiConstants.authLogin, data: {
-        'username': username,
+        'phone': username,
         'password': password,
       });
       

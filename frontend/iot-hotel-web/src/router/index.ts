@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '设备监控', icon: 'MonitorOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
+        path: 'environment',
+        name: 'AdminEnvironmentMonitor',
+        component: () => import('@/views/admin/EnvironmentMonitor.vue'),
+        meta: { title: '环境监测', icon: 'EnvironmentOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
+      },
+      {
         path: 'rooms/edit',
         name: 'RoomEdit',
         component: () => import('@/views/admin/RoomEdit.vue'),
@@ -159,6 +165,12 @@ const routes: RouteRecordRaw[] = [
         name: 'VoiceCalls',
         component: () => import('@/views/reception/VoiceCalls.vue'),
         meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
+      },
+      {
+        path: 'environment',
+        name: 'ReceptionEnvironmentMonitor',
+        component: () => import('@/views/reception/EnvironmentMonitor.vue'),
+        meta: { title: '环境监测', icon: 'EnvironmentOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'price-settings',
