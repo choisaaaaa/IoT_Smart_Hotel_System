@@ -107,8 +107,9 @@ class WebSocketService {
 
           let displayName = data.clientId;
 
-          // 人员识别逻辑：如果是前台或APP，从数据库验证并获取用户名
-          if (data.clientType === 'front_desk' || data.clientType === 'app') {
+          // 人员识别逻辑
+          if (data.clientType === 'front_desk') {
+            // 前台必须从数据库验证
             const [rows] = await pool.query<RowDataPacket[]>(
               'SELECT username, role FROM users WHERE id = ? OR username = ?',
               [data.clientId, data.clientId]
@@ -118,6 +119,15 @@ class WebSocketService {
               return;
             }
             displayName = rows[0].username;
+          } else if (data.clientType === 'app') {
+            // App端（顾客）不需要验证数据库，直接使用clientId作为显示名
+            // 格式通常为 guest_{roomId} 或用户自定义ID
+            if (data.clientId.startsWith('guest_')) {
+              const roomId = data.clientId.replace('guest_', '');
+              displayName = `顾客${roomId}`;
+            } else {
+              displayName = data.clientId;
+            }
           } else if (data.clientType === 'room') {
             const [rows] = await pool.query<RowDataPacket[]>(
               'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
