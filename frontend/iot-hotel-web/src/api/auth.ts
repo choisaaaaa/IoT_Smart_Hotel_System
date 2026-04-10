@@ -40,6 +40,7 @@ export interface UserInfo {
   username: string
   email?: string
   phone?: string
+  avatar?: string
   uid?: string
   role: string
   hotel_id?: number

@@ -147,6 +147,8 @@ router.post('/scan-login', async (req, res) => {
         role,
         permissions: [],
         email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
         hotel_id: user.hotel_id,
         hotel_name: user.hotel_name
       },
@@ -251,7 +253,7 @@ router.post('/login', async (req, res) => {
         permissions,
         email: user.email,
         phone: user.phone,
-        uid: user.uid,
+        avatar: user.avatar,
         hotel_id: user.hotel_id,
         hotel_name: user.hotel_name
       },
@@ -410,7 +412,7 @@ router.get('/me', async (req: AuthRequest, res) => {
     }
 
     const [users]: any = await db.execute(
-      `SELECT id, username, email, role, phone, uid, hotel_id, created_at FROM users WHERE id = ?`,
+      `SELECT id, username, email, role, phone, uid, avatar, hotel_id, created_at FROM users WHERE id = ?`,
       [decoded.id]
     );
 

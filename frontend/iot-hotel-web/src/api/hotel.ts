@@ -84,6 +84,13 @@ class HotelApi {
     )
     return response?.data
   }
+
+  async getStatistics(year?: number, month?: number): Promise<any> {
+    const response: any = await request.get<ApiResponse<any>>('/hotel/statistics', {
+      params: { year, month }
+    })
+    return response?.data
+  }
 }
 
 export const hotelApi = new HotelApi()

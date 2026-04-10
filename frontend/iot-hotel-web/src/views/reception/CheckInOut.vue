@@ -1,5 +1,21 @@
 <template>
-  <div class="check-in-out">
+  <div class="reception-center">
+    <div class="reception-header-logo">
+      <div class="logo-wrapper">
+        <div class="logo-icon">
+          <span class="logo-emoji">🏨</span>
+        </div>
+        <div class="logo-text">
+          <div class="main-title">智联酒店接待中心</div>
+          <div class="sub-title">SMART HOTEL RECEPTION CENTER</div>
+        </div>
+        <div class="header-divider"></div>
+        <div class="hotel-info">
+          <div class="hotel-name">🏨 {{ hotelStore.hotelInfo?.hotel_name || '当前门店' }}</div>
+          <div class="hotel-id">集团编号: {{ hotelStore.hotelInfo?.id || '-' }}</div>
+        </div>
+      </div>
+    </div>
     <a-tabs v-model:activeKey="activeTab">
       <a-tab-pane key="checkin" tab="📥 入住办理">
         <a-row :gutter="16">
@@ -81,8 +97,64 @@
                   {{ selectedRoom.room_name }} · ¥{{ selectedRoom.room_price }}/晚
                 </div>
               </a-card>
-              <a-form-item label="预估金额 (含会员/日期折扣)" style="margin-top: 12px;">
-                <a-statistic :value="estimatedPrice" prefix="¥" :precision="2" :loading="priceLoading" />
+
+              <a-divider orientation="left">费用与优惠</a-divider>
+
+              <a-row :gutter="16">
+                <a-col :span="12">
+                  <a-form-item label="使用优惠券">
+                <div style="display: flex; gap: 8px;">
+                  <a-select
+                    v-model:value="checkinForm.coupon_id"
+                    placeholder="选择可用优惠券"
+                    allow-clear
+                    :loading="couponsLoading"
+                    style="flex: 1;"
+                    @change="updateEstimatedPrice"
+                  >
+                    <a-select-option v-for="c in userCoupons" :key="c.id" :value="c.id">
+                      {{ c.coupon_name }} ({{ c.coupon_type === 'discount' ? c.discount_value + '折' : '减¥' + c.discount_value }})
+                    </a-select-option>
+                  </a-select>
+                  <a-button type="primary" ghost @click="showIssueCouponModal">
+                    发放优惠券
+                  </a-button>
+                </div>
+              </a-form-item>
+                </a-col>
+                <a-col :span="6">
+                  <a-form-item label="折扣率">
+                    <a-input-number
+                      v-model:value="checkinForm.manual_discount"
+                      :min="0.1" :max="1" :step="0.05"
+                      style="width: 100%"
+                      placeholder="1.0"
+                      @change="updateEstimatedPrice"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="6">
+                  <a-form-item label="立减金额">
+                    <a-input-number
+                      v-model:value="checkinForm.manual_reduce"
+                      :min="0"
+                      style="width: 100%"
+                      placeholder="0"
+                      @change="updateEstimatedPrice"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-form-item label="预估应付金额 (含折扣/优惠)" style="margin-top: 12px;">
+                <div class="price-display">
+                  <a-statistic :value="estimatedPrice" prefix="¥" :precision="2" :loading="priceLoading" />
+                  <div class="price-detail" v-if="priceDetailText">
+                    <a-tooltip :title="priceDetailText">
+                      <InfoCircleOutlined /> 计价详情
+                    </a-tooltip>
+                  </div>
+                </div>
               </a-form-item>
               <a-divider orientation="left">同住人</a-divider>
               <a-space direction="vertical" style="width: 100%;">
@@ -116,6 +188,9 @@
                 <a-space>
                   <a-button type="primary" size="large" @click="handleCheckIn" :loading="submitting">
                     <UserAddOutlined /> 确认入住
+                  </a-button>
+                  <a-button v-if="lastCreatedBookingId" type="primary" ghost size="large" @click="openCardModal('issue', { id: lastCreatedBookingId, room_number: selectedRoom?.room_number, guest_name: checkinForm.guest_name })">
+                    <KeyOutlined /> 立即发卡
                   </a-button>
                   <a-button @click="resetCheckinForm">重置</a-button>
                 </a-space>
@@ -180,7 +255,7 @@
                     <a-tag v-else color="default">非会员</a-tag>
                   </template>
                   <template v-if="column.key === 'action'">
-                    <a-button type="link" size="small" @click="fillByBooking(record)">办理入住</a-button>
+                    <a-button type="link" size="small" style="padding: 0;" @click="fillByBooking(record)">办理入住</a-button>
                   </template>
                 </template>
               </a-table>
@@ -190,6 +265,21 @@
       </a-tab-pane>
 
       <a-tab-pane key="checkout" tab="📤 退房办理">
+        <div class="checkout-actions" style="margin-bottom: 16px;">
+          <a-space>
+            <a-popconfirm
+              title="确定要对选中的房间进行批量退房吗？"
+              :disabled="checkoutKeys.length === 0"
+              @confirm="handleBatchCheckout"
+            >
+              <a-button type="primary" :disabled="checkoutKeys.length === 0">批量退房</a-button>
+            </a-popconfirm>
+            <a-button :disabled="checkoutKeys.length !== 1" @click="openCardModal('revoke')">
+              <template #icon><CloseCircleOutlined /></template>
+              收回房卡
+            </a-button>
+          </a-space>
+        </div>
         <a-table
           :columns="checkoutColumns"
           :data-source="currentGuests"
@@ -201,21 +291,111 @@
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'amount'"><strong>¥{{ record.total_amount }}</strong></template>
             <template v-if="column.key === 'action'">
-              <a-popconfirm title="确认办理退房？" @confirm="handleCheckout(record)">
-                <a-button type="primary" size="small">办理退房</a-button>
-              </a-popconfirm>
+              <a-space>
+                <a-popconfirm title="确认办理退房？" @confirm="handleCheckout(record)">
+                  <a-button type="primary" size="small">办理退房</a-button>
+                </a-popconfirm>
+                <a-button type="link" size="small" @click="showIssueCouponModalForPhone(record.phone, record.guest_name)">发券</a-button>
+                <a-dropdown>
+                  <a-button type="link" size="small">
+                    房卡 <DownOutlined />
+                  </a-button>
+                  <template #overlay>
+                    <a-menu>
+                      <a-menu-item key="issue" @click="openCardModal('issue', record)">
+                        <template #icon><KeyOutlined /></template>
+                        发放房卡
+                      </a-menu-item>
+                      <a-menu-item key="revoke" @click="openCardModal('revoke', record)">
+                        <template #icon><CloseCircleOutlined /></template>
+                        收回房卡
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </a-space>
             </template>
           </template>
         </a-table>
       </a-tab-pane>
     </a-tabs>
+
+    <!-- 发放优惠券弹窗 -->
+    <a-modal
+      v-model:open="issueCouponModalVisible"
+      title="发放优惠券"
+      @ok="handleIssueCoupon"
+      :confirmLoading="issuingCoupon"
+      width="400px"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="选择优惠券" required>
+          <a-select v-model:value="selectedIssueCouponId" placeholder="选择要发放的优惠券">
+            <a-select-option v-for="c in allAvailableCoupons" :key="c.id" :value="c.id">
+              {{ c.coupon_name }} ({{ c.coupon_type === 'discount' ? c.discount_value + '折' : '减¥' + c.discount_value }})
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-alert :message="`将发放给：${targetIssueName} (${targetIssuePhone})`" type="info" />
+      </a-form>
+    </a-modal>
+
+    <!-- 房卡管理弹窗 -->
+    <a-modal
+      v-model:open="cardModalVisible"
+      :title="cardOpType === 'issue' ? '发放房卡' : '收回房卡'"
+      @ok="handleCardOp"
+      :confirmLoading="cardOpLoading"
+      width="400px"
+    >
+      <div v-if="selectedGuestForCard" class="card-op-info">
+        <a-descriptions :column="1" size="small" style="margin-bottom: 16px;">
+          <a-descriptions-item label="房间号">{{ selectedGuestForCard.room_number }}</a-descriptions-item>
+          <a-descriptions-item label="住客姓名">{{ selectedGuestForCard.guest_name }}</a-descriptions-item>
+        </a-descriptions>
+
+        <template v-if="cardOpType === 'issue'">
+          <div class="verify-section">
+            <div style="margin-bottom: 8px; font-weight: 500;">安全验证：</div>
+            <a-input-password
+              v-model:value="idLastFour"
+              placeholder="请输入住客证件号后四位"
+              :maxlength="4"
+              size="large"
+            >
+              <template #prefix><SafetyCertificateOutlined /></template>
+            </a-input-password>
+            <div style="margin-top: 8px; color: #8c8c8c; font-size: 12px;">
+              * 为了用卡安全，请务必核对住客身份。支持多次发卡。
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div style="text-align: center; padding: 20px 0;">
+            <p>请将房卡置于前台发卡器上以执行注销。</p>
+            <a-spin v-if="cardOpLoading" tip="正在通信..." />
+          </div>
+        </template>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { UserAddOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import request from '@/api/request'
+import {
+  UserAddOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  CloseCircleOutlined,
+  KeyOutlined,
+  SafetyCertificateOutlined,
+  DownOutlined,
+  InfoCircleOutlined,
+  ControlOutlined
+} from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
 import { bookingApi } from '@/api/booking'
@@ -241,6 +421,53 @@ const companions = ref<any[]>([])
 const roomDetailVisible = ref(false)
 const roomDetail = ref<RoomInfo | null>(null)
 
+// 房卡管理
+const cardModalVisible = ref(false)
+const cardOpLoading = ref(false)
+const cardOpType = ref<'issue' | 'revoke'>('issue')
+const selectedGuestForCard = ref<any>(null)
+const idLastFour = ref('')
+
+function openCardModal(type: 'issue' | 'revoke', record?: any) {
+  if (record) {
+    selectedGuestForCard.value = record
+  } else if (checkoutKeys.value.length === 1) {
+    selectedGuestForCard.value = currentGuests.value.find(g => g.id === checkoutKeys.value[0])
+  }
+
+  if (!selectedGuestForCard.value) return
+
+  cardOpType.value = type
+  idLastFour.value = ''
+  cardModalVisible.value = true
+}
+
+async function handleCardOp() {
+  if (cardOpType.value === 'issue' && !idLastFour.value) {
+    return message.warning('请输入证件后四位进行验证')
+  }
+
+  try {
+    cardOpLoading.value = true
+    const res = await request.post('/devices/room-card', {
+      action: cardOpType.value,
+      booking_id: selectedGuestForCard.value.id,
+      id_last_four: idLastFour.value
+    })
+
+    if (res.data.success) {
+      message.success(cardOpType.value === 'issue' ? '房卡发放指令已下发' : '房卡收回指令已下发')
+      cardModalVisible.value = false
+    } else {
+      message.error(res.data.message || '操作失败')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '设备通信失败')
+  } finally {
+    cardOpLoading.value = false
+  }
+}
+
 function showRoomDetail(room: RoomInfo) {
   roomDetail.value = room
   roomDetailVisible.value = true
@@ -250,7 +477,88 @@ const checkinForm = reactive({
   guest_name: '', phone: '', id_type: 'idcard', id_number: '',
   room_id: undefined as number | undefined, guest_count: 1,
   check_in_date: dayjs(), check_out_date: dayjs().add(2, 'day'),
-  payment_method: 'alipay', remark: ''
+  payment_method: 'alipay', remark: '',
+  coupon_id: undefined as number | undefined,
+  manual_discount: 1.0,
+  manual_reduce: 0
+})
+
+const userCoupons = ref<any[]>([])
+const couponsLoading = ref(false)
+const priceDetailText = ref('')
+
+// 优惠券发放
+const issueCouponModalVisible = ref(false)
+const issuingCoupon = ref(false)
+const allAvailableCoupons = ref<any[]>([])
+const selectedIssueCouponId = ref<number | undefined>(undefined)
+const targetIssuePhone = ref('')
+const targetIssueName = ref('')
+
+async function showIssueCouponModal() {
+  if (!checkinForm.phone || checkinForm.phone.length < 11) {
+    return message.warning('请先输入完整的客人手机号')
+  }
+  showIssueCouponModalForPhone(checkinForm.phone, checkinForm.guest_name)
+}
+
+async function showIssueCouponModalForPhone(phone: string, name: string) {
+  if (!phone || phone.length < 11) {
+    return message.warning('手机号不正确')
+  }
+  targetIssuePhone.value = phone
+  targetIssueName.value = name || '客人'
+
+  try {
+    const res = await request.get('/coupons')
+    allAvailableCoupons.value = res.data.list || []
+    issueCouponModalVisible.value = true
+  } catch (error) {
+    message.error('获取优惠券列表失败')
+  }
+}
+
+async function handleIssueCoupon() {
+  if (!selectedIssueCouponId.value) return message.warning('请选择优惠券')
+
+  try {
+    issuingCoupon.value = true
+    await request.post('/coupons/issue-to-user', {
+      coupon_id: selectedIssueCouponId.value,
+      phone: targetIssuePhone.value
+    })
+    message.success('优惠券发放成功')
+    issueCouponModalVisible.value = false
+    if (targetIssuePhone.value === checkinForm.phone) {
+      fetchUserCoupons(checkinForm.phone) // 刷新当前客人的可用优惠券
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '发放失败')
+  } finally {
+    issuingCoupon.value = false
+  }
+}
+
+async function fetchUserCoupons(phone: string) {
+  if (!phone || phone.length < 11) {
+    userCoupons.value = []
+    return
+  }
+  try {
+    couponsLoading.value = true
+    const res = await request.get('/coupons/me', { params: { phone } })
+    userCoupons.value = res.data || []
+  } catch (error) {
+    console.error('获取用户优惠券失败:', error)
+  } finally {
+    couponsLoading.value = false
+  }
+}
+
+watch(() => checkinForm.phone, (newVal) => {
+  if (newVal && newVal.length === 11) {
+    fetchUserCoupons(newVal)
+  }
 })
 
 const availableRooms = computed(() => hotelStore.getAvailableRooms())
@@ -273,16 +581,34 @@ async function updateEstimatedPrice() {
     estimatedPrice.value = 0
     return
   }
-  
+
   try {
     priceLoading.value = true
     const res: any = await bookingApi.getCalculatedPrice({
       room_id: checkinForm.room_id,
       check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
       check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
-      guest_phone: checkinForm.phone || undefined
+      guest_phone: checkinForm.phone || undefined,
+      coupon_id: checkinForm.coupon_id
     })
-    estimatedPrice.value = res.data?.total_price || 0
+
+    let price = res.data?.total_price || 0
+    let detail = `系统计价: ¥${price.toFixed(2)}`
+
+    // 应用手动折扣
+    if (checkinForm.manual_discount < 1) {
+      price *= checkinForm.manual_discount
+      detail += ` -> 手动${checkinForm.manual_discount * 10}折: ¥${price.toFixed(2)}`
+    }
+
+    // 应用立减
+    if (checkinForm.manual_reduce > 0) {
+      price = Math.max(0, price - checkinForm.manual_reduce)
+      detail += ` -> 立减¥${checkinForm.manual_reduce}: ¥${price.toFixed(2)}`
+    }
+
+    estimatedPrice.value = price
+    priceDetailText.value = detail
   } catch (error) {
     console.error('计算预估价失败:', error)
   } finally {
@@ -303,11 +629,11 @@ const checkoutColumns = [
 ]
 
 const todayBookingColumns = [
-  { title: '客人', dataIndex: 'guest_name', width: 88 },
-  { title: '手机号', dataIndex: 'guest_phone', width: 112 },
-  { title: '房号', dataIndex: 'room_number', width: 62 },
-  { title: '会员等级', key: 'registered', width: 100 },
-  { title: '操作', key: 'action', width: 92 }
+  { title: '客人', dataIndex: 'guest_name', width: 70 },
+  { title: '手机号', dataIndex: 'guest_phone', width: 105 },
+  { title: '房号', dataIndex: 'room_number', width: 50 },
+  { title: '会员', key: 'registered', width: 85 },
+  { title: '操作', key: 'action', width: 65 }
 ]
 
 function normalizePhone(phone: string): string {
@@ -324,11 +650,11 @@ function getMemberByPhone(phone: string): any {
 
 function getLevelName(level: string): string {
   const levels: Record<string, string> = {
-    'diamond': '💎 钻石会员',
-    'platinum': '🥈 铂金会员',
-    'gold': '🥇 金卡会员',
-    'silver': '🥈 银卡会员',
-    'standard': '👤 普通会员'
+    'diamond': '钻石',
+    'platinum': '铂金',
+    'gold': '金卡',
+    'silver': '银卡',
+    'standard': '普通'
   }
   return levels[level] || '已注册'
 }
@@ -433,6 +759,8 @@ function checkInSelectedBooking() {
   fillByBooking(booking)
 }
 
+const lastCreatedBookingId = ref<number | null>(null)
+
 async function handleCheckIn() {
   if (!checkinForm.guest_name || !checkinForm.phone || !checkinForm.room_id) {
     message.warning('请填写必填项'); return
@@ -445,11 +773,19 @@ async function handleCheckIn() {
       check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
       status: 'checked_in',
       guest_phone: checkinForm.phone,
+      total_price: estimatedPrice.value, // 使用计算后的价格
       companions: companions.value.filter(item => item.name || item.phone || item.id_number)
     }
-    await bookingApi.createBooking(payload)
+    const res: any = await bookingApi.createBooking(payload)
+    lastCreatedBookingId.value = res.data?.id
     message.success(`入住成功！${checkinForm.guest_name} 已分配房间`)
-    resetCheckinForm()
+    // 自动打开对应房号的发卡弹窗
+    openCardModal('issue', {
+      id: res.data?.id,
+      room_number: selectedRoom.value?.room_number,
+      guest_name: checkinForm.guest_name
+    })
+
     await Promise.all([
       fetchCurrentGuests(),
       fetchTodayBookings(),
@@ -485,6 +821,23 @@ async function handleCheckout(record: any) {
   }
 }
 
+async function handleBatchCheckout() {
+  if (checkoutKeys.value.length === 0) return
+  try {
+    await Promise.all(
+      checkoutKeys.value.map(id => bookingApi.updateBookingStatus(id, 'checked_out'))
+    )
+    message.success(`批量退房成功，共 ${checkoutKeys.value.length} 间房`)
+    checkoutKeys.value = []
+    await Promise.all([
+      fetchCurrentGuests(),
+      hotelStore.fetchRooms({ pageSize: 300 })
+    ])
+  } catch (error) {
+    message.error('批量退房失败')
+  }
+}
+
 async function fillByBookingId() {
   const bookingId = Number(route.query.booking_id || 0)
   if (!bookingId) return
@@ -499,7 +852,10 @@ async function fillByBookingId() {
 
 onMounted(async () => {
   try {
-    await hotelStore.fetchRooms({ pageSize: 300 })
+    await Promise.allSettled([
+      hotelStore.fetchHotelInfo(),
+      hotelStore.fetchRooms({ pageSize: 300 })
+    ])
   } catch (error) {}
   await Promise.allSettled([
     fetchMemberList(),
@@ -591,6 +947,123 @@ onMounted(async () => {
 .room-detail-modal-content {
   padding: 8px 0;
 }
+
+.card-op-info {
+  padding: 8px;
+}
+
+.verify-section {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.checkout-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.reception-center {
+  padding: 0;
+}
+
+.reception-header-logo {
+  background: #fff;
+  padding: 32px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+}
+
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.logo-icon {
+  background: linear-gradient(135deg, #1890ff, #0050b3);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  letter-spacing: 1px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(24, 144, 255, 0.25);
+}
+
+.logo-fallback {
+  font-family: 'Arial Black', Gadget, sans-serif;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+  background: #fff;
+}
+
+.logo-fallback {
+  position: absolute;
+  z-index: 0;
+}
+
+.header-divider {
+  width: 1px;
+  height: 48px;
+  background: #f0f0f0;
+  margin: 0 24px;
+}
+
+.hotel-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hotel-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hotel-id {
+  font-size: 13px;
+  color: #8c8c8c;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.main-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1a1a1a;
+  line-height: 1.2;
+  letter-spacing: 1px;
+}
+
+.sub-title {
+  font-size: 11px;
+  color: #bfbfbf;
+  letter-spacing: 3px;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
 .selected-room-card {
   border: 1px dashed #d9d9d9;
 }
@@ -615,5 +1088,17 @@ onMounted(async () => {
   min-width: 80px;
   display: flex;
   justify-content: flex-end;
+}
+
+.price-display {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.price-detail {
+  font-size: 12px;
+  color: #8c8c8c;
+  cursor: help;
 }
 </style>

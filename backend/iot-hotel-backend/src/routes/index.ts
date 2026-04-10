@@ -21,6 +21,7 @@ import frequentGuestRouter from './v1/frequent-guests';
 import healthRouter from './v1/health';
 import aiButlerRouter from './v1/ai-butler';
 import priceCalendarRouter from './v1/price-calendar';
+import systemConfigRouter from './v1/system-config';
 
 const router = Router();
 
@@ -46,5 +47,6 @@ router.use('/frequent-guests', frequentGuestRouter);
 router.use('/health', healthRouter);
 router.use('/ai-butler', aiButlerRouter);
 router.use('/price-calendar', priceCalendarRouter);
+router.use('/system-config', systemConfigRouter);
 
 export default router;

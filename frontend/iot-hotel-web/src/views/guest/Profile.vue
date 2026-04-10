@@ -15,14 +15,14 @@
           <div class="card-inner">
             <div class="card-top">
               <div class="hotel-info">
-                <div class="hotel-logo">IOT</div>
+                <div class="hotel-logo">{{ memberProgramName }}</div>
                 <div class="hotel-brand">SMART HOTEL</div>
               </div>
               <div class="member-badge-new">
                 <span class="level-text">{{ memberLevelInfo.label }}</span>
               </div>
             </div>
-            
+
             <div class="user-info-section">
               <div class="user-name-row">
                 <div class="user-avatar-wrapper" @click="handleAvatarClick">
@@ -38,11 +38,11 @@
                   <div class="user-phone-row">{{ userInfo.phone }}</div>
                 </div>
                 <div class="checkin-btn-wrapper">
-                  <a-button 
-                    v-if="!hasCheckedInToday" 
-                    type="primary" 
-                    shape="round" 
-                    class="premium-checkin-btn" 
+                  <a-button
+                    v-if="!hasCheckedInToday"
+                    type="primary"
+                    shape="round"
+                    class="premium-checkin-btn"
                     @click="handleCheckin"
                     :loading="checkinLoading"
                   >
@@ -181,17 +181,17 @@
                   <div v-else class="edit-row-vertical">
                     <div class="phone-input-group">
                       <a-input v-model:value="profileForm.phone" placeholder="请输入新手机号" />
-                      <a-button 
-                        :disabled="countdown > 0 || !profileForm.phone" 
+                      <a-button
+                        :disabled="countdown > 0 || !profileForm.phone"
                         @click="handleSendCode"
                         class="send-code-btn"
                       >
                         {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
                       </a-button>
                     </div>
-                    <a-input 
-                      v-model:value="profileForm.code" 
-                      placeholder="请输入验证码" 
+                    <a-input
+                      v-model:value="profileForm.code"
+                      placeholder="请输入验证码"
                       class="mt-2"
                     />
                     <div class="edit-actions mt-2">
@@ -246,7 +246,10 @@
           </a-tab-pane>
 
           <!-- 优惠券 -->
-          <a-tab-pane key="coupons" tab="优惠券">
+          <a-tab-pane key="coupons">
+            <template #tab>
+              <span><TagOutlined /> 优惠券</span>
+            </template>
             <div class="coupons-section">
               <!-- 导入券码 -->
               <div class="coupon-import-bar">
@@ -267,7 +270,7 @@
                 <div v-for="coupon in myCoupons" :key="coupon.id" class="coupon-card">
                   <div class="coupon-left">
                     <div class="coupon-value">
-                      <span v-if="coupon.coupon_type === 'discount'" class="val">{{ coupon.discount_value * 10 }}折</span>
+                      <span v-if="coupon.coupon_type === 'discount'" class="val">{{ Number(coupon.discount_value) }}折</span>
                       <span v-else class="val"><span class="unit">¥</span>{{ coupon.discount_value }}</span>
                     </div>
                     <div class="coupon-condition">满{{ coupon.min_amount }}可用</div>
@@ -361,6 +364,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -382,9 +386,11 @@ import {
 import { useAppStore } from '@/stores/app'
 import { userApi } from '@/api/user'
 import request from '@/api/request'
+import { systemConfigApi } from '@/api/system-config'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import dayjs from 'dayjs'
 
+const router = useRouter()
 const appStore = useAppStore()
 const userInfo = computed(() => appStore.userInfo || {})
 const avatarInput = ref<HTMLInputElement | null>(null)
@@ -422,13 +428,13 @@ const onAvatarChange = async (e: Event) => {
 
     // 2. 更新用户资料
     await userApi.updateProfile({ avatar: imageUrl })
-    
+
     // 3. 更新全局状态
     appStore.setUserInfo({
       ...appStore.userInfo,
       avatar: imageUrl
     })
-    
+
     message.success('头像更新成功')
   } catch (error) {
     console.error('更新头像失败:', error)
@@ -452,6 +458,7 @@ const memberLevelInfo = computed(() => {
 
 // 会员与资产信息
 const memberInfo = ref<any>({})
+const memberProgramName = ref('IOT')
 const loading = ref(false)
 const myCoupons = ref<any[]>([])
 const checkinLoading = ref(false)
@@ -460,7 +467,7 @@ const importLoading = ref(false)
 
 const handleImportCoupon = async () => {
   if (!couponCodeInput.value.trim()) return message.warning('请输入券码')
-  
+
   try {
     importLoading.value = true
     await request.post('/coupons/import', { coupon_code: couponCodeInput.value.trim() })
@@ -540,7 +547,7 @@ const handleSendCode = async () => {
   if (!/^1[3-9]\d{9}$/.test(profileForm.phone)) {
     return message.warning('请输入正确的手机号')
   }
-  
+
   try {
     await userApi.sendCode(profileForm.phone)
     message.success('验证码已发送 (模拟)')
@@ -581,24 +588,39 @@ const maskId = (id: string) => {
 
 // 初始化数据
 const fetchData = async () => {
-  if (!appStore.userInfo) return
-  
+  if (!appStore.userInfo) {
+    message.warning('请先登录')
+    appStore.showLoginModal = true
+    router.push('/guest/booking')
+    return
+  }
+
   try {
     loading.value = true
     // 获取会员资产信息
     const res = await request.get('/members/me')
     console.log('Member Info Response:', res.data)
     memberInfo.value = res.data
-    
+
+    // 获取系统配置
+    try {
+      const configRes = await systemConfigApi.getConfig('member_program_name')
+      if (configRes.data) {
+        memberProgramName.value = configRes.data
+      }
+    } catch (e) {
+      console.error('获取会员计划名称失败:', e)
+    }
+
     // 获取我的优惠券
     const couponRes = await request.get('/coupons/me')
     myCoupons.value = couponRes.data || []
-    
+
     // 初始化个人资料表单
     profileForm.username = appStore.userInfo.username
     profileForm.phone = appStore.userInfo.phone
     profileForm.email = appStore.userInfo.email || ''
-    
+
     // 获取常用入住人
     fetchFrequentGuests()
   } catch (error) {
@@ -626,7 +648,7 @@ const handleUpdateProfile = async () => {
   if (editingField.value === 'phone' && (!profileForm.phone || !profileForm.code)) {
     return message.warning('请填写新手机号和验证码')
   }
-  
+
   try {
     saving.value = true
     const updateData: any = {}
@@ -637,8 +659,8 @@ const handleUpdateProfile = async () => {
       updateData.code = profileForm.code
     }
 
-    const res = await userApi.updateProfile(updateData)
-    
+    const res: any = await userApi.updateProfile(updateData)
+
     if (res.data?.user) {
       appStore.setUserInfo({
         ...appStore.userInfo,
@@ -659,7 +681,7 @@ const handleUpdatePassword = async () => {
   if (!profileForm.oldPassword || !profileForm.newPassword) return message.warning('请输入完整密码信息')
   if (profileForm.newPassword !== profileForm.confirmPassword) return message.warning('两次输入的新密码不一致')
   if (profileForm.newPassword.length < 6) return message.warning('新密码长度不能少于6位')
-  
+
   try {
     saving.value = true
     await userApi.updatePassword(appStore.userInfo.id, {
@@ -696,7 +718,7 @@ const handleSaveFrequentGuest = async () => {
   if (!guestEditForm.name || !guestEditForm.phone || !guestEditForm.id_number) {
     return message.warning('请填写完整信息')
   }
-  
+
   try {
     guestSaveLoading.value = true
     if (guestEditForm.id) {
@@ -778,11 +800,16 @@ onMounted(() => {
 }
 
 .hotel-logo {
-  font-family: 'Copperplate', serif;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 2px;
+  font-family: 'Playfair Display', 'Optima', 'Palatino', serif;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 3px;
   line-height: 1;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #fff, #f9e29c);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .hotel-brand {
@@ -1322,7 +1349,7 @@ onMounted(() => {
   .profile-content {
     grid-template-columns: 1fr;
   }
-  
+
   .profile-left {
     max-width: 500px;
     margin: 0 auto 32px;
