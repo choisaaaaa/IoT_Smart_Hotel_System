@@ -22,9 +22,15 @@
           <template #icon><DashboardOutlined /></template>
           <span>前台总览</span>
         </a-menu-item>
-        <a-menu-item key="/reception/checkinout">
-          <template #icon><LoginOutlined /></template>
-          <span>入住退房</span>
+        <a-menu-item key="/reception/reception-center">
+          <template #icon>
+            <span style="font-size: 12px;">🛎️</span>
+          </template>
+          <span>接待中心</span>
+        </a-menu-item>
+        <a-menu-item key="/reception/device-management">
+          <template #icon><ControlOutlined /></template>
+          <span>主控设备管理</span>
         </a-menu-item>
         <a-menu-item key="/reception/bookings">
           <template #icon><CalendarOutlined /></template>
@@ -82,7 +88,10 @@
           <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
           <a-dropdown>
             <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <a-avatar style="background-color: #1890ff;">前</a-avatar>
+              <a-avatar :src="appStore.userInfo?.avatar" style="background-color: #1890ff;">
+                <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
+                {{ !appStore.userInfo?.avatar ? appStore.userInfo?.username?.charAt(0) : '' }}
+              </a-avatar>
               <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
             </span>
             <template #overlay>
@@ -117,6 +126,7 @@ import {
   BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
@@ -124,6 +134,7 @@ import { deliveryApi } from '@/api/delivery'
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
 
 // 初始化用户信息
 appStore.initUserInfo()
@@ -142,9 +153,15 @@ function handleMenuClick({ key }: { key: string }) {
   router.push(key)
 }
 
+onMounted(async () => {
+  try {
+    await hotelStore.fetchHotelInfo()
+  } catch (error) {}
+})
+
 async function handleLogout() {
   await authService.logout()
-  router.push('/login')
+  router.push('/guest/booking')
 }
 
 async function loadPending() {

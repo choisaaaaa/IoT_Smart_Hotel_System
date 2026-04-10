@@ -20,8 +20,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'SystemDashboard',
-        component: () => import('@/views/admin/Dashboard.vue'), // 复用 Dashboard
-        meta: { title: '系统概览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['system'] }
+        component: () => import('@/views/system/GlobalDashboard.vue'),
+        meta: { title: '集团运营总览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['system'] }
       },
       {
         path: 'hotels',
@@ -40,6 +40,12 @@ const routes: RouteRecordRaw[] = [
         name: 'SystemUserManagement',
         component: () => import('@/views/system/UserManagement.vue'),
         meta: { title: '账户管理', icon: 'UserOutlined', requiresAuth: true, roles: ['system'] }
+      },
+      {
+        path: 'settings',
+        name: 'SystemSettings',
+        component: () => import('@/views/system/SystemSettings.vue'),
+        meta: { title: '系统配置', icon: 'SettingOutlined', requiresAuth: true, roles: ['system'] }
       }
     ]
   },
@@ -137,10 +143,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '前台总览', icon: 'DashboardOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
-        path: 'checkinout',
-        name: 'CheckInOut',
+        path: 'reception-center',
+        name: 'ReceptionCenter',
         component: () => import('@/views/reception/CheckInOut.vue'),
-        meta: { title: '入住退房', icon: 'LoginOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
+        meta: { title: '接待中心', icon: 'UserOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
+      },
+      {
+        path: 'device-management',
+        name: 'DeviceManagement',
+        component: () => import('@/views/reception/DeviceManagement.vue'),
+        meta: { title: '主控设备管理', icon: 'ControlOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'bookings',
@@ -294,10 +306,18 @@ router.beforeEach((to, from, next) => {
 
   // 需要认证但未登录，重定向到首页并开启登录弹窗
   if (!token || !userInfo) {
-    next({
-      path: '/guest/booking',
-      query: { login: '1', redirect: to.fullPath }
-    })
+    if (to.path.startsWith('/guest/')) {
+      next({
+        path: '/guest/booking',
+        query: { login: '1', redirect: to.fullPath }
+      })
+    } else {
+      // 管理端如果未登录，也回到首页弹窗
+      next({
+        path: '/guest/booking',
+        query: { login: '1', redirect: to.fullPath }
+      })
+    }
     return
   }
 

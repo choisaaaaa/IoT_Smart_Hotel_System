@@ -4,7 +4,7 @@
     <a-card title="优惠券管理" :bordered="false">
       <template #extra>
         <a-button type="primary" @click="showAddModal">
-          <PlusOutlined /> 发放优惠券
+          <PlusOutlined /> 新增优惠券
         </a-button>
       </template>
 
@@ -23,15 +23,35 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
-              <a @click="editCoupon(record)">编辑</a>
+              <a-button type="link" size="small" @click="showDirectIssueModal(record)">发放给用户</a-button>
+              <a-button type="link" size="small" @click="editCoupon(record)">编辑</a-button>
               <a-popconfirm title="确定删除此优惠券吗？" @confirm="deleteCoupon(record.id)">
-                <a class="text-danger">删除</a>
+                <a-button type="link" danger size="small">删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
+
+    <!-- 直接发放给用户弹窗 -->
+    <a-modal
+      v-model:open="directIssueVisible"
+      title="直接发放优惠券"
+      @ok="handleDirectIssue"
+      :confirmLoading="directIssueLoading"
+      width="400px"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="优惠券" required>
+          <a-input :value="selectedCouponForIssue?.coupon_name" disabled />
+        </a-form-item>
+        <a-form-item label="用户手机号" required>
+          <a-input v-model:value="directIssuePhone" placeholder="请输入用户手机号" />
+        </a-form-item>
+        <a-alert message="发放后用户可在其个人中心查看到该券" type="info" show-icon />
+      </a-form>
+    </a-modal>
 
     <!-- 添加/编辑弹窗 -->
     <a-modal
@@ -109,6 +129,37 @@ const modalVisible = ref(false)
 const submitLoading = ref(false)
 const editingId = ref<number | null>(null)
 const validRange = ref<any[]>([])
+
+// 直接发放相关
+const directIssueVisible = ref(false)
+const directIssueLoading = ref(false)
+const directIssuePhone = ref('')
+const selectedCouponForIssue = ref<any>(null)
+
+const showDirectIssueModal = (record: any) => {
+  selectedCouponForIssue.value = record
+  directIssuePhone.value = ''
+  directIssueVisible.value = true
+}
+
+const handleDirectIssue = async () => {
+  if (!directIssuePhone.value) return message.warning('请输入手机号')
+
+  directIssueLoading.value = true
+  try {
+    await request.post('/coupons/issue-to-user', {
+      coupon_id: selectedCouponForIssue.value.id,
+      phone: directIssuePhone.value
+    })
+    message.success('发放成功')
+    directIssueVisible.value = false
+    fetchCoupons()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '发放失败')
+  } finally {
+    directIssueLoading.value = false
+  }
+}
 
 const formState = reactive({
   coupon_name: '',

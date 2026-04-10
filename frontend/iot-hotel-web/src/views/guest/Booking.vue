@@ -380,7 +380,7 @@
                 @change="handleCouponChange"
               >
                 <a-select-option v-for="coupon in availableCoupons" :key="coupon.id" :value="coupon.id">
-                  {{ coupon.coupon_name }} ({{ coupon.coupon_type === 'discount' ? coupon.discount_value * 10 + '折' : '减¥' + coupon.discount_value }}) - 满{{ coupon.min_amount }}可用
+                  {{ coupon.coupon_name }} ({{ coupon.coupon_type === 'discount' ? coupon.discount_value + '折' : '减¥' + coupon.discount_value }}) - 满{{ coupon.min_amount }}可用
                 </a-select-option>
               </a-select>
               <div v-if="availableCoupons.length === 0" class="empty-tip">
@@ -571,7 +571,9 @@ const couponDiscountAmount = computed(() => {
   if (!selectedCoupon.value) return 0
   const priceAfterMemberDiscount = Math.floor(originalPrice.value * memberDiscount.value * 100) / 100
   if (selectedCoupon.value.coupon_type === 'discount') {
-    return Math.floor(priceAfterMemberDiscount * (1 - selectedCoupon.value.discount_value) * 100) / 100
+    // discount_value 为 8.5 表示 8.5 折，即价格乘以 0.85
+    const multiplier = Number(selectedCoupon.value.discount_value) / 10
+    return Math.floor(priceAfterMemberDiscount * (1 - multiplier) * 100) / 100
   } else {
     return Math.min(priceAfterMemberDiscount, selectedCoupon.value.discount_value)
   }
@@ -619,7 +621,7 @@ const memberDiscountRate = ref(1)
 
 const updateCalculatedPrice = async () => {
   if (!selectedRoom.value || !dateRange.value || dateRange.value.length < 2) return
-  
+
   try {
     const res = await request.get('/bookings/calculate-price', {
       params: {
@@ -719,9 +721,15 @@ const selectHotel = async (hotel: any) => {
 }
 
 const selectRoom = (room: any) => {
+  if (!appStore.userInfo) {
+    message.info('请先登录后再进行预订')
+    appStore.showLoginModal = true
+    return
+  }
   selectedRoom.value = room
   currentStep.value = 3
   updateCalculatedPrice()
+  fetchFrequentGuests()
 }
 
 const fetchFrequentGuests = async () => {
@@ -818,7 +826,7 @@ const submitBooking = async () => {
       guest_count: searchForm.guests,
       special_requests: bookingForm.remark,
       payment_method: paymentMethod.value,
-      coupon_id: selectedCouponId.value,
+      coupon_id: selectedCouponId.value || undefined,
       status: 'pending'
     })
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
@@ -841,6 +849,15 @@ const resetAll = () => {
 
 onMounted(() => {
   searchHotels(false)
+  if (appStore.userInfo) {
+    fetchFrequentGuests()
+  }
+})
+
+watch(() => appStore.userInfo, (newVal) => {
+  if (newVal) {
+    fetchFrequentGuests()
+  }
 })
 </script>
 

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { AuthRequest } from '../types';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import { hashPassword, comparePassword } from '../utils/password';
+import { normalizeRole } from '../utils/role';
 import db from '../config/database';
 
 const router = Router();
@@ -21,7 +22,7 @@ export async function list(req: AuthRequest, res: Response) {
     const l = Math.max(1, parseInt(limit as string) || 10);
     const offset = (p - 1) * l;
 
-    let sql = `SELECT u.id, u.username, u.email, u.role, u.hotel_id, u.created_at,
+    let sql = `SELECT u.id, u.username, u.phone, u.email, u.role, u.hotel_id, u.created_at,
                 h.hotel_name
                 FROM users u
                 LEFT JOIN hotels h ON u.hotel_id = h.id`;
@@ -31,15 +32,17 @@ export async function list(req: AuthRequest, res: Response) {
     const conditions: string[] = [];
     const params: any[] = [];
 
-    // 权限过滤逻辑
-    if (currentUser.role === 'admin' || currentUser.role === 'staff') {
-      // Admin 和 Staff 只能看到自己门店的用户
+    // 权限隔离：非系统管理员只能查看自己酒店的员工，且不能查看普通用户 (user 角色)
+    const userRole = normalizeRole(currentUser.role);
+    if (userRole === 'admin' || userRole === 'staff' || userRole === 'manager') {
       conditions.push('u.hotel_id = ?');
       params.push(currentUser.hotel_id);
+      // 门店管理人员不能看到普通用户
+      conditions.push("u.role NOT IN ('user')");
       // 不能看到 system 用户
       conditions.push('u.role != ?');
       params.push('system');
-    } else if (currentUser.role === 'system') {
+    } else if (userRole === 'system') {
       // System 可以看到所有用户，也可以按门店过滤
       if (hotel_id && hotel_id !== 'undefined') {
         conditions.push('u.hotel_id = ?');
@@ -50,8 +53,8 @@ export async function list(req: AuthRequest, res: Response) {
     }
 
     if (keyword) {
-      conditions.push('(u.username LIKE ? OR u.email LIKE ?)');
-      params.push(`%${keyword}%`, `%${keyword}%`);
+      conditions.push('(u.username LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     if (role) {
@@ -111,7 +114,7 @@ export async function detail(req: AuthRequest, res: Response) {
 // 创建用户
 export async function create(req: AuthRequest, res: Response) {
   try {
-    const { username, password, email, role, hotel_id } = req.body;
+    const { username, password, email, phone, role, hotel_id } = req.body;
     const currentUser = req.user;
 
     if (!currentUser) {
@@ -154,8 +157,8 @@ export async function create(req: AuthRequest, res: Response) {
     const hashedPassword = await hashPassword(password);
 
     const [result]: any = await db.execute(
-      'INSERT INTO users (username, password, email, role, hotel_id) VALUES (?, ?, ?, ?, ?)',
-      [username, hashedPassword, email || null, finalRole, finalHotelId || 0]
+      'INSERT INTO users (username, password, email, phone, role, hotel_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, hashedPassword, email || null, phone || null, finalRole, finalHotelId || 0]
     );
 
     const userId = result.insertId;
@@ -171,7 +174,7 @@ export async function create(req: AuthRequest, res: Response) {
 export async function update(req: AuthRequest, res: Response) {
   try {
     const { id: userId } = req.params;
-    const { email, role, hotel_id, password } = req.body;
+    const { email, phone, role, hotel_id, password } = req.body;
     const currentUser = req.user;
 
     if (!currentUser) {
@@ -212,17 +215,23 @@ export async function update(req: AuthRequest, res: Response) {
     }
 
     // 更新用户基本信息
-    let updateSql = 'UPDATE users SET email = ?, role = ?, hotel_id = ?';
-    const params = [email || targetUser.email, finalRole, finalHotelId, userId];
+    let updateFields = ['email = ?', 'phone = ?', 'role = ?', 'hotel_id = ?', 'avatar = ?'];
+    const params = [
+      email || targetUser.email,
+      phone || targetUser.phone,
+      finalRole,
+      finalHotelId,
+      req.body.avatar || targetUser.avatar
+    ];
 
     if (password) {
+      updateFields.push('password = ?');
       const hashedPassword = await hashPassword(password);
-      updateSql += ', password = ?';
-      params.splice(3, 0, hashedPassword);
+      params.push(hashedPassword);
     }
 
-    updateSql += ' WHERE id = ?';
-
+    params.push(userId);
+    const updateSql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
     await db.execute(updateSql, params);
 
     sendSuccess(res, { message: '用户信息更新成功' });

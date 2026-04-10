@@ -182,9 +182,13 @@ const callStartTime = ref<number | null>(null)
 // 组合可呼叫目标
 const callableTargets = computed(() => {
   const list: any[] = []
-  
+
   // 1. 添加房间
   hotelStore.rooms.forEach(room => {
+    // 隔离：只能看到本店房间
+    if (appStore.userInfo?.role !== 'system' && room.hotel_id !== appStore.userInfo?.hotel_id) {
+      return
+    }
     const isOnline = onlineStatus.value.rooms.some((r: any) => r.id === String(room.room_number))
     list.push({
       id: room.id,
@@ -196,13 +200,18 @@ const callableTargets = computed(() => {
       isOnline
     })
   })
-  
-  // 2. 添加员工 (过滤掉自己)
+
+  // 2. 添加员工 (过滤掉自己并过滤掉 user 角色)
   console.log('[VoiceCalls] 当前用户:', appStore.userInfo?.username)
   console.log('[VoiceCalls] 用户列表:', users.value)
   users.value.forEach(user => {
-    console.log('[VoiceCalls] 检查用户:', user.username, '当前用户:', appStore.userInfo?.username)
-    if (user.username !== appStore.userInfo?.username) {
+    console.log('[VoiceCalls] 检查用户:', user.username, '角色:', user.role)
+    // 隔离：只能看到本店员工 (除非是系统管理员)，且不能看到角色为 user 的用户
+    const isSameHotel = appStore.userInfo?.role === 'system' || user.hotel_id === appStore.userInfo?.hotel_id
+    const isNotSelf = user.username !== appStore.userInfo?.username
+    const isNotUserRole = user.role !== 'user'
+
+    if (isNotSelf && isSameHotel && isNotUserRole) {
       const isOnline = onlineStatus.value.web.some((w: any) => w.id === user.username)
       list.push({
         id: user.id,
@@ -213,11 +222,9 @@ const callableTargets = computed(() => {
         status: 'available',
         isOnline
       })
-    } else {
-      console.log('[VoiceCalls] 过滤掉自己:', user.username)
     }
   })
-  
+
   console.log('[VoiceCalls] 可呼叫目标:', list.length, '个')
   return list.sort((a, b) => a.name.localeCompare(b.name))
 })
@@ -268,7 +275,7 @@ function handleCardClick(target: any) {
     })
     return
   }
-  
+
   outgoingCallModal.targetId = target.clientId
   outgoingCallModal.targetName = target.name
   startCall(target)
@@ -288,11 +295,11 @@ async function startCall(target: any) {
       callee_id: target.clientId,
       caller_type: 'front_desk'
     })
-    
+
     const callData = (res as any).data
     outgoingCallModal.callId = callData.call_id
     outgoingCallModal.visible = true
-    
+
     // 设置全局当前通话，让悬浮窗显示
     appStore.setCurrentCall({
       call_id: callData.call_id,
@@ -303,9 +310,9 @@ async function startCall(target: any) {
       caller_name: target.name,
       status: 'calling'
     })
-    
+
     console.log('[VoiceCalls] 等待对方接听，全局通话已设置')
-    
+
     await fetchCalls()
   } catch (error) {
     message.error('发起呼叫失败')
@@ -366,7 +373,7 @@ async function toggleRegister() {
     message.error('WebSocket 连接中...')
     return
   }
-  
+
   if (appStore.isRegistered) {
     // 注销
     appStore.setRegistration(false, '')
@@ -390,13 +397,13 @@ const handleOnlineStatus = (data: any) => {
 
 const handleCallAnswered = (data: any) => {
   console.log('[VoiceCalls] 收到call_answered:', data)
-  
+
   // 处理外呼通话
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
     message.success('对方已接听')
   }
-  
+
   // 更新全局通话状态为已连接（包括来电）
   if (appStore.currentCall?.call_id === data.call_id) {
     appStore.setCurrentCall({
@@ -407,7 +414,7 @@ const handleCallAnswered = (data: any) => {
     startCallDurationTimer()
     message.success('通话已连接')
   }
-  
+
   fetchCalls()
 }
 
@@ -435,7 +442,7 @@ const handleCallHungup = (data: any) => {
 // 处理来电（包括AI转接）
 const handleIncomingCall = (data: any) => {
   console.log('[VoiceCalls] 收到来电:', data)
-  
+
   // 设置来电信息
   appStore.setIncomingCall({
     call_id: data.call_id,
@@ -447,7 +454,7 @@ const handleIncomingCall = (data: any) => {
     isTransfer: data.isTransfer,
     transferReason: data.transferReason
   })
-  
+
   // 显示来电提醒
   if (data.isTransfer) {
     message.info(`AI管家转接: ${data.transferReason || '客人要求转人工'}`)
@@ -475,15 +482,15 @@ function setupSignalingListeners() {
 
 onMounted(async () => {
   await Promise.all([fetchCalls(), fetchUsers(), hotelStore.fetchRooms({ pageSize: 300 }), fetchStats()])
-  
+
   const socket = initWebSocket()
   if (socket) {
     setupSignalingListeners()
-    
+
     socket.on('connect', () => {
       socket.emit('get_online_status')
     })
-    
+
     if (socket.connected) {
       socket.emit('get_online_status')
     }

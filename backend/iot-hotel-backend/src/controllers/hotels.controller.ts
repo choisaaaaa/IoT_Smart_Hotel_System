@@ -126,7 +126,7 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         r.max_guests,
         r.room_status,
         r.facilities,
-        r.images as image_url,
+        COALESCE(r.images, rt_meta.images) as images,
         rt.available_count
       FROM rooms r
       INNER JOIN (
@@ -135,37 +135,43 @@ export async function roomAvailability(req: AuthRequest, res: Response) {
         WHERE hotel_id = ? AND room_status = 'available'
         GROUP BY room_type
       ) rt ON rt.room_type = r.room_type
-      WHERE r.hotel_id = ? AND r.room_status = 'available'
+      LEFT JOIN (
+        SELECT *, ROW_NUMBER() OVER(PARTITION BY code ORDER BY hotel_id DESC) as rn
+        FROM room_types
+        WHERE hotel_id = ? OR hotel_id = 0
+      ) rt_meta ON r.room_type = rt_meta.code
+      WHERE r.hotel_id = ? AND r.room_status = 'available' AND (rt_meta.rn = 1 OR rt_meta.rn IS NULL)
       GROUP BY r.room_type, r.id
     `;
 
-    const [rooms]: any = await db.execute(sql, [hotelId, hotelId]);
+    const [rooms]: any = await db.execute(sql, [hotelId, hotelId, hotelId]);
 
     sendSuccess(res, {
       rooms: rooms.map((r: any) => {
         const facilities = parseFacilities(r.facilities);
+        const images = parseFacilities(r.images);
         return ({
-        id: r.id,
-        room_number: r.room_number,
-        room_name: r.room_name,
-        room_type: r.room_type,
-        room_price: r.room_price,
-        floor: r.floor,
-        area: r.area,
-        bed_type: r.bed_type,
-        max_guests: r.max_guests,
-        room_status: r.room_status,
-        facilities,
-        image: r.image_url || '/room-placeholder.jpg',
-        available_count: r.available_count || 0,
-        name: r.room_name,
-        description: `${r.room_type} · ${r.floor}楼`,
-        bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
-        maxGuests: r.max_guests,
-        hasBreakfast: facilities.some((item) => item.includes('早餐')),
-        freeCancel: facilities.some((item) => item.includes('免费取消')),
-        hasWifi: facilities.some((item) => /wifi/i.test(item))
-      });
+          id: r.id,
+          room_number: r.room_number,
+          room_name: r.room_name,
+          room_type: r.room_type,
+          room_price: r.room_price,
+          floor: r.floor,
+          area: r.area,
+          bed_type: r.bed_type,
+          max_guests: r.max_guests,
+          room_status: r.room_status,
+          facilities,
+          image: images.length > 0 ? images[0] : '/room-placeholder.jpg',
+          available_count: r.available_count || 0,
+          name: r.room_name,
+          description: `${r.room_type} · ${r.floor}楼`,
+          bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
+          maxGuests: r.max_guests,
+          hasBreakfast: facilities.some((item) => item.includes('早餐')),
+          freeCancel: facilities.some((item) => item.includes('免费取消')),
+          hasWifi: facilities.some((item) => /wifi/i.test(item))
+        });
       })
     });
   } catch (error) {

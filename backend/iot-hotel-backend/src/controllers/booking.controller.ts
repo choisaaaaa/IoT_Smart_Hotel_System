@@ -63,7 +63,7 @@ async function calculateBookingPrice(connection: PoolConnection, roomId: number,
       'SELECT final_price FROM room_prices WHERE room_type_id = ? AND price_date = ?',
       [room.room_type_id, dateStr]
     );
-    
+
     if (priceRows.length > 0) {
       totalPrice += Number(priceRows[0].final_price);
     } else {
@@ -86,8 +86,8 @@ async function calculateBookingPrice(connection: PoolConnection, roomId: number,
   // 3. 应用优惠券
   if (couponId && memberId) {
     const [couponRows] = await connection.query<RowDataPacket[]>(
-      `SELECT c.* FROM member_coupons mc 
-       JOIN coupons c ON mc.coupon_id = c.id 
+      `SELECT c.* FROM member_coupons mc
+       JOIN coupons c ON mc.coupon_id = c.id
        WHERE mc.id = ? AND mc.member_id = ? AND mc.status = 'unused' AND c.valid_to >= CURDATE()`,
       [couponId, memberId]
     );
@@ -238,11 +238,11 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     // 使用辅助函数计算最终价格 (集成价格日历、会员折扣、优惠券)
     const { totalPrice, discountRate } = await calculateBookingPrice(
-      connection, 
-      room_id, 
-      check_in_date, 
-      check_out_date, 
-      phone, 
+      connection,
+      room_id,
+      check_in_date,
+      check_out_date,
+      phone,
       coupon_id
     );
 
@@ -265,9 +265,10 @@ export const create = async (req: AuthRequest, res: Response) => {
     // 如果是直接办理入住，插入到 guests 表
     if (bookingStatus === 'checked_in') {
       await connection.query(
-        `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [bookingId, guest_name, guest_phone, guest_id_number || null, room_id]
+        `INSERT INTO guests (booking_id, hotel_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
+        [bookingId, hotelId, guest_name, guest_phone, guest_id_number || null, room_id]
       );
 
       // 同步更新房间状态为“在住”
@@ -383,9 +384,10 @@ export const checkinOnline = async (req: Request, res: Response) => {
 
     // 插入到 guests 表
     await connection.query(
-      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [id, real_name, guest_phone, id_number, booking.room_id]
+      `INSERT INTO guests (booking_id, hotel_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
+      [id, real_name, guest_phone, id_number, booking.room_id, booking.hotel_id]
     );
 
     // 同步更新房间状态为“在住”
@@ -506,9 +508,10 @@ export const checkin = async (req: AuthRequest, res: Response) => {
 
     // 插入到 guests 表
     await connection.query(
-      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [id, guest_name || booking.guest_name, guest_phone || booking.guest_phone, guest_id_number || booking.guest_id_number, roomId]
+      `INSERT INTO guests (booking_id, hotel_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
+      [id, booking.hotel_id, guest_name || booking.guest_name, guest_phone || booking.guest_phone, guest_id_number || booking.guest_id_number, roomId]
     );
 
     // 同步更新房间状态为“在住”
@@ -716,7 +719,7 @@ export const extendStay = async (req: AuthRequest, res: Response) => {
     const roomPrice = roomRows.length > 0 ? (roomRows[0] as any).room_price : 0;
     const currentCheckIn = new Date(booking.current_check_in_date || booking.check_in_date);
     const newTotalDays = Math.ceil((newCheckOut.getTime() - currentCheckIn.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     // 续住加收费用计算 (也需要应用会员折扣)
     const phone = req.user?.phone || req.user?.username;
     let discountRate = 1.0;
@@ -758,7 +761,7 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
     const { room_id, check_in_date, check_out_date, guest_phone, coupon_id } = req.query;
-    
+
     if (!room_id || !check_in_date || !check_out_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
     }

@@ -202,7 +202,7 @@ import {
   WifiOutlined, ThunderboltOutlined, SafetyCertificateOutlined,
   RobotOutlined, UserOutlined, EditOutlined, SoundOutlined
 } from '@ant-design/icons-vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
@@ -211,6 +211,7 @@ import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 
 const isCheckedIn = computed(() => {
@@ -297,6 +298,12 @@ const extraServices = [
 let socket: any = null
 
 onMounted(async () => {
+  if (!appStore.userInfo) {
+    message.warning('请先登录以查看客房服务')
+    appStore.showLoginModal = true
+    router.push('/guest/booking')
+    return
+  }
   if (!isCheckedIn.value) {
     message.info('您还未办理入住，部分功能可能受限')
   }

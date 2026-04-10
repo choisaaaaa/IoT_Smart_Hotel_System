@@ -46,4 +46,11 @@ router.delete('/:id', authenticate as any, authorize(['admin', 'system']), devic
  */
 router.post('/:id/command', authenticate as any, authorize(['admin', 'staff', 'system']), deviceController.sendCommand);
 
+/**
+ * @route   POST /api/v1/devices/room-card
+ * @desc    发放/收回房卡
+ * @access  Private (Admin/Staff)
+ */
+router.post('/room-card', authenticate as any, authorize(['admin', 'staff']), deviceController.handleRoomCard);
+
 export default router;

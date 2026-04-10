@@ -11,8 +11,8 @@
       <div class="search-bar" style="margin-bottom: 16px; display: flex; gap: 16px;">
         <a-input-search
           v-model:value="searchKey"
-          placeholder="搜索用户名/邮箱"
-          style="width: 250px"
+          placeholder="搜索用户名/手机号/邮箱"
+          style="width: 280px"
           allow-clear
           @search="fetchUsers"
         />
@@ -26,7 +26,7 @@
           <a-select-option value="system" v-if="isSystem">系统管理员</a-select-option>
           <a-select-option value="admin">门店管理员</a-select-option>
           <a-select-option value="staff">门店员工</a-select-option>
-          <a-select-option value="user">普通用户</a-select-option>
+          <a-select-option value="user" v-if="isSystem">普通用户</a-select-option>
         </a-select>
         <a-select
           v-if="isSystem"
@@ -88,6 +88,9 @@
         <a-form-item label="用户名" name="username">
           <a-input v-model:value="formState.username" :disabled="!!editingId" />
         </a-form-item>
+        <a-form-item label="手机号" name="phone">
+          <a-input v-model:value="formState.phone" placeholder="请输入手机号" />
+        </a-form-item>
         <a-form-item label="密码" name="password" :rules="editingId ? [] : [{ required: true, message: '请输入密码' }]">
           <a-input-password v-model:value="formState.password" :placeholder="editingId ? '留空表示不修改' : '请输入密码'" />
         </a-form-item>
@@ -99,7 +102,7 @@
             <a-select-option value="system" v-if="isSystem">系统管理员</a-select-option>
             <a-select-option value="admin">门店管理员</a-select-option>
             <a-select-option value="staff">门店员工</a-select-option>
-            <a-select-option value="user">普通用户</a-select-option>
+            <a-select-option value="user" v-if="isSystem">普通用户</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item 
@@ -135,6 +138,7 @@ import { hotelManageApi } from '@/api/hotel-manage'
 interface UserItem {
   id: number
   username: string
+  phone?: string
   email?: string
   role: string
   hotel_id?: number
@@ -187,17 +191,20 @@ const formState = reactive({
   username: '',
   password: '',
   email: '',
+  phone: '',
   role: 'user',
   hotel_id: undefined
 })
 
 const rules = {
   username: [{ required: true, message: '请输入用户名' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号' }],
   role: [{ required: true, message: '请选择角色' }]
 }
 
 const columns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
+  { title: '手机号', dataIndex: 'phone', key: 'phone' },
   { title: '邮箱', dataIndex: 'email', key: 'email' },
   { title: '角色', dataIndex: 'role', key: 'role' },
   { title: '所属酒店', key: 'hotel' },
@@ -260,6 +267,7 @@ const handleAdd = () => {
     username: '',
     password: '',
     email: '',
+    phone: '',
     role: isSystem.value ? 'admin' : 'staff',
     hotel_id: appStore.userInfo?.hotel_id
   })
@@ -272,6 +280,7 @@ const handleEdit = (record: any) => {
     username: record.username,
     password: '',
     email: record.email,
+    phone: record.phone || '',
     role: record.role,
     hotel_id: record.hotel_id || appStore.userInfo?.hotel_id
   })

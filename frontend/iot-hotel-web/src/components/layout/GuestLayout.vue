@@ -42,11 +42,11 @@
               <a-tag v-if="appStore.userStatus.is_member" color="gold">会员</a-tag>
               <a-tag v-if="appStore.userStatus.is_checked_in" color="cyan">已入住</a-tag>
             </div>
-            
+
             <!-- 切端按钮：仅对非普通用户显示 -->
-            <a-button 
+            <a-button
               v-if="userInfo.role && userInfo.role !== 'user'"
-              type="link" 
+              type="link"
               class="switch-side-btn"
               @click="$router.push('/reception/dashboard')"
             >
@@ -540,6 +540,7 @@ const handleLogout = async () => {
   try {
     await authService.logout()
     message.success('已退出登录')
+    // 退出后回到首页
     router.push('/guest/booking')
   } catch (error) {
     console.error('登出失败:', error)

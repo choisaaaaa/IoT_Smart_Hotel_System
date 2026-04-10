@@ -22,9 +22,13 @@
           <template #icon><UserOutlined /></template>
           <span>账户管理</span>
         </a-menu-item>
+        <a-menu-item key="/system/settings">
+          <template #icon><SettingOutlined /></template>
+          <span>系统配置</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
-    
+
     <a-layout>
       <a-layout-header class="header">
         <div class="header-left">
@@ -38,8 +42,8 @@
         <div class="header-right">
           <a-dropdown>
             <span class="user-action">
-              <a-avatar size="small">
-                <template #icon><UserOutlined /></template>
+              <a-avatar size="small" :src="appStore.userInfo?.avatar">
+                <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
               </a-avatar>
               <span class="username">{{ appStore.userInfo?.username }}</span>
             </span>
@@ -53,7 +57,7 @@
           </a-dropdown>
         </div>
       </a-layout-header>
-      
+
       <a-layout-content class="content">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
@@ -73,7 +77,7 @@ import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
   UserOutlined, MenuFoldOutlined,
-  MenuUnfoldOutlined, LogoutOutlined
+  MenuUnfoldOutlined, LogoutOutlined, SettingOutlined
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
@@ -100,7 +104,7 @@ function handleMenuClick({ key }: any) {
 
 async function handleLogout() {
   await authService.logout()
-  router.push('/login')
+  router.push('/guest/booking')
 }
 </script>
 

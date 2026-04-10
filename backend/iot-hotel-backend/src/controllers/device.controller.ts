@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import deviceService from '../services/device.service';
+import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
 
 class DeviceController {
@@ -64,9 +65,9 @@ class DeviceController {
     try {
       const user = (req as any).user;
       const { status, audit_status, room_id, hotel_id } = req.query;
-      
+
       let targetHotelId: number | undefined;
-      
+
       if (user?.role === 'system') {
         // 系统角色可以查看所有或指定酒店
         targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
@@ -80,7 +81,7 @@ class DeviceController {
         audit_status: audit_status as string,
         room_id: room_id ? parseInt(room_id as string) : undefined
       };
-      
+
       const result = await deviceService.getAllDevices(targetHotelId, filters);
       res.json({
         success: true,
@@ -181,6 +182,88 @@ class DeviceController {
       }
     } catch (error) {
       logger.error('Send command error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * 发放/收回房卡 (前台发卡器专用)
+   */
+  async handleRoomCard(req: Request, res: Response) {
+    try {
+      const hotelId = (req as any).user?.hotel_id;
+      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+      const { action, booking_id, id_last_four } = req.body;
+      const user = (req as any).user;
+
+      if (!action || !booking_id) {
+        return res.status(400).json({ success: false, message: 'Missing parameters' });
+      }
+
+      // 1. 查找订单及住客信息用于验证 (优先从 guests 表查找，确保信息是最新的)
+      const [guestRows] = await pool.query<RowDataPacket[]>(
+        'SELECT guest_id_number FROM guests WHERE booking_id = ? AND check_out_time IS NULL',
+        [booking_id]
+      );
+
+      const [bookingRows] = await pool.query<RowDataPacket[]>(
+        'SELECT b.room_id, b.guest_id_number, r.room_number FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.id = ? AND b.hotel_id = ?',
+        [booking_id, hotelId]
+      );
+
+      if (bookingRows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Booking not found' });
+      }
+
+      const booking = bookingRows[0];
+      const actualIdNumber = guestRows.length > 0 ? guestRows[0].guest_id_number : booking.guest_id_number;
+
+      // 2. 发卡时验证证件后四位
+      if (action === 'issue') {
+        if (!id_last_four) {
+          return res.status(400).json({ success: false, message: 'ID last four digits required' });
+        }
+        const actualId = actualIdNumber || '';
+        if (actualId.slice(-4) !== id_last_four) {
+          return res.status(403).json({ success: false, message: 'ID verification failed' });
+        }
+      }
+
+      // 3. 查找该门店在线的前台发卡设备
+      const [deviceRows] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id FROM devices WHERE hotel_id = ? AND device_type = "front_desk" AND device_status = "online" AND audit_status = "approved" LIMIT 1',
+        [hotelId]
+      );
+
+      if (deviceRows.length === 0) {
+        return res.status(404).json({ success: false, message: 'No online front desk device found' });
+      }
+
+      const deviceId = deviceRows[0].device_id;
+
+      // 4. 下发指令
+      const mqttService = require('../services/mqtt.service').default;
+      const commandValue = JSON.stringify({
+        booking_id,
+        room_number: booking.room_number,
+        action: action // issue | revoke
+      });
+
+      const commandId = await mqttService.sendDeviceCommand(
+        deviceId,
+        'room_card_op',
+        commandValue,
+        user?.username || 'admin'
+      );
+
+      res.json({
+        success: true,
+        message: action === 'issue' ? 'Card issuance command sent' : 'Card revocation command sent',
+        data: { command_id: commandId }
+      });
+    } catch (error) {
+      logger.error('Handle room card error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
