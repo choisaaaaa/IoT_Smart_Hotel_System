@@ -15,6 +15,9 @@ import '../../services/room_service.dart';
 import '../../services/delivery_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/room_type_service.dart';
+import 'work_orders_page.dart';
+import 'delivery_orders_page.dart';
+import 'room_availability_page.dart';
 
 class ReceptionDashboardPage extends ConsumerStatefulWidget {
   const ReceptionDashboardPage({super.key});
@@ -1150,6 +1153,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
   bool _isOnline = false;
+  String? _currentCallId;
   Map<String, dynamic>? _currentCall;
   late TabController _callTabController;
   Stream<Map<String, dynamic>>? _callEvents;
@@ -1325,12 +1329,19 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
     }
 
     try {
-      await DioClient().post('${ApiConstants.calls}outbound', data: {
+      final response = await DioClient().post('${ApiConstants.calls}outbound', data: {
         'caller_id': 'reception_app',
         'callee_type': target['type'],
         'callee_id': target['clientId'],
         'caller_type': 'front_desk',
       });
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final callData = response.data['data'];
+        if (callData != null && mounted) {
+          setState(() => _currentCallId = callData['call_id']?.toString());
+        }
+      }
 
       if (mounted) {
         showDialog(
@@ -1372,7 +1383,11 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
 
   Future<void> _hangupCall() async {
     try {
-      await DioClient().post('${ApiConstants.calls}hangup', data: {'call_id': 'current'});
+      final callId = _currentCallId;
+      if (callId != null && callId.isNotEmpty) {
+        await DioClient().post('${ApiConstants.calls}$callId/hangup');
+        setState(() => _currentCallId = null);
+      }
     } catch (e) {
       debugPrint('Error hanging up: $e');
     }
@@ -1405,7 +1420,10 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
 
     switch (type) {
       case 'incoming_call':
-        setState(() => _currentCall = data);
+        setState(() {
+          _currentCall = data;
+          _currentCallId = data['call_id']?.toString() ?? data['id']?.toString();
+        });
         _showIncomingCallDialog(data);
         break;
       case 'call_answered':
@@ -1415,14 +1433,20 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
         );
         break;
       case 'call_rejected':
-        setState(() => _currentCall = null);
+        setState(() {
+          _currentCall = null;
+          _currentCallId = null;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('对方已拒绝')),
         );
         Navigator.of(context, rootNavigator: true).pop();
         break;
       case 'call_hungup':
-        setState(() => _currentCall = null);
+        setState(() {
+          _currentCall = null;
+          _currentCallId = null;
+        });
         Navigator.of(context, rootNavigator: true).pop();
         break;
     }

@@ -171,7 +171,11 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('缺少状态参数'));
     }
 
-    const success = await RoomService.updateRoom(id, hotelId, { room_status: status } as any);
+    let success = await RoomService.updateRoomStatus(id, status, hotelId);
+
+    if (!success) {
+      success = await RoomService.updateRoomStatus(id, status);
+    }
     
     if (!success) {
       res.status(404).json(errorResponse('房间不存在'));

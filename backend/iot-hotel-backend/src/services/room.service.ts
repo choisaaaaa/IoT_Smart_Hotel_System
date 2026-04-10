@@ -211,6 +211,27 @@ export class RoomService {
     }
   }
 
+  static async updateRoomStatus(id: number, status: string, hotelId?: number): Promise<boolean> {
+    try {
+      if (hotelId) {
+        const [result] = await pool.query<ResultSetHeader>(
+          'UPDATE rooms SET room_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
+          [status, id, hotelId]
+        );
+        return result.affectedRows > 0;
+      }
+
+      const [result] = await pool.query<ResultSetHeader>(
+        'UPDATE rooms SET room_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, id]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      logger.error('更新房间状态失败:', error);
+      throw new Error('更新房间状态失败');
+    }
+  }
+
   static async deleteRoom(id: number, hotelId: number): Promise<boolean> {
     try {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM rooms WHERE id = ? AND hotel_id = ?', [id, hotelId]);

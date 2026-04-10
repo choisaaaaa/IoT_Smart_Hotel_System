@@ -36,7 +36,6 @@
               <template #overlay>
                 <a-menu>
                   <a-menu-item v-if="record.status === 'pending'" @click="handleConfirm(record.id)">确认预订</a-menu-item>
-                  <a-menu-item v-if="record.status === 'confirmed'" @click="doCheckin(record)">办理入住</a-menu-item>
                   <a-menu-item danger @click="handleCancel(record.id)">取消预订</a-menu-item>
                 </a-menu>
               </template>
