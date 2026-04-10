@@ -584,7 +584,7 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
     if (status === 'approved') {
       if (app.application_type === 'create_hotel') {
         const [hotelResult]: any = await connection.execute(
-          'INSERT INTO hotels (hotel_name, address, hotel_type, star_rating, contact_phone, description) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO hotels (hotel_name, hotel_address, hotel_type, star_rating, contact_phone, description) VALUES (?, ?, ?, ?, ?, ?)',
           [app.hotel_name, app.hotel_address, '商务酒店', 3, '', '']
         );
         const newHotelId = hotelResult.insertId;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -730,77 +731,230 @@ class _ContactFrontDeskTab extends ConsumerStatefulWidget {
 class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   final _messageController = TextEditingController();
   List<Map<String, dynamic>> _messages = [];
+  final VoiceCallService _callService = VoiceCallService();
+  bool _isOnline = false;
+  String? _clientName;
+  Map<String, dynamic>? _onlineStatus;
+  StreamSubscription? _callEventSubscription;
 
   @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _initCallService();
   }
 
-  Future<void> _makeCall() async {
-    try {
-      final callService = VoiceCallService();
-      callService.init('guest_app');
-      callService.startCall('front_desk', 'staff');
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 16),
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                const Text('正在呼叫前台...',
-                    style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 8),
-                const Text('请稍候，前台即将接听',
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary)),
-              ],
+  void _initCallService() {
+    _callService.init('guest_app');
+    _callEventSubscription = _callService.callEvents.listen((event) {
+      if (!mounted) return;
+      
+      switch (event['type']) {
+        case 'registered':
+          setState(() {
+            _isOnline = true;
+            _clientName = event['data']?['clientName'];
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已上线${_clientName != null ? '：$_clientName' : ''}'),
+              backgroundColor: AppColors.success,
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  callService.hangup('current');
-                  Navigator.pop(ctx);
-                },
-                child: const Text('取消呼叫',
-                    style: TextStyle(color: AppColors.error)),
-              ),
-            ],
-          ),
-        );
-      }
-
-      callService.callEvents.listen((event) {
-        if (event['type'] == 'call_answered' && mounted) {
-          Navigator.of(context).pop();
+          );
+          // 获取在线状态
+          _callService.requestOnlineStatus();
+          break;
+        case 'online_status':
+          setState(() {
+            _onlineStatus = event['data'];
+          });
+          break;
+        case 'incoming_call':
+          _showIncomingCallDialog(event['data']);
+          break;
+        case 'call_answered':
+          Navigator.of(context).maybePop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('前台已接听'),
-                backgroundColor: AppColors.success),
+              content: Text('前台已接听'),
+              backgroundColor: AppColors.success,
+            ),
           );
-        } else if ((event['type'] == 'call_rejected' ||
-                event['type'] == 'call_hungup') &&
-            mounted) {
+          break;
+        case 'call_rejected':
+        case 'call_hungup':
           Navigator.of(context).maybePop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('通话已结束')),
           );
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('呼叫失败：$e')),
-        );
+          break;
+        case 'call_error':
+          final message = event['data']?['message'] ?? '呼叫失败';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          break;
       }
+    });
+  }
+
+  void _showIncomingCallDialog(Map<String, dynamic> callData) {
+    final callerName = callData['caller_name'] ?? callData['caller_id'] ?? '未知';
+    final callId = callData['call_id'];
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.phone_in_talk_rounded,
+                size: 40,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              callerName,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '正在呼叫您...',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _callService.answerCall(
+                        callId,
+                        callData['caller_id'],
+                        callData['caller_type'],
+                      );
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.call_rounded),
+                    label: const Text('接听'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _callService.rejectCall(callId);
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.call_end_rounded),
+                    label: const Text('拒绝'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleOnlineStatus() {
+    if (_isOnline) {
+      // 下线
+      _callService.unregisterClient();
+      setState(() {
+        _isOnline = false;
+        _clientName = null;
+        _onlineStatus = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已下线')),
+      );
+    } else {
+      // 上线
+      final userId = 'guest_${widget.roomId ?? 'app'}';
+      _callService.registerClient(userId);
+    }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _callEventSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _makeCall() async {
+    if (!_isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先点击上线按钮'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    // 呼叫所有前台：callee_type='front_desk', callee_id='all'
+    _callService.startCall('all', 'front_desk');
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('正在呼叫前台...',
+                  style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 8),
+              const Text('请稍候，前台即将接听',
+                  style: TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _callService.hangup('current');
+                Navigator.pop(ctx);
+              },
+              child: const Text('取消呼叫',
+                  style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -832,8 +986,72 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       {'name': '紧急电话', 'number': '911', 'icon': Icons.emergency_rounded, 'color': AppColors.error},
     ];
 
+    // 计算在线前台数量
+    final onlineFrontDesk = _onlineStatus?['web']?.where((c) => c['type'] == 'front_desk')?.toList() ?? [];
+    final onlineCount = onlineFrontDesk.length;
+
     return Column(
       children: [
+        // 上线状态卡片
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isOnline ? Icons.circle : Icons.circle_outlined,
+                            size: 12,
+                            color: _isOnline ? AppColors.success : AppColors.textHint,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _isOnline ? '当前身份: ${_clientName ?? '已上线'}' : '当前状态: 未上线',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: _isOnline ? AppColors.success : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_isOnline && onlineCount > 0) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '在线前台: $onlineCount人',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  ElevatedButton(
+                    onPressed: _toggleOnlineStatus,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isOnline ? Colors.white : AppColors.primary,
+                      foregroundColor: _isOnline ? AppColors.error : Colors.white,
+                      side: _isOnline ? const BorderSide(color: AppColors.error) : null,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      minimumSize: const Size(100, 36),
+                    ),
+                    child: Text(_isOnline ? '注销' : '上线'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
         Container(
           padding: const EdgeInsets.all(16),
           color: Colors.white,

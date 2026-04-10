@@ -107,7 +107,7 @@
       </template>
 
       <a-table
-        :dataSource="environmentList"
+        :dataSource="displayList"
         :columns="columns"
         :loading="loading"
         rowKey="room_id"
@@ -155,14 +155,35 @@
         </template>
       </a-table>
 
-      <a-empty v-if="!environmentList.length && !loading" description="暂无环境监测数据" />
+      <a-empty v-if="!displayList.length && !loading" description="暂无环境监测数据" />
 
       <a-alert
         v-if="summary.danger_count > 0"
-        message="环境异常警告"
-        :description="`检测到 ${summary.danger_count} 个房间存在危险级别的环境异常，请立即处理！`"
+        message="⚠️ 环境异常警告"
+        :description="`检测到 ${summary.danger_count} 个房间存在危险级别的环境异常（温度过高/过低、湿度过高/过低的、或烟雾浓度超标），请立即处理！`"
         type="error"
         show-icon
+        closable
+        style="margin-top: 16px;"
+      />
+
+      <a-alert
+        v-else-if="summary.warning_count > 0 && !usingMockData"
+        message="⚡ 环境异常提醒"
+        :description="`检测到 ${summary.warning_count} 个房间存在警告级别的环境异常，建议关注并适时调整。`"
+        type="warning"
+        show-icon
+        closable
+        style="margin-top: 16px;"
+      />
+
+      <a-alert
+        v-if="usingMockData"
+        message="💡 当前显示模拟数据"
+        description="系统正在使用模拟数据进行展示，后端服务未连接或API调用失败。接入真实设备后可删除此提示。"
+        type="info"
+        show-icon
+        closable
         style="margin-top: 16px;"
       />
     </a-card>
@@ -170,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   CloudOutlined,
@@ -188,6 +209,7 @@ dayjs.extend(relativeTime)
 
 const loading = ref(false)
 const environmentList = ref<EnvironmentData[]>([])
+const usingMockData = ref(false)
 const summary = reactive<EnvironmentSummary>({
   avg_temperature: 0,
   avg_humidity: 0,
@@ -248,8 +270,114 @@ const columns = [
   }
 ]
 
+function generateMockEnvironmentData(): EnvironmentData[] {
+  const now = new Date()
+  const rooms = [
+    { room_id: 1, room_number: '301', floor_id: 3, floor_name: '3楼' },
+    { room_id: 2, room_number: '302', floor_id: 3, floor_name: '3楼' },
+    { room_id: 3, room_number: '303', floor_id: 3, floor_name: '3楼' },
+    { room_id: 4, room_number: '304', floor_id: 3, floor_name: '3楼' },
+    { room_id: 5, room_number: '305', floor_id: 3, floor_name: '3楼' },
+    { room_id: 6, room_number: '401', floor_id: 4, floor_name: '4楼' },
+    { room_id: 7, room_number: '402', floor_id: 4, floor_name: '4楼' },
+    { room_id: 8, room_number: '403', floor_id: 4, floor_name: '4楼' },
+    { room_id: 9, room_number: '404', floor_id: 4, floor_name: '4楼' },
+    { room_id: 10, room_number: '405', floor_id: 4, floor_name: '4楼' },
+    { room_id: 11, room_number: '501', floor_id: 5, floor_name: '5楼' },
+    { room_id: 12, room_number: '502', floor_id: 5, floor_name: '5楼' }
+  ]
+
+  return rooms.map((room, index) => {
+    let temperature: number, humidity: number, smokeLevel: number
+
+    if (index === 7) {
+      temperature = 35.8 + Math.random() * 1.5
+      humidity = 68 + Math.random() * 8
+      smokeLevel = 75 + Math.random() * 10
+    } else if (index === 3) {
+      temperature = 32.5 + Math.random() * 2
+      humidity = 78 + Math.random() * 5
+      smokeLevel = 48 + Math.random() * 8
+    } else if (index === 9 || index === 10) {
+      temperature = 28 + Math.random() * 3
+      humidity = 72 + Math.random() * 6
+      smokeLevel = 38 + Math.random() * 8
+    } else {
+      temperature = 22 + Math.random() * 6
+      humidity = 45 + Math.random() * 25
+      smokeLevel = 8 + Math.random() * 22
+    }
+
+    const lightLevel = parseInt((200 + Math.random() * 600).toString())
+    let status: 'normal' | 'warning' | 'danger' = 'normal'
+
+    if (temperature > 30 || temperature < 18 || humidity > 75 || humidity < 30) {
+      status = 'warning'
+    }
+
+    if (smokeLevel > 60 || temperature > 35) {
+      status = 'danger'
+    }
+
+    return {
+      ...room,
+      temperature: parseFloat(temperature.toFixed(1)),
+      humidity: parseFloat(humidity.toFixed(1)),
+      smoke_level: parseFloat(smokeLevel.toFixed(1)),
+      smoke_alarm: smokeLevel > 60,
+      light_level: lightLevel,
+      update_time: new Date(now.getTime() - index * 60000).toISOString(),
+      status
+    }
+  })
+}
+
+function calculateMockSummary(data: EnvironmentData[]): EnvironmentSummary {
+  if (data.length === 0) {
+    return {
+      avg_temperature: 0,
+      avg_humidity: 0,
+      avg_smoke_level: 0,
+      normal_count: 0,
+      warning_count: 0,
+      danger_count: 0,
+      total_rooms: 0
+    }
+  }
+
+  const totalTemp = data.reduce((sum, item) => sum + item.temperature, 0)
+  const totalHumidity = data.reduce((sum, item) => sum + item.humidity, 0)
+  const totalSmoke = data.reduce((sum, item) => sum + item.smoke_level, 0)
+
+  return {
+    avg_temperature: parseFloat((totalTemp / data.length).toFixed(1)),
+    avg_humidity: parseFloat((totalHumidity / data.length).toFixed(1)),
+    avg_smoke_level: parseFloat((totalSmoke / data.length).toFixed(1)),
+    normal_count: data.filter(item => item.status === 'normal').length,
+    warning_count: data.filter(item => item.status === 'warning').length,
+    danger_count: data.filter(item => item.status === 'danger').length,
+    total_rooms: data.length
+  }
+}
+
+const displayList = computed(() => {
+  let result = environmentList.value
+
+  if (selectedFloor.value) {
+    result = result.filter(item => item.floor_id === selectedFloor.value)
+  }
+
+  if (selectedStatus.value) {
+    result = result.filter(item => item.status === selectedStatus.value)
+  }
+
+  return result
+})
+
 async function fetchData() {
   loading.value = true
+  usingMockData.value = false
+
   try {
     const params: any = {}
     if (selectedFloor.value) params.floor_id = selectedFloor.value
@@ -258,16 +386,27 @@ async function fetchData() {
     const res: any = await environmentApi.getEnvironmentData(params)
     const data = res.data
 
-    if (data) {
-      environmentList.value = data.list || []
+    if (data && data.list && data.list.length > 0) {
+      environmentList.value = data.list
       Object.assign(summary, data.summary)
+      console.log('✅ 环境数据加载成功（来自API）')
+    } else {
+      throw new Error('Empty or invalid response')
     }
   } catch (err) {
-    console.error('Failed to fetch environment data:', err)
-    message.error('获取环境监测数据失败')
+    console.warn('⚠️ API获取失败，使用模拟数据:', err.message || err)
+    useMockData()
   } finally {
     loading.value = false
   }
+}
+
+function useMockData() {
+  usingMockData.value = true
+  const mockData = generateMockEnvironmentData()
+  environmentList.value = mockData
+  Object.assign(summary, calculateMockSummary(mockData))
+  console.log('📊 已加载模拟环境数据（共 ' + mockData.length + ' 个房间）')
 }
 
 function getTemperatureColor(temp: number): string {

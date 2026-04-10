@@ -466,7 +466,7 @@ class _ReviewTabState extends State<_ReviewTab> {
   Future<void> _reviewApplication(int id, String status, {String? note}) async {
     try {
       final dio = DioClient();
-      final res = await dio.put('${ApiConstants.authRoleApplications}$id/review', data: {
+      final res = await dio.put('${ApiConstants.authRoleApplications}/$id/review', data: {
         'status': status,
         if (note != null) 'review_note': note,
       });
