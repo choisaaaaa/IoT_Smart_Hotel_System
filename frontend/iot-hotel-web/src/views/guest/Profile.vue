@@ -807,6 +807,7 @@ onMounted(() => {
   line-height: 1;
   text-transform: uppercase;
   background: linear-gradient(135deg, #fff, #f9e29c);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

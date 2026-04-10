@@ -55,6 +55,7 @@ export interface FloorInfo {
 
 export interface RoomInfo {
   id: number
+  hotel_id: number
   room_number: string
   room_type: string
   room_type_id: number
