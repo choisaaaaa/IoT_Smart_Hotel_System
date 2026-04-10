@@ -16,6 +16,19 @@ async function startServer() {
         `UPDATE calls SET status = 'ended', ended_at = NOW() WHERE status IN ('calling', 'outgoing', 'ringing', 'connected')`
       );
       logger.info('已清理进行中的通话记录');
+
+      // 自动修复 bookings 表 schema
+      try {
+        await pool.query('ALTER TABLE bookings ADD COLUMN used_points INT DEFAULT 0 AFTER coupon_id');
+        await pool.query('ALTER TABLE bookings ADD COLUMN points_discount DECIMAL(10,2) DEFAULT 0.00 AFTER used_points');
+        logger.info('数据库表 bookings 修复成功');
+      } catch (schemaError: any) {
+        if (schemaError.code === 'ER_DUP_COLUMN_NAME') {
+          logger.info('数据库表 bookings 已包含 used_points/points_discount 字段');
+        } else {
+          logger.warn('修复数据库 schema 失败:', schemaError.message);
+        }
+      }
     } catch (cleanupError) {
       logger.warn('清理通话记录失败:', cleanupError);
     }

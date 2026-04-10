@@ -650,17 +650,25 @@ function getMemberByPhone(phone: string): any {
 
 function getLevelName(member: any): string {
   if (!member) return '已注册'
-  // 优先尝试数字等级，如果没有则显示 member_level 字符串的简化版
-  if (member.level) return `LEVEL ${member.level}`
+  
+  // 优先使用后端返回的标签
+  if (member.level_label) return member.level_label
   
   const levels: Record<string, string> = {
-    'diamond': 'LV5',
-    'platinum': 'LV4',
-    'gold': 'LV3',
-    'silver': 'LV2',
-    'standard': 'LV1'
+    'diamond': '钻石会员',
+    'platinum': '铂金会员',
+    'gold': '金会员',
+    'silver': '银会员',
+    'standard': '普通会员'
   }
-  return levels[member.member_level] || '已注册'
+  
+  // 以关键字 member_level 为准进行映射
+  if (member.member_level && levels[member.member_level]) {
+    return levels[member.member_level]
+  }
+  
+  // 兜底显示数字等级
+  return member.level ? `LEVEL ${member.level}` : '已注册'
 }
 
 function isPhoneRegistered(phone: string): boolean {

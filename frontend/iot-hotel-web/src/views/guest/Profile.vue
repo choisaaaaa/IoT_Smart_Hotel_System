@@ -11,7 +11,7 @@
     <div class="profile-content">
       <!-- 左侧：会员卡与资产概览 -->
       <div class="profile-left">
-        <div class="member-card-new">
+        <div class="member-card-new" :class="`card-level-${memberInfo.member_level || 'standard'}`">
           <div class="card-inner">
             <div class="card-top">
               <div class="hotel-info">
@@ -19,7 +19,7 @@
                 <div class="hotel-brand">SMART HOTEL</div>
               </div>
               <div class="member-badge-new">
-                <span class="level-text">LEVEL {{ memberInfo.level || 1 }}</span>
+                <span class="level-text">{{ memberInfo.level_label || `LEVEL ${memberInfo.level || 1}` }}</span>
               </div>
             </div>
 
@@ -122,15 +122,8 @@
             <div class="right-box" :class="{ disabled: memberLevelInfo.multiplier === 1 }">
               <div class="right-icon-wrapper"><ThunderboltOutlined /></div>
               <div class="right-content">
-                <div class="right-title">积分加速</div>
+                <div class="right-title">积分倍率</div>
                 <div class="right-value">{{ memberLevelInfo.multiplier }}倍积分</div>
-              </div>
-            </div>
-            <div class="right-box active">
-              <div class="right-icon-wrapper"><CoffeeOutlined /></div>
-              <div class="right-content">
-                <div class="right-title">尊享服务</div>
-                <div class="right-value">专属管家</div>
               </div>
             </div>
           </div>
@@ -140,8 +133,8 @@
       <!-- 右侧：个人资料与常用入住人 -->
       <div class="profile-right">
         <a-tabs v-model:activeKey="activeTab" class="profile-tabs">
-          <!-- 个人资料编辑 -->
-          <a-tab-pane key="account" tab="账号信息">
+          <!-- 账号管理 -->
+          <a-tab-pane key="account" tab="账号管理">
             <div class="account-info-list">
               <!-- 用户ID (不可修改) -->
               <div class="info-item">
@@ -328,9 +321,119 @@
               </a-list>
             </div>
           </a-tab-pane>
+
+          <!-- 我的钱包 -->
+          <a-tab-pane key="wallet" tab="我的钱包">
+            <div class="wallet-card-ctrip">
+              <div class="wallet-header">
+                <h3>账户余额</h3>
+                <a-tag color="blue">实时到账</a-tag>
+              </div>
+
+              <div class="balance-display-large">
+                <div class="lab">当前可用余额</div>
+                <div class="val">
+                  <span class="currency">¥</span>
+                  <span class="num">{{ memberInfo?.balance || '0.00' }}</span>
+                </div>
+              </div>
+
+              <div class="recharge-section">
+                <div class="stats-header-modern" style="margin-bottom: 24px;">快捷充值</div>
+                <div class="recharge-grid">
+                  <div 
+                    v-for="amount in rechargeOptions" 
+                    :key="amount" 
+                    class="recharge-item"
+                    :class="{ active: selectedRechargeAmount === amount }"
+                    @click="selectedRechargeAmount = amount"
+                  >
+                    <span class="amount-text">¥{{ amount }}</span>
+                    <span v-if="getBonusAmount(amount) > 0" class="bonus-tag">
+                      赠 ¥{{ getBonusAmount(amount) }}
+                    </span>
+                    <span v-if="getBonusAmount(amount) > 0" class="bonus-tip">
+                      立享 {{ ((1 / discountRate - 1) * 100).toFixed(0) }}% 优惠
+                    </span>
+                  </div>
+                </div>
+
+                <div class="recharge-btn-container">
+                  <a-button 
+                    type="primary" 
+                    block 
+                    class="recharge-btn-large" 
+                    :disabled="!selectedRechargeAmount"
+                    @click="handleOpenRechargePayment"
+                  >
+                    立即充值 {{ selectedRechargeAmount ? `¥${selectedRechargeAmount}` : '' }}
+                  </a-button>
+                </div>
+
+                <div class="bonus-explain">
+                  <InfoCircleOutlined class="icon" />
+                  <div class="text">
+                    <strong>充值说明：</strong><br/>
+                    您的当前等级为 <strong>{{ memberInfo?.level_label }}</strong>，充值立享 <strong>{{ ((1 / discountRate - 1) * 100).toFixed(0) }}%</strong> 额度赠送（等同于您的房价折扣力度）。充值后的余额可用于预订房费支付，享受折上折，余额永不过期。
+                  </div>
+                </div>
+              </div>
+            </div>
+          </a-tab-pane>
         </a-tabs>
       </div>
     </div>
+
+    <!-- Recharge Payment Modal -->
+    <a-modal
+      v-model:open="rechargeModalVisible"
+      title="收银台"
+      :footer="null"
+      width="440px"
+      :closable="false"
+    >
+      <div class="mock-payment-recharge">
+        <div class="payment-title">应付金额</div>
+        <div class="amount-box">
+          <div class="lab">充值金额</div>
+          <div class="val">¥{{ selectedRechargeAmount }}</div>
+        </div>
+        
+        <div class="stats-header-modern" style="margin-bottom: 16px;">选择支付方式</div>
+        <div class="payment-vendor-recharge">
+          <div 
+            class="vendor-item" 
+            :class="{ active: rechargeVendor === 'wechat', 'wechat-active': rechargeVendor === 'wechat' }"
+            @click="rechargeVendor = 'wechat'"
+          >
+            <WechatOutlined class="icon wechat-color" />
+            <div class="name">微信支付</div>
+          </div>
+          <div 
+            class="vendor-item" 
+            :class="{ active: rechargeVendor === 'alipay', 'alipay-active': rechargeVendor === 'alipay' }"
+            @click="rechargeVendor = 'alipay'"
+          >
+            <AlipayCircleOutlined class="icon alipay-color" />
+            <div class="name">支付宝</div>
+          </div>
+        </div>
+
+        <div class="payment-qr-mock">
+          <div class="qr-placeholder">
+            <QrcodeOutlined style="font-size: 56px; color: #1a1a1a" />
+            <p>请使用{{ rechargeVendor === 'wechat' ? '微信' : '支付宝' }}扫码支付</p>
+          </div>
+        </div>
+
+        <a-button type="primary" block size="large" :loading="rechargeLoading" @click="confirmRecharge">
+          我已完成支付
+        </a-button>
+        <a-button block style="margin-top: 12px" @click="rechargeModalVisible = false">
+          取消
+        </a-button>
+      </div>
+    </a-modal>
 
     <!-- 添加/编辑联系人弹窗 -->
     <a-modal
@@ -396,6 +499,51 @@ const userInfo = computed(() => appStore.userInfo || {})
 const avatarInput = ref<HTMLInputElement | null>(null)
 const activeTab = ref('account')
 const editingField = ref<string | null>(null)
+const rechargeOptions = [100, 300, 500, 1000, 2000, 5000]
+const selectedRechargeAmount = ref<number | null>(null)
+const rechargeModalVisible = ref(false)
+const rechargeVendor = ref('wechat')
+const rechargeLoading = ref(false)
+
+const discountRate = computed(() => {
+  const level = memberInfo.value?.member_level || 'standard'
+  const rates: Record<string, number> = {
+    'diamond': 0.7,
+    'platinum': 0.8,
+    'gold': 0.85,
+    'silver': 0.9,
+    'standard': 1.0
+  }
+  return rates[level] || 1.0
+})
+
+const getBonusAmount = (amount: number) => {
+  if (discountRate.value >= 1) return 0
+  const credit = Math.floor((amount / discountRate.value) * 100) / 100
+  return Math.floor((credit - amount) * 100) / 100
+}
+
+const handleOpenRechargePayment = () => {
+  rechargeModalVisible.value = true
+}
+
+const confirmRecharge = async () => {
+  if (!selectedRechargeAmount.value) return
+  
+  rechargeLoading.value = true
+  try {
+    const res = await request.post('/members/recharge', {
+      amount: selectedRechargeAmount.value
+    })
+    message.success(`充值成功！实际到账 ¥${res.data.credit_amount}`)
+    rechargeModalVisible.value = false
+    fetchData() // 刷新余额
+  } catch (error) {
+    message.error('充值失败，请稍后重试')
+  } finally {
+    rechargeLoading.value = false
+  }
+}
 
 // 头像上传
 const handleAvatarClick = () => {
@@ -448,18 +596,18 @@ const onAvatarChange = async (e: Event) => {
 
 // 会员等级逻辑
 const memberLevelInfo = computed(() => {
-  const level = memberInfo.value.level || 1
+  const mLevel = memberInfo.value.member_level || 'standard'
   const exp = memberInfo.value.experience || 0
   
-  const levels: any = {
-    5: { label: '钻石会员', discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 },
-    4: { label: '铂金会员', discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) },
-    3: { label: '金会员', discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) },
-    2: { label: '银会员', discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) },
-    1: { label: '普通会员', discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
+  const levelConfig: any = {
+    'diamond': { label: '钻石会员', level: 5, discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 },
+    'platinum': { label: '铂金会员', level: 4, discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) },
+    'gold': { label: '金会员', level: 3, discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) },
+    'silver': { label: '银会员', level: 2, discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) },
+    'standard': { label: '普通会员', level: 1, discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
   }
   
-  return levels[level] || levels[1]
+  return levelConfig[mLevel] || levelConfig['standard']
 })
 
 // 会员与资产信息
@@ -761,29 +909,36 @@ onMounted(() => {
 <style scoped>
 .profile-page-container {
   padding: 40px 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   min-height: calc(100vh - 120px);
 }
 
 .profile-content {
   display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 32px;
+  grid-template-columns: 450px 1fr;
+  gap: 40px;
 }
 
 /* 新版会员卡样式 */
 .member-card-new {
-  height: 240px;
-  border-radius: 24px;
+  height: 260px;
+  border-radius: 28px;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #1a1a1a 0%, #3a3a3a 100%);
   color: #fff;
-  padding: 28px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-  margin-bottom: 24px;
+  padding: 32px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  margin-bottom: 32px;
+  transition: all 0.5s ease;
 }
+
+/* 等级配色方案 */
+.card-level-standard { background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%); }
+.card-level-silver { background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%); }
+.card-level-gold { background: linear-gradient(135deg, #d4af37 0%, #1a1a1a 100%); }
+.card-level-platinum { background: linear-gradient(135deg, #e5e4e2 0%, #434343 100%); }
+.card-level-diamond { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
 
 .card-inner {
   position: relative;
@@ -807,9 +962,9 @@ onMounted(() => {
 
 .hotel-logo {
   font-family: 'Playfair Display', 'Optima', 'Palatino', serif;
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 900;
-  letter-spacing: 3px;
+  letter-spacing: 4px;
   line-height: 1;
   text-transform: uppercase;
   background: linear-gradient(135deg, #fff, #f9e29c);
@@ -819,50 +974,50 @@ onMounted(() => {
 }
 
 .hotel-brand {
-  font-size: 10px;
-  letter-spacing: 3px;
+  font-size: 11px;
+  letter-spacing: 4px;
   opacity: 0.6;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .member-badge-new {
   background: linear-gradient(90deg, #d4af37, #f9e29c);
-  padding: 6px 16px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  padding: 8px 20px;
+  border-radius: 14px;
+  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.3);
 }
 
 .level-text {
   color: #1a1a1a;
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: 800;
+  font-size: 14px;
 }
 
 .user-info-section {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .user-name-row {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .user-avatar-wrapper {
   position: relative;
   cursor: pointer;
   border-radius: 50%;
-  padding: 3px;
+  padding: 4px;
   background: linear-gradient(135deg, #d4af37, #f9e29c);
-  transition: transform 0.3s;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .user-avatar-wrapper:hover {
-  transform: scale(1.05);
+  transform: scale(1.1) rotate(5deg);
 }
 
 .premium-avatar {
-  border: 3px solid #1a1a1a;
+  border: 4px solid #1a1a1a;
   background: #2a2a2a;
 }
 
@@ -873,14 +1028,14 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.3s;
   color: #fff;
-  font-size: 20px;
+  font-size: 24px;
 }
 
 .user-avatar-wrapper:hover .avatar-edit-overlay {
@@ -893,41 +1048,46 @@ onMounted(() => {
 
 .user-name {
   color: #fff;
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   margin: 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .user-phone-row {
-  font-size: 16px;
-  opacity: 0.5;
-  margin-top: 4px;
-  letter-spacing: 1px;
+  font-size: 18px;
+  opacity: 0.6;
+  margin-top: 6px;
+  letter-spacing: 1.5px;
 }
 
 .premium-checkin-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
   color: #fff;
-  font-weight: 600;
-  backdrop-filter: blur(4px);
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+  padding: 0 20px;
+  height: 36px;
 }
 
 .premium-checkin-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.3);
   border-color: #fff;
+  transform: translateY(-2px);
 }
 
 .checkin-done {
   color: #52c41a;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(82, 196, 26, 0.1);
-  padding: 4px 12px;
+  gap: 6px;
+  background: rgba(82, 196, 26, 0.15);
+  padding: 6px 16px;
   border-radius: 20px;
+  backdrop-filter: blur(4px);
 }
 
 .card-bottom {
@@ -941,94 +1101,117 @@ onMounted(() => {
 .exp-header {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 8px;
-  opacity: 0.8;
+  font-size: 13px;
+  margin-bottom: 10px;
+  opacity: 0.9;
 }
 
 .points-badge {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-weight: 600;
 }
 
 .exp-progress-new {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .exp-fill {
   height: 100%;
-  background: linear-gradient(90deg, #d4af37, #f9e29c);
-  border-radius: 3px;
-  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(90deg, #d4af37, #f9e29c, #fff);
+  background-size: 200% 100%;
+  animation: shine 3s infinite linear;
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes shine {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 .card-bg-pattern {
   position: absolute;
   top: 0;
   right: 0;
-  width: 60%;
+  width: 70%;
   height: 100%;
-  background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.15), transparent 70%);
+  background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.2), transparent 70%);
   z-index: 1;
 }
 
 /* 资产网格 (现代感) */
 .stats-card-modern {
   background: #fff;
-  border-radius: 24px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  border-radius: 28px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
 }
 
 .stats-header-modern {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: #1a1a1a;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stats-header-modern::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: #d4af37;
+  border-radius: 2px;
 }
 
 .asset-grid-modern {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
 }
 
 .asset-item-modern {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #f8f9fb;
-  border-radius: 16px;
+  gap: 16px;
+  padding: 20px;
+  background: #f8faff;
+  border-radius: 20px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
 }
 
 .asset-item-modern:hover {
   background: #fff;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  border-color: #e6f0ff;
 }
 
 .asset-icon-bg {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-.coupon-bg { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; }
-.points-bg { background: rgba(250, 173, 20, 0.1); color: #faad14; }
-.balance-bg { background: rgba(82, 196, 26, 0.1); color: #52c41a; }
-.stays-bg { background: rgba(24, 144, 255, 0.1); color: #1890ff; }
+.coupon-bg { background: linear-gradient(135deg, #fff1f0 0%, #fff1f0 100%); color: #ff4d4f; }
+.points-bg { background: linear-gradient(135deg, #fffbe6 0%, #fffbe6 100%); color: #faad14; }
+.balance-bg { background: linear-gradient(135deg, #f6ffed 0%, #f6ffed 100%); color: #52c41a; }
+.stays-bg { background: linear-gradient(135deg, #e6f7ff 0%, #e6f7ff 100%); color: #1890ff; }
 
 .asset-info-modern {
   display: flex;
@@ -1036,27 +1219,205 @@ onMounted(() => {
 }
 
 .asset-num {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
   color: #1a1a1a;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .asset-num .unit, .asset-num .currency {
-  font-size: 12px;
+  font-size: 14px;
   margin: 0 2px;
-  color: #999;
+  color: #8c8c8c;
+  font-weight: 600;
 }
 
 .asset-name {
-  font-size: 12px;
-  color: #999;
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  font-weight: 500;
 }
+
+/* Wallet Styles */
+.wallet-card-ctrip {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.wallet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.wallet-header h3 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.balance-display-large {
+  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  padding: 40px;
+  border-radius: 24px;
+  text-align: center;
+  margin-bottom: 40px;
+  border: 1px solid #91d5ff;
+}
+
+.balance-display-large .lab {
+  font-size: 14px;
+  color: #595959;
+  margin-bottom: 12px;
+}
+
+.balance-display-large .val {
+  color: #1a1a1a;
+}
+
+.balance-display-large .val .currency {
+  font-size: 24px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.balance-display-large .val .num {
+  font-size: 56px;
+  font-weight: 900;
+}
+
+.recharge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.recharge-item {
+  border: 1.5px solid #f0f0f0;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.recharge-item:hover {
+  border-color: #008cff;
+  background: #f8faff;
+}
+
+.recharge-item.active {
+  border-color: #008cff;
+  background: #e6f7ff;
+  box-shadow: 0 0 0 1px #008cff;
+}
+
+.recharge-item .amount-text {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1a1a1a;
+  display: block;
+}
+
+.recharge-item .bonus-tag {
+  display: inline-block;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+
+.recharge-item .bonus-tip {
+  display: block;
+  font-size: 12px;
+  color: #52c41a;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.recharge-btn-container {
+  margin-top: 40px;
+}
+
+.recharge-btn-large {
+  height: 60px;
+  font-size: 20px;
+  font-weight: 800;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 140, 255, 0.2);
+}
+
+.bonus-explain {
+  margin-top: 24px;
+  padding: 20px;
+  background: #fffbe6;
+  border-radius: 12px;
+  border: 1px solid #ffe58f;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.bonus-explain .icon { color: #faad14; font-size: 18px; margin-top: 2px; }
+.bonus-explain .text { font-size: 13px; color: #856404; line-height: 1.6; }
+
+/* Mock Payment Recharge */
+.mock-payment-recharge {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.mock-payment-recharge .amount-box {
+  margin: 24px 0;
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.mock-payment-recharge .amount-box .lab { font-size: 13px; color: #8c8c8c; }
+.mock-payment-recharge .amount-box .val { font-size: 36px; font-weight: 800; color: #1a1a1a; margin-top: 4px; }
+
+.payment-vendor-recharge {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.vendor-item {
+  width: 120px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.vendor-item:hover { border-color: #008cff; }
+.vendor-item.active { border-color: #008cff; }
+.vendor-item.wechat-active { background: #e6fffb; border-color: #07c160; }
+.vendor-item.alipay-active { background: #e6f7ff; border-color: #1677ff; }
+.vendor-item .icon { font-size: 24px; display: block; margin-bottom: 8px; }
+.vendor-item .name { font-size: 13px; font-weight: 600; }
+
+.wechat-color { color: #07c160; }
+.alipay-color { color: #1677ff; }
 
 /* 会员权益 (现代感) */
 .rights-card-modern {
-  border-radius: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  border-radius: 28px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
+  padding: 8px;
 }
 
 .rights-header {
@@ -1066,178 +1427,206 @@ onMounted(() => {
 }
 
 .rights-title-text {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .rights-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: #d4af37;
-  font-weight: 600;
+  font-weight: 700;
+  background: #fffdf0;
+  padding: 4px 12px;
+  border-radius: 10px;
+  border: 1px solid #f9e29c;
 }
 
 .rights-grid-modern {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  padding: 16px;
 }
 
 .right-box {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: #f8f9fb;
-  border-radius: 16px;
+  gap: 20px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 20px;
   transition: all 0.3s;
+  border: 1px solid transparent;
 }
 
-.right-box.active {
-  background: linear-gradient(90deg, #fff 0%, #fffbf0 100%);
+.right-box.active, .right-box:not(.disabled) {
+  background: linear-gradient(90deg, #fff 0%, #fffdf0 100%);
   border: 1px solid #f9e29c;
 }
 
 .right-box.disabled {
   opacity: 0.5;
+  filter: grayscale(1);
 }
 
 .right-icon-wrapper {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   background: #fff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 22px;
   color: #d4af37;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.15);
 }
 
 .right-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   color: #1a1a1a;
 }
 
 .right-value {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
-/* 右侧标签页 */
-.coupons-section {
-  padding: 8px 0;
-}
-
+/* 优惠券页 */
 .coupons-section {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
 }
 
 .coupon-import-bar {
-  background: #f8f9fa;
-  padding: 24px;
-  border-radius: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  padding: 32px;
+  border-radius: 24px;
   border: 1px dashed #d9d9d9;
+  text-align: center;
 }
 
 .coupons-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
 }
 
 .coupon-card {
   display: flex;
-  height: 100px;
+  height: 120px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border: 1px solid #eee;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  transition: all 0.3s;
+}
+
+.coupon-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
 }
 
 .coupon-left {
-  width: 100px;
+  width: 120px;
   background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 8px;
+  padding: 16px;
+  position: relative;
+}
+
+.coupon-left::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  background-image: radial-gradient(circle at 12px 10px, transparent 6px, #ff605c 6px);
+  background-size: 12px 20px;
 }
 
 .coupon-value .val {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 900;
 }
 
 .coupon-value .unit {
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .coupon-condition {
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 600;
   opacity: 0.9;
+  margin-top: 4px;
 }
 
 .coupon-right {
   flex: 1;
-  padding: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .coupon-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1a1a1a;
 }
 
 .coupon-date {
-  font-size: 11px;
-  color: #999;
+  font-size: 12px;
+  color: #8c8c8c;
+  font-weight: 500;
 }
 
-/* 常用入住人列表 */
+.empty-state {
+  padding: 60px 0;
+}
+/* 右侧标签页 */
 .profile-right {
   background: #fff;
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
 }
 
 .profile-tabs :deep(.ant-tabs-nav) {
   margin-bottom: 32px;
 }
 
-.profile-tabs :deep(.ant-tabs-tab-btn) {
+.profile-tabs :deep(.ant-tabs-tab) {
   font-size: 16px;
+  font-weight: 600;
+  padding: 12px 24px;
 }
 
-/* 账号信息列表样式 */
 .account-info-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 32px;
 }
 
 .info-item {
-  display: flex;
-  padding: 24px;
-  border-bottom: 1px solid #f0f0f0;
-  align-items: flex-start;
-  transition: background 0.3s;
-  border-radius: 12px;
-}
-
-.info-item:hover {
-  background: #fafafa;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: start;
+  gap: 24px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #f5f5f5;
 }
 
 .info-item:last-child {
@@ -1245,48 +1634,44 @@ onMounted(() => {
 }
 
 .info-label {
-  width: 120px;
-  font-size: 14px;
-  color: #666;
+  font-size: 15px;
+  color: #8c8c8c;
+  font-weight: 600;
   padding-top: 4px;
 }
 
 .info-content {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .info-value {
-  font-size: 16px;
+  font-size: 17px;
+  font-weight: 700;
   color: #1a1a1a;
-  font-weight: 500;
-}
-
-.info-tip {
-  font-size: 12px;
-  color: #999;
 }
 
 .display-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  width: 100%;
+  justify-content: space-between;
 }
 
 .edit-link {
-  padding: 0;
-  height: auto;
+  font-weight: 600;
   font-size: 14px;
+}
+
+.info-tip {
+  font-size: 13px;
+  color: #bfbfbf;
 }
 
 .edit-row {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
-  width: 100%;
 }
 
 .edit-input {
@@ -1296,60 +1681,90 @@ onMounted(() => {
 .edit-row-vertical {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 100%;
+  gap: 16px;
   max-width: 400px;
 }
 
-.edit-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.mt-2 { margin-top: 8px; }
-
 .phone-input-group {
   display: flex;
-  gap: 8px;
+  gap: 12px;
 }
 
 .send-code-btn {
   width: 120px;
-}
-
-/* 常用入住人列表 */
-.frequent-guests-section .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.frequent-guests-section .section-header p {
-  color: #666;
-  margin: 0;
-}
-
-.guest-name {
-  font-size: 16px;
   font-weight: 600;
 }
 
+.edit-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mt-2 { margin-top: 8px; }
+
+/* 常用入住人 */
+.frequent-guests-section {
+  padding: 8px 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  background: #f8faff;
+  padding: 20px 24px;
+  border-radius: 20px;
+  border: 1px solid #e6f0ff;
+}
+
+.section-header p {
+  margin: 0;
+  color: #595959;
+  font-weight: 500;
+}
+
+.guests-list :deep(.ant-list-item) {
+  padding: 24px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+  transition: all 0.3s;
+  border: 1px solid #f0f0f0;
+}
+
+.guests-list :deep(.ant-list-item:hover) {
+  background: #f8faff;
+  border-color: #008cff;
+  transform: translateX(8px);
+}
+
+.guest-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
 .self-tag {
-  margin-left: 8px;
-  font-size: 11px;
+  margin-left: 12px;
+  font-weight: 700;
+  border-radius: 6px;
 }
 
 .guest-desc {
   display: flex;
   gap: 24px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
-.text-danger {
-  color: #ff4d4f;
+.guest-desc span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #8c8c8c;
 }
+
+.text-danger { color: #ff4d4f; }
 
 @media (max-width: 992px) {
   .profile-content {

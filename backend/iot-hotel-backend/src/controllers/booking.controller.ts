@@ -5,25 +5,49 @@ import { PoolConnection } from 'mysql2/promise';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { isSystemRole } from '../utils/role';
-import { LEVEL_DISCOUNTS } from './member.controller';
+import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from './member.controller';
 
-// 辅助函数：退房后更新会员成长值与等级
+// 辅助函数：退房后更新会员成长值、积分与等级
 async function updateMemberExperienceAfterCheckout(connection: PoolConnection, guestPhone: string, totalPrice: number) {
   try {
+    // 1. 获取系统积分配置 (默认 1元 = 10积分)
+    let pointsRate = 10;
+    try {
+      const [configRows] = await connection.query<RowDataPacket[]>(
+        'SELECT config_value FROM system_settings WHERE config_key = ?',
+        ['points_rate']
+      );
+      if (configRows.length > 0) {
+        pointsRate = Number(configRows[0].config_value);
+      }
+    } catch (e) {
+      logger.warn('获取积分倍率配置失败，使用默认值 10');
+    }
+
+    // 2. 获取会员当前信息
     const [memberRows] = await connection.query<RowDataPacket[]>(
-      'SELECT id, experience, member_level, total_spent, total_stays FROM members WHERE phone = ?',
+      'SELECT id, experience, points, member_level, total_spent, total_stays FROM members WHERE phone = ?',
       [guestPhone]
     );
 
     if (!memberRows || memberRows.length === 0) return;
 
     const member = memberRows[0];
+    
+    // 3. 计算奖励
+    // 成长值: 10元 = 1点 (固定)
     const expGain = Math.floor(totalPrice / 10);
     const newExp = (member.experience || 0) + expGain;
+    
+    // 积分: 1元 = pointsRate点 * 会员等级倍率
+    const multiplier = LEVEL_POINTS_MULTIPLIER[member.member_level] || 1;
+    const pointsGain = Math.floor(totalPrice * pointsRate * multiplier);
+    const newPoints = (member.points || 0) + pointsGain;
+    
     const newSpent = Number(member.total_spent || 0) + Number(totalPrice);
     const newStays = (member.total_stays || 0) + 1;
 
-    // 自动升级逻辑
+    // 4. 自动升级逻辑 (基于成长值)
     let newLevel = member.member_level;
     if (newExp >= 5000) newLevel = 'diamond';
     else if (newExp >= 2000) newLevel = 'platinum';
@@ -31,20 +55,29 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
     else if (newExp >= 100) newLevel = 'silver';
     else newLevel = 'standard';
 
+    // 5. 更新数据库
     await connection.query(
-      'UPDATE members SET experience = ?, member_level = ?, total_spent = ?, total_stays = ? WHERE id = ?',
-      [newExp, newLevel, newSpent, newStays, member.id]
+      'UPDATE members SET experience = ?, points = ?, member_level = ?, total_spent = ?, total_stays = ? WHERE id = ?',
+      [newExp, newPoints, newLevel, newSpent, newStays, member.id]
     );
 
-    logger.info(`会员退房奖励: 手机号 ${guestPhone}, 获得成长值 ${expGain}, 总成长值 ${newExp}, 最终等级 ${newLevel}`);
+    logger.info(`会员退房奖励成功: 手机号 ${guestPhone}, 获得成长值 ${expGain}(总:${newExp}), 获得积分 ${pointsGain}(总:${newPoints}), 最终等级 ${newLevel}`);
   } catch (error) {
     logger.error('更新会员退房奖励失败:', error);
     // 退房流程不应因为奖励失败而中断
   }
 }
 
-// 辅助函数：计算预订最终价格 (集成价格日历与会员/优惠券逻辑)
-async function calculateBookingPrice(connection: PoolConnection, roomId: number, checkInDate: string, checkOutDate: string, memberPhone?: string, couponId?: number) {
+// 辅助函数：计算预订最终价格 (集成价格日历、会员折扣、优惠券与积分抵扣)
+async function calculateBookingPrice(
+  connection: PoolConnection, 
+  roomId: number, 
+  checkInDate: string, 
+  checkOutDate: string, 
+  memberPhone?: string, 
+  couponId?: number,
+  usedPoints?: number
+) {
   const [roomRows] = await connection.query<RowDataPacket[]>(
     'SELECT r.room_price, r.hotel_id, r.room_type_id FROM rooms r WHERE r.id = ?',
     [roomId]
@@ -71,17 +104,23 @@ async function calculateBookingPrice(connection: PoolConnection, roomId: number,
     }
   }
 
-  // 2. 应用会员折扣
+  const basePrice = totalPrice;
   let discountRate = 1.0;
   let memberId = null;
+  let availablePoints = 0;
+
   if (memberPhone) {
-    const [memberRows] = await connection.query<RowDataPacket[]>('SELECT id, member_level FROM members WHERE phone = ?', [memberPhone]);
+    const [memberRows] = await connection.query<RowDataPacket[]>('SELECT id, member_level, points FROM members WHERE phone = ?', [memberPhone]);
     if (memberRows.length > 0) {
       memberId = memberRows[0].id;
+      availablePoints = memberRows[0].points || 0;
       discountRate = LEVEL_DISCOUNTS[memberRows[0].member_level] || 1.0;
       totalPrice = Math.floor(totalPrice * discountRate * 100) / 100;
     }
   }
+
+  const memberDiscountedPrice = totalPrice;
+  let couponDiscount = 0;
 
   // 3. 应用优惠券
   if (couponId && memberId) {
@@ -96,15 +135,54 @@ async function calculateBookingPrice(connection: PoolConnection, roomId: number,
       const coupon = couponRows[0];
       if (totalPrice >= (coupon.min_amount || 0)) {
         if (coupon.coupon_type === 'discount') {
-          totalPrice = Math.floor(totalPrice * (Number(coupon.discount_value) / 10) * 100) / 100; // 假设折扣券存的是几折，如 8.5 表示 85 折
+          const originalPrice = totalPrice;
+          totalPrice = Math.floor(totalPrice * (Number(coupon.discount_value) / 10) * 100) / 100;
+          couponDiscount = originalPrice - totalPrice;
         } else if (coupon.coupon_type === 'cash') {
-          totalPrice = Math.max(0, totalPrice - Number(coupon.discount_value));
+          couponDiscount = Number(coupon.discount_value);
+          totalPrice = Math.max(0, totalPrice - couponDiscount);
         }
       }
     }
   }
 
-  return { totalPrice, discountRate };
+  // 4. 应用积分抵扣 (10积分 = 1元)
+  let pointsDiscount = 0;
+  let actualUsedPoints = 0;
+  if (usedPoints && usedPoints > 0 && memberId) {
+    // 校验积分是否足够
+    actualUsedPoints = Math.min(usedPoints, availablePoints);
+    
+    // 获取抵扣比例 (10:1)
+    let redeemRate = 10;
+    try {
+      const [configRows] = await connection.query<RowDataPacket[]>(
+        'SELECT config_value FROM system_settings WHERE config_key = ?',
+        ['points_redeem_rate']
+      );
+      if (configRows.length > 0) redeemRate = Number(configRows[0].config_value);
+    } catch (e) {}
+
+    pointsDiscount = Math.floor(actualUsedPoints / redeemRate * 100) / 100;
+    // 积分抵扣不能超过当前总价
+    if (pointsDiscount > totalPrice) {
+      pointsDiscount = totalPrice;
+      actualUsedPoints = Math.ceil(pointsDiscount * redeemRate);
+    }
+    totalPrice = Math.floor((totalPrice - pointsDiscount) * 100) / 100;
+  }
+
+  return { 
+    total_price: totalPrice, 
+    discount_rate: discountRate, 
+    base_price: basePrice,
+    member_discount: basePrice - memberDiscountedPrice,
+    coupon_discount: couponDiscount,
+    points_discount: pointsDiscount,
+    pointsDiscount: pointsDiscount, // 兼容前端字段名
+    usedPoints: actualUsedPoints,   // 兼容前端字段名
+    used_points: actualUsedPoints
+  };
 }
 
 export const get = async (req: AuthRequest, res: Response) => {
@@ -222,7 +300,7 @@ export const create = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    const { room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id, status } = req.body;
+    const { room_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id, used_points, status } = req.body;
 
     const [roomRows] = await connection.query<RowDataPacket[]>('SELECT room_price, hotel_id FROM rooms WHERE id = ?', [room_id]);
 
@@ -236,14 +314,15 @@ export const create = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id || null;
     const phone = guest_phone || req.user?.phone || req.user?.username;
 
-    // 使用辅助函数计算最终价格 (集成价格日历、会员折扣、优惠券)
-    const { totalPrice, discountRate } = await calculateBookingPrice(
+    // 使用辅助函数计算最终价格 (集成价格日历、会员折扣、优惠券、积分抵扣)
+    const { total_price, discount_rate, used_points: actualUsedPoints, points_discount } = await calculateBookingPrice(
       connection,
       room_id,
       check_in_date,
       check_out_date,
       phone,
-      coupon_id
+      coupon_id,
+      used_points
     );
 
     // 如果使用了优惠券，标记为已使用
@@ -251,13 +330,18 @@ export const create = async (req: AuthRequest, res: Response) => {
        await connection.query('UPDATE member_coupons SET status = "used", used_at = CURRENT_TIMESTAMP WHERE id = ?', [coupon_id]);
     }
 
+    // 如果使用了积分，扣除积分
+    if (actualUsedPoints > 0) {
+      await connection.query('UPDATE members SET points = points - ? WHERE phone = ?', [actualUsedPoints, phone]);
+    }
+
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     const bookingStatus = status || 'pending';
     const checkInTime = bookingStatus === 'checked_in' ? new Date() : null;
 
     const [result] = await connection.query<ResultSetHeader>(
-      'INSERT INTO bookings (booking_number, hotel_id, room_id, user_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id, total_price, deposit, status, check_in_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [bookingNumber, hotelId, room_id, userId, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id || null, totalPrice, 0, bookingStatus, checkInTime]
+      'INSERT INTO bookings (booking_number, hotel_id, room_id, user_id, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id, used_points, points_discount, total_price, deposit, status, check_in_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [bookingNumber, hotelId, room_id, userId, guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, guest_count, special_requests, payment_method, coupon_id || null, actualUsedPoints, points_discount, total_price, 0, bookingStatus, checkInTime]
     );
 
     const bookingId = result.insertId;
@@ -279,7 +363,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     }
 
     await connection.commit();
-    res.json(successResponse({ id: bookingId, booking_number: bookingNumber, total_price: totalPrice }, '创建预订成功'));
+    res.json(successResponse({ id: bookingId, booking_number: bookingNumber, total_price: total_price }, '创建预订成功'));
   } catch (error) {
     await connection.rollback();
     logger.error('创建预订失败:', error);
@@ -760,7 +844,7 @@ export const extendStay = async (req: AuthRequest, res: Response) => {
 export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
-    const { room_id, check_in_date, check_out_date, guest_phone, coupon_id } = req.query;
+    const { room_id, check_in_date, check_out_date, guest_phone, coupon_id, used_points } = req.query;
 
     if (!room_id || !check_in_date || !check_out_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
@@ -768,19 +852,17 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
 
     const phone = (guest_phone as string) || req.user?.phone || req.user?.username;
 
-    const { totalPrice, discountRate } = await calculateBookingPrice(
+    const result = await calculateBookingPrice(
       connection,
       Number(room_id),
       check_in_date as string,
       check_out_date as string,
       phone,
-      coupon_id ? Number(coupon_id) : undefined
+      coupon_id ? Number(coupon_id) : undefined,
+      used_points ? Number(used_points) : undefined
     );
 
-    res.json(successResponse({
-      total_price: totalPrice,
-      discount_rate: discountRate
-    }, '价格计算成功'));
+    res.json(successResponse(result, '价格计算成功'));
   } catch (error: any) {
     logger.error('计算价格失败:', error);
     res.status(500).json(errorResponse(error.message || '计算价格失败'));

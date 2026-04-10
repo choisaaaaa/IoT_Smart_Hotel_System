@@ -80,7 +80,7 @@
     <div class="ota-content-wrapper" :class="{ 'with-padding': currentStep > 0 }">
       <!-- Steps Navigation (Visible after step 0) -->
       <div v-if="currentStep > 0" class="ota-steps-nav">
-        <a-steps :current="currentStep" size="small" class="ota-custom-steps">
+        <a-steps :current="currentStep - 1" size="small" class="ota-custom-steps">
           <a-step title="选择酒店" />
           <a-step title="房型预订" />
           <a-step title="订单确认" />
@@ -210,236 +210,426 @@
 
       <!-- Step 2: Room Selection -->
       <div v-if="currentStep === 2" class="room-selection-section">
-        <div class="back-nav" @click="currentStep = 1">
+        <div class="back-nav-cta" @click="currentStep = 1">
           <LeftOutlined /> 返回列表
         </div>
 
-        <div class="hotel-detail-header" v-if="selectedHotel">
-          <div class="header-info">
-            <h1 class="detail-title">{{ selectedHotel.name }}</h1>
-            <div class="detail-meta">
-              <span class="stars"><StarFilled v-for="i in selectedHotel.star" :key="i" /></span>
-              <span class="location"><EnvironmentOutlined /> {{ selectedHotel.location }}</span>
+        <div class="hotel-detail-container" v-if="selectedHotel">
+          <!-- Hotel Gallery & Header -->
+          <div class="hotel-intro-card">
+            <div class="hotel-gallery">
+              <div class="main-img">
+                <img :src="selectedHotel.image || '/hotel-placeholder.jpg'" />
+              </div>
+              <div class="side-imgs">
+                <div class="side-img-item"><img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400&auto=format&fit=crop" /></div>
+                <div class="side-img-item"><img src="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400&auto=format&fit=crop" /></div>
+                <div class="side-img-item more">
+                  <img src="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?q=80&w=400&auto=format&fit=crop" />
+                  <div class="overlay">查看全部图片</div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="header-rating">
-            <div class="score">{{ selectedHotel.rating }}</div>
-            <div class="info">
-              <div class="desc">超赞</div>
-              <div class="count">{{ selectedHotel.reviewCount }}条评价</div>
-            </div>
-          </div>
-        </div>
 
-        <div class="ota-room-list" v-if="selectedHotel?.rooms?.length > 0">
-          <div class="room-item-card" v-for="room in selectedHotel?.rooms" :key="room.id">
-            <a-row :gutter="20">
-              <a-col :md="6">
-                <div class="room-preview">
-                  <img :src="room.image || '/room-placeholder.jpg'" :alt="room.name" />
+            <div class="hotel-header-new">
+              <div class="header-left">
+                <h1 class="hotel-name-large">{{ selectedHotel.name }}</h1>
+                <div class="hotel-tags-row">
+                  <a-rate :value="selectedHotel.star" disabled style="font-size: 14px" />
+                  <span class="hotel-type-tag">智能酒店</span>
+                  <span class="hotel-type-tag">商务首选</span>
                 </div>
-              </a-col>
-              <a-col :md="12">
-                <div class="room-info">
-                  <h3 class="room-title">{{ room.name }}</h3>
-                  <div class="room-specs">
-                    <span>📐 {{ room.area }}m²</span>
-                    <span>🛏️ {{ room.bedType }}</span>
-                    <span>👥 {{ room.maxGuests }}人</span>
+                <div class="hotel-address-new">
+                  <EnvironmentFilled style="color: #008cff" /> {{ selectedHotel.location }}
+                </div>
+              </div>
+              <div class="header-right">
+                <div class="score-card-new">
+                  <div class="score-main">
+                    <span class="num">{{ selectedHotel.rating }}</span>
+                    <span class="total">/5</span>
                   </div>
-                  <div class="room-policies">
-                    <div class="policy-item"><CoffeeOutlined /> {{ room.hasBreakfast ? '含早餐' : '不含早' }}</div>
-                    <div class="policy-item success" v-if="room.freeCancel"><CheckCircleOutlined /> 免费取消 (入住前24h)</div>
-                    <div class="policy-item" v-if="room.hasWifi"><WifiOutlined /> 免费无线网络</div>
+                  <div class="score-info">
+                    <div class="desc">“超赞”</div>
+                    <div class="count">{{ selectedHotel.reviewCount }} 条真实评价</div>
                   </div>
                 </div>
-              </a-col>
-              <a-col :md="6" class="room-cta">
-                <div class="room-price-info">
-                  <div class="price-main">
-                    <span class="currency">¥</span>
-                    <span class="amount">{{ room.price }}</span>
-                  </div>
-                  <div class="price-sub">含税费 / 晚</div>
-                </div>
-                <a-button
-                  type="primary"
-                  size="large"
-                  class="ota-book-btn"
-                  :disabled="room.availableCount === 0"
-                  @click="selectRoom(room)"
-                >
-                  {{ room.availableCount === 0 ? '已售罄' : '立即预订' }}
-                </a-button>
-                <div class="room-status" :class="{ warning: room.availableCount < 3 }">
-                  仅剩 {{ room.availableCount }} 间
-                </div>
-              </a-col>
-            </a-row>
+              </div>
+            </div>
           </div>
-        </div>
-        <div v-else class="ota-empty-rooms">
-          <a-empty description="该酒店暂无可预订房型" />
-          <div style="text-align: center; margin-top: 20px;">
-            <a-button @click="currentStep = 0">返回浏览其他酒店</a-button>
+
+          <!-- Room List -->
+          <div class="ota-room-list-new" v-if="selectedHotel?.rooms?.length > 0">
+            <div class="room-list-header">
+              <div class="title">房型选择</div>
+              <div class="filter-tips">已包含增值税及服务费</div>
+            </div>
+
+            <div class="room-card-modern" v-for="room in selectedHotel?.rooms" :key="room.id">
+              <div class="room-card-content">
+                <!-- Room Image -->
+                <div class="room-img-wrapper">
+                  <img :src="room.image || '/room-placeholder.jpg'" :alt="room.name" />
+                  <div class="img-zoom"><FullscreenOutlined /> 查看详情</div>
+                </div>
+
+                <!-- Room Details -->
+                <div class="room-main-info">
+                  <h3 class="room-name-text">{{ room.name }}</h3>
+                  <div class="room-params">
+                    <div class="param-item">
+                      <span class="label">面积</span>
+                      <span class="val">{{ room.area }}m²</span>
+                    </div>
+                    <div class="param-item">
+                      <span class="label">床型</span>
+                      <span class="val">{{ room.bedType }}</span>
+                    </div>
+                    <div class="param-item">
+                      <span class="label">人数</span>
+                      <span class="val">{{ room.maxGuests }}人</span>
+                    </div>
+                    <div class="param-item">
+                      <span class="label">窗户</span>
+                      <span class="val">有窗</span>
+                    </div>
+                  </div>
+                  
+                  <div class="room-perks">
+                    <div class="perk-tag wifi"><WifiOutlined /> 免费无限WiFi</div>
+                    <div class="perk-tag breakfast" :class="{ disabled: !room.hasBreakfast }">
+                      <CoffeeOutlined /> {{ room.hasBreakfast ? '含双早' : '不含早' }}
+                    </div>
+                    <div class="perk-tag cancel" v-if="room.freeCancel"><CheckOutlined /> 免费取消</div>
+                    <div class="perk-tag confirm"><ThunderboltOutlined /> 极速确认</div>
+                  </div>
+                </div>
+
+                <!-- Room CTA Area -->
+                <div class="room-price-cta">
+                  <div class="price-wrapper-new">
+                    <div class="price-top">
+                      <span class="cur">¥</span>
+                      <span class="val">{{ room.price }}</span>
+                    </div>
+                    <div class="price-bottom">
+                      <span class="tax-label">含税费 / 晚</span>
+                    </div>
+                  </div>
+                  
+                  <div class="cta-actions">
+                    <a-button 
+                      type="primary" 
+                      size="large" 
+                      class="book-now-btn"
+                      :disabled="room.availableCount === 0"
+                      @click="selectRoom(room)"
+                    >
+                      {{ room.availableCount === 0 ? '已售罄' : '立即预订' }}
+                    </a-button>
+                    <div class="inventory-status" :class="{ low: room.availableCount < 3 }">
+                      {{ room.availableCount === 0 ? '下手慢了' : `仅剩 ${room.availableCount} 间` }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="ota-empty-rooms">
+            <a-empty description="该酒店暂无可预订房型" />
+            <div style="text-align: center; margin-top: 20px;">
+              <a-button @click="currentStep = 0">返回浏览其他酒店</a-button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Step 3: Order Confirmation -->
       <div v-if="currentStep === 3" class="order-confirmation-section">
-        <a-row :gutter="24">
-          <a-col :md="16">
-            <!-- Guest Selection Section -->
-            <a-card class="ota-form-card frequent-guests-card" title="常用入住人" :bordered="false">
-              <template #extra>
-                <a-button type="link" @click="handleAddGuest">
-                  <PlusOutlined /> 管理名册
+        <div class="ctrip-container">
+          <!-- Left Content -->
+          <div class="ctrip-main">
+            <!-- Order Header -->
+            <div class="order-header-ctrip">
+              <h2 class="hotel-title-large">{{ selectedHotel?.name }}</h2>
+              <div class="hotel-meta-ctrip">
+                <a-rate :value="5" disabled style="font-size: 14px" />
+                <span class="location-text"><EnvironmentOutlined /> {{ selectedHotel?.location }}</span>
+              </div>
+            </div>
+
+            <!-- Guest Form Card -->
+            <div class="ctrip-card">
+              <div class="card-header-ctrip">
+                <span class="title">入住人信息</span>
+                <a-button type="link" size="small" @click="handleAddGuest">
+                  <PlusOutlined /> 添加常用入住人
                 </a-button>
-              </template>
-              <div class="frequent-guest-list">
-                <div
-                  v-for="guest in frequentGuests"
-                  :key="guest.id"
-                  class="guest-chip"
-                  :class="{ active: bookingForm.idNumber === guest.id_number }"
-                  @click="selectFrequentGuest(guest)"
-                >
-                  <span class="name">{{ guest.name }}</span>
-                  <div class="actions">
-                    <EditOutlined @click.stop="handleEditGuest(guest)" />
-                    <a-popconfirm title="确定删除吗？" @confirm.stop="handleDeleteGuest(guest.id!)">
-                      <DeleteOutlined @click.stop />
-                    </a-popconfirm>
+              </div>
+              
+              <!-- Frequent Guests -->
+              <div class="frequent-guest-bar">
+                <span class="label">常用入住人:</span>
+                <div class="guest-chips-container">
+                  <div
+                    v-for="guest in frequentGuests"
+                    :key="guest.id"
+                    class="guest-chip-ctrip"
+                    :class="{ active: bookingForm.idNumber === guest.id_number }"
+                    @click="selectFrequentGuest(guest)"
+                  >
+                    {{ guest.name }}
                   </div>
                 </div>
-                <div v-if="frequentGuests.length === 0" class="empty-tip">
-                  暂无常用联系人，填写后可勾选保存
-                </div>
               </div>
-            </a-card>
 
-            <a-card class="ota-form-card" title="入住人信息" :bordered="false" style="margin-top: 20px;">
-              <a-form :model="bookingForm" layout="vertical">
-                <a-row :gutter="16">
+              <a-form :model="bookingForm" layout="vertical" class="ctrip-form">
+                <a-row :gutter="20">
                   <a-col :span="12">
-                    <a-form-item label="姓名" required>
-                      <a-input v-model:value="bookingForm.guestName" placeholder="请填写真实姓名" />
+                    <a-form-item label="入住人姓名" required>
+                      <a-input v-model:value="bookingForm.guestName" placeholder="请填写真实姓名" size="large" />
                     </a-form-item>
                   </a-col>
                   <a-col :span="12">
                     <a-form-item label="手机号" required>
-                      <a-input v-model:value="bookingForm.phone" placeholder="接收确认短信" />
+                      <a-input v-model:value="bookingForm.phone" placeholder="用于接收确认短信" size="large" />
                     </a-form-item>
                   </a-col>
                 </a-row>
-                <a-row :gutter="16">
-                  <a-col :span="8">
+                <a-row :gutter="20">
+                  <a-col :span="12">
                     <a-form-item label="证件类型" required>
-                      <a-select v-model:value="bookingForm.idType">
+                      <a-select v-model:value="bookingForm.idType" size="large">
                         <a-select-option value="idcard">身份证</a-select-option>
                         <a-select-option value="passport">护照</a-select-option>
                       </a-select>
                     </a-form-item>
                   </a-col>
-                  <a-col :span="16">
+                  <a-col :span="12">
                     <a-form-item label="证件号码" required>
-                      <a-input v-model:value="bookingForm.idNumber" placeholder="请输入有效证件号" />
+                      <a-input v-model:value="bookingForm.idNumber" placeholder="请输入有效证件号" size="large" />
                     </a-form-item>
                   </a-col>
                 </a-row>
                 <a-form-item>
                   <a-checkbox v-model:checked="saveAsFrequent">保存到常用入住人名册</a-checkbox>
                 </a-form-item>
-                <a-form-item label="特殊要求">
-                  <a-textarea v-model:value="bookingForm.remark" :rows="3" placeholder="如：高楼层、无烟房等" />
-                </a-form-item>
               </a-form>
-            </a-card>
+            </div>
 
-            <a-card class="ota-form-card" title="支付方式" :bordered="false" style="margin-top: 20px;">
-              <a-radio-group v-model:value="paymentMethod" class="payment-group">
-                <a-radio value="balance" class="payment-item">
-                  <WalletOutlined /> 余额支付 (推荐)
-                </a-radio>
-                <a-radio value="wechat" class="payment-item">
-                  <WechatOutlined style="color: #07c160" /> 微信支付
-                </a-radio>
-                <a-radio value="alipay" class="payment-item">
-                  <AlipayCircleOutlined style="color: #1677ff" /> 支付宝
-                </a-radio>
-              </a-radio-group>
-            </a-card>
-
-            <a-card class="ota-form-card" title="优惠券" :bordered="false" style="margin-top: 20px;">
-              <a-select
-                v-model:value="selectedCouponId"
-                placeholder="选择优惠券"
-                style="width: 100%"
-                allow-clear
-                @change="handleCouponChange"
-              >
-                <a-select-option v-for="coupon in availableCoupons" :key="coupon.id" :value="coupon.id">
-                  {{ coupon.coupon_name }} ({{ coupon.coupon_type === 'discount' ? coupon.discount_value + '折' : '减¥' + coupon.discount_value }}) - 满{{ coupon.min_amount }}可用
-                </a-select-option>
-              </a-select>
-              <div v-if="availableCoupons.length === 0" class="empty-tip">
-                暂无可用优惠券
+            <!-- Payment Method Card -->
+            <div class="ctrip-card" style="margin-top: 20px;">
+              <div class="card-header-ctrip">
+                <span class="title">支付方式</span>
               </div>
-            </a-card>
-          </a-col>
-
-          <a-col :md="8">
-            <div class="order-summary-card">
-              <div class="summary-hotel">
-                <img :src="selectedHotel?.image" class="hotel-mini-img" />
-                <div class="hotel-mini-info">
-                  <h4>{{ selectedHotel?.name }}</h4>
-                  <div class="room-name">{{ selectedRoom?.name }}</div>
+              <div class="payment-selector-ctrip">
+                <div 
+                  class="payment-option-ctrip" 
+                  :class="{ active: paymentMethod === 'balance' }"
+                  @click="paymentMethod = 'balance'"
+                >
+                  <div class="icon-box balance"><WalletOutlined /></div>
+                  <div class="info">
+                    <div class="name">余额支付</div>
+                    <div class="desc">余额: ¥{{ memberInfo?.balance || 0 }}</div>
+                  </div>
                 </div>
-              </div>
-              <div class="summary-details">
-                <div class="detail-item">
-                  <span>入住</span>
-                  <span>{{ dayjs(dateRange[0]).format('MM-DD') }} ({{ nights }}晚)</span>
+                <div 
+                  class="payment-option-ctrip" 
+                  :class="{ active: paymentMethod === 'front_desk' }"
+                  @click="paymentMethod = 'front_desk'"
+                >
+                  <div class="icon-box front"><HomeOutlined /></div>
+                  <div class="info">
+                    <div class="name">到店支付</div>
+                    <div class="desc">前台办理时缴纳</div>
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <span>退房</span>
-                  <span>{{ dayjs(dateRange[1]).format('MM-DD') }}</span>
+                <div 
+                  class="payment-option-ctrip" 
+                  :class="{ active: paymentMethod === 'wechat' }"
+                  @click="paymentMethod = 'wechat'"
+                >
+                  <div class="icon-box wechat"><WechatOutlined /></div>
+                  <div class="info">
+                    <div class="name">微信支付</div>
+                    <div class="desc">微信扫码</div>
+                  </div>
                 </div>
-              </div>
-              <a-divider />
-              <div class="price-breakdown">
-                <div class="price-row">
-                  <span>房费 ({{ nights }}晚)</span>
-                  <span>¥{{ (selectedRoom?.price || 0) * nights }}</span>
+                <div 
+                  class="payment-option-ctrip" 
+                  :class="{ active: paymentMethod === 'alipay' }"
+                  @click="paymentMethod = 'alipay'"
+                >
+                  <div class="icon-box alipay"><AlipayCircleOutlined /></div>
+                  <div class="info">
+                    <div class="name">支付宝</div>
+                    <div class="desc">手机支付</div>
+                  </div>
                 </div>
-                <div v-if="memberDiscount < 1" class="price-row discount">
-                  <span>会员折扣 ({{ memberLevelLabel }})</span>
-                  <span>-¥{{ discountAmount }}</span>
-                </div>
-                <div class="price-row total">
-                  <span>应付总额</span>
-                  <span class="total-amount">¥{{ finalTotalPrice }}</span>
-                </div>
-              </div>
-              <a-button type="primary" size="large" block class="ota-confirm-btn" :loading="submitting" @click="submitBooking">
-                确认支付
-              </a-button>
-              <div class="security-tip">
-                <SecurityScanOutlined /> 安全支付保障 · 极速确认
               </div>
             </div>
-          </a-col>
-        </a-row>
-      </div>
+
+            <!-- Offer Card -->
+            <div class="ctrip-card" style="margin-top: 20px;">
+              <div class="card-header-ctrip">
+                <span class="title">优惠与抵扣</span>
+              </div>
+              <div class="offer-section-ctrip">
+                <div class="offer-row-ctrip">
+                  <span class="label">优惠券</span>
+                  <a-select
+                    v-model:value="selectedCouponId"
+                    placeholder="选择可用优惠券"
+                    style="width: 300px"
+                    allow-clear
+                    @change="handleCouponChange"
+                  >
+                    <a-select-option v-for="coupon in availableCoupons" :key="coupon.id" :value="coupon.id">
+                      {{ coupon.coupon_name }} (-¥{{ coupon.discount_value }})
+                    </a-select-option>
+                  </a-select>
+                </div>
+                <div class="offer-row-ctrip">
+                  <div class="label-group">
+                    <span class="label">积分抵扣</span>
+                    <span class="sub-label">可用 {{ memberInfo?.points || 0 }} 积分 (10积分=1元)</span>
+                  </div>
+                  <div class="action-group">
+                    <a-checkbox v-model:checked="usePoints" @change="handlePointsToggle">使用积分</a-checkbox>
+                    <a-input-number
+                      v-if="usePoints"
+                      v-model:value="pointsToUse"
+                      :min="0"
+                      :max="memberInfo?.points || 0"
+                      :step="10"
+                      style="width: 120px"
+                      @change="handlePointsChange"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Content (Sticky Summary) -->
+            <div class="ctrip-side">
+              <div class="ctrip-summary-card">
+                <div class="summary-header-ctrip">
+                  <div class="room-info-box">
+                    <img :src="selectedRoom?.image || selectedHotel?.image" class="room-img" />
+                    <div class="room-name-box">
+                      <div class="name">{{ selectedRoom?.name }}</div>
+                      <div class="tags">不含早 | 免费取消</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="summary-body-ctrip">
+                  <div class="date-range-ctrip">
+                    <div class="date-item">
+                      <div class="lab">入住</div>
+                      <div class="val">{{ dayjs(dateRange[0]).format('MM月DD日') }}</div>
+                    </div>
+                    <div class="nights-tag">{{ nights }}晚</div>
+                    <div class="date-item text-right">
+                      <div class="lab">退房</div>
+                      <div class="val">{{ dayjs(dateRange[1]).format('MM月DD日') }}</div>
+                    </div>
+                  </div>
+
+                  <div class="price-breakdown-ctrip">
+                    <div class="item">
+                      <span>房费总计</span>
+                      <span>¥{{ (selectedRoom?.price || 0) * nights }}</span>
+                    </div>
+                    <div v-if="memberDiscount < 1" class="item discount">
+                      <span>会员优惠 ({{ memberLevelLabel }})</span>
+                      <span>-¥{{ discountAmount }}</span>
+                    </div>
+                    <div v-if="pointsDiscount > 0" class="item discount">
+                      <span>积分抵扣</span>
+                      <span>-¥{{ pointsDiscount }}</span>
+                    </div>
+                  </div>
+
+                  <div class="final-total-ctrip">
+                    <div class="lab">应付总额</div>
+                    <div class="val">
+                      <span class="unit">¥</span>
+                      <span class="num">{{ finalTotalPrice }}</span>
+                    </div>
+                  </div>
+
+                  <a-button type="primary" block class="ctrip-confirm-btn" :loading="submitting" @click="handlePreSubmit">
+                    {{ paymentMethod === 'front_desk' ? '确认预订' : '立即支付' }}
+                  </a-button>
+
+                  <div class="ctrip-safety-tips">
+                    <SecurityScanOutlined /> 安全预订 · 房位保障
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      <!-- Payment Modal (Mock) -->
+      <a-modal
+        v-model:visible="paymentModalVisible"
+        title="收银台"
+        :footer="null"
+        width="400px"
+        :closable="false"
+      >
+        <div class="mock-payment-ctrip">
+          <div class="payment-title">支付金额</div>
+          <div class="payment-amount">¥{{ finalTotalPrice }}</div>
+          
+          <div class="payment-vendor">
+            <template v-if="paymentMethod === 'wechat'">
+              <WechatOutlined class="icon wechat" />
+              <span>微信支付</span>
+            </template>
+            <template v-else-if="paymentMethod === 'alipay'">
+              <AlipayCircleOutlined class="icon alipay" />
+              <span>支付宝</span>
+            </template>
+            <template v-else-if="paymentMethod === 'balance'">
+              <WalletOutlined class="icon balance" />
+              <span>余额支付</span>
+            </template>
+          </div>
+
+          <div class="payment-qr-mock">
+            <div class="qr-placeholder">
+              <template v-if="paymentMethod === 'balance'">
+                <UnlockOutlined style="font-size: 48px; color: #52c41a" />
+                <p>指纹/面容确认中</p>
+              </template>
+              <template v-else>
+                <QrcodeOutlined style="font-size: 48px; color: #1a1a1a" />
+                <p>请扫码完成支付</p>
+              </template>
+            </div>
+          </div>
+
+          <a-button type="primary" block size="large" :loading="paymentLoading" @click="confirmMockPayment">
+            确认付款
+          </a-button>
+          <a-button block style="margin-top: 12px" @click="paymentModalVisible = false">
+            取消支付
+          </a-button>
+        </div>
+      </a-modal>
 
       <!-- Success Result -->
       <div v-if="currentStep === 4" class="success-result-section">
         <a-result
           status="success"
           title="预订已成功确认！"
-          :sub-title="`预订编号: ${bookingNo}。我们已向您的手机发送了确认短信。`"
+          :sub-title="`预订编号: ${bookingNo}。支付状态: 已支付。我们已向您的手机发送了确认短信。`"
         >
           <template #extra>
             <div class="success-actions">
@@ -455,7 +645,7 @@
 
     <!-- Frequent Guest Management Modal -->
     <a-modal
-      v-model:open="showGuestModal"
+      v-model:visible="showGuestModal"
       :title="editingGuestId ? '编辑联系人' : '添加联系人'"
       @ok="saveGuest"
     >
@@ -495,7 +685,8 @@ import {
   UserOutlined, MobileOutlined, CheckOutlined,
   CheckCircleOutlined, LeftOutlined, WifiOutlined,
   CoffeeOutlined, WalletOutlined, WechatOutlined, AlipayCircleOutlined,
-  SecurityScanOutlined, PlusOutlined, DeleteOutlined, EditOutlined
+  SecurityScanOutlined, PlusOutlined, DeleteOutlined, EditOutlined, InfoCircleOutlined,
+  QrcodeOutlined, UnlockOutlined, HomeOutlined, FullscreenOutlined, ThunderboltOutlined
 } from '@ant-design/icons-vue'
 
 // --- State ---
@@ -511,6 +702,53 @@ const memberInfo = ref<any>(null)
 const paymentMethod = ref('balance')
 const selectedCouponId = ref<number | null>(null)
 const myCoupons = ref<any[]>([])
+const usePoints = ref(false)
+const pointsToUse = ref(0)
+const pointsDiscount = ref(0)
+
+const paymentModalVisible = ref(false)
+const paymentLoading = ref(false)
+
+const handlePreSubmit = () => {
+  if (paymentMethod.value === 'balance') {
+    const balance = Number(memberInfo.value?.balance || 0)
+    if (balance < finalTotalPrice.value) {
+      return message.error(`余额不足！当前余额 ¥${balance}，还需充值 ¥${(finalTotalPrice.value - balance).toFixed(2)}`)
+    }
+  }
+
+  if (paymentMethod.value === 'front_desk') {
+    submitBooking()
+  } else {
+    paymentModalVisible.value = true
+  }
+}
+
+const confirmMockPayment = async () => {
+  paymentLoading.value = true
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  paymentLoading.value = false
+  paymentModalVisible.value = false
+  submitBooking()
+}
+
+const handlePointsToggle = () => {
+  if (!usePoints.value) {
+    pointsToUse.value = 0
+    pointsDiscount.value = 0
+  } else {
+    // 默认使用最大可用积分（简单处理）
+    pointsToUse.value = memberInfo.value?.points || 0
+    handlePointsChange()
+  }
+}
+
+const handlePointsChange = () => {
+  if (currentStep.value === 3) {
+    updateCalculatedPrice()
+  }
+}
 
 const handleCouponChange = (val: any) => {
   selectedCouponId.value = val
@@ -581,20 +819,20 @@ const couponDiscountAmount = computed(() => {
 
 const memberDiscount = computed(() => {
   if (!memberInfo.value) return 1.0
-  const level = memberInfo.value.level || 1
-  const discounts: Record<number, number> = {
-    5: 0.80,
-    4: 0.85,
-    3: 0.88,
-    2: 0.95,
-    1: 1.0
+  const mLevel = memberInfo.value.member_level || 'standard'
+  const discounts: Record<string, number> = {
+    'diamond': 0.80,
+    'platinum': 0.85,
+    'gold': 0.88,
+    'silver': 0.95,
+    'standard': 1.0
   }
-  return discounts[level] || 1.0
+  return discounts[mLevel] || 1.0
 })
 
 const memberLevelLabel = computed(() => {
   if (!memberInfo.value) return ''
-  return `LEVEL ${memberInfo.value.level || 1}`
+  return memberInfo.value.level_label || `LEVEL ${memberInfo.value.level || 1}`
 })
 
 const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
@@ -631,11 +869,16 @@ const updateCalculatedPrice = async () => {
         room_id: selectedRoom.value.id,
         check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
         check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
-        coupon_id: selectedCouponId.value || undefined
+        coupon_id: selectedCouponId.value || undefined,
+        used_points: usePoints.value ? pointsToUse.value : 0
       }
     })
     finalTotalPrice.value = res.data.total_price
     memberDiscountRate.value = res.data.discount_rate
+    pointsDiscount.value = res.data.pointsDiscount || 0
+    if (usePoints.value) {
+      pointsToUse.value = res.data.usedPoints || 0
+    }
   } catch (error) {
     console.error('价格计算失败:', error)
   }
@@ -646,7 +889,10 @@ watch([selectedRoom, dateRange, selectedCouponId], () => {
     updateCalculatedPrice()
   }
 })
-const discountAmount = computed(() => Math.floor((originalPrice.value - finalTotalPrice.value) * 100) / 100)
+const discountAmount = computed(() => {
+  const val = Number(originalPrice.value) - Number(finalTotalPrice.value)
+  return isNaN(val) ? 0 : Math.floor(val * 100) / 100
+})
 
 const nights = computed(() => {
   if (dateRange.value[0] && dateRange.value[1]) {
@@ -830,6 +1076,7 @@ const submitBooking = async () => {
       special_requests: bookingForm.remark,
       payment_method: paymentMethod.value,
       coupon_id: selectedCouponId.value || undefined,
+      used_points: usePoints.value ? pointsToUse.value : 0,
       status: 'pending'
     })
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
@@ -923,7 +1170,7 @@ watch(() => appStore.userInfo, (newVal) => {
 
 /* Floating Search Bar */
 .floating-search-wrapper {
-  max-width: 1040px;
+  max-width: 1200px;
   margin: -60px auto 0;
   padding: 0 20px;
   position: relative;
@@ -932,20 +1179,20 @@ watch(() => appStore.userInfo, (newVal) => {
 
 .ota-search-card {
   border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  padding: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  padding: 12px;
   background: white;
 }
 
 .search-item {
-  padding: 8px 16px;
+  padding: 8px 20px;
 }
 
 .search-label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: #8c8c8c;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-weight: 600;
 }
 
@@ -954,18 +1201,18 @@ watch(() => appStore.userInfo, (newVal) => {
 }
 
 .ota-input :deep(.ant-input) {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .ota-range-picker :deep(.ant-picker-input > input) {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .ota-guest-selector {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   cursor: pointer;
   padding: 4px 0;
   display: flex;
@@ -976,11 +1223,11 @@ watch(() => appStore.userInfo, (newVal) => {
   position: absolute;
   top: 100%;
   left: 0;
-  width: 200px;
+  width: 220px;
   background: white;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  border-radius: 8px;
-  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  border-radius: 12px;
+  padding: 16px;
   margin-top: 12px;
   z-index: 100;
 }
@@ -989,26 +1236,46 @@ watch(() => appStore.userInfo, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .ota-search-btn {
-  height: 56px;
-  font-size: 18px;
+  height: 60px;
+  font-size: 20px;
   font-weight: bold;
-  border-radius: 12px;
+  border-radius: 14px;
   background: linear-gradient(90deg, #008cff, #0056ff);
+  box-shadow: 0 4px 15px rgba(0, 140, 255, 0.3);
 }
 
 /* Content Wrapper */
 .ota-content-wrapper {
-  max-width: 1100px;
+  max-width: 1300px;
   margin: 40px auto;
-  padding: 0 20px;
+  padding: 0 30px;
 }
 
 .with-padding {
   padding-top: 20px;
+}
+
+/* Steps Nav */
+.ota-steps-nav {
+  background: white;
+  padding: 24px 40px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.ota-custom-steps :deep(.ant-steps-item-title) {
+  font-weight: 700 !important;
+  font-size: 15px !important;
+}
+
+.ota-custom-steps :deep(.ant-steps-item-process .ant-steps-item-icon) {
+  background: #008cff;
+  border-color: #008cff;
 }
 
 /* Section Header */
@@ -1195,31 +1462,205 @@ watch(() => appStore.userInfo, (newVal) => {
 .spacer { flex: 1; }
 .ota-action-btn { border-radius: 8px; height: 40px; font-weight: 700; }
 
-/* Room Selection Styles */
-.room-item-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 16px;
-  border: 1px solid #f0f0f0;
+/* Room Selection Styles Redesign */
+.room-selection-section {
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
-.room-preview { height: 140px; border-radius: 8px; overflow: hidden; }
-.room-preview img { width: 100%; height: 100%; object-fit: cover; }
+.back-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #008cff;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition: all 0.2s;
+}
 
-.room-specs { margin: 8px 0; display: flex; gap: 16px; color: #8c8c8c; font-size: 13px; }
-.room-policies { margin-top: 12px; }
-.policy-item { font-size: 13px; margin-bottom: 4px; color: #595959; display: flex; align-items: center; gap: 6px; }
-.policy-item.success { color: #52c41a; font-weight: 600; }
+.back-nav-cta:hover { opacity: 0.8; }
 
-.room-cta { text-align: right; }
-.room-price-info { margin-bottom: 12px; }
-.price-main { color: #ff4d4f; }
-.price-main .currency { font-size: 16px; }
-.price-main .amount { font-size: 32px; }
-.price-sub { font-size: 12px; color: #8c8c8c; }
+.hotel-intro-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  margin-bottom: 24px;
+  position: relative; /* 确保子元素定位参考 */
+}
 
-.room-status { font-size: 12px; margin-top: 8px; color: #8c8c8c; }
+.hotel-gallery {
+  display: flex;
+  height: 380px; /* 增加高度以容纳评分卡片 */
+  gap: 4px;
+}
+
+.hotel-gallery img { width: 100%; height: 100%; object-fit: cover; }
+
+.main-img { flex: 2; }
+.side-imgs { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.side-img-item { flex: 1; min-height: 0; } /* 确保子项不溢出 */
+.side-img-item.more { position: relative; }
+.side-img-item.more .overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.hotel-header-new {
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* 顶部对齐 */
+}
+
+.hotel-name-large { font-size: 32px; font-weight: 800; margin-bottom: 8px; color: #1a1a1a; }
+.hotel-tags-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.hotel-type-tag { font-size: 12px; color: #8c8c8c; background: #f5f5f5; padding: 2px 8px; border-radius: 4px; }
+
+.hotel-address-new { font-size: 14px; color: #595959; }
+
+.score-card-new {
+  background: #fff; /* 改为白色背景增加对比 */
+  padding: 12px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin-top: -60px; /* 向上偏移悬浮在图片上 */
+  position: relative;
+  z-index: 5;
+}
+
+.score-main { text-align: center; border-right: 1px solid #d6e4ff; padding-right: 16px; }
+.score-main .num { font-size: 32px; font-weight: 900; color: #008cff; line-height: 1; }
+.score-main .total { font-size: 14px; color: #8c8c8c; }
+
+.score-info .desc { font-weight: 800; color: #008cff; font-size: 16px; margin-bottom: 4px; }
+.score-info .count { font-size: 12px; color: #8c8c8c; }
+
+/* Room List New Styles */
+.room-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.room-list-header .title { font-size: 22px; font-weight: 800; color: #1a1a1a; }
+.room-list-header .filter-tips { font-size: 13px; color: #8c8c8c; }
+
+.room-card-modern {
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: all 0.3s;
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.room-card-modern:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  border-color: #008cff;
+}
+
+.room-card-content {
+  display: flex;
+  height: 200px;
+}
+
+.room-img-wrapper {
+  width: 260px;
+  position: relative;
+  overflow: hidden;
+}
+
+.room-img-wrapper img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+.room-card-modern:hover .room-img-wrapper img { transform: scale(1.1); }
+
+.img-zoom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  font-size: 12px;
+  padding: 4px 0;
+  text-align: center;
+  transform: translateY(100%);
+  transition: transform 0.3s;
+}
+
+.room-card-modern:hover .img-zoom { transform: translateY(0); }
+
+.room-main-info {
+  flex: 1;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-name-text { font-size: 20px; font-weight: 800; margin-bottom: 16px; color: #1a1a1a; }
+
+.room-params {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.param-item { display: flex; flex-direction: column; gap: 4px; }
+.param-item .label { font-size: 12px; color: #8c8c8c; }
+.param-item .val { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+
+.room-perks { display: flex; flex-wrap: wrap; gap: 8px; }
+.perk-tag {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.perk-tag.wifi { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+.perk-tag.cancel { background: #f9f0ff; color: #722ed1; border-color: #d3adf7; }
+.perk-tag.confirm { background: #fff7e6; color: #fa8c16; border-color: #ffd591; }
+.perk-tag.disabled { background: #f5f5f5; color: #bfbfbf; border-color: #d9d9d9; text-decoration: line-through; }
+
+.room-price-cta {
+  width: 240px;
+  padding: 20px 24px;
+  border-left: 1px dashed #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.price-wrapper-new { text-align: right; margin-bottom: 16px; }
+.price-top { color: #ff4d4f; line-height: 1; }
+.price-top .cur { font-size: 18px; font-weight: 700; }
+.price-top .val { font-size: 42px; font-weight: 900; }
+.price-bottom { font-size: 12px; color: #8c8c8c; margin-top: 4px; }
+
+.cta-actions { width: 100%; }
+.book-now-btn { width: 100%; height: 48px; font-size: 18px; font-weight: 800; border-radius: 8px; }
+.inventory-status { font-size: 12px; text-align: center; margin-top: 8px; color: #8c8c8c; font-weight: 600; }
+.inventory-status.low { color: #fa8c16; }
+
 .ota-form-card {
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
@@ -1279,28 +1720,450 @@ watch(() => appStore.userInfo, (newVal) => {
 /* Order Summary */
 .order-summary-card {
   background: white;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 28px;
   position: sticky;
   top: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.08);
+  border: 1px solid #f0f0f0;
 }
 
-.summary-hotel { display: flex; gap: 12px; margin-bottom: 20px; }
-.hotel-mini-img { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
-.hotel-mini-info h4 { margin: 0; font-size: 16px; }
-.hotel-mini-info .room-name { font-size: 13px; color: #8c8c8c; }
+.summary-header { margin-bottom: 20px; border-bottom: 1px solid #f0f0f0; padding-bottom: 16px; }
+.summary-title { font-size: 20px; font-weight: 800; margin: 0; color: #1a1a1a; }
 
-.summary-details { background: #f9f9f9; padding: 12px; border-radius: 8px; }
-.detail-item { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+.summary-hotel-large { display: flex; gap: 16px; margin-bottom: 24px; }
+.hotel-large-img { width: 100px; height: 100px; border-radius: 12px; object-fit: cover; }
+.hotel-large-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.hotel-name { font-size: 18px; font-weight: 700; margin: 0 0 6px 0; }
+.room-type-tag { font-size: 14px; color: #008cff; font-weight: 600; margin-bottom: 4px; }
+.hotel-address { font-size: 13px; color: #8c8c8c; }
 
-.price-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-.price-row.total { margin-top: 16px; border-top: 1px solid #f0f0f0; padding-top: 16px; }
-.total-amount { font-size: 24px; color: #ff4d4f; font-weight: 800; }
+.summary-date-box { 
+  background: #f8faff; 
+  padding: 20px; 
+  border-radius: 16px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  margin-bottom: 24px;
+}
+.date-item { flex: 1; }
+.date-label { font-size: 12px; color: #8c8c8c; margin-bottom: 4px; }
+.date-val { font-size: 16px; font-weight: 700; color: #1a1a1a; }
+.date-week { font-size: 12px; color: #595959; }
+.night-count { padding: 0 12px; display: flex; flex-direction: column; align-items: center; }
+.night-count .line { width: 1px; height: 10px; background: #d9d9d9; }
+.night-count .text { font-size: 12px; font-weight: 600; color: #008cff; margin: 4px 0; border: 1px solid #008cff; padding: 2px 8px; border-radius: 10px; background: white; }
 
-.ota-confirm-btn { height: 48px; font-size: 18px; font-weight: 700; border-radius: 8px; margin-top: 12px; }
+.price-details-box { margin-bottom: 24px; }
+.price-row-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.price-row-item .label { font-size: 14px; color: #595959; }
+.price-row-item .val { font-size: 15px; font-weight: 600; }
+.price-row-item.discount .val { color: #ff4d4f; }
+.price-row-item.final .label { font-size: 16px; font-weight: 700; color: #1a1a1a; }
+.final-price-wrapper { color: #ff4d4f; }
+.final-price-wrapper .currency { font-size: 18px; font-weight: 700; }
+.final-price-wrapper .amount { font-size: 32px; font-weight: 800; }
+
+/* Ctrip Style Redesign */
+.ctrip-container {
+  display: flex;
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ctrip-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-header-ctrip {
+  margin-bottom: 24px;
+}
+
+.hotel-title-large {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.hotel-meta-ctrip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #595959;
+}
+
+.ctrip-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.card-header-ctrip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-header-ctrip .title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.frequent-guest-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.frequent-guest-bar .label {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.guest-chips-container {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guest-chip-ctrip {
+  padding: 4px 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+
+.guest-chip-ctrip:hover {
+  border-color: #008cff;
+  color: #008cff;
+}
+
+.guest-chip-ctrip.active {
+  border-color: #008cff;
+  background: #e6f7ff;
+  color: #008cff;
+}
+
+.ctrip-form :deep(.ant-form-item-label > label) {
+  font-size: 13px;
+  color: #595959;
+}
+
+.payment-selector-ctrip {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.payment-option-ctrip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.payment-option-ctrip:hover {
+  background: #f8faff;
+  border-color: #008cff;
+}
+
+.payment-option-ctrip.active {
+  background: #e6f7ff;
+  border-color: #008cff;
+  box-shadow: 0 0 0 1px #008cff;
+}
+
+.payment-option-ctrip .icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.icon-box.balance { background: #e6f7ff; color: #1890ff; }
+.icon-box.front { background: #fff7e6; color: #faad14; }
+.icon-box.wechat { background: #e6fffb; color: #52c41a; }
+.icon-box.alipay { background: #e6f7ff; color: #1677ff; }
+
+.payment-option-ctrip .info .name {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.payment-option-ctrip .info .desc {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.offer-section-ctrip {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.offer-row-ctrip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.offer-row-ctrip .label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.label-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.label-group .sub-label {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Side Summary */
+.ctrip-side {
+  width: 360px;
+}
+
+.ctrip-summary-card {
+  background: #fff;
+  border-radius: 8px;
+  position: sticky;
+  top: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.summary-header-ctrip {
+  background: #f0f5ff;
+  padding: 20px;
+}
+
+.room-info-box {
+  display: flex;
+  gap: 12px;
+}
+
+.room-img {
+  width: 80px;
+  height: 60px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.room-name-box .name {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.room-name-box .tags {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.summary-body-ctrip {
+  padding: 24px;
+}
+
+.date-range-ctrip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.date-item .lab {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 4px;
+}
+
+.date-item .val {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.nights-tag {
+  padding: 2px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  font-size: 12px;
+  background: #fff;
+}
+
+.price-breakdown-ctrip {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.price-breakdown-ctrip .item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.price-breakdown-ctrip .item.discount {
+  color: #ff4d4f;
+}
+
+.final-total-ctrip {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed #f0f0f0;
+}
+
+.final-total-ctrip .lab {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.final-total-ctrip .val {
+  color: #ff4d4f;
+}
+
+.final-total-ctrip .val .unit {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.final-total-ctrip .val .num {
+  font-size: 36px;
+  font-weight: 800;
+}
+
+.ctrip-confirm-btn {
+  height: 50px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 4px;
+  background: #ff9a14;
+  border-color: #ff9a14;
+}
+
+.ctrip-confirm-btn:hover {
+  background: #ffb147;
+  border-color: #ffb147;
+}
+
+.ctrip-safety-tips {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #52c41a;
+  font-weight: 600;
+}
+
+/* Mock Payment UI */
+.mock-payment-ctrip {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.payment-title {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.payment-amount {
+  font-size: 48px;
+  font-weight: 800;
+  margin: 8px 0 24px;
+  color: #1a1a1a;
+}
+
+.payment-vendor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.payment-vendor .icon {
+  font-size: 24px;
+}
+
+.payment-vendor .icon.wechat { color: #07c160; }
+.payment-vendor .icon.alipay { color: #1677ff; }
+.payment-vendor .icon.balance { color: #1890ff; }
+
+.payment-qr-mock {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 32px;
+  background: #f5f5f5;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-placeholder {
+  text-align: center;
+}
+
+.qr-placeholder p {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.ota-confirm-btn-large { height: 56px; font-size: 20px; font-weight: 800; border-radius: 14px; margin-top: 8px; box-shadow: 0 6px 20px rgba(0, 140, 255, 0.25); }
+.trust-badges { display: flex; justify-content: center; gap: 20px; margin-top: 24px; border-top: 1px solid #f0f0f0; padding-top: 20px; }
+.badge-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #52c41a; font-weight: 600; }
+.payment-item-box { width: 100%; border: 1px solid #f0f0f0; border-radius: 12px; padding: 16px; transition: all 0.2s; margin: 0 !important; display: flex !important; align-items: center; }
+.payment-item-box:hover { border-color: #008cff; background: #f8faff; }
+.ant-radio-wrapper-checked.payment-item-box { border-color: #008cff; background: #e6f7ff; }
+.payment-item-content { display: flex; align-items: center; gap: 16px; margin-left: 8px; }
+.pay-icon { font-size: 24px; color: #008cff; }
+.pay-icon.wechat { color: #07c160; }
+.pay-icon.alipay { color: #1677ff; }
+.pay-info { display: flex; flex-direction: column; }
+.pay-name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.pay-desc { font-size: 12px; color: #8c8c8c; }
+.online-payment-hint { text-align: center; margin-top: 16px; font-size: 13px; color: #1890ff; background: #e6f7ff; padding: 10px; border-radius: 8px; border: 1px solid #91d5ff; }
+.front-desk-payment-hint { text-align: center; margin-top: 16px; font-size: 13px; color: #faad14; background: #fffbe6; padding: 10px; border-radius: 8px; border: 1px solid #ffe58f; }
 .security-tip { text-align: center; margin-top: 12px; font-size: 12px; color: #8c8c8c; }
-
+.points-redemption { padding: 8px 0; }
+.points-info { margin-bottom: 12px; font-size: 14px; }
+.points-count { font-weight: 700; color: #faad14; }
+.points-rule { color: #8c8c8c; font-size: 12px; }
+.points-action { display: flex; align-items: center; }
+.points-result { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #f0f0f0; font-size: 14px; color: #8c8c8c; }
+.discount-val { color: #ff4d4f; font-weight: 700; margin-left: 4px; }
 /* Animation helpers */
 .animate__animated { animation-duration: 0.8s; }
 @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }

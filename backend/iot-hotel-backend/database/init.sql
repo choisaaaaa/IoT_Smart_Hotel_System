@@ -171,6 +171,8 @@ CREATE TABLE bookings (
     special_requests VARCHAR(255) DEFAULT NULL,
     payment_method VARCHAR(20) DEFAULT 'balance',
     coupon_id INT DEFAULT NULL,
+    used_points INT DEFAULT 0,
+    points_discount DECIMAL(10,2) DEFAULT 0.00,
     total_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     deposit DECIMAL(10,2) DEFAULT 0.00,
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
@@ -233,7 +235,7 @@ CREATE TABLE members (
     password VARCHAR(255) DEFAULT NULL,
     name VARCHAR(100) DEFAULT NULL,
     id_number VARCHAR(50) DEFAULT NULL,
-    member_level VARCHAR(20) NOT NULL DEFAULT 'standard',
+    member_level ENUM('standard', 'silver', 'gold', 'platinum', 'diamond') DEFAULT 'standard',
     experience INT DEFAULT 0,
     points INT NOT NULL DEFAULT 0,
     balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -244,6 +246,14 @@ CREATE TABLE members (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_member_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 会员等级配色方案配置 (可选)
+INSERT INTO system_settings (config_key, config_value, description) 
+VALUES ('color_standard', '#4b6cb7', '普通会员主色'),
+       ('color_silver', '#bdc3c7', '银会员主色'),
+       ('color_gold', '#d4af37', '金会员主色'),
+       ('color_platinum', '#e5e4e2', '铂金会员主色'),
+       ('color_diamond', '#30cfd0', '钻石会员主色');
 
 -- -----------------------------------------------------------------------------
 -- 10. 优惠券定义表 (Coupons)
@@ -379,6 +389,8 @@ VALUES ('sys_admin', '$2a$10$p0M96fI3D0eI8V1v.H6o7u/8h6Q6q5n0V8i1W5a4C0g7Y6e5f4a
 -- 系统全局配置
 INSERT INTO system_settings (config_key, config_value, description) 
 VALUES ('member_program_name', '智联尊享会', '会员计划名称'),
-       ('points_rate', '10', '消费1元获得积分数');
+       ('points_rate', '1', '消费1元获得积分数'),
+       ('points_redeem_rate', '10', '多少积分抵扣1元'),
+       ('checkin_points', '50', '每日签到获得积分数');
 
 SET FOREIGN_KEY_CHECKS = 1;

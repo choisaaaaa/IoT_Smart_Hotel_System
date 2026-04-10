@@ -76,6 +76,7 @@ class HotelApi {
     special_requests?: string
     payment_method?: string
     coupon_id?: number
+    used_points?: number
     status?: string
   }): Promise<any> {
     const response: any = await request.post<ApiResponse<any>>(

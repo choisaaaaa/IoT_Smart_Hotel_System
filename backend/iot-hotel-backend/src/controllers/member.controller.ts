@@ -13,6 +13,15 @@ let LEVEL_DISCOUNTS: Record<string, number> = {
   'standard': 1.0
 };
 
+// 会员等级积分倍率映射 (消费1元获得的基本积分 * 倍率)
+const LEVEL_POINTS_MULTIPLIER: Record<string, number> = {
+  'diamond': 15,
+  'platinum': 12,
+  'gold': 9,
+  'silver': 3,
+  'standard': 1
+};
+
 export const updateLevelDiscounts = async (req: AuthRequest, res: Response) => {
   try {
     const { discounts } = req.body;
@@ -30,7 +39,97 @@ export const getLevelDiscounts = async (_req: Request, res: Response) => {
   res.json(successResponse(LEVEL_DISCOUNTS, '获取会员折扣成功'));
 };
 
-export { LEVEL_DISCOUNTS };
+export const rechargeBalance = async (req: AuthRequest, res: Response) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json(errorResponse('无效的充值金额'));
+    }
+
+    const phone = req.user?.phone || req.user?.username;
+    if (!phone) return res.status(401).json(errorResponse('用户未登录'));
+
+    // 获取当前会员等级以计算优惠
+    const [memberRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, member_level, balance FROM members WHERE phone = ?',
+      [phone]
+    );
+
+    if (!memberRows || memberRows.length === 0) {
+      return res.status(404).json(errorResponse('会员信息不存在'));
+    }
+
+    const member = memberRows[0];
+    const discountRate = LEVEL_DISCOUNTS[member.member_level] || 1.0;
+    
+    // 按照会员等级给跟房价优惠相同的充值优惠 (例如 8.5折房费 -> 充值 100 得到 100/0.85 余额)
+    // 或者理解为：赠送金额 = 充值金额 * (1 - 折扣率) / 折扣率 ? 
+    // 更直观的逻辑：实际到账 = 充值金额 / 折扣率
+    const creditAmount = Math.floor((amount / discountRate) * 100) / 100;
+    const bonusAmount = Math.floor((creditAmount - amount) * 100) / 100;
+    const newBalance = Number(member.balance || 0) + creditAmount;
+
+    await pool.query(
+      'UPDATE members SET balance = ? WHERE id = ?',
+      [newBalance, member.id]
+    );
+
+    logger.info(`会员充值成功: 手机号 ${phone}, 支付 ${amount}, 获得余额 ${creditAmount}(含赠送 ${bonusAmount}), 最终余额 ${newBalance}`);
+
+    res.json(successResponse({
+      paid_amount: amount,
+      credit_amount: creditAmount,
+      bonus_amount: bonusAmount,
+      new_balance: newBalance
+    }, '充值成功'));
+  } catch (error) {
+    logger.error('会员充值失败:', error);
+    res.status(500).json(errorResponse('会员充值失败'));
+  }
+};
+
+export { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER };
+
+/**
+ * 获取等级标签
+ */
+function getLevelLabel(memberLevel: string): string {
+  const labels: Record<string, string> = {
+    'diamond': '钻石会员',
+    'platinum': '铂金会员',
+    'gold': '金会员',
+    'silver': '银会员',
+    'standard': '普通会员'
+  };
+  return labels[memberLevel] || '普通会员';
+}
+
+/**
+ * 根据关键字获取数字等级
+ */
+function getLevelNumber(memberLevel: string): number {
+  const mapping: Record<string, number> = {
+    'diamond': 5,
+    'platinum': 4,
+    'gold': 3,
+    'silver': 2,
+    'standard': 1
+  };
+  return mapping[memberLevel] || 1;
+}
+
+/**
+ * 根据经验值计算会员等级关键字
+ * 保持原有阈值逻辑不变
+ */
+function calculateMemberLevel(experience: number): string {
+  const exp = Number(experience || 0);
+  if (exp >= 5000) return 'diamond';
+  if (exp >= 2000) return 'platinum';
+  if (exp >= 500) return 'gold';
+  if (exp >= 100) return 'silver';
+  return 'standard';
+}
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -47,8 +146,14 @@ export const get = async (req: AuthRequest, res: Response) => {
           list: [], total: 0, page: 1, pageSize: 10, totalPages: 0
         }, '获取会员列表成功'));
       }
+      
+      const membersWithLevel = rows.map(m => ({
+        ...m,
+        level: getLevelNumber(m.member_level),
+        level_label: getLevelLabel(m.member_level)
+      }));
       return res.json(successResponse({
-        list: rows, total: 1, page: 1, pageSize: 10, totalPages: 1
+        list: membersWithLevel, total: 1, page: 1, pageSize: 10, totalPages: 1
       }, '获取会员列表成功'));
     }
 
@@ -63,13 +168,19 @@ export const get = async (req: AuthRequest, res: Response) => {
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM members ${whereClause}`, params);
     const total = (totalRows[0] as any).total;
 
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await pool.query<RowDataPacket[]>( 
       `SELECT * FROM members ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
     );
 
+    const membersWithLevel = rows.map(m => ({
+      ...m,
+      level: getLevelNumber(m.member_level),
+      level_label: getLevelLabel(m.member_level)
+    }));
+
     res.json(successResponse({
-      list: rows,
+      list: membersWithLevel,
       total,
       page: Number(page),
       pageSize: Number(pageSize),
@@ -92,7 +203,13 @@ export const getById = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    res.json(successResponse(rows[0], '获取会员详情成功'));
+    const member = {
+      ...rows[0],
+      level: getLevelNumber(rows[0].member_level),
+      level_label: getLevelLabel(rows[0].member_level)
+    };
+
+    res.json(successResponse(member, '获取会员详情成功'));
   } catch (error) {
     logger.error('获取会员详情失败:', error);
     res.status(500).json(errorResponse('获取会员详情失败'));
@@ -146,6 +263,21 @@ export const update = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// 临时数据库修复接口
+export const fixDatabaseSchema = async (req: AuthRequest, res: Response) => {
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN used_points INT DEFAULT 0 AFTER coupon_id');
+    await pool.query('ALTER TABLE bookings ADD COLUMN points_discount DECIMAL(10,2) DEFAULT 0.00 AFTER used_points');
+    res.json(successResponse(null, '数据库表 bookings 修复成功'));
+  } catch (error: any) {
+    if (error.code === 'ER_DUP_COLUMN_NAME') {
+      return res.json(successResponse(null, '字段已存在，无需修复'));
+    }
+    logger.error('修复数据库失败:', error);
+    res.status(500).json(errorResponse('修复数据库失败: ' + error.message));
+  }
+};
+
 // 辅助函数：确保会员记录存在
 async function ensureMemberRecord(phone: string, name: string) {
   const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
@@ -177,22 +309,19 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       [member.id]
     );
     
-    // 计算等级数字 (1-5)
-    const exp = Number(member.experience || 0);
-    let level = 1;
-    if (exp >= 5000) level = 5;
-    else if (exp >= 2000) level = 4;
-    else if (exp >= 500) level = 3;
-    else if (exp >= 100) level = 2;
+    // 计算等级 (以数据库存储的 member_level 为准，映射数字等级和标签)
+    const levelNum = getLevelNumber(member.member_level);
+    const levelLabel = getLevelLabel(member.member_level);
 
     // 显式构建结果对象，确保所有字段都包含在内
     const result = {
       id: member.id,
       phone: member.phone,
       name: member.name,
-      member_level: member.member_level,
-      level: level, // 增加数字等级字段
-      experience: exp,
+      member_level: member.member_level, // 关键字 member_level (数据库原始值)
+      level: levelNum,                   // 数字等级
+      level_label: levelLabel,           // 中文标签
+      experience: Number(member.experience || 0),
       points: Number(member.points || 0),
       balance: member.balance,
       total_spent: member.total_spent,
@@ -221,7 +350,15 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
     // 检查会员状态
     const [memberRows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
     const isMember = memberRows.length > 0;
-    const memberInfo = isMember ? memberRows[0] : null;
+    let memberInfo = isMember ? memberRows[0] : null;
+
+    if (memberInfo) {
+      memberInfo = {
+        ...memberInfo,
+        level: getLevelNumber(memberInfo.member_level),
+        level_label: getLevelLabel(memberInfo.member_level)
+      };
+    }
 
     // 检查入住状态
     const [guestRows] = await pool.query<RowDataPacket[]>(
@@ -311,28 +448,45 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 计算获得的成长值 (固定 5 点)
-    const expGain = 5;
+    // 计算获得的奖励
+    // 1. 成长值 (固定 10 点)
+    const expGain = 10;
     const newExp = (member.experience || 0) + expGain;
     
+    // 2. 积分 (从配置获取，默认 50 点)
+    let pointsGain = 50;
+    try {
+      const [configRows] = await pool.query<RowDataPacket[]>(
+        'SELECT config_value FROM system_settings WHERE config_key = ?',
+        ['checkin_points']
+      );
+      if (configRows.length > 0) {
+        pointsGain = Number(configRows[0].config_value);
+      }
+    } catch (e) {
+      logger.warn('获取签到积分配置失败，使用默认值 50');
+    }
+    const newPoints = (member.points || 0) + pointsGain;
+    
     // 自动升级逻辑 (保持原有阈值)
-    let newLevel = member.member_level;
-    if (newExp >= 5000) newLevel = 'diamond';
-    else if (newExp >= 2000) newLevel = 'platinum';
-    else if (newExp >= 500) newLevel = 'gold';
-    else if (newExp >= 100) newLevel = 'silver';
-    else newLevel = 'standard';
+    const newLevelKey = calculateMemberLevel(newExp);
+    const newLevelNum = getLevelNumber(newLevelKey);
+    const newLevelLabel = getLevelLabel(newLevelKey);
 
     await pool.query(
-      'UPDATE members SET experience = ?, member_level = ?, last_checkin_date = ? WHERE id = ?',
-      [newExp, newLevel, today, member.id]
+      'UPDATE members SET experience = ?, points = ?, member_level = ?, last_checkin_date = ? WHERE id = ?',
+      [newExp, newPoints, newLevelKey, today, member.id]
     );
 
     res.json(successResponse({
       already_checked_in: false,
       experience: expGain,
+      points: pointsGain,
       total_experience: newExp,
-      level: newLevel
+      total_points: newPoints,
+      member_level: newLevelKey,
+      level: newLevelNum,
+      level_label: newLevelLabel
     }, '签到成功'));
   } catch (error) {
     logger.error('会员签到失败:', error);

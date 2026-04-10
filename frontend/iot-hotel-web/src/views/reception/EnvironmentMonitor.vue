@@ -328,7 +328,10 @@ function generateMockEnvironmentData(): EnvironmentData[] {
       humidity: parseFloat(humidity.toFixed(1)),
       smoke_level: parseFloat(smokeLevel.toFixed(1)),
       smoke_alarm: smokeLevel > 60,
+      noise_level: parseFloat((30 + Math.random() * 20).toFixed(1)),
+      pm25: parseFloat((5 + Math.random() * 15).toFixed(1)),
       light_level: lightLevel,
+      environment_score: status === 'normal' ? 95 : (status === 'warning' ? 75 : 45),
       update_time: new Date(now.getTime() - index * 60000).toISOString(),
       status
     }
@@ -341,6 +344,9 @@ function calculateMockSummary(data: EnvironmentData[]): EnvironmentSummary {
       avg_temperature: 0,
       avg_humidity: 0,
       avg_smoke_level: 0,
+      avg_noise_level: 0,
+      avg_pm25: 0,
+      avg_environment_score: 0,
       normal_count: 0,
       warning_count: 0,
       danger_count: 0,
@@ -351,11 +357,17 @@ function calculateMockSummary(data: EnvironmentData[]): EnvironmentSummary {
   const totalTemp = data.reduce((sum, item) => sum + item.temperature, 0)
   const totalHumidity = data.reduce((sum, item) => sum + item.humidity, 0)
   const totalSmoke = data.reduce((sum, item) => sum + item.smoke_level, 0)
+  const totalNoise = data.reduce((sum, item) => sum + (item.noise_level || 0), 0)
+  const totalPM25 = data.reduce((sum, item) => sum + (item.pm25 || 0), 0)
+  const totalScore = data.reduce((sum, item) => sum + (item.environment_score || 0), 0)
 
   return {
     avg_temperature: parseFloat((totalTemp / data.length).toFixed(1)),
     avg_humidity: parseFloat((totalHumidity / data.length).toFixed(1)),
     avg_smoke_level: parseFloat((totalSmoke / data.length).toFixed(1)),
+    avg_noise_level: parseFloat((totalNoise / data.length).toFixed(1)),
+    avg_pm25: parseFloat((totalPM25 / data.length).toFixed(1)),
+    avg_environment_score: parseFloat((totalScore / data.length).toFixed(1)),
     normal_count: data.filter(item => item.status === 'normal').length,
     warning_count: data.filter(item => item.status === 'warning').length,
     danger_count: data.filter(item => item.status === 'danger').length,
@@ -396,7 +408,7 @@ async function fetchData() {
     } else {
       throw new Error('Empty or invalid response')
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('⚠️ API获取失败，使用模拟数据:', err.message || err)
     useMockData()
   } finally {
