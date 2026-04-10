@@ -56,7 +56,15 @@ export class PaymentService {
         whereClause += ' AND p.order_type = ?';
         paramsArray.push(order_type);
       }
-      const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, paramsArray);
+      
+      // COUNT查询也需要JOIN bookings表（如果有userId条件）
+      let countQuery = `SELECT COUNT(*) as total FROM payments p`;
+      if (userId) {
+        countQuery += ` LEFT JOIN bookings b ON p.order_type = 'booking' AND p.order_id = b.id`;
+      }
+      countQuery += ` ${whereClause}`;
+      
+      const [totalRows] = await pool.query<RowDataPacket[]>(countQuery, paramsArray);
       const total = (totalRows[0] as any).total;
 
       const [rows] = await pool.query<RowDataPacket[]>(
