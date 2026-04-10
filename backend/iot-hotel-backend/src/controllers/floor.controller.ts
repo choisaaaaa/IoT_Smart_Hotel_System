@@ -4,9 +4,9 @@ import { successResponse, errorResponse } from '../types';
 import logger from '../utils/logger';
 
 export class FloorController {
-  static async getAllFloors(req: Request, res: Response) {
+  static async getFloors(req: Request, res: Response) {
     try {
-      const list = await FloorService.getAllFloors();
+      const list = await FloorService.getFloors();
       res.json(successResponse(list, '获取楼层列表成功'));
     } catch (error: any) {
       logger.error('获取楼层列表失败:', error);

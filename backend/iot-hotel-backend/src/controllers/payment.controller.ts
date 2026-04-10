@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { successResponse, errorResponse, AuthRequest } from '../types';
 import { PaymentService } from '../services/payment.service';
 import logger from '../utils/logger';
+import pool from '../config/database';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -40,7 +41,6 @@ export const create = async (req: AuthRequest, res: Response) => {
     let hotel_id = req.user?.hotel_id || 0;
 
     if (!hotel_id && order_type === 'booking' && order_id) {
-      const { pool } = await import('../config/database');
       const [rows] = await pool.query('SELECT hotel_id FROM bookings WHERE id = ?', [Number(order_id)]);
       if (Array.isArray(rows) && rows.length > 0) {
         hotel_id = (rows[0] as any).hotel_id || 1;
@@ -71,7 +71,6 @@ export const pay = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id || 0;
 
     if (!hotelId) {
-      const { pool } = await import('../config/database');
       const [rows] = await pool.query('SELECT hotel_id FROM payments WHERE id = ?', [Number(id)]);
       if (Array.isArray(rows) && rows.length > 0) {
         hotelId = (rows[0] as any).hotel_id || 1;
