@@ -8,13 +8,10 @@ import { isSystemRole } from '../utils/role';
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (!hotelId && isSystemRole(req.user?.role)) {
+    if (isSystemRole(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
-      } else {
-        const hotels = await HotelService.getAllHotels();
-        hotelId = hotels[0]?.id;
       }
     }
     if (!hotelId) {

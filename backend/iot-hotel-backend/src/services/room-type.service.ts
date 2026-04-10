@@ -36,9 +36,16 @@ export class RoomTypeService {
     return exists;
   }
 
-  static async getRoomTypes(): Promise<RoomType[]> {
+  static async getRoomTypes(hotelId?: number): Promise<RoomType[]> {
     try {
-      const [rows] = await pool.query<RoomType[]>('SELECT * FROM room_types ORDER BY id DESC');
+      let sql = 'SELECT * FROM room_types';
+      const params = [];
+      if (hotelId) {
+        sql += ' WHERE hotel_id = ? OR hotel_id = 0';
+        params.push(hotelId);
+      }
+      sql += ' ORDER BY id DESC';
+      const [rows] = await pool.query<RoomType[]>(sql, params);
       return rows;
     } catch (error) {
       logger.error('获取房型列表失败:', error);
@@ -46,9 +53,15 @@ export class RoomTypeService {
     }
   }
 
-  static async getRoomTypeById(id: number): Promise<RoomType | null> {
+  static async getRoomTypeById(id: number, hotelId?: number): Promise<RoomType | null> {
     try {
-      const [rows] = await pool.query<RoomType[]>('SELECT * FROM room_types WHERE id = ?', [id]);
+      let sql = 'SELECT * FROM room_types WHERE id = ?';
+      const params: any[] = [id];
+      if (hotelId) {
+        sql += ' AND (hotel_id = ? OR hotel_id = 0)';
+        params.push(hotelId);
+      }
+      const [rows] = await pool.query<RoomType[]>(sql, params);
       return (rows[0] as RoomType) || null;
     } catch (error) {
       logger.error('获取房型详情失败:', error);
@@ -56,12 +69,12 @@ export class RoomTypeService {
     }
   }
 
-  static async createRoomType(data: Partial<RoomType>): Promise<number> {
+  static async createRoomType(data: Partial<RoomType> & { hotel_id?: number }): Promise<number> {
     try {
-      const { name, code, base_price, area, bed_type, max_guests, facilities, description, images } = data;
+      const { name, code, base_price, area, bed_type, max_guests, facilities, description, images, hotel_id } = data;
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO room_types (name, code, base_price, area, bed_type, max_guests, facilities, description, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, code, base_price, area, bed_type, max_guests, JSON.stringify(facilities || []), description, JSON.stringify(images || [])]
+        'INSERT INTO room_types (name, code, base_price, area, bed_type, max_guests, facilities, description, images, hotel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, code, base_price, area, bed_type, max_guests, JSON.stringify(facilities || []), description, JSON.stringify(images || []), hotel_id || 0]
       );
       return result.insertId;
     } catch (error) {

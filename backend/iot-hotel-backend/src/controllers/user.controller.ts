@@ -305,7 +305,7 @@ export async function updatePassword(req: AuthRequest, res: Response) {
 export async function updateProfile(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
-    const { username, email, phone, code } = req.body;
+    const { username, email, phone, code, avatar } = req.body;
 
     if (!userId) {
       return sendError(res, errorResponse('未授权', 401));
@@ -323,6 +323,11 @@ export async function updateProfile(req: AuthRequest, res: Response) {
     if (email !== undefined) {
       updateFields.push('email = ?');
       params.push(email || null);
+    }
+
+    if (avatar !== undefined) {
+      updateFields.push('avatar = ?');
+      params.push(avatar || null);
     }
 
     if (phone) {
@@ -353,7 +358,7 @@ export async function updateProfile(req: AuthRequest, res: Response) {
     await db.execute(sql, params);
 
     // 获取更新后的用户信息
-    const [users]: any = await db.execute('SELECT id, username, email, phone, role, hotel_id FROM users WHERE id = ?', [userId]);
+    const [users]: any = await db.execute('SELECT id, username, email, phone, avatar, role, hotel_id FROM users WHERE id = ?', [userId]);
 
     sendSuccess(res, { user: users[0] }, '个人资料更新成功');
   } catch (error) {

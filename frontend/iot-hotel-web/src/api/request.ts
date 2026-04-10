@@ -80,7 +80,7 @@ request.interceptors.response.use(
           if (shouldClearAuth(error)) {
             localStorage.removeItem('auth_token')
             localStorage.removeItem('user_info')
-            window.location.href = '/login'
+            window.location.href = '/guest/booking?login=1'
           }
           break
         case 403:

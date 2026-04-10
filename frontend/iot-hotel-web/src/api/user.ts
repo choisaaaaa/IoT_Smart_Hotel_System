@@ -6,13 +6,14 @@ export interface UserProfile {
   username: string
   email: string | null
   phone: string | null
+  avatar: string | null
   role: string
   hotel_id: number | null
 }
 
 export const userApi = {
   // 更新个人资料
-  updateProfile: (data: { username?: string; email?: string; phone?: string; code?: string }) =>
+  updateProfile: (data: { username?: string; email?: string; phone?: string; code?: string; avatar?: string }) =>
     request.put<ApiResponse<{ user: UserProfile }>>('/users/profile', data),
 
   // 发送验证码

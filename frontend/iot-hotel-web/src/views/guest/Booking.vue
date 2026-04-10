@@ -370,6 +370,23 @@
                 </a-radio>
               </a-radio-group>
             </a-card>
+
+            <a-card class="ota-form-card" title="优惠券" :bordered="false" style="margin-top: 20px;">
+              <a-select
+                v-model:value="selectedCouponId"
+                placeholder="选择优惠券"
+                style="width: 100%"
+                allow-clear
+                @change="handleCouponChange"
+              >
+                <a-select-option v-for="coupon in availableCoupons" :key="coupon.id" :value="coupon.id">
+                  {{ coupon.coupon_name }} ({{ coupon.coupon_type === 'discount' ? coupon.discount_value * 10 + '折' : '减¥' + coupon.discount_value }}) - 满{{ coupon.min_amount }}可用
+                </a-select-option>
+              </a-select>
+              <div v-if="availableCoupons.length === 0" class="empty-tip">
+                暂无可用优惠券
+              </div>
+            </a-card>
           </a-col>
 
           <a-col :md="8">
@@ -397,9 +414,13 @@
                   <span>房费 ({{ nights }}晚)</span>
                   <span>¥{{ (selectedRoom?.price || 0) * nights }}</span>
                 </div>
+                <div v-if="memberDiscount < 1" class="price-row discount">
+                  <span>会员折扣 ({{ memberLevelLabel }})</span>
+                  <span>-¥{{ discountAmount }}</span>
+                </div>
                 <div class="price-row total">
                   <span>应付总额</span>
-                  <span class="total-amount">¥{{ (selectedRoom?.price || 0) * nights }}</span>
+                  <span class="total-amount">¥{{ finalTotalPrice }}</span>
                 </div>
               </div>
               <a-button type="primary" size="large" block class="ota-confirm-btn" :loading="submitting" @click="submitBooking">
@@ -460,13 +481,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
 import { hotelApi } from '@/api/hotel'
+import request from '@/api/request'
 import { useAppStore } from '@/stores/app'
 import {
   EnvironmentOutlined, EnvironmentFilled, StarOutlined, StarFilled,
@@ -485,7 +507,14 @@ const submitting = ref(false)
 const bookingNo = ref('')
 const selectedHotel = ref<any>(null)
 const selectedRoom = ref<any>(null)
+const memberInfo = ref<any>(null)
 const paymentMethod = ref('balance')
+const selectedCouponId = ref<number | null>(null)
+const myCoupons = ref<any[]>([])
+
+const handleCouponChange = (val: any) => {
+  selectedCouponId.value = val
+}
 const frequentGuests = ref<FrequentGuest[]>([])
 const saveAsFrequent = ref(false)
 const showGuestModal = ref(false)
@@ -525,6 +554,95 @@ const bookingForm = reactive({
 const hotelList = ref<any[]>([])
 
 // --- Computed ---
+const availableCoupons = computed(() => {
+  if (!myCoupons.value) return []
+  // 只显示满足最低消费金额的优惠券
+  return myCoupons.value.filter(c => {
+    const priceAfterMemberDiscount = Math.floor(originalPrice.value * memberDiscount.value * 100) / 100
+    return priceAfterMemberDiscount >= (c.min_amount || 0)
+  })
+})
+
+const selectedCoupon = computed(() => {
+  return availableCoupons.value.find(c => c.id === selectedCouponId.value)
+})
+
+const couponDiscountAmount = computed(() => {
+  if (!selectedCoupon.value) return 0
+  const priceAfterMemberDiscount = Math.floor(originalPrice.value * memberDiscount.value * 100) / 100
+  if (selectedCoupon.value.coupon_type === 'discount') {
+    return Math.floor(priceAfterMemberDiscount * (1 - selectedCoupon.value.discount_value) * 100) / 100
+  } else {
+    return Math.min(priceAfterMemberDiscount, selectedCoupon.value.discount_value)
+  }
+})
+
+const memberDiscount = computed(() => {
+  if (!memberInfo.value) return 1.0
+  const level = memberInfo.value.member_level
+  const discounts: Record<string, number> = {
+    'diamond': 0.80,
+    'platinum': 0.85,
+    'gold': 0.88,
+    'silver': 0.95,
+    'standard': 1.0
+  }
+  return discounts[level] || 1.0
+})
+
+const memberLevelLabel = computed(() => {
+  if (!memberInfo.value) return ''
+  const level = memberInfo.value.member_level
+  const labels: Record<string, string> = {
+    'diamond': '钻石会员',
+    'platinum': '铂金会员',
+    'gold': '金会员',
+    'silver': '银会员',
+    'standard': '标准会员'
+  }
+  return labels[level] || ''
+})
+
+const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
+const fetchAvailableCoupons = async () => {
+  if (!appStore.userInfo) return
+  try {
+    const res = await request.get('/coupons/me')
+    myCoupons.value = res.data || []
+  } catch (error) {
+    console.error('获取优惠券失败:', error)
+  }
+}
+
+const finalTotalPrice = ref(0)
+const memberDiscountRate = ref(1)
+
+const updateCalculatedPrice = async () => {
+  if (!selectedRoom.value || !dateRange.value || dateRange.value.length < 2) return
+  
+  try {
+    const res = await request.get('/bookings/calculate-price', {
+      params: {
+        room_id: selectedRoom.value.id,
+        check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
+        check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
+        coupon_id: selectedCouponId.value || undefined
+      }
+    })
+    finalTotalPrice.value = res.data.total_price
+    memberDiscountRate.value = res.data.discount_rate
+  } catch (error) {
+    console.error('价格计算失败:', error)
+  }
+}
+
+watch([selectedRoom, dateRange, selectedCouponId], () => {
+  if (currentStep.value === 3) {
+    updateCalculatedPrice()
+  }
+})
+const discountAmount = computed(() => Math.floor((originalPrice.value - finalTotalPrice.value) * 100) / 100)
+
 const nights = computed(() => {
   if (dateRange.value[0] && dateRange.value[1]) {
     return dateRange.value[1].diff(dateRange.value[0], 'day')
@@ -601,28 +719,9 @@ const selectHotel = async (hotel: any) => {
 }
 
 const selectRoom = (room: any) => {
-  if (!authService.isAuthenticated()) {
-    Modal.confirm({
-      title: '请先登录',
-      content: '预订房间需要先登录账号，是否立即登录？',
-      okText: '立即登录',
-      cancelText: '取消',
-      onOk: () => {
-        appStore.showLoginModal = true
-      }
-    })
-    return
-  }
   selectedRoom.value = room
   currentStep.value = 3
-
-  // 自动填充用户信息
-  if (appStore.userInfo) {
-    bookingForm.guestName = appStore.userInfo.username || ''
-    bookingForm.phone = appStore.userInfo.phone || ''
-  }
-
-  fetchFrequentGuests()
+  updateCalculatedPrice()
 }
 
 const fetchFrequentGuests = async () => {
@@ -719,6 +818,7 @@ const submitBooking = async () => {
       guest_count: searchForm.guests,
       special_requests: bookingForm.remark,
       payment_method: paymentMethod.value,
+      coupon_id: selectedCouponId.value,
       status: 'pending'
     })
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))

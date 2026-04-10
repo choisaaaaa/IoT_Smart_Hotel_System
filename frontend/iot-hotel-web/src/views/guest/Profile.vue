@@ -1,57 +1,137 @@
 <template>
   <div class="profile-page-container">
+    <!-- 隐藏的头像上传输入框 -->
+    <input
+      type="file"
+      ref="avatarInput"
+      style="display: none"
+      accept="image/*"
+      @change="onAvatarChange"
+    />
     <div class="profile-content">
       <!-- 左侧：会员卡与资产概览 -->
       <div class="profile-left">
-        <a-card class="member-card" :bordered="false">
-          <div class="card-bg"></div>
-          <div class="card-content">
-            <div class="card-header">
-              <div class="hotel-brand">IOT SMART HOTEL</div>
-              <div class="member-level-badge">{{ memberInfo.member_level === 'platinum' ? '铂金会员' : memberInfo.member_level === 'gold' ? '黄金会员' : '标准会员' }}</div>
-            </div>
-            <div class="user-main">
-              <div class="user-nickname">{{ userInfo.username }}</div>
-              <div class="user-phone">{{ userInfo.phone }}</div>
-            </div>
-            <div class="card-footer">
-              <div class="points-info">
-                <span class="label">积分：</span>
-                <span class="value">{{ memberInfo.points || 0 }}</span>
+        <div class="member-card-new">
+          <div class="card-inner">
+            <div class="card-top">
+              <div class="hotel-info">
+                <div class="hotel-logo">IOT</div>
+                <div class="hotel-brand">SMART HOTEL</div>
               </div>
-              <div class="join-date">注册于 {{ formatDate(userInfo.created_at) }}</div>
+              <div class="member-badge-new">
+                <span class="level-text">{{ memberLevelInfo.label }}</span>
+              </div>
+            </div>
+            
+            <div class="user-info-section">
+              <div class="user-name-row">
+                <div class="user-avatar-wrapper" @click="handleAvatarClick">
+                  <a-avatar :size="64" :src="userInfo.avatar" class="premium-avatar">
+                    <template #icon><UserOutlined /></template>
+                  </a-avatar>
+                  <div class="avatar-edit-overlay">
+                    <CameraOutlined />
+                  </div>
+                </div>
+                <div class="user-main-info">
+                  <h2 class="user-name">{{ userInfo.username }}</h2>
+                  <div class="user-phone-row">{{ userInfo.phone }}</div>
+                </div>
+                <div class="checkin-btn-wrapper">
+                  <a-button 
+                    v-if="!hasCheckedInToday" 
+                    type="primary" 
+                    shape="round" 
+                    class="premium-checkin-btn" 
+                    @click="handleCheckin"
+                    :loading="checkinLoading"
+                  >
+                    每日签到
+                  </a-button>
+                  <div v-else class="checkin-done">
+                    <CheckCircleFilled /> 今日已签到
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-bottom">
+              <div class="exp-container">
+                <div class="exp-header">
+                  <span>成长值 {{ memberInfo.experience || 0 }} / {{ memberLevelInfo.nextExp }}</span>
+                  <span class="points-badge">积分 {{ memberInfo.points || 0 }}</span>
+                </div>
+                <div class="exp-progress-new">
+                  <div class="exp-fill" :style="{ width: `${memberLevelInfo.percent}%` }"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </a-card>
-
-        <div class="asset-grid">
-          <a-card class="asset-item" :bordered="false">
-            <template #title><span class="asset-title">账户余额</span></template>
-            <div class="asset-value">
-              <span class="currency">¥</span>
-              <span class="amount">{{ memberInfo.balance || '0.00' }}</span>
-            </div>
-            <a-button type="link" class="action-btn">立即充值</a-button>
-          </a-card>
-          <a-card class="asset-item" :bordered="false">
-            <template #title><span class="asset-title">优惠券</span></template>
-            <div class="asset-value">
-              <span class="amount">{{ memberInfo.coupons_count || 0 }}</span>
-              <span class="unit">张</span>
-            </div>
-            <a-button type="link" class="action-btn" @click="$router.push('/guest/orders')">查看更多</a-button>
-          </a-card>
+          <div class="card-bg-pattern"></div>
         </div>
 
-        <a-card class="stats-card" :bordered="false">
-          <div class="stats-grid">
-            <div class="stat-box">
-              <div class="stat-value">{{ memberInfo.total_stays || 0 }}</div>
-              <div class="stat-label">累计入住</div>
+        <div class="stats-card-modern">
+          <div class="stats-header-modern">我的资产</div>
+          <div class="asset-grid-modern">
+            <div class="asset-item-modern" @click="activeTab = 'coupons'">
+              <div class="asset-icon-bg coupon-bg"><TagFilled /></div>
+              <div class="asset-info-modern">
+                <div class="asset-num">{{ memberInfo.coupons_count || 0 }}<span class="unit">张</span></div>
+                <div class="asset-name">优惠券</div>
+              </div>
             </div>
-            <div class="stat-box">
-              <div class="stat-value">¥{{ memberInfo.total_spent || '0.00' }}</div>
-              <div class="stat-label">累计消费</div>
+            <div class="asset-item-modern">
+              <div class="asset-icon-bg points-bg"><ThunderboltFilled /></div>
+              <div class="asset-info-modern">
+                <div class="asset-num">{{ memberInfo.points || 0 }}</div>
+                <div class="asset-name">积分</div>
+              </div>
+            </div>
+            <div class="asset-item-modern">
+              <div class="asset-icon-bg balance-bg"><WalletFilled /></div>
+              <div class="asset-info-modern">
+                <div class="asset-num"><span class="currency">¥</span>{{ memberInfo.balance || '0.00' }}</div>
+                <div class="asset-name">余额</div>
+              </div>
+            </div>
+            <div class="asset-item-modern">
+              <div class="asset-icon-bg stays-bg"><HomeFilled /></div>
+              <div class="asset-info-modern">
+                <div class="asset-num">{{ memberInfo.total_stays || 0 }}<span class="unit">次</span></div>
+                <div class="asset-name">累计入住</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <a-card class="rights-card-modern" :bordered="false">
+          <template #title>
+            <div class="rights-header">
+              <span class="rights-title-text">会员权益</span>
+              <span class="rights-subtitle">{{ memberLevelInfo.label }}尊享</span>
+            </div>
+          </template>
+          <div class="rights-grid-modern">
+            <div class="right-box" :class="{ disabled: memberLevelInfo.discount === 1 }">
+              <div class="right-icon-wrapper"><PercentageOutlined /></div>
+              <div class="right-content">
+                <div class="right-title">预订折扣</div>
+                <div class="right-value">{{ memberLevelInfo.discount * 10 }}折起</div>
+              </div>
+            </div>
+            <div class="right-box" :class="{ disabled: memberLevelInfo.multiplier === 1 }">
+              <div class="right-icon-wrapper"><ThunderboltOutlined /></div>
+              <div class="right-content">
+                <div class="right-title">积分加速</div>
+                <div class="right-value">{{ memberLevelInfo.multiplier }}倍积分</div>
+              </div>
+            </div>
+            <div class="right-box active">
+              <div class="right-icon-wrapper"><CoffeeOutlined /></div>
+              <div class="right-content">
+                <div class="right-title">尊享服务</div>
+                <div class="right-value">专属管家</div>
+              </div>
             </div>
           </div>
         </a-card>
@@ -165,6 +245,43 @@
             </div>
           </a-tab-pane>
 
+          <!-- 优惠券 -->
+          <a-tab-pane key="coupons" tab="优惠券">
+            <div class="coupons-section">
+              <!-- 导入券码 -->
+              <div class="coupon-import-bar">
+                <a-input-search
+                  v-model:value="couponCodeInput"
+                  placeholder="请输入优惠券兑换码"
+                  enter-button="导入券码"
+                  size="large"
+                  :loading="importLoading"
+                  @search="handleImportCoupon"
+                />
+              </div>
+
+              <div v-if="myCoupons.length === 0" class="empty-state">
+                <a-empty description="暂无可用优惠券" />
+              </div>
+              <div v-else class="coupons-grid">
+                <div v-for="coupon in myCoupons" :key="coupon.id" class="coupon-card">
+                  <div class="coupon-left">
+                    <div class="coupon-value">
+                      <span v-if="coupon.coupon_type === 'discount'" class="val">{{ coupon.discount_value * 10 }}折</span>
+                      <span v-else class="val"><span class="unit">¥</span>{{ coupon.discount_value }}</span>
+                    </div>
+                    <div class="coupon-condition">满{{ coupon.min_amount }}可用</div>
+                  </div>
+                  <div class="coupon-right">
+                    <div class="coupon-name">{{ coupon.coupon_name }}</div>
+                    <div class="coupon-date">有效期至 {{ formatDate(coupon.valid_to) }}</div>
+                    <a-button type="primary" size="small" shape="round" @click="$router.push('/guest/booking')">去使用</a-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </a-tab-pane>
+
           <!-- 常用入住人管理 -->
           <a-tab-pane key="guests" tab="常用入住人">
             <div class="frequent-guests-section">
@@ -250,7 +367,17 @@ import {
   PhoneOutlined,
   IdcardOutlined,
   TeamOutlined,
-  UserOutlined
+  UserOutlined,
+  TagOutlined,
+  ThunderboltOutlined,
+  CoffeeOutlined,
+  CheckCircleFilled,
+  TagFilled,
+  ThunderboltFilled,
+  WalletFilled,
+  HomeFilled,
+  PercentageOutlined,
+  CameraOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { userApi } from '@/api/user'
@@ -260,12 +387,117 @@ import dayjs from 'dayjs'
 
 const appStore = useAppStore()
 const userInfo = computed(() => appStore.userInfo || {})
+const avatarInput = ref<HTMLInputElement | null>(null)
 const activeTab = ref('account')
 const editingField = ref<string | null>(null)
+
+// 头像上传
+const handleAvatarClick = () => {
+  avatarInput.value?.click()
+}
+
+const onAvatarChange = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // 校验文件类型和大小
+  if (!file.type.startsWith('image/')) {
+    return message.error('请选择图片文件')
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    return message.error('图片大小不能超过 2MB')
+  }
+
+  const formData = new FormData()
+  formData.append('image', file)
+
+  try {
+    loading.value = true
+    // 1. 上传图片到服务器
+    const uploadRes = await request.post('/upload/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const imageUrl = uploadRes.data.url
+
+    // 2. 更新用户资料
+    await userApi.updateProfile({ avatar: imageUrl })
+    
+    // 3. 更新全局状态
+    appStore.setUserInfo({
+      ...appStore.userInfo,
+      avatar: imageUrl
+    })
+    
+    message.success('头像更新成功')
+  } catch (error) {
+    console.error('更新头像失败:', error)
+    message.error('头像更新失败')
+  } finally {
+    loading.value = false
+    // 重置 input，允许再次选择同一张图片
+    target.value = ''
+  }
+}
+
+// 会员等级逻辑 (对接手机端逻辑)
+const memberLevelInfo = computed(() => {
+  const exp = memberInfo.value.experience || 0
+  if (exp >= 5000) return { label: '钻石会员', discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 }
+  if (exp >= 2000) return { label: '铂金会员', discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) }
+  if (exp >= 500) return { label: '金会员', discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) }
+  if (exp >= 100) return { label: '银会员', discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) }
+  return { label: '普通会员', discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
+})
 
 // 会员与资产信息
 const memberInfo = ref<any>({})
 const loading = ref(false)
+const myCoupons = ref<any[]>([])
+const checkinLoading = ref(false)
+const couponCodeInput = ref('')
+const importLoading = ref(false)
+
+const handleImportCoupon = async () => {
+  if (!couponCodeInput.value.trim()) return message.warning('请输入券码')
+  
+  try {
+    importLoading.value = true
+    await request.post('/coupons/import', { coupon_code: couponCodeInput.value.trim() })
+    message.success('优惠券导入成功！')
+    couponCodeInput.value = ''
+    fetchData() // 刷新列表
+  } catch (error: any) {
+    // 错误已由拦截器处理
+  } finally {
+    importLoading.value = false
+  }
+}
+
+const hasCheckedInToday = computed(() => {
+  if (!memberInfo.value.last_checkin_date) return false
+  const today = new Date().toISOString().split('T')[0]
+  const lastDate = new Date(memberInfo.value.last_checkin_date).toISOString().split('T')[0]
+  return today === lastDate
+})
+
+const handleCheckin = async () => {
+  try {
+    checkinLoading.value = true
+    const res = await request.post('/members/checkin')
+    if (res.data.already_checked_in) {
+      message.info('今日已签到')
+    } else {
+      message.success(`签到成功！获得 ${res.data.experience} 成长值`)
+      // 刷新数据
+      fetchData()
+    }
+  } catch (error) {
+    console.error('签到失败:', error)
+  } finally {
+    checkinLoading.value = false
+  }
+}
 
 // 账号编辑
 const saving = ref(false)
@@ -355,7 +587,12 @@ const fetchData = async () => {
     loading.value = true
     // 获取会员资产信息
     const res = await request.get('/members/me')
+    console.log('Member Info Response:', res.data)
     memberInfo.value = res.data
+    
+    // 获取我的优惠券
+    const couponRes = await request.get('/coupons/me')
+    myCoupons.value = couponRes.data || []
     
     // 初始化个人资料表单
     profileForm.username = appStore.userInfo.username
@@ -503,167 +740,438 @@ onMounted(() => {
 
 .profile-content {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 400px 1fr;
   gap: 32px;
 }
 
-/* 会员卡样式 */
-.member-card {
-  height: 220px;
-  border-radius: 20px;
-  overflow: hidden;
+/* 新版会员卡样式 */
+.member-card-new {
+  height: 240px;
+  border-radius: 24px;
   position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1a1a1a 0%, #3a3a3a 100%);
   color: #fff;
+  padding: 28px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   margin-bottom: 24px;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
 }
 
-.card-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%);
-  z-index: 1;
-}
-
-.card-content {
+.card-inner {
   position: relative;
   z-index: 2;
-  padding: 24px;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-.card-header {
+.card-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
 }
 
-.hotel-brand {
-  font-family: 'Copperplate', serif;
-  font-size: 18px;
-  letter-spacing: 2px;
-  font-weight: 600;
-  opacity: 0.9;
+.hotel-info {
+  display: flex;
+  flex-direction: column;
 }
 
-.member-level-badge {
+.hotel-logo {
+  font-family: 'Copperplate', serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.hotel-brand {
+  font-size: 10px;
+  letter-spacing: 3px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+.member-badge-new {
   background: linear-gradient(90deg, #d4af37, #f9e29c);
+  padding: 6px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+}
+
+.level-text {
   color: #1a1a1a;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.user-info-section {
+  margin-top: 12px;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.user-avatar-wrapper {
+  position: relative;
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #d4af37, #f9e29c);
+  transition: transform 0.3s;
+}
+
+.user-avatar-wrapper:hover {
+  transform: scale(1.05);
+}
+
+.premium-avatar {
+  border: 3px solid #1a1a1a;
+  background: #2a2a2a;
+}
+
+.avatar-edit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+  color: #fff;
+  font-size: 20px;
+}
+
+.user-avatar-wrapper:hover .avatar-edit-overlay {
+  opacity: 1;
+}
+
+.user-main-info {
+  flex: 1;
+}
+
+.user-name {
+  color: #fff;
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.user-phone-row {
+  font-size: 16px;
+  opacity: 0.5;
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+.premium-checkin-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
+.premium-checkin-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: #fff;
+}
+
+.checkin-done {
+  color: #52c41a;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(82, 196, 26, 0.1);
   padding: 4px 12px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
-.user-main {
-  margin-top: 20px;
+.card-bottom {
+  margin-top: auto;
 }
 
-.user-nickname {
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: 4px;
+.exp-container {
+  width: 100%;
 }
 
-.user-phone {
-  font-size: 16px;
-  opacity: 0.7;
-}
-
-.card-footer {
+.exp-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  font-size: 13px;
+  font-size: 12px;
+  margin-bottom: 8px;
   opacity: 0.8;
 }
 
-.points-info .value {
-  font-size: 18px;
-  font-weight: 600;
-  margin-left: 4px;
+.points-badge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-/* 资产网格 */
-.asset-grid {
+.exp-progress-new {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.exp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d4af37, #f9e29c);
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.card-bg-pattern {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60%;
+  height: 100%;
+  background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.15), transparent 70%);
+  z-index: 1;
+}
+
+/* 资产网格 (现代感) */
+.stats-card-modern {
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.stats-header-modern {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+}
+
+.asset-grid-modern {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin-bottom: 24px;
 }
 
-.asset-item {
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.asset-title {
-  font-size: 14px;
-  color: #666;
-}
-
-.asset-value {
-  margin: 8px 0;
-}
-
-.asset-value .currency {
-  font-size: 14px;
-  color: #333;
-  margin-right: 2px;
-}
-
-.asset-value .amount {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.asset-value .unit {
-  font-size: 14px;
-  color: #666;
-  margin-left: 4px;
-}
-
-.action-btn {
-  padding: 0;
-  height: auto;
-}
-
-/* 统计卡片 */
-.stats-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.stats-grid {
+.asset-item-modern {
   display: flex;
-  justify-content: space-around;
-  padding: 8px 0;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.stat-box {
-  text-align: center;
+.asset-item-modern:hover {
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
-.stat-value {
+.asset-icon-bg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 20px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 4px;
 }
 
-.stat-label {
+.coupon-bg { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; }
+.points-bg { background: rgba(250, 173, 20, 0.1); color: #faad14; }
+.balance-bg { background: rgba(82, 196, 26, 0.1); color: #52c41a; }
+.stays-bg { background: rgba(24, 144, 255, 0.1); color: #1890ff; }
+
+.asset-info-modern {
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.asset-num .unit, .asset-num .currency {
+  font-size: 12px;
+  margin: 0 2px;
+  color: #999;
+}
+
+.asset-name {
   font-size: 12px;
   color: #999;
 }
 
+/* 会员权益 (现代感) */
+.rights-card-modern {
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.rights-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rights-title-text {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rights-subtitle {
+  font-size: 12px;
+  color: #d4af37;
+  font-weight: 600;
+}
+
+.rights-grid-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 16px;
+  transition: all 0.3s;
+}
+
+.right-box.active {
+  background: linear-gradient(90deg, #fff 0%, #fffbf0 100%);
+  border: 1px solid #f9e29c;
+}
+
+.right-box.disabled {
+  opacity: 0.5;
+}
+
+.right-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #d4af37;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.right-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.right-value {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+
 /* 右侧标签页 */
+.coupons-section {
+  padding: 8px 0;
+}
+
+.coupons-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.coupon-import-bar {
+  background: #f8f9fa;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px dashed #d9d9d9;
+}
+
+.coupons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.coupon-card {
+  display: flex;
+  height: 100px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eee;
+}
+
+.coupon-left {
+  width: 100px;
+  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+}
+
+.coupon-value .val {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.coupon-value .unit {
+  font-size: 14px;
+}
+
+.coupon-condition {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.coupon-right {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.coupon-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.coupon-date {
+  font-size: 11px;
+  color: #999;
+}
+
+/* 常用入住人列表 */
 .profile-right {
   background: #fff;
   border-radius: 20px;
@@ -688,9 +1196,15 @@ onMounted(() => {
 
 .info-item {
   display: flex;
-  padding: 24px 0;
+  padding: 24px;
   border-bottom: 1px solid #f0f0f0;
   align-items: flex-start;
+  transition: background 0.3s;
+  border-radius: 12px;
+}
+
+.info-item:hover {
+  background: #fafafa;
 }
 
 .info-item:last-child {

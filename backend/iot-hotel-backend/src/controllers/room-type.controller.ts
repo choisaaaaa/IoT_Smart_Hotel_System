@@ -1,13 +1,22 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../types';
 import { RoomTypeService } from '../services/room-type.service';
 import logger from '../utils/logger';
+import { isSystemRole } from '../utils/role';
 
 type ControllerError = Error & { statusCode?: number };
 
 export class RoomTypeController {
-  static async getRoomTypes(req: Request, res: Response) {
+  static async getRoomTypes(req: AuthRequest, res: Response) {
     try {
-      const list = await RoomTypeService.getRoomTypes();
+      let hotelId = req.user?.hotel_id;
+      if (isSystemRole(req.user?.role)) {
+        const queryHotelId = req.query.hotel_id;
+        if (queryHotelId) {
+          hotelId = parseInt(queryHotelId as string);
+        }
+      }
+      const list = await RoomTypeService.getRoomTypes(hotelId);
       res.json({
         code: 200,
         message: '获取房型列表成功',
@@ -19,10 +28,11 @@ export class RoomTypeController {
     }
   }
 
-  static async getRoomTypeById(req: Request, res: Response) {
+  static async getRoomTypeById(req: AuthRequest, res: Response) {
     try {
       const id = Number(req.params.id);
-      const detail = await RoomTypeService.getRoomTypeById(id);
+      const hotelId = req.user?.hotel_id;
+      const detail = await RoomTypeService.getRoomTypeById(id, hotelId);
       if (detail) {
         res.json({ code: 200, message: '获取房型详情成功', data: detail });
       } else {
@@ -34,9 +44,10 @@ export class RoomTypeController {
     }
   }
 
-  static async createRoomType(req: Request, res: Response) {
+  static async createRoomType(req: AuthRequest, res: Response) {
     try {
-      const id = await RoomTypeService.createRoomType(req.body);
+      const hotelId = req.user?.hotel_id;
+      const id = await RoomTypeService.createRoomType({ ...req.body, hotel_id: hotelId });
       res.status(201).json({ code: 201, message: '创建房型成功', data: { id } });
     } catch (error) {
       logger.error('创建房型失败:', error);
@@ -46,9 +57,10 @@ export class RoomTypeController {
     }
   }
 
-  static async updateRoomType(req: Request, res: Response) {
+  static async updateRoomType(req: AuthRequest, res: Response) {
     try {
       const id = Number(req.params.id);
+      const hotelId = req.user?.hotel_id;
       const success = await RoomTypeService.updateRoomType(id, req.body);
       if (success) {
         res.json({ code: 200, message: '更新房型成功' });
@@ -63,7 +75,7 @@ export class RoomTypeController {
     }
   }
 
-  static async deleteRoomType(req: Request, res: Response) {
+  static async deleteRoomType(req: AuthRequest, res: Response) {
     try {
       const id = Number(req.params.id);
       const success = await RoomTypeService.deleteRoomType(id);

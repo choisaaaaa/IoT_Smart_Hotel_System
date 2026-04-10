@@ -4,6 +4,34 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { hashPassword, comparePassword } from '../utils/password';
 
+// 会员等级折扣映射 (可由总部系统用户通过 updateLevelDiscounts 接口指定)
+let LEVEL_DISCOUNTS: Record<string, number> = {
+  'diamond': 0.80,
+  'platinum': 0.85,
+  'gold': 0.88,
+  'silver': 0.95,
+  'standard': 1.0
+};
+
+export const updateLevelDiscounts = async (req: AuthRequest, res: Response) => {
+  try {
+    const { discounts } = req.body;
+    if (!discounts) return res.status(400).json(errorResponse('缺少参数'));
+    
+    LEVEL_DISCOUNTS = { ...LEVEL_DISCOUNTS, ...discounts };
+    res.json(successResponse(LEVEL_DISCOUNTS, '更新会员折扣成功'));
+  } catch (error) {
+    logger.error('更新会员折扣失败:', error);
+    res.status(500).json(errorResponse('更新会员折扣失败'));
+  }
+};
+
+export const getLevelDiscounts = async (_req: Request, res: Response) => {
+  res.json(successResponse(LEVEL_DISCOUNTS, '获取会员折扣成功'));
+};
+
+export { LEVEL_DISCOUNTS };
+
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, pageSize = 10, level } = req.query;
@@ -118,64 +146,58 @@ export const update = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// 辅助函数：确保会员记录存在
+async function ensureMemberRecord(phone: string, name: string) {
+  const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
+  if (rows.length > 0) return rows[0];
+
+  // 创建会员记录
+  const [result] = await pool.query<ResultSetHeader>(
+    'INSERT INTO members (phone, name, member_level, experience, points, balance) VALUES (?, ?, "standard", 0, 0, 0.00)',
+    [phone, name]
+  );
+  
+  const [newRows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE id = ?', [result.insertId]);
+  return newRows[0];
+}
+
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json(errorResponse('未认证'));
 
     const user = req.user as any;
-    // 如果没有对应的会员记录，先尝试通过 phone 查找
-    const phone = user.phone || user.username; // 优先使用 phone
-    let [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
-
-    // 如果没有，再尝试通过 user_id 查找 (以防 user_id 列不存在)
-    if (rows.length === 0) {
-      try {
-        const [userIdRows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE user_id = ?', [user.id]);
-        rows = userIdRows;
-      } catch (e) {
-        // 如果没有 user_id 列，忽略错误
-        logger.warn('members 表可能缺少 user_id 列:', e);
-      }
-    }
-
-    if (rows.length === 0) {
-      // 如果仍未找到对应的会员记录，返回默认空资产，而不是 500
-      return res.json(successResponse({
-        id: 0,
-        phone: user.username,
-        name: user.username,
-        member_level: 'standard',
-        points: 0,
-        balance: 0.00,
-        total_spent: 0.00,
-        total_stays: 0,
-        coupons_count: 0
-      }, '获取资产成功'));
-    }
+    const phone = user.phone || user.username; 
+    
+    // 确保会员记录存在
+    const member = await ensureMemberRecord(phone, user.username);
 
     // 增加优惠券数量统计
-    const [couponRows] = await pool.query<RowDataPacket[]>(
-      'SELECT COUNT(*) as count FROM user_coupons WHERE user_id = ? AND status = "unused"',
-      [user.id]
+    const [couponRows]: any = await pool.query(
+      'SELECT COUNT(*) as count FROM member_coupons WHERE member_id = ? AND status = "unused"',
+      [member.id]
     );
-    const result = { ...rows[0], coupons_count: (couponRows[0] as any).count || 0 };
+    
+    // 显式构建结果对象，确保所有字段都包含在内
+    const result = {
+      id: member.id,
+      phone: member.phone,
+      name: member.name,
+      member_level: member.member_level,
+      experience: Number(member.experience || 0),
+      points: Number(member.points || 0),
+      balance: member.balance,
+      total_spent: member.total_spent,
+      total_stays: member.total_stays,
+      last_checkin_date: member.last_checkin_date,
+      coupons_count: Number(couponRows[0]?.count || 0),
+      level_discounts: LEVEL_DISCOUNTS // 增加这一行，让前端知道各等级折扣
+    };
 
+    logger.info(`获取会员资产成功: 手机号 ${phone}, 成长值 ${result.experience}, 等级 ${result.member_level}`);
     res.json(successResponse(result, '获取资产成功'));
   } catch (error) {
     logger.error('获取会员资产失败:', error);
-    // 降级返回默认信息，而不是 500
-    const user = req.user as any;
-    res.json(successResponse({
-      id: 0,
-      phone: user?.username || '',
-      name: user?.username || '',
-      member_level: 'standard',
-      points: 0,
-      balance: 0.00,
-      total_spent: 0.00,
-      total_stays: 0,
-      coupons_count: 0
-    }, '获取资产成功(降级)'));
+    res.status(500).json(errorResponse('获取资产失败'));
   }
 };
 
@@ -247,5 +269,62 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('会员登录失败:', error);
     res.status(500).json(errorResponse('登录失败'));
+  }
+};
+
+// 会员签到 (每日领取成长值)
+export const checkin = async (req: AuthRequest, res: Response) => {
+  try {
+    logger.info('收到会员签到请求:', req.user?.username);
+    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+
+    const user = req.user as any;
+    const phone = user.phone || user.username;
+    
+    // 确保会员记录存在
+    const member = await ensureMemberRecord(phone, user.username);
+    
+    // 使用本地时间获取日期，避免 ISOString 时区导致的问题
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    logger.info(`签到校验: 手机号 ${phone}, 数据库日期 ${member.last_checkin_date}, 今天日期 ${today}`);
+
+    // 检查是否已签到
+    if (member.last_checkin_date) {
+      const lastDateObj = new Date(member.last_checkin_date);
+      const lastDate = `${lastDateObj.getFullYear()}-${String(lastDateObj.getMonth() + 1).padStart(2, '0')}-${String(lastDateObj.getDate()).padStart(2, '0')}`;
+      
+      if (lastDate === today) {
+        return res.json(successResponse({ already_checked_in: true }, '今日已签到'));
+      }
+    }
+
+    // 计算获得的成长值 (固定 5 点)
+    const expGain = 5;
+    const newExp = (member.experience || 0) + expGain;
+    
+    // 自动升级逻辑 (保持原有阈值)
+    let newLevel = member.member_level;
+    if (newExp >= 5000) newLevel = 'diamond';
+    else if (newExp >= 2000) newLevel = 'platinum';
+    else if (newExp >= 500) newLevel = 'gold';
+    else if (newExp >= 100) newLevel = 'silver';
+    else newLevel = 'standard';
+
+    await pool.query(
+      'UPDATE members SET experience = ?, member_level = ?, last_checkin_date = ? WHERE id = ?',
+      [newExp, newLevel, today, member.id]
+    );
+
+    res.json(successResponse({
+      already_checked_in: false,
+      experience: expGain,
+      total_experience: newExp,
+      level: newLevel
+    }, '签到成功'));
+  } catch (error) {
+    logger.error('会员签到失败:', error);
+    res.status(500).json(errorResponse('签到失败'));
   }
 };

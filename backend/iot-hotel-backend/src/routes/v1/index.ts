@@ -18,6 +18,8 @@ import users from './users';
 import upload from './upload';
 import aiButler from './ai-butler';
 import environment from './environment';
+import roomTypes from './room-types';
+import priceCalendar from './price-calendar';
 
 const router = Router();
 
@@ -27,6 +29,8 @@ router.use('/hotel', hotel);
 router.use('/auth', auth);
 router.use('/bookings', bookings);
 router.use('/rooms', rooms);
+router.use('/room-types', roomTypes);
+router.use('/price-calendar', priceCalendar);
 router.use('/payments', payments);
 router.use('/members', members);
 router.use('/coupons', coupons);

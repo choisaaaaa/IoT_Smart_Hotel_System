@@ -7,24 +7,10 @@ import { isSystemRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
+    // 统一获取 hotelId 的逻辑：优先使用 req.user 中的，如果是系统管理员则可从 query 覆盖
     let hotelId = req.user?.hotel_id;
     
     if (isSystemRole(req.user?.role)) {
-      const queryHotelId = req.query.hotel_id;
-      if (queryHotelId) {
-        hotelId = parseInt(queryHotelId as string);
-      } else if (!hotelId) {
-        const hotels = await HotelService.getAllHotels();
-        hotelId = hotels[0]?.id;
-      }
-    } else if (req.user?.role === 'staff' || req.user?.role === 'manager') {
-      const [hotelRows]: any = await (await import('../config/database')).default.execute(
-        'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
-        [req.user?.id]
-      );
-      if (hotelRows.length > 0) {
-        hotelId = hotelRows[0].hotel_id;
-      }
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
@@ -32,7 +18,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     }
 
     if (!hotelId) {
-      return res.status(401).json(errorResponse('未授权'));
+      return res.status(401).json(errorResponse('未授权，无法获取门店 ID'));
     }
 
     const { page = 1, pageSize = 10, status, type, floor, groupBy } = req.query;

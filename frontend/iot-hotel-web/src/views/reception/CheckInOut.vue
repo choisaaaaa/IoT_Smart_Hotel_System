@@ -14,9 +14,16 @@
                 </a-col>
                 <a-col :span="12">
                   <a-form-item label="联系电话" required>
-                    <a-input v-model:value="checkinForm.phone" placeholder="手机号码" />
+                    <div class="phone-input-wrapper">
+                      <a-input v-model:value="checkinForm.phone" placeholder="手机号码" style="flex: 1;" />
+                      <div class="member-status-info">
+                        <a-tag v-if="getMemberByPhone(checkinForm.phone)" color="gold" style="margin: 0;">
+                          {{ getLevelName(getMemberByPhone(checkinForm.phone).member_level) }}
+                        </a-tag>
+                        <a-tag v-else-if="checkinForm.phone && checkinForm.phone.length >= 11" color="warning" style="margin: 0;">未注册</a-tag>
+                      </div>
+                    </div>
                   </a-form-item>
-                  <a-tag :color="phoneRegistered ? 'success' : 'warning'">{{ phoneRegistered ? '已注册用户' : '未注册用户' }}</a-tag>
                 </a-col>
               </a-row>
               <a-row :gutter="16">
@@ -74,8 +81,8 @@
                   {{ selectedRoom.room_name }} · ¥{{ selectedRoom.room_price }}/晚
                 </div>
               </a-card>
-              <a-form-item label="预估金额" style="margin-top: 12px;">
-                <a-statistic :value="estimatedPrice" prefix="¥" :precision="2" />
+              <a-form-item label="预估金额 (含会员/日期折扣)" style="margin-top: 12px;">
+                <a-statistic :value="estimatedPrice" prefix="¥" :precision="2" :loading="priceLoading" />
               </a-form-item>
               <a-divider orientation="left">同住人</a-divider>
               <a-space direction="vertical" style="width: 100%;">
@@ -124,13 +131,32 @@
                   :key="room.id"
                   class="room-tile"
                   :class="{ active: checkinForm.room_id === room.id }"
-                  @click="chooseRoom(room)"
                 >
-                  <div class="room-num">{{ room.room_number }}</div>
-                  <div class="room-name">{{ room.room_name }}</div>
+                  <div class="room-main" @click="chooseRoom(room)">
+                    <div class="room-type-text">{{ room.room_name }}</div>
+                    <div class="room-num-text">{{ room.room_number }}</div>
+                  </div>
+                  <a-button type="link" size="small" class="detail-link" @click.stop="showRoomDetail(room)">详情</a-button>
                 </div>
               </div>
             </a-card>
+
+    <!-- 房间详情弹窗 -->
+    <a-modal v-model:open="roomDetailVisible" title="房间详情" :footer="null" width="400px">
+      <div v-if="roomDetail" class="room-detail-modal-content">
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item label="房号">{{ roomDetail.room_number }}</a-descriptions-item>
+          <a-descriptions-item label="房型">{{ roomDetail.room_name }}</a-descriptions-item>
+          <a-descriptions-item label="基准价格">¥{{ roomDetail.room_price }}/晚</a-descriptions-item>
+          <a-descriptions-item label="面积">{{ roomDetail.area }}㎡</a-descriptions-item>
+          <a-descriptions-item label="床型">{{ roomDetail.bed_type }}</a-descriptions-item>
+          <a-descriptions-item label="最大入住">{{ roomDetail.max_guests }}人</a-descriptions-item>
+          <a-descriptions-item label="设施">
+            <a-tag v-for="f in roomDetail.facilities" :key="f" size="small">{{ f }}</a-tag>
+          </a-descriptions-item>
+        </a-descriptions>
+      </div>
+    </a-modal>
             <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
               <a-space style="margin-bottom: 8px;">
                 <a-button size="small" @click="fetchTodayBookings">刷新</a-button>
@@ -148,9 +174,10 @@
               >
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'registered'">
-                    <a-tag :color="record.phone_registered ? 'success' : 'warning'">
-                      {{ record.phone_registered ? '已注册' : '未注册' }}
+                    <a-tag v-if="getMemberByPhone(record.guest_phone)" color="gold">
+                      {{ getLevelName(getMemberByPhone(record.guest_phone).member_level) }}
                     </a-tag>
+                    <a-tag v-else color="default">非会员</a-tag>
                   </template>
                   <template v-if="column.key === 'action'">
                     <a-button type="link" size="small" @click="fillByBooking(record)">办理入住</a-button>
@@ -186,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { UserAddOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
@@ -205,9 +232,19 @@ const currentGuests = ref<any[]>([])
 const roomSearchKeyword = ref('')
 const todayBookings = ref<any[]>([])
 const selectedBookingKeys = ref<number[]>([])
-const memberPhones = ref<Set<string>>(new Set())
+// 移除 memberPhones，改用 memberList
+// const memberPhones = ref<Set<string>>(new Set())
 const todayBookingLoading = ref(false)
-const companions = ref<Array<{ name: string; phone: string; id_type: string; id_number: string }>>([])
+const companions = ref<any[]>([])
+
+// 房间详情
+const roomDetailVisible = ref(false)
+const roomDetail = ref<RoomInfo | null>(null)
+
+function showRoomDetail(room: RoomInfo) {
+  roomDetail.value = room
+  roomDetailVisible.value = true
+}
 
 const checkinForm = reactive({
   guest_name: '', phone: '', id_type: 'idcard', id_number: '',
@@ -228,12 +265,33 @@ const searchedRooms = computed(() => {
 const selectedRoom = computed(() => availableRooms.value.find(room => room.id === checkinForm.room_id))
 const phoneRegistered = computed(() => isPhoneRegistered(checkinForm.phone))
 
-const estimatedPrice = computed(() => {
-  if (!checkinForm.room_id) return 0
-  const room = availableRooms.value.find(r => r.id === checkinForm.room_id)
-  if (!room) return 0
-  const nights = dayjs(checkinForm.check_out_date).diff(dayjs(checkinForm.check_in_date), 'day')
-  return Number(room.room_price) * Math.max(nights, 1)
+const estimatedPrice = ref(0)
+const priceLoading = ref(false)
+
+async function updateEstimatedPrice() {
+  if (!checkinForm.room_id || !checkinForm.check_in_date || !checkinForm.check_out_date) {
+    estimatedPrice.value = 0
+    return
+  }
+  
+  try {
+    priceLoading.value = true
+    const res: any = await bookingApi.getCalculatedPrice({
+      room_id: checkinForm.room_id,
+      check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
+      check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
+      guest_phone: checkinForm.phone || undefined
+    })
+    estimatedPrice.value = res.data?.total_price || 0
+  } catch (error) {
+    console.error('计算预估价失败:', error)
+  } finally {
+    priceLoading.value = false
+  }
+}
+
+watch(() => [checkinForm.room_id, checkinForm.check_in_date, checkinForm.check_out_date, checkinForm.phone], () => {
+  updateEstimatedPrice()
 })
 
 const checkoutColumns = [
@@ -248,7 +306,7 @@ const todayBookingColumns = [
   { title: '客人', dataIndex: 'guest_name', width: 88 },
   { title: '手机号', dataIndex: 'guest_phone', width: 112 },
   { title: '房号', dataIndex: 'room_number', width: 62 },
-  { title: '注册', key: 'registered', width: 72 },
+  { title: '会员等级', key: 'registered', width: 100 },
   { title: '操作', key: 'action', width: 92 }
 ]
 
@@ -256,10 +314,27 @@ function normalizePhone(phone: string): string {
   return String(phone || '').replace(/\D/g, '')
 }
 
-function isPhoneRegistered(phone: string): boolean {
+const memberList = ref<any[]>([])
+
+function getMemberByPhone(phone: string): any {
   const key = normalizePhone(phone)
-  if (!key) return false
-  return memberPhones.value.has(key)
+  if (!key) return null
+  return memberList.value.find(m => normalizePhone(m.phone) === key)
+}
+
+function getLevelName(level: string): string {
+  const levels: Record<string, string> = {
+    'diamond': '💎 钻石会员',
+    'platinum': '🥈 铂金会员',
+    'gold': '🥇 金卡会员',
+    'silver': '🥈 银卡会员',
+    'standard': '👤 普通会员'
+  }
+  return levels[level] || '已注册'
+}
+
+function isPhoneRegistered(phone: string): boolean {
+  return !!getMemberByPhone(phone)
 }
 
 function addCompanion() {
@@ -301,15 +376,9 @@ async function fetchCurrentGuests() {
 async function fetchMemberList() {
   try {
     const res: any = await memberApi.getMemberList({ pageSize: 1000 })
-    const list = res.data?.list || []
-    const phoneSet = new Set<string>()
-    list.forEach((item: any) => {
-      const key = normalizePhone(item.phone)
-      if (key) phoneSet.add(key)
-    })
-    memberPhones.value = phoneSet
+    memberList.value = res.data?.list || []
   } catch (error) {
-    memberPhones.value = new Set()
+    memberList.value = []
   }
 }
 
@@ -321,7 +390,7 @@ async function fetchTodayBookings() {
     const res: any = await bookingApi.getBookingList({
       pageSize: 200,
       check_in_date: 'today'
-    })
+    } as any)
     const list = (res.data?.list || []).filter((item: any) =>
       ['pending', 'confirmed'].includes(item.status)
     )
@@ -443,31 +512,84 @@ onMounted(async () => {
 
 <style scoped>
 .room-grid {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 8px;
-  max-height: 240px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  max-height: 400px;
   overflow-y: auto;
+  padding: 4px;
 }
 .room-tile {
   border: 1px solid #f0f0f0;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 0;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  min-height: 100px;
+}
+.room-tile:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: translateY(-2px);
 }
 .room-tile.active {
   border-color: #1890ff;
   background: #e6f7ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
 }
-.room-num {
+.room-tile.active .room-type-text {
+  color: #1890ff;
+}
+.room-main {
+  padding: 12px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.room-type-text {
+  font-size: 14px;
   font-weight: 700;
-  font-size: 15px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 4px;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.room-name {
+.room-num-text {
+  font-size: 16px;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: rgba(0, 0, 0, 0.65);
+  font-weight: 500;
+}
+.detail-link {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
+  height: 28px;
+  line-height: 28px;
+  padding: 0;
+  border-top: 1px solid #f0f0f0;
+  width: 100%;
+  background: #fafafa;
+  color: #8c8c8c;
+}
+.detail-link:hover {
+  background: #f0f0f0;
+  color: #1890ff;
+}
+.room-tile.active .detail-link {
+  border-top-color: #91d5ff;
+  background: #bae7ff;
+  color: #0050b3;
+}
+.room-detail-modal-content {
+  padding: 8px 0;
 }
 .selected-room-card {
   border: 1px dashed #d9d9d9;
@@ -480,5 +602,18 @@ onMounted(async () => {
 .selected-room-text {
   margin-top: 4px;
   color: rgba(0, 0, 0, 0.65);
+}
+
+.phone-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-status-info {
+  flex-shrink: 0;
+  min-width: 80px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
