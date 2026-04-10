@@ -24,7 +24,7 @@ export function normalizeRole(role?: string): string {
 }
 
 export interface LoginParams {
-  username: string
+  phone: string
   password: string
 }
 
@@ -174,6 +174,14 @@ class AuthService {
     } as UserInfo
   }
 
+  // 获取用户会员和入住状态
+  async getUserStatus(): Promise<{ phone: string; is_member: boolean; member_info: any; is_checked_in: boolean; checkin_info: any }> {
+    const res = await this.api.get<any, ApiResponse<{ phone: string; is_member: boolean; member_info: any; is_checked_in: boolean; checkin_info: any }>>(
+      '/members/status'
+    )
+    return res.data!
+  }
+
   // 检查是否已登录
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token')
@@ -189,7 +197,7 @@ class AuthService {
   hasRole(role: string | string[]): boolean {
     const user = this.getUserInfo()
     if (!user) return false
-    
+
     const roles = (Array.isArray(role) ? role : [role]).map(normalizeRole)
     return roles.includes(normalizeRole(user.role))
   }
@@ -198,7 +206,7 @@ class AuthService {
   hasPermission(permission: string | string[]): boolean {
     const user = this.getUserInfo()
     if (!user) return false
-    
+
     const permissions = Array.isArray(permission) ? permission : [permission]
     return permissions.some(p => user.permissions.includes(p))
   }

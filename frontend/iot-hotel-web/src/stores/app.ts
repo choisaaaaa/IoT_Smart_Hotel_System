@@ -6,6 +6,7 @@ export const useAppStore = defineStore('app', () => {
   const currentTier = ref<'admin' | 'floor' | 'room'>('admin')
   const connected = ref(false)
   const userInfo = ref<any>(null)
+  const userStatus = ref<any>(null)
   const showLoginModal = ref(false)
   const notifications = ref<{ id: string; type: string; message: string; time: string }[]>([])
 
@@ -60,7 +61,12 @@ export const useAppStore = defineStore('app', () => {
     } else {
       localStorage.removeItem('user_info')
       localStorage.removeItem('auth_token')
+      userStatus.value = null
     }
+  }
+
+  const setUserStatus = (status: any) => {
+    userStatus.value = status
   }
 
   // --- 语音通话全局状态 ---
@@ -110,6 +116,8 @@ export const useAppStore = defineStore('app', () => {
     clearNotifications,
     initUserInfo,
     setUserInfo,
+    userStatus,
+    setUserStatus,
     setIncomingCall,
     clearIncomingCall,
     setCurrentCall,

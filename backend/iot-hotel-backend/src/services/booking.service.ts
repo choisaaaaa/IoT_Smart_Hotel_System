@@ -40,10 +40,11 @@ export class BookingService {
     pageSize?: number;
     status?: string;
     guest_name?: string;
+    check_in_date?: string;
     hotelId: number;
   }): Promise<BookingListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, guest_name, hotelId } = params;
+      const { page = 1, pageSize = 10, status, guest_name, check_in_date, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
 
       let whereClause = 'WHERE b.hotel_id = ?';
@@ -57,6 +58,15 @@ export class BookingService {
       if (guest_name) {
         whereClause += ' AND b.guest_name LIKE ?';
         paramsArray.push(`%${guest_name}%`);
+      }
+
+      if (check_in_date) {
+        if (check_in_date === 'today') {
+          whereClause += ' AND DATE(b.check_in_date) = CURDATE()';
+        } else {
+          whereClause += ' AND DATE(b.check_in_date) = ?';
+          paramsArray.push(check_in_date);
+        }
       }
 
       const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM bookings b ${whereClause}`, paramsArray);

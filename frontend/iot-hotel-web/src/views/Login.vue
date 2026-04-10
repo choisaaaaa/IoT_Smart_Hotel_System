@@ -15,14 +15,14 @@
             layout="vertical"
             @finish="handleLogin"
           >
-            <a-form-item name="username" label="用户名">
+            <a-form-item name="phone" label="手机号">
               <a-input
-                v-model:value="loginForm.username"
-                placeholder="请输入用户名"
+                v-model:value="loginForm.phone"
+                placeholder="请输入手机号"
                 size="large"
               >
                 <template #prefix>
-                  <UserOutlined />
+                  <PhoneOutlined />
                 </template>
               </a-input>
             </a-form-item>
@@ -116,10 +116,10 @@
         :rules="registerRules"
         layout="vertical"
       >
-        <a-form-item name="username" label="用户名">
+        <a-form-item name="username" label="昵称">
           <a-input
             v-model:value="registerForm.username"
-            placeholder="请设置用户名"
+            placeholder="请设置您的昵称"
             size="large"
           >
             <template #prefix>
@@ -207,14 +207,14 @@ const activeTab = ref('password')
 const loading = ref(false)
 const loginFormRef = ref()
 const loginForm = reactive({
-  username: '',
+  phone: '',
   password: ''
 })
 
 const loginRules: Record<string, Rule[]> = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3-20 个字符', trigger: 'blur' }
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -242,20 +242,8 @@ const registerForm = reactive({
 
 const registerRules: Record<string, Rule[]> = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    {
-      validator: (_rule: Rule, value: string) => {
-        if (!value) return Promise.reject('请输入用户名')
-        let charCount = 0
-        for (const ch of value) {
-          charCount += /[\u4e00-\u9fa5]/.test(ch) ? 1 : 0.5
-        }
-        if (charCount < 2) return Promise.reject('用户名至少2个字符（1个中文字=1字符，2个字母=1字符）')
-        if (charCount > 8) return Promise.reject('用户名最多8个字符（1个中文字=1字符，2个字母=1字符）')
-        return Promise.resolve()
-      },
-      trigger: 'blur'
-    }
+    { required: true, message: '请输入昵称', trigger: 'blur' },
+    { min: 2, max: 20, message: '昵称长度在 2-20 个字符', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -305,9 +293,9 @@ const handleLogin = async () => {
   try {
     loading.value = true
     const { user } = await authService.login(loginForm)
-    
+
     message.success('登录成功')
-    
+
     // 根据角色跳转到不同的页面
     redirectByRole(user.role)
   } catch (error) {
@@ -322,13 +310,13 @@ const handleGenerateToken = async () => {
   try {
     generatingToken.value = true
     const { token, expiresAt } = await authService.generateToken(loginForm)
-    
+
     scanToken.value = token
     tokenExpireTime.value = new Date(expiresAt).getTime()
-    
+
     // 自动开始扫码登录轮询
     pollScanLogin(token)
-    
+
     message.success('登录码生成成功，请使用管理端 APP 扫码')
   } catch (error) {
     console.error('生成登录码失败:', error)
@@ -379,17 +367,17 @@ const handleRegister = async () => {
       email: registerForm.email || undefined,
       phone: registerForm.phone
     })
-    
+
     message.success('注册成功，请登录')
     registerVisible.value = false
-    
+
     // 清空表单
     registerForm.username = ''
     registerForm.password = ''
     registerForm.confirmPassword = ''
     registerForm.email = ''
     registerForm.phone = ''
-    
+
     // 切换到密码登录
     activeTab.value = 'password'
   } catch (error) {

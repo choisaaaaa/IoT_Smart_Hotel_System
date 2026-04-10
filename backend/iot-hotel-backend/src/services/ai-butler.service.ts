@@ -35,7 +35,7 @@ interface GuestSession {
 export class AIButlerService {
   private static instance: AIButlerService;
   private sessions: Map<string, GuestSession> = new Map();
-  
+
   // API配置
   private zhipuApiKey = process.env.ZHIPU_API_KEY || '';
   private xfyunAppId = process.env.XFYUN_APP_ID || '';
@@ -54,18 +54,18 @@ export class AIButlerService {
         parameters: {
           type: 'object',
           properties: {
-            device_type: { 
-              type: 'string', 
+            device_type: {
+              type: 'string',
               enum: ['light', 'ac', 'curtain', 'tv', 'lock', 'all'],
               description: '设备类型：light=灯, ac=空调, curtain=窗帘, tv=电视, lock=门锁, all=全部'
             },
-            action: { 
-              type: 'string', 
+            action: {
+              type: 'string',
               enum: ['on', 'off', 'toggle', 'set_temperature', 'set_brightness', 'open', 'close'],
               description: '操作：on=开, off=关, toggle=切换, set_temperature=设置温度, set_brightness=设置亮度, open=打开, close=关闭'
             },
-            value: { 
-              type: 'number', 
+            value: {
+              type: 'number',
               description: '参数值（温度、亮度等），可选'
             }
           },
@@ -93,17 +93,17 @@ export class AIButlerService {
         parameters: {
           type: 'object',
           properties: {
-            service_type: { 
-              type: 'string', 
+            service_type: {
+              type: 'string',
               enum: ['cleaning', 'maintenance', 'room_service', 'towels', 'water', 'other'],
               description: '服务类型：cleaning=保洁, maintenance=维修, room_service=送餐, towels=换毛巾, water=送水, other=其他'
             },
-            description: { 
-              type: 'string', 
+            description: {
+              type: 'string',
               description: '服务详细描述（如：空调不制冷、需要2瓶矿泉水等）'
             },
-            urgency: { 
-              type: 'string', 
+            urgency: {
+              type: 'string',
               enum: ['normal', 'urgent', 'emergency'],
               description: '紧急程度：normal=普通, urgent=紧急, emergency=非常紧急'
             }
@@ -120,8 +120,8 @@ export class AIButlerService {
         parameters: {
           type: 'object',
           properties: {
-            info_type: { 
-              type: 'string', 
+            info_type: {
+              type: 'string',
               enum: ['restaurant', 'gym', 'wifi', 'nearby', 'checkout', 'breakfast', 'all'],
               description: '信息类型：restaurant=餐厅, gym=健身房, wifi=WiFi, nearby=周边, checkout=退房, breakfast=早餐, all=全部'
             }
@@ -138,9 +138,9 @@ export class AIButlerService {
         parameters: {
           type: 'object',
           properties: {
-            reason: { 
-              type: 'string', 
-              description: '转接原因' 
+            reason: {
+              type: 'string',
+              description: '转接原因'
             }
           },
           required: []
@@ -161,31 +161,30 @@ export class AIButlerService {
    */
   async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
     try {
-      const [bookings] = await pool.query<RowDataPacket[]>(
-        `SELECT b.*, r.room_number, r.id as room_db_id
-         FROM bookings b
-         JOIN rooms r ON b.room_id = r.id
+      const [guests] = await pool.query<RowDataPacket[]>(
+        `SELECT g.*, r.room_number, b.check_in_date, b.check_out_date
+         FROM guests g
+         JOIN rooms r ON g.room_id = r.id
+         LEFT JOIN bookings b ON g.booking_id = b.id
          WHERE (r.id = ? OR r.room_number = ?)
-         AND b.status = 'checked_in'
-         AND b.check_in_date <= CURDATE()
-         AND b.check_out_date >= CURDATE()
-         ORDER BY b.created_at DESC
+         AND g.check_out_time IS NULL
+         ORDER BY g.check_in_time DESC
          LIMIT 1`,
         [roomId, roomId]
       );
 
-      if (bookings.length === 0) {
+      if (guests.length === 0) {
         logger.warn(`房间 ${roomId} 无有效入住记录`);
         return null;
       }
 
-      const booking = bookings[0];
+      const guest = guests[0];
       const session: GuestSession = {
-        roomId: booking.room_number,
-        guestId: booking.id,
-        guestName: booking.guest_name || '尊敬的客人',
-        checkInDate: booking.check_in_date,
-        checkOutDate: booking.check_out_date,
+        roomId: guest.room_number,
+        guestId: guest.booking_id,
+        guestName: guest.guest_name || '尊敬的客人',
+        checkInDate: guest.check_in_date,
+        checkOutDate: guest.check_out_date,
         isValid: true
       };
 
@@ -203,12 +202,12 @@ export class AIButlerService {
   async speechToText(audioBase64: string): Promise<string> {
     try {
       const url = 'https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr';
-      
+
       const date = new Date().toUTCString();
       const signature = this.buildAliyunSignature(date);
-      
+
       const audioBuffer = Buffer.from(audioBase64, 'base64');
-      
+
       const response = await axios.post(url, audioBuffer, {
         headers: {
           'X-NLS-Token': this.aliyunAccessKey,
@@ -224,7 +223,7 @@ export class AIButlerService {
       if (response.data && response.data.result) {
         return response.data.result;
       }
-      
+
       throw new Error('ASR识别失败');
     } catch (error) {
       logger.error('阿里云ASR识别失败:', error);
@@ -276,7 +275,7 @@ export class AIButlerService {
 
       if (response.data && response.data.choices && response.data.choices[0]) {
         const choice = response.data.choices[0];
-        
+
         // 检查是否有工具调用
         if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
           return {
@@ -369,10 +368,10 @@ export class AIButlerService {
     for (const device of targetDevices) {
       const command = this.buildDeviceCommand(device_type, action, value);
       logger.info(`发送设备指令到 ${device.device_id}:`, command);
-      
+
       // TODO: 实际通过MQTT发送指令
       // mqttService.publish(`hotel/device/command/${device.device_id}`, command);
-      
+
       const actionText = this.getActionText(action, value, device_type);
       results.push(`${device.device_name || device.device_id}${actionText}`);
     }
@@ -385,7 +384,7 @@ export class AIButlerService {
    */
   private buildDeviceCommand(deviceType: string, action: string, value?: number): any {
     const baseCommand = { timestamp: Date.now() };
-    
+
     switch (action) {
       case 'on':
       case 'open':
@@ -904,13 +903,13 @@ export class AIButlerService {
       // 4. 如果有工具调用，执行工具并生成最终回复
       if (llmResult.needToolCall && llmResult.tool_calls) {
         const toolResults: any[] = [];
-        
+
         for (const toolCall of llmResult.tool_calls) {
           const functionName = toolCall.function.name;
           const functionArgs = JSON.parse(toolCall.function.arguments);
-          
+
           logger.info(`执行工具: ${functionName}`, functionArgs);
-          
+
           const toolResult = await this.executeToolCall(functionName, functionArgs, session);
           toolResults.push({
             id: toolCall.id,
@@ -943,7 +942,7 @@ export class AIButlerService {
         });
 
         const finalText = finalResponse.data?.choices?.[0]?.message?.content || toolResults[0].result;
-        
+
         logger.info(`📝 [工具调用] 最终回复文本: "${finalText.substring(0, 80)}${finalText.length > 80 ? '...' : ''}" (${finalText.length}字)`);
 
         const transferMatch = finalText.match(/\[TRANSFER:(\w+)\]/);

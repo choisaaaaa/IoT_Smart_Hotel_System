@@ -17,6 +17,16 @@
             :class="{ active: isActive('/guest/room') }"
             @click="$router.push('/guest/room')"
           >客房服务</a-button>
+          <a-button
+            type="text"
+            :class="{ active: isActive('/guest/orders') }"
+            @click="$router.push('/guest/orders')"
+          >我的订单</a-button>
+          <a-button
+            type="text"
+            :class="{ active: isActive('/guest/profile') }"
+            @click="$router.push('/guest/profile')"
+          >个人中心</a-button>
         </div>
         <div class="header-right">
           <a-tag :color="appStore.connected ? 'success' : 'default'" size="small">
@@ -28,12 +38,23 @@
             </a-button>
           </template>
           <template v-else>
+            <div class="user-status-tags" v-if="appStore.userStatus">
+              <a-tag v-if="appStore.userStatus.is_member" color="gold">会员</a-tag>
+              <a-tag v-if="appStore.userStatus.is_checked_in" color="cyan">已入住</a-tag>
+            </div>
             <a-dropdown>
               <a class="user-dropdown" @click.prevent>
                 <a-tag color="blue">{{ userInfo.username }}</a-tag>
               </a>
               <template #overlay>
                 <a-menu>
+                  <a-menu-item key="profile" @click="$router.push('/guest/profile')">
+                    <UserOutlined /> 个人中心
+                  </a-menu-item>
+                  <a-menu-item key="orders" @click="$router.push('/guest/orders')">
+                    <OrderedListOutlined /> 我的订单
+                  </a-menu-item>
+                  <a-menu-divider />
                   <a-menu-item key="logout" @click="handleLogout">
                     <LogoutOutlined /> 退出登录
                   </a-menu-item>
@@ -66,7 +87,7 @@
           欢迎登录智联酒店
         </div>
       </template>
-      
+
       <a-tabs v-model:activeKey="activeTab" class="login-tabs">
         <a-tab-pane key="password" tab="密码登录">
           <a-form
@@ -76,14 +97,14 @@
             layout="vertical"
             @finish="handleLogin"
           >
-            <a-form-item name="username" label="用户名">
+            <a-form-item name="phone" label="手机号">
               <a-input
-                v-model:value="loginForm.username"
-                placeholder="请输入用户名"
+                v-model:value="loginForm.phone"
+                placeholder="请输入手机号"
                 size="large"
               >
                 <template #prefix>
-                  <UserOutlined />
+                  <PhoneOutlined />
                 </template>
               </a-input>
             </a-form-item>
@@ -170,10 +191,10 @@
         :rules="registerRules"
         layout="vertical"
       >
-        <a-form-item name="username" label="用户名">
+        <a-form-item name="username" label="昵称">
           <a-input
             v-model:value="registerForm.username"
-            placeholder="请设置用户名"
+            placeholder="请设置您的昵称"
             size="large"
           >
             <template #prefix>
@@ -242,18 +263,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import {
   MobileOutlined,
-  SettingOutlined,
   UserOutlined,
   LockOutlined,
   MailOutlined,
   PhoneOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  OrderedListOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, normalizeRole } from '@/api/auth'
@@ -268,21 +289,44 @@ const userInfo = computed(() => appStore.userInfo)
 // 初始化
 appStore.initUserInfo()
 
+// 获取用户状态
+const fetchUserStatus = async () => {
+  if (appStore.userInfo) {
+    try {
+      const status = await authService.getUserStatus()
+      appStore.setUserStatus(status)
+    } catch (error) {
+      console.error('获取用户状态失败:', error)
+    }
+  }
+}
+
+onMounted(() => {
+  fetchUserStatus()
+})
+
+watch(() => appStore.userInfo, (newVal) => {
+  if (newVal) {
+    fetchUserStatus()
+  } else {
+    appStore.setUserStatus(null)
+  }
+})
+
 // 登录相关
-const showLoginModal = ref(false)
 const showRegisterModal = ref(false)
 const activeTab = ref('password')
 const loginLoading = ref(false)
 const loginFormRef = ref()
 const loginForm = reactive({
-  username: '',
+  phone: '',
   password: ''
 })
 
 const loginRules: Record<string, Rule[]> = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3-20 个字符', trigger: 'blur' }
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -308,20 +352,8 @@ const registerForm = reactive({
 
 const registerRules: Record<string, Rule[]> = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    {
-      validator: (_rule: Rule, value: string) => {
-        if (!value) return Promise.reject('请输入用户名')
-        let charCount = 0
-        for (const ch of value) {
-          charCount += /[\u4e00-\u9fa5]/.test(ch) ? 1 : 0.5
-        }
-        if (charCount < 2) return Promise.reject('用户名至少2个字符（1个中文字=1字符，2个字母=1字符）')
-        if (charCount > 8) return Promise.reject('用户名最多8个字符（1个中文字=1字符，2个字母=1字符）')
-        return Promise.resolve()
-      },
-      trigger: 'blur'
-    }
+    { required: true, message: '请输入昵称', trigger: 'blur' },
+    { min: 2, max: 20, message: '昵称长度在 2-20 个字符', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -367,10 +399,10 @@ const handleLogin = async () => {
   try {
     loginLoading.value = true
     const { user } = await authService.login(loginForm)
-    
+
     message.success('登录成功')
     appStore.showLoginModal = false
-    
+
     // 根据角色跳转
     redirectByRole(user.role)
   } catch (error) {
@@ -385,13 +417,13 @@ const handleGenerateToken = async () => {
   try {
     generatingToken.value = true
     const { token, expiresAt } = await authService.generateToken(loginForm)
-    
+
     scanToken.value = token
     tokenExpireTime.value = new Date(expiresAt).getTime()
-    
+
     // 自动开始扫码登录轮询
     pollScanLogin(token)
-    
+
     message.success('登录码生成成功，请使用管理端 APP 扫码')
   } catch (error) {
     console.error('生成登录码失败:', error)
@@ -438,17 +470,17 @@ const handleRegister = async () => {
       email: registerForm.email || undefined,
       phone: registerForm.phone
     })
-    
+
     message.success('注册成功，请登录')
     showRegisterModal.value = false
-    
+
     // 清空表单
     registerForm.username = ''
     registerForm.password = ''
     registerForm.confirmPassword = ''
     registerForm.email = ''
     registerForm.phone = ''
-    
+
     // 切换到密码登录
     activeTab.value = 'password'
   } catch (error) {
@@ -463,6 +495,7 @@ const handleLogout = async () => {
   try {
     await authService.logout()
     message.success('已退出登录')
+    router.push('/guest/booking')
   } catch (error) {
     console.error('登出失败:', error)
   }
@@ -490,9 +523,10 @@ const handleLogout = async () => {
 .header-nav .ant-btn { font-size: 15px; padding: 4px 16px; border-radius: 20px; font-weight: 500; }
 .header-nav .ant-btn.active { background: #e6f7ff; color: #1890ff; }
 .header-right { display: flex; align-items: center; gap: 12px; }
+.user-status-tags { display: flex; gap: 4px; align-items: center; }
 .user-dropdown { cursor: pointer; }
 .guest-content {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 28px 24px;
   min-height: calc(100vh - 60px - 80px);
@@ -504,12 +538,10 @@ const handleLogout = async () => {
   background: transparent;
 }
 .guest-footer p { margin: 4px 0; font-size: 13px; }
-.footer-links a { color: rgba(0,0,0,0.45); }
-.footer-links a:hover { color: #1890ff; }
 
 .login-tabs { margin-top: 16px; }
 .form-footer { text-align: center; margin-top: 16px; color: #666; }
-.form-footer a { color: #667eea; text-decoration: none; margin-left: 8px; }
+.form-footer a { color: #667eea; text-decoration: none; margin-left: 8px; cursor: pointer; }
 .form-footer a:hover { text-decoration: underline; }
 
 .scan-login-container { padding: 20px 0; text-align: center; }

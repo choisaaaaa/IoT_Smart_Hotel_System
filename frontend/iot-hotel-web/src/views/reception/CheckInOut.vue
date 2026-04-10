@@ -317,12 +317,14 @@ async function fetchTodayBookings() {
   if (todayBookingLoading.value) return
   todayBookingLoading.value = true
   try {
-    const today = dayjs().format('YYYY-MM-DD')
-    const res: any = await bookingApi.getBookingList({ pageSize: 200 })
-    const list = (res.data?.list || []).filter((item: any) => {
-      const checkInDate = String(item.check_in_date || '').slice(0, 10)
-      return checkInDate === today && ['pending', 'confirmed'].includes(item.status)
+    // 改用后端过滤，支持 check_in_date=today 参数，且只查询待办理和已确认的
+    const res: any = await bookingApi.getBookingList({
+      pageSize: 200,
+      check_in_date: 'today'
     })
+    const list = (res.data?.list || []).filter((item: any) =>
+      ['pending', 'confirmed'].includes(item.status)
+    )
     todayBookings.value = list.map((item: any) => ({
       ...item,
       phone_registered: isPhoneRegistered(item.guest_phone)

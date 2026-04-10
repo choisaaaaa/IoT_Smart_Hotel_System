@@ -11,7 +11,7 @@
           </p>
         </div>
       </div>
-      
+
       <!-- Floating Search Bar -->
       <div class="floating-search-wrapper">
         <a-card class="ota-search-card" :bordered="false">
@@ -20,9 +20,9 @@
               <a-col :xs="24" :md="7">
                 <div class="search-item">
                   <span class="search-label">目的地/酒店名称</span>
-                  <a-input 
-                    v-model:value="searchForm.destination" 
-                    placeholder="城市、商圈或酒店" 
+                  <a-input
+                    v-model:value="searchForm.destination"
+                    placeholder="城市、商圈或酒店"
                     :bordered="false"
                     class="ota-input"
                   >
@@ -33,8 +33,8 @@
               <a-col :xs="24" :md="9">
                 <div class="search-item divider-left">
                   <span class="search-label">入住 - 退房日期</span>
-                  <a-range-picker 
-                    v-model:value="dateRange" 
+                  <a-range-picker
+                    v-model:value="dateRange"
                     :disabled-date="(d: any) => d && d < dayjs().startOf('day')"
                     :bordered="false"
                     class="ota-range-picker"
@@ -93,7 +93,7 @@
         <div class="section-header">
           <h2 class="section-title">🏨 合作智能酒店</h2>
         </div>
-        
+
         <a-row :gutter="[20, 20]">
           <a-col :xs="24" :sm="12" :lg="8" v-for="hotel in recommendHotels" :key="hotel.id">
             <div class="ota-hotel-card" @click="selectHotel(hotel)">
@@ -213,7 +213,7 @@
         <div class="back-nav" @click="currentStep = 1">
           <LeftOutlined /> 返回列表
         </div>
-        
+
         <div class="hotel-detail-header" v-if="selectedHotel">
           <div class="header-info">
             <h1 class="detail-title">{{ selectedHotel.name }}</h1>
@@ -262,9 +262,9 @@
                   </div>
                   <div class="price-sub">含税费 / 晚</div>
                 </div>
-                <a-button 
-                  type="primary" 
-                  size="large" 
+                <a-button
+                  type="primary"
+                  size="large"
                   class="ota-book-btn"
                   :disabled="room.availableCount === 0"
                   @click="selectRoom(room)"
@@ -298,9 +298,9 @@
                 </a-button>
               </template>
               <div class="frequent-guest-list">
-                <div 
-                  v-for="guest in frequentGuests" 
-                  :key="guest.id" 
+                <div
+                  v-for="guest in frequentGuests"
+                  :key="guest.id"
                   class="guest-chip"
                   :class="{ active: bookingForm.idNumber === guest.id_number }"
                   @click="selectFrequentGuest(guest)"
@@ -615,6 +615,13 @@ const selectRoom = (room: any) => {
   }
   selectedRoom.value = room
   currentStep.value = 3
+
+  // 自动填充用户信息
+  if (appStore.userInfo) {
+    bookingForm.guestName = appStore.userInfo.username || ''
+    bookingForm.phone = appStore.userInfo.phone || ''
+  }
+
   fetchFrequentGuests()
 }
 
@@ -686,7 +693,7 @@ const submitBooking = async () => {
   if (!bookingForm.guestName || !bookingForm.phone || !bookingForm.idNumber) {
     return message.warning('请完善入住人信息')
   }
-  
+
   submitting.value = true
   try {
     // 如果勾选了保存为常用联系人，且该联系人不在列表中

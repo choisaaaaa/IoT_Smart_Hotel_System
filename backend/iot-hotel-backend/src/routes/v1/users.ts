@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { list, detail, create, update, remove, updatePassword } from '../../controllers/user.controller';
+import { list, detail, create, update, remove, updatePassword, updateProfile, sendVerificationCode } from '../../controllers/user.controller';
 import { authenticate, authorize } from '../../middleware/auth';
 
 const router = Router();
 
+router.post('/send-code', sendVerificationCode);
+router.put('/profile', authenticate as any, updateProfile);
 router.get('/', authenticate as any, authorize(['admin', 'system', 'staff']), list);
 router.get('/:id', authenticate as any, authorize(['admin', 'system', 'staff']), detail);
 router.post('/', authenticate as any, authorize(['admin', 'system']), create);

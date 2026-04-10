@@ -4,6 +4,7 @@ import config from '../config';
 export interface JwtPayload {
   id: number;
   username: string;
+  phone?: string;
   role: string;
   hotel_id: number;
   permissions?: string[];

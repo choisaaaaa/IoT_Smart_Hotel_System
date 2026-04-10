@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { AuthRequest } from '../types';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import { hashPassword, comparePassword } from '../utils/password';
@@ -11,7 +11,7 @@ export async function list(req: AuthRequest, res: Response) {
   try {
     const { page = 1, limit = 10, role, keyword, hotel_id } = req.query;
     const currentUser = req.user;
-    
+
     if (!currentUser) {
       return sendError(res, errorResponse('未授权', 401));
     }
@@ -20,17 +20,17 @@ export async function list(req: AuthRequest, res: Response) {
     const p = Math.max(1, parseInt(page as string) || 1);
     const l = Math.max(1, parseInt(limit as string) || 10);
     const offset = (p - 1) * l;
-    
+
     let sql = `SELECT u.id, u.username, u.email, u.role, u.hotel_id, u.created_at,
                 h.hotel_name
                 FROM users u
                 LEFT JOIN hotels h ON u.hotel_id = h.id`;
-    
+
     let countSql = 'SELECT COUNT(*) as total FROM users u';
-    
+
     const conditions: string[] = [];
     const params: any[] = [];
-    
+
     // 权限过滤逻辑
     if (currentUser.role === 'admin' || currentUser.role === 'staff') {
       // Admin 和 Staff 只能看到自己门店的用户
@@ -53,23 +53,23 @@ export async function list(req: AuthRequest, res: Response) {
       conditions.push('(u.username LIKE ? OR u.email LIKE ?)');
       params.push(`%${keyword}%`, `%${keyword}%`);
     }
-    
+
     if (role) {
       conditions.push('u.role = ?');
       params.push(role);
     }
-    
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
       countSql += ' WHERE ' + conditions.join(' AND ');
     }
-    
+
     sql += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
-    
+
     // 使用 db.query 而非 db.execute 以更好地支持 LIMIT/OFFSET 的参数替换
     const [users]: any = await db.query(sql, [...params, l, offset]);
     const [countResult]: any = await db.query(countSql, params);
-    
+
     sendSuccess(res, {
       users,
       total: countResult[0].total,
@@ -86,7 +86,7 @@ export async function list(req: AuthRequest, res: Response) {
 export async function detail(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
-    
+
     const [users]: any = await db.execute(
       `SELECT u.*, GROUP_CONCAT(r.role_name) as roles
        FROM users u
@@ -96,11 +96,11 @@ export async function detail(req: AuthRequest, res: Response) {
        GROUP BY u.id`,
       [userId]
     );
-    
+
     if (users.length === 0) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
-    
+
     sendSuccess(res, { user: users[0] });
   } catch (error) {
     console.error('获取用户详情失败:', error);
@@ -117,7 +117,7 @@ export async function create(req: AuthRequest, res: Response) {
     if (!currentUser) {
       return sendError(res, errorResponse('未授权', 401));
     }
-    
+
     if (!username || !password) {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
@@ -140,26 +140,26 @@ export async function create(req: AuthRequest, res: Response) {
     } else {
       return sendError(res, errorResponse('权限不足', 403));
     }
-    
+
     // 检查用户名是否已存在
     const [existingUsers]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
       [username]
     );
-    
+
     if (existingUsers.length > 0) {
       return sendError(res, errorResponse('用户名已存在', 400));
     }
-    
+
     const hashedPassword = await hashPassword(password);
-    
+
     const [result]: any = await db.execute(
       'INSERT INTO users (username, password, email, role, hotel_id) VALUES (?, ?, ?, ?, ?)',
       [username, hashedPassword, email || null, finalRole, finalHotelId || 0]
     );
-    
+
     const userId = result.insertId;
-    
+
     sendSuccess(res, { userId, username, role: finalRole, hotel_id: finalHotelId }, '用户创建成功');
   } catch (error) {
     console.error('创建用户失败:', error);
@@ -177,13 +177,13 @@ export async function update(req: AuthRequest, res: Response) {
     if (!currentUser) {
       return sendError(res, errorResponse('未授权', 401));
     }
-    
+
     // 检查被修改的用户是否存在
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
       [userId]
     );
-    
+
     if (users.length === 0) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
@@ -210,7 +210,7 @@ export async function update(req: AuthRequest, res: Response) {
     } else {
       return sendError(res, errorResponse('权限不足', 403));
     }
-    
+
     // 更新用户基本信息
     let updateSql = 'UPDATE users SET email = ?, role = ?, hotel_id = ?';
     const params = [email || targetUser.email, finalRole, finalHotelId, userId];
@@ -222,9 +222,9 @@ export async function update(req: AuthRequest, res: Response) {
     }
 
     updateSql += ' WHERE id = ?';
-    
+
     await db.execute(updateSql, params);
-    
+
     sendSuccess(res, { message: '用户信息更新成功' });
   } catch (error) {
     console.error('更新用户失败:', error);
@@ -236,24 +236,24 @@ export async function update(req: AuthRequest, res: Response) {
 export async function remove(req: AuthRequest, res: Response) {
   try {
     const { id: userId } = req.params;
-    
+
     // 检查用户是否存在
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
       [userId]
     );
-    
+
     if (users.length === 0) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
-    
+
     // 不允许删除 admin 用户
     if (users[0].username === 'admin') {
       return sendError(res, errorResponse('不能删除管理员账户', 403));
     }
-    
+
     await db.execute('DELETE FROM users WHERE id = ?', [userId]);
-    
+
     sendSuccess(res, { message: '用户删除成功' });
   } catch (error) {
     console.error('删除用户失败:', error);
@@ -266,20 +266,20 @@ export async function updatePassword(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
     const { oldPassword, newPassword } = req.body;
-    
+
     if (!newPassword) {
       return sendError(res, errorResponse('新密码不能为空', 400));
     }
-    
+
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
       [userId]
     );
-    
+
     if (users.length === 0) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
-    
+
     // 如果是管理员修改其他用户密码，不需要验证旧密码
     if (req.user?.role !== 'admin' && oldPassword) {
       const isPasswordValid = await comparePassword(oldPassword, users[0].password);
@@ -287,16 +287,96 @@ export async function updatePassword(req: AuthRequest, res: Response) {
         return sendError(res, errorResponse('原密码错误', 400));
       }
     }
-    
+
     const hashedPassword = await hashPassword(newPassword);
     await db.execute(
       'UPDATE users SET password = ? WHERE id = ?',
       [hashedPassword, userId]
     );
-    
+
     sendSuccess(res, { message: '密码修改成功' });
   } catch (error) {
     console.error('修改密码失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
+// 用户自助更新个人资料
+export async function updateProfile(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.id;
+    const { username, email, phone, code } = req.body;
+
+    if (!userId) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
+
+    // 构建更新字段
+    const updateFields: string[] = [];
+    const params: any[] = [];
+
+    if (username) {
+      updateFields.push('username = ?');
+      params.push(username);
+    }
+
+    if (email !== undefined) {
+      updateFields.push('email = ?');
+      params.push(email || null);
+    }
+
+    if (phone) {
+      // 模拟验证码校验：简单校验验证码是否存在且为6位数字
+      if (!code || !/^\d{6}$/.test(code)) {
+        return sendError(res, errorResponse('验证码错误或已过期 (模拟环境：请输入任意6位数字)', 400));
+      }
+
+      // 检查手机号是否已被其他用户使用
+      const [existing]: any = await db.execute(
+        'SELECT id FROM users WHERE phone = ? AND id != ?',
+        [phone, userId]
+      );
+      if (existing.length > 0) {
+        return sendError(res, errorResponse('手机号已被占用', 400));
+      }
+      updateFields.push('phone = ?');
+      params.push(phone);
+    }
+
+    if (updateFields.length === 0) {
+      return sendError(res, errorResponse('没有提供更新内容', 400));
+    }
+
+    params.push(userId);
+    const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+
+    await db.execute(sql, params);
+
+    // 获取更新后的用户信息
+    const [users]: any = await db.execute('SELECT id, username, email, phone, role, hotel_id FROM users WHERE id = ?', [userId]);
+
+    sendSuccess(res, { user: users[0] }, '个人资料更新成功');
+  } catch (error) {
+    console.error('更新个人资料失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
+// 模拟发送短信验证码
+export async function sendVerificationCode(req: Request, res: Response) {
+  try {
+    const { phone } = req.body;
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+      return sendError(res, errorResponse('请输入正确的手机号', 400));
+    }
+
+    // 模拟发送成功
+    console.log(`[Mock SMS] Sending verification code to ${phone}...`);
+    
+    // 这里的逻辑可以根据需要扩展，目前仅返回成功
+    sendSuccess(res, { message: '验证码已发送 (模拟)' });
+  } catch (error) {
+    console.error('发送验证码失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
 }

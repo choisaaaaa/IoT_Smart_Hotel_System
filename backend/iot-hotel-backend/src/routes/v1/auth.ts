@@ -12,28 +12,28 @@ const router = Router();
 // 生成 API Token (用于扫码登录)
 router.post('/generate-token', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { phone, password } = req.body;
 
-    if (!username || !password) {
-      return sendError(res, errorResponse('用户名和密码不能为空', 400));
+    if (!phone || !password) {
+      return sendError(res, errorResponse('手机号和密码不能为空', 400));
     }
 
     const [users]: any = await db.execute(
-      'SELECT * FROM users WHERE username = ?',
-      [username]
+      'SELECT * FROM users WHERE phone = ?',
+      [phone]
     );
 
     if (users.length === 0) {
-      console.log(`Login failed: user ${username} not found`);
-      return sendError(res, errorResponse('用户名或密码错误', 401));
+      console.log(`Login failed: user ${phone} not found`);
+      return sendError(res, errorResponse('手机号或密码错误', 401));
     }
 
     const user = users[0];
     const isPasswordValid = await comparePassword(password, user.password);
 
     if (!isPasswordValid) {
-      console.log(`Login failed: password mismatch for user ${username}`);
-      return sendError(res, errorResponse('用户名或密码错误', 401));
+      console.log(`Login failed: password mismatch for user ${phone}`);
+      return sendError(res, errorResponse('手机号或密码错误', 401));
     }
 
     // 生成一次性 Token，5 分钟过期
@@ -41,7 +41,7 @@ router.post('/generate-token', async (req, res) => {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 分钟
 
     await db.execute(
-      `INSERT INTO api_tokens (user_id, token, token_type, expires_at) 
+      `INSERT INTO api_tokens (user_id, token, token_type, expires_at)
        VALUES (?, ?, 'login', ?)`,
       [user.id, token, expiresAt]
     );
@@ -96,9 +96,9 @@ router.post('/scan-login', async (req, res) => {
 
     // 获取用户信息
     const [users]: any = await db.execute(
-      `SELECT u.*, h.hotel_name 
-       FROM users u 
-       LEFT JOIN hotels h ON u.hotel_id = h.id 
+      `SELECT u.*, h.hotel_name
+       FROM users u
+       LEFT JOIN hotels h ON u.hotel_id = h.id
        WHERE u.id = ?`,
       [tokenData.user_id]
     );
@@ -114,6 +114,7 @@ router.post('/scan-login', async (req, res) => {
     const jwtPayload: JwtPayload = {
       id: user.id,
       username: user.username,
+      phone: user.phone,
       role,
       hotel_id: user.hotel_id,
       permissions: [] // 后续可以加上
@@ -157,38 +158,38 @@ router.post('/scan-login', async (req, res) => {
   }
 });
 
-// 用户名密码登录
+// 手机号密码登录
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { phone, password } = req.body;
 
-    if (!username || !password) {
-      return sendError(res, errorResponse('用户名和密码不能为空', 400));
+    if (!phone || !password) {
+      return sendError(res, errorResponse('手机号和密码不能为空', 400));
     }
 
     // 获取用户信息
     const [users]: any = await db.execute(
-      `SELECT u.*, h.hotel_name 
-       FROM users u 
-       LEFT JOIN hotels h ON u.hotel_id = h.id 
-       WHERE u.username = ?`,
-      [username]
+      `SELECT u.*, h.hotel_name
+       FROM users u
+       LEFT JOIN hotels h ON u.hotel_id = h.id
+       WHERE u.phone = ?`,
+      [phone]
     );
 
     if (users.length === 0) {
-      return sendError(res, errorResponse('用户名或密码错误', 401));
+      return sendError(res, errorResponse('手机号或密码错误', 401));
     }
 
     const user = users[0];
     const isPasswordValid = await comparePassword(password, user.password);
 
     if (!isPasswordValid) {
-      return sendError(res, errorResponse('用户名或密码错误', 401));
+      return sendError(res, errorResponse('手机号或密码错误', 401));
     }
 
     // 获取用户角色和权限
     const [userRoles]: any = await db.execute(
-      `SELECT r.role_name, r.permissions 
+      `SELECT r.role_name, r.permissions
        FROM user_roles ur
        JOIN roles r ON ur.role_id = r.id
        WHERE ur.user_id = ?`,
@@ -212,14 +213,15 @@ router.post('/login', async (req, res) => {
     const role = isSystemAccount
       ? 'system'
       : normalizeRole(userRoles.length > 0 ? userRoles[0].role_name : user.role);
-    const permissions = userRoles.length > 0 
-      ? parsePermissions(userRoles[0].permissions) 
+    const permissions = userRoles.length > 0
+      ? parsePermissions(userRoles[0].permissions)
       : parsePermissions(user.permissions);
 
     // 生成 JWT
     const jwtPayload: JwtPayload = {
       id: user.id,
       username: user.username,
+      phone: user.phone,
       role,
       hotel_id: user.hotel_id,
       permissions
@@ -266,34 +268,17 @@ router.post('/register', async (req, res) => {
   try {
     const { username, password, phone, email, role, hotel_id } = req.body;
 
-    if (!username || !password) {
-      return sendError(res, errorResponse('用户名和密码不能为空', 400));
+    if (!phone || !password) {
+      return sendError(res, errorResponse('手机号和密码不能为空', 400));
     }
 
-    let charCount = 0;
-    for (const ch of username) {
-      charCount += /[\u4e00-\u9fa5]/.test(ch) ? 1 : 0.5;
-    }
-    if (charCount < 2 || charCount > 8) {
-      return sendError(res, errorResponse('用户名需2-8个字符（1个中文字=1字符，2个字母=1字符）', 400));
-    }
-
-    if (!phone) {
-      return sendError(res, errorResponse('手机号不能为空', 400));
+    if (!username) {
+      return sendError(res, errorResponse('姓名不能为空', 400));
     }
 
     const phoneRegex = /^1[3-9]\d{9}$/;
     if (!phoneRegex.test(phone)) {
       return sendError(res, errorResponse('请输入11位手机号', 400));
-    }
-
-    const [existingUsers]: any = await db.execute(
-      'SELECT * FROM users WHERE username = ?',
-      [username]
-    );
-
-    if (existingUsers.length > 0) {
-      return sendError(res, errorResponse('用户名已存在', 400));
     }
 
     const [existingPhones]: any = await db.execute(
@@ -320,7 +305,7 @@ router.post('/register', async (req, res) => {
     const userRole = 'user';
 
     const [result]: any = await db.execute(
-      `INSERT INTO users (username, password, phone, uid, email, role, hotel_id) 
+      `INSERT INTO users (username, password, phone, uid, email, role, hotel_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [username, hashedPassword, phone, uid, email || null, userRole, targetHotelId || null]
     );
@@ -393,7 +378,7 @@ router.post('/reset-password', async (req, res) => {
 router.post('/logout', async (req: AuthRequest, res) => {
   try {
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (sessionToken) {
       await db.execute(
         'DELETE FROM login_sessions WHERE session_token = ?',
@@ -412,7 +397,7 @@ router.post('/logout', async (req: AuthRequest, res) => {
 router.get('/me', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader) {
       return sendError(res, errorResponse('未提供认证令牌', 401));
     }

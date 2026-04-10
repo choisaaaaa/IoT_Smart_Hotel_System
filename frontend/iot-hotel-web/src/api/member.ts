@@ -15,5 +15,14 @@ export const memberApi = {
     request.get<PaginatedResponse<MemberInfo>>('/members', { params }),
 
   createMember: (data: { phone: string; password: string; name: string; id_number: string }) =>
-    request.post<ApiResponse<{ id: number }>>('/members', data)
+    request.post<ApiResponse<{ id: number }>>('/members', data),
+
+  getStatus: () =>
+    request.get<ApiResponse<{
+      phone: string
+      is_member: boolean
+      member_info: any
+      is_checked_in: boolean
+      checkin_info: any
+    }>>('/members/status')
 }

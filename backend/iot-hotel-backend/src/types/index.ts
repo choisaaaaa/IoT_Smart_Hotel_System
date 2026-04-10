@@ -4,6 +4,7 @@ export interface AuthRequest extends Request {
   user?: {
     id: number;
     username: string;
+    phone?: string;
     role: string;
     hotel_id: number;
     permissions?: string[];

@@ -200,6 +200,18 @@ const routes: RouteRecordRaw[] = [
         name: 'GuestRoom',
         component: () => import('@/views/guest/GuestRoom.vue'),
         meta: { title: '客房服务', icon: 'HomeOutlined', requiresAuth: false }
+      },
+      {
+        path: 'orders',
+        name: 'MyOrders',
+        component: () => import('@/views/guest/MyOrders.vue'),
+        meta: { title: '我的订单', icon: 'OrderedListOutlined', requiresAuth: false }
+      },
+      {
+        path: 'profile',
+        name: 'UserProfile',
+        component: () => import('@/views/guest/Profile.vue'),
+        meta: { title: '个人中心', icon: 'UserOutlined', requiresAuth: true }
       }
     ]
   }

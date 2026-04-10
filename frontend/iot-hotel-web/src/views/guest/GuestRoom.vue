@@ -203,6 +203,7 @@ import {
   RobotOutlined, UserOutlined, EditOutlined, SoundOutlined
 } from '@ant-design/icons-vue'
 import { useRoute } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
 import { callApi } from '@/api/call'
@@ -210,13 +211,20 @@ import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
 
 const route = useRoute()
+const appStore = useAppStore()
 
 const isCheckedIn = computed(() => {
-  const guestInfo = localStorage.getItem('guest_checkin_info')
-  return !!guestInfo
+  return !!appStore.userStatus?.is_checked_in
 })
 
 function getRoomId(): string {
+  if (appStore.userStatus?.is_checked_in) {
+    const info = appStore.userStatus.checkin_info
+    if (info.room_number) return String(info.room_number)
+    if (info.room_id) return String(info.room_id)
+  }
+
+  // 兼容逻辑
   try {
     const raw = localStorage.getItem('guest_checkin_info')
     if (raw) {
