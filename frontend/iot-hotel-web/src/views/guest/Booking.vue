@@ -259,77 +259,79 @@
           </div>
 
           <!-- Room List -->
-          <div class="ota-room-list-new" v-if="selectedHotel?.rooms?.length > 0">
+          <div class="ota-room-list-new" v-if="roomTypes?.length > 0">
             <div class="room-list-header">
               <div class="title">房型选择</div>
               <div class="filter-tips">已包含增值税及服务费</div>
             </div>
 
-            <div class="room-card-modern" v-for="room in selectedHotel?.rooms" :key="room.id">
-              <div class="room-card-content">
-                <!-- Room Image -->
+            <div class="room-type-card-modern" v-for="type in roomTypes" :key="type.code">
+              <div class="room-type-header">
                 <div class="room-img-wrapper">
-                  <img :src="room.image || '/room-placeholder.jpg'" :alt="room.name" />
-                  <div class="img-zoom"><FullscreenOutlined /> 查看详情</div>
+                  <img :src="type.images[0] || '/room-placeholder.jpg'" :alt="type.name" />
                 </div>
-
-                <!-- Room Details -->
-                <div class="room-main-info">
-                  <h3 class="room-name-text">{{ room.name }}</h3>
-                  <div class="room-params">
-                    <div class="param-item">
-                      <span class="label">面积</span>
-                      <span class="val">{{ room.area }}m²</span>
-                    </div>
-                    <div class="param-item">
-                      <span class="label">床型</span>
-                      <span class="val">{{ room.bedType }}</span>
-                    </div>
-                    <div class="param-item">
-                      <span class="label">人数</span>
-                      <span class="val">{{ room.maxGuests }}人</span>
-                    </div>
-                    <div class="param-item">
-                      <span class="label">窗户</span>
-                      <span class="val">有窗</span>
-                    </div>
+                <div class="room-type-info">
+                  <h3 class="type-name-text">{{ type.name }}</h3>
+                  <div class="type-params">
+                    <span>{{ type.area }}m²</span>
+                    <a-divider type="vertical" />
+                    <span>{{ type.bedType }}</span>
+                    <a-divider type="vertical" />
+                    <span>最多入住{{ type.maxGuests }}人</span>
                   </div>
-                  
-                  <div class="room-perks">
-                    <div class="perk-tag wifi"><WifiOutlined /> 免费无限WiFi</div>
-                    <div class="perk-tag breakfast" :class="{ disabled: !room.hasBreakfast }">
-                      <CoffeeOutlined /> {{ room.hasBreakfast ? '含双早' : '不含早' }}
-                    </div>
-                    <div class="perk-tag cancel" v-if="room.freeCancel"><CheckOutlined /> 免费取消</div>
-                    <div class="perk-tag confirm"><ThunderboltOutlined /> 极速确认</div>
+                  <div class="type-facilities">
+                    <span v-for="f in type.facilities.slice(0, 4)" :key="f" class="f-tag">{{ f }}</span>
                   </div>
                 </div>
+              </div>
 
-                <!-- Room CTA Area -->
-                <div class="room-price-cta">
-                  <div class="price-wrapper-new">
-                    <div class="price-top">
+              <!-- Rate Plans Table -->
+              <div class="rate-plans-container">
+                <div class="plan-row header">
+                  <div class="plan-info-col">方案名称 / 服务内容</div>
+                  <div class="plan-policy-col">政策</div>
+                  <div class="plan-price-col">价格 (每晚)</div>
+                  <div class="plan-action-col"></div>
+                </div>
+                <div class="plan-row" v-for="plan in type.plans" :key="plan.id">
+                  <div class="plan-info-col">
+                    <div class="plan-name">{{ plan.name }}</div>
+                    <div class="plan-services">
+                      <span :class="{ 'has': plan.hasBreakfast, 'no': !plan.hasBreakfast }">
+                        <CoffeeOutlined /> {{ plan.hasBreakfast ? `含早(${plan.breakfastCount || 0}份)` : '不含早' }}
+                      </span>
+                      <span class="has"><WifiOutlined /> 免费WiFi</span>
+                    </div>
+                  </div>
+                  <div class="plan-policy-col">
+                    <div :class="plan.freeCancel ? 'text-success' : 'text-warning'">
+                      <CheckOutlined v-if="plan.freeCancel" />
+                      <CloseOutlined v-else />
+                      {{ plan.freeCancel ? (plan.cancelTimeLimit > 0 ? `入住前${plan.cancelTimeLimit}h免费取消` : '免费取消') : '不可取消' }}
+                    </div>
+                    <div class="payment-limit">
+                      <CreditCardOutlined />
+                      {{ plan.paymentType === 'online_only' ? '仅限在线支付' : plan.paymentType === 'front_desk_only' ? '仅限到店支付' : '在线付/到店付' }}
+                      <span v-if="plan.prepaymentRatio > 0" class="prepay-tip">(预付{{ plan.prepaymentRatio }}%)</span>
+                    </div>
+                  </div>
+                  <div class="plan-price-col">
+                    <div class="price-val">
                       <span class="cur">¥</span>
-                      <span class="val">{{ room.price }}</span>
+                      <span class="num">{{ plan.price }}</span>
                     </div>
-                    <div class="price-bottom">
-                      <span class="tax-label">含税费 / 晚</span>
-                    </div>
+                    <div class="original-price" v-if="plan.originalPrice > plan.price">¥{{ plan.originalPrice }}</div>
                   </div>
-                  
-                  <div class="cta-actions">
+                  <div class="plan-action-col">
                     <a-button 
                       type="primary" 
-                      size="large" 
-                      class="book-now-btn"
-                      :disabled="room.availableCount === 0"
-                      @click="selectRoom(room)"
+                      class="plan-book-btn"
+                      :disabled="type.availableCount === 0"
+                      @click="selectPlan(type, plan)"
                     >
-                      {{ room.availableCount === 0 ? '已售罄' : '立即预订' }}
+                      预订
                     </a-button>
-                    <div class="inventory-status" :class="{ low: room.availableCount < 3 }">
-                      {{ room.availableCount === 0 ? '下手慢了' : `仅剩 ${room.availableCount} 间` }}
-                    </div>
+                    <div class="inventory-tip" v-if="type.availableCount < 3">仅剩{{ type.availableCount }}间</div>
                   </div>
                 </div>
               </div>
@@ -437,35 +439,44 @@
                 </div>
                 <div 
                   class="payment-option-ctrip" 
-                  :class="{ active: paymentMethod === 'front_desk' }"
-                  @click="paymentMethod = 'front_desk'"
+                  :class="{ 
+                    active: paymentMethod === 'front_desk',
+                    disabled: selectedRoom?.paymentType === 'online_only'
+                  }"
+                  @click="selectedRoom?.paymentType !== 'online_only' && (paymentMethod = 'front_desk')"
                 >
                   <div class="icon-box front"><HomeOutlined /></div>
                   <div class="info">
                     <div class="name">到店支付</div>
-                    <div class="desc">前台办理时缴纳</div>
+                    <div class="desc">{{ selectedRoom?.paymentType === 'online_only' ? '该方案不支持' : '前台办理时缴纳' }}</div>
                   </div>
                 </div>
                 <div 
                   class="payment-option-ctrip" 
-                  :class="{ active: paymentMethod === 'wechat' }"
-                  @click="paymentMethod = 'wechat'"
+                  :class="{ 
+                    active: paymentMethod === 'wechat',
+                    disabled: selectedRoom?.paymentType === 'front_desk_only'
+                  }"
+                  @click="selectedRoom?.paymentType !== 'front_desk_only' && (paymentMethod = 'wechat')"
                 >
                   <div class="icon-box wechat"><WechatOutlined /></div>
                   <div class="info">
                     <div class="name">微信支付</div>
-                    <div class="desc">微信扫码</div>
+                    <div class="desc">{{ selectedRoom?.paymentType === 'front_desk_only' ? '该方案不支持' : '微信扫码' }}</div>
                   </div>
                 </div>
                 <div 
                   class="payment-option-ctrip" 
-                  :class="{ active: paymentMethod === 'alipay' }"
-                  @click="paymentMethod = 'alipay'"
+                  :class="{ 
+                    active: paymentMethod === 'alipay',
+                    disabled: selectedRoom?.paymentType === 'front_desk_only'
+                  }"
+                  @click="selectedRoom?.paymentType !== 'front_desk_only' && (paymentMethod = 'alipay')"
                 >
                   <div class="icon-box alipay"><AlipayCircleOutlined /></div>
                   <div class="info">
                     <div class="name">支付宝</div>
-                    <div class="desc">手机支付</div>
+                    <div class="desc">{{ selectedRoom?.paymentType === 'front_desk_only' ? '该方案不支持' : '手机支付' }}</div>
                   </div>
                 </div>
               </div>
@@ -487,7 +498,7 @@
                     @change="handleCouponChange"
                   >
                     <a-select-option v-for="coupon in availableCoupons" :key="coupon.id" :value="coupon.id">
-                      {{ coupon.coupon_name }} (-¥{{ coupon.discount_value }})
+                      {{ coupon.coupon_name }} ({{ coupon.coupon_type === 'discount' ? coupon.discount_value + '折' : '-¥' + coupon.discount_value }})
                     </a-select-option>
                   </a-select>
                 </div>
@@ -521,7 +532,11 @@
                     <img :src="selectedRoom?.image || selectedHotel?.image" class="room-img" />
                     <div class="room-name-box">
                       <div class="name">{{ selectedRoom?.name }}</div>
-                      <div class="tags">不含早 | 免费取消</div>
+                      <div class="plan-name-tag">{{ selectedRoom?.plan_name }}</div>
+                      <div class="tags">
+                        {{ selectedRoom?.hasBreakfast ? `含早(${selectedRoom.breakfastCount}份)` : '不含早' }} | 
+                        {{ selectedRoom?.freeCancel ? '免费取消' : '不可取消' }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -542,15 +557,20 @@
                   <div class="price-breakdown-ctrip">
                     <div class="item">
                       <span>房费总计</span>
-                      <span>¥{{ (selectedRoom?.price || 0) * nights }}</span>
+                      <span>¥{{ priceBaseTotal }}</span>
                     </div>
-                    <div v-if="memberDiscount < 1" class="item discount">
-                      <span>会员优惠 ({{ memberLevelLabel }})</span>
-                      <span>-¥{{ discountAmount }}</span>
+                    <!-- 强制显示所有优惠项以便 Debug，包含为 0 的情况 -->
+                    <div class="item discount">
+                      <span>会员优惠 ({{ memberLevelLabel || '未获取' }})</span>
+                      <span>-¥{{ priceMemberDiscount }}</span>
                     </div>
-                    <div v-if="pointsDiscount > 0" class="item discount">
+                    <div class="item discount">
+                      <span>优惠券</span>
+                      <span>-¥{{ priceCouponDiscount }}</span>
+                    </div>
+                    <div class="item discount">
                       <span>积分抵扣</span>
-                      <span>-¥{{ pointsDiscount }}</span>
+                      <span>-¥{{ pricePointsDiscount }}</span>
                     </div>
                   </div>
 
@@ -560,6 +580,17 @@
                       <span class="unit">¥</span>
                       <span class="num">{{ finalTotalPrice }}</span>
                     </div>
+                  </div>
+
+                  <!-- Debug Info for User -->
+                  <div v-if="priceDebugInfo" class="debug-panel-ota">
+                    <div class="debug-header"><InfoCircleOutlined /> 计算诊断</div>
+                    <div class="debug-item"><span>识别手机号:</span> <span>{{ priceDebugInfo.received_phone }}</span></div>
+                    <div class="debug-item"><span>会员等级:</span> <span>{{ priceDebugInfo.member_level_raw }} ({{ priceDebugInfo.member_found ? '已识别' : '未匹配' }})</span></div>
+                    <div class="debug-item"><span>应用折扣:</span> <span>{{ (priceDebugInfo.discount_rate_applied * 10).toFixed(1) }} 折</span></div>
+                    <div class="debug-item"><span>房费底价:</span> <span>¥{{ priceDebugInfo.base_price_raw }}</span></div>
+                    <div class="debug-item"><span>会员价后:</span> <span>¥{{ priceDebugInfo.total_after_member_discount }}</span></div>
+                    <div class="debug-item tip">※ 若折扣异常，请核对手机号是否正确。</div>
                   </div>
 
                   <a-button type="primary" block class="ctrip-confirm-btn" :loading="submitting" @click="handlePreSubmit">
@@ -589,15 +620,21 @@
           
           <div class="payment-vendor">
             <template v-if="paymentMethod === 'wechat'">
-              <WechatOutlined class="icon wechat" />
+              <div class="icon-wrapper wechat-color">
+                <WechatOutlined style="font-size: 32px" />
+              </div>
               <span>微信支付</span>
             </template>
             <template v-else-if="paymentMethod === 'alipay'">
-              <AlipayCircleOutlined class="icon alipay" />
+              <div class="icon-wrapper alipay-color">
+                <AlipayCircleOutlined style="font-size: 32px" />
+              </div>
               <span>支付宝</span>
             </template>
             <template v-else-if="paymentMethod === 'balance'">
-              <WalletOutlined class="icon balance" />
+              <div class="icon-wrapper balance-color">
+                <WalletOutlined style="font-size: 32px" />
+              </div>
               <span>余额支付</span>
             </template>
           </div>
@@ -792,6 +829,33 @@ const bookingForm = reactive({
 const hotelList = ref<any[]>([])
 
 // --- Computed ---
+const nights = computed(() => {
+  if (dateRange.value[0] && dateRange.value[1]) {
+    return dateRange.value[1].diff(dateRange.value[0], 'day')
+  }
+  return 1
+})
+
+const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
+
+const memberDiscount = computed(() => {
+  if (!memberInfo.value) return 1.0
+  const mLevel = memberInfo.value.member_level || 'standard'
+  const discounts: Record<string, number> = {
+    'diamond': 0.80,
+    'platinum': 0.85,
+    'gold': 0.88,
+    'silver': 0.95,
+    'standard': 1.0
+  }
+  return discounts[mLevel] || 1.0
+})
+
+const memberLevelLabel = computed(() => {
+  if (!memberInfo.value) return ''
+  return memberInfo.value.level_label || `LEVEL ${memberInfo.value.level || 1}`
+})
+
 const availableCoupons = computed(() => {
   if (!myCoupons.value) return []
   // 只显示满足最低消费金额的优惠券
@@ -817,26 +881,6 @@ const couponDiscountAmount = computed(() => {
   }
 })
 
-const memberDiscount = computed(() => {
-  if (!memberInfo.value) return 1.0
-  const mLevel = memberInfo.value.member_level || 'standard'
-  const discounts: Record<string, number> = {
-    'diamond': 0.80,
-    'platinum': 0.85,
-    'gold': 0.88,
-    'silver': 0.95,
-    'standard': 1.0
-  }
-  return discounts[mLevel] || 1.0
-})
-
-const memberLevelLabel = computed(() => {
-  if (!memberInfo.value) return ''
-  return memberInfo.value.level_label || `LEVEL ${memberInfo.value.level || 1}`
-})
-
-const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
-
 const fetchMemberInfo = async () => {
   if (!appStore.userInfo) return
   try {
@@ -859,32 +903,62 @@ const fetchAvailableCoupons = async () => {
 
 const finalTotalPrice = ref(0)
 const memberDiscountRate = ref(1)
+const priceMemberDiscount = ref(0)
+const priceCouponDiscount = ref(0)
+const pricePointsDiscount = ref(0)
+
+const priceBaseTotal = ref(0)
+const priceDebugInfo = ref<any>(null)
+
+// 当选中的房型或日期变化时，重置所有价格
+watch([selectedRoom, nights], () => {
+  if (selectedRoom.value) {
+    const base = (selectedRoom.value.price || 0) * (nights.value || 1)
+    priceBaseTotal.value = base
+    finalTotalPrice.value = base
+  }
+}, { immediate: true })
 
 const updateCalculatedPrice = async () => {
-  if (!selectedRoom.value || !dateRange.value || dateRange.value.length < 2) return
+  const roomId = selectedRoom.value?.id || selectedRoom.value?.room_id
+  if (!roomId || !dateRange.value || dateRange.value.length < 2) {
+    console.warn('Skipping price calculation: Missing roomId or dates', { roomId, dateRange: dateRange.value })
+    return
+  }
 
   try {
     const res = await request.get('/bookings/calculate-price', {
       params: {
-        room_id: selectedRoom.value.id,
+        room_id: roomId,
+        rate_plan_id: selectedRoom.value.rate_plan_id,
         check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
         check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
+        guest_phone: memberInfo.value?.phone || appStore.userInfo?.phone || appStore.userInfo?.username || bookingForm.phone || undefined,
         coupon_id: selectedCouponId.value || undefined,
         used_points: usePoints.value ? pointsToUse.value : 0
       }
     })
-    finalTotalPrice.value = res.data.total_price
-    memberDiscountRate.value = res.data.discount_rate
-    pointsDiscount.value = res.data.pointsDiscount || 0
-    if (usePoints.value) {
-      pointsToUse.value = res.data.usedPoints || 0
+    
+    const data = res.data
+    priceDebugInfo.value = data.debug // 存储调试信息
+    finalTotalPrice.value = data.total_price
+    memberDiscountRate.value = data.discount_rate
+    priceBaseTotal.value = data.base_price || priceBaseTotal.value
+    priceMemberDiscount.value = data.member_discount || 0
+    priceCouponDiscount.value = data.coupon_discount || 0
+    pricePointsDiscount.value = data.points_discount || 0
+    pointsDiscount.value = data.points_discount || 0
+    
+    // 如果返回了实际使用的积分且用户勾选了使用积分，同步到输入框
+    if (usePoints.value && data.used_points !== undefined) {
+      pointsToUse.value = data.used_points
     }
   } catch (error) {
     console.error('价格计算失败:', error)
   }
 }
 
-watch([selectedRoom, dateRange, selectedCouponId], () => {
+watch([selectedRoom, dateRange, selectedCouponId, usePoints, pointsToUse], () => {
   if (currentStep.value === 3) {
     updateCalculatedPrice()
   }
@@ -892,13 +966,6 @@ watch([selectedRoom, dateRange, selectedCouponId], () => {
 const discountAmount = computed(() => {
   const val = Number(originalPrice.value) - Number(finalTotalPrice.value)
   return isNaN(val) ? 0 : Math.floor(val * 100) / 100
-})
-
-const nights = computed(() => {
-  if (dateRange.value[0] && dateRange.value[1]) {
-    return dateRange.value[1].diff(dateRange.value[0], 'day')
-  }
-  return 1
 })
 
 const recommendHotels = computed(() => hotelList.value)
@@ -940,42 +1007,56 @@ const searchHotels = async (shouldAdvance = true) => {
   }
 }
 
+const roomTypes = ref<any[]>([])
+
 const selectHotel = async (hotel: any) => {
   try {
-    const rooms = await hotelApi.getRoomAvailability(
+    const res = await hotelApi.getRoomAvailability(
       Number(hotel.id),
       dateRange.value[0].format('YYYY-MM-DD'),
       dateRange.value[1].format('YYYY-MM-DD')
     )
-    selectedHotel.value = {
-      ...hotel,
-      rooms: (rooms || []).map((room: any) => ({
-        ...room,
-        name: room.name || room.room_name || room.room_number,
-        area: Number(room.area || 0),
-        bedType: room.bedType || room.bed_type || '-',
-        maxGuests: Number(room.maxGuests || room.max_guests || 1),
-        price: Number(room.price || room.room_price || 0),
-        availableCount: Number(room.available_count || room.availableCount || 0),
-        image: room.image || room.image_url || '/room-placeholder.jpg',
-        hasBreakfast: Boolean(room.hasBreakfast),
-        freeCancel: Boolean(room.freeCancel),
-        hasWifi: Boolean(room.hasWifi)
-      }))
-    }
+    selectedHotel.value = hotel
+    roomTypes.value = res.roomTypes || []
     currentStep.value = 2
   } catch (error) {
     message.error('加载房态失败，请稍后重试')
   }
 }
 
-const selectRoom = (room: any) => {
+const selectPlan = async (type: any, plan: any) => {
   if (!appStore.userInfo) {
     message.info('请先登录后再进行预订')
     appStore.showLoginModal = true
     return
   }
-  selectedRoom.value = room
+  
+  if (!memberInfo.value) {
+    await fetchMemberInfo()
+  }
+
+  if (!myCoupons.value || myCoupons.value.length === 0) {
+    await fetchAvailableCoupons()
+  }
+
+  selectedRoom.value = {
+    ...type,
+    id: type.room_id || type.id,
+    room_id: type.room_id,
+    room_type_id: type.room_type_id,
+    hotel_id: type.hotel_id,
+    price: plan.price,
+    rate_plan_id: plan.id,
+    plan_name: plan.name,
+    mealPlan: plan.mealPlan,
+    breakfastCount: plan.breakfastCount,
+    cancelPolicy: plan.cancelPolicy,
+    cancelTimeLimit: plan.cancelTimeLimit,
+    paymentType: plan.paymentType,
+    hasBreakfast: plan.hasBreakfast,
+    freeCancel: plan.freeCancel,
+    prepaymentRatio: plan.prepaymentRatio
+  }
   currentStep.value = 3
   updateCalculatedPrice()
   fetchFrequentGuests()
@@ -1050,6 +1131,28 @@ const submitBooking = async () => {
     return message.warning('请完善入住人信息')
   }
 
+  const roomId = Number(selectedRoom.value?.id || selectedRoom.value?.room_id)
+  if (!roomId || isNaN(roomId)) {
+    return message.error('无效的房间 ID，请重新选择房间')
+  }
+
+  const payload = {
+    room_id: roomId,
+    rate_plan_id: selectedRoom.value?.rate_plan_id,
+    check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
+    check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
+    guest_name: bookingForm.guestName,
+    guest_phone: bookingForm.phone,
+    guest_id_number: bookingForm.idNumber,
+    guest_count: searchForm.guests,
+    special_requests: bookingForm.remark,
+    payment_method: paymentMethod.value,
+    coupon_id: selectedCouponId.value || undefined,
+    used_points: usePoints.value ? pointsToUse.value : 0,
+    status: 'pending'
+  }
+
+  console.log('提交预订数据:', payload)
   submitting.value = true
   try {
     // 如果勾选了保存为常用联系人，且该联系人不在列表中
@@ -1065,20 +1168,7 @@ const submitBooking = async () => {
       }
     }
 
-    const booking = await hotelApi.createBooking({
-      room_id: Number(selectedRoom.value?.id),
-      check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
-      check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
-      guest_name: bookingForm.guestName,
-      guest_phone: bookingForm.phone,
-      guest_id_number: bookingForm.idNumber,
-      guest_count: searchForm.guests,
-      special_requests: bookingForm.remark,
-      payment_method: paymentMethod.value,
-      coupon_id: selectedCouponId.value || undefined,
-      used_points: usePoints.value ? pointsToUse.value : 0,
-      status: 'pending'
-    })
+    const booking = await hotelApi.createBooking(payload)
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
     currentStep.value = 4
     message.success('预订成功！')
@@ -1101,6 +1191,7 @@ onMounted(() => {
   searchHotels(false)
   if (appStore.userInfo) {
     fetchMemberInfo()
+    fetchAvailableCoupons()
     fetchFrequentGuests()
   }
 })
@@ -1108,6 +1199,7 @@ onMounted(() => {
 watch(() => appStore.userInfo, (newVal) => {
   if (newVal) {
     fetchMemberInfo()
+    fetchAvailableCoupons()
     fetchFrequentGuests()
   }
 })
@@ -1661,6 +1753,78 @@ watch(() => appStore.userInfo, (newVal) => {
 .inventory-status { font-size: 12px; text-align: center; margin-top: 8px; color: #8c8c8c; font-weight: 600; }
 .inventory-status.low { color: #fa8c16; }
 
+/* Room Type Card New Styles */
+.room-type-card-modern {
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.room-type-header {
+  display: flex;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.room-type-header .room-img-wrapper {
+  width: 220px;
+  height: 140px;
+}
+
+.room-type-header .room-type-info {
+  flex: 1;
+  padding: 20px 24px;
+}
+
+.type-name-text { font-size: 20px; font-weight: 800; margin-bottom: 12px; color: #1a1a1a; }
+.type-params { display: flex; align-items: center; gap: 8px; color: #595959; font-size: 14px; margin-bottom: 12px; }
+.type-facilities { display: flex; gap: 8px; flex-wrap: wrap; }
+.f-tag { font-size: 12px; color: #8c8c8c; border: 1px solid #d9d9d9; padding: 1px 8px; border-radius: 4px; }
+
+/* Rate Plans Table */
+.rate-plans-container { padding: 0 20px 20px; }
+.plan-row {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.plan-row.header {
+  font-size: 13px;
+  color: #8c8c8c;
+  font-weight: 600;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.plan-row:last-child { border-bottom: none; }
+
+.plan-info-col { flex: 2; padding-right: 20px; }
+.plan-policy-col { flex: 1.5; padding-right: 20px; }
+.plan-price-col { flex: 1; text-align: right; padding-right: 20px; }
+.plan-action-col { width: 100px; text-align: right; }
+
+.plan-name { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+.plan-services { font-size: 12px; display: flex; gap: 12px; }
+.plan-services .has { color: #52c41a; }
+.plan-services .no { color: #8c8c8c; text-decoration: line-through; }
+
+.plan-policy-col { font-size: 13px; line-height: 1.6; }
+.text-success { color: #52c41a; font-weight: 600; }
+.text-warning { color: #fa8c16; font-weight: 600; }
+.payment-limit { color: #8c8c8c; display: flex; align-items: center; gap: 4px; }
+
+.price-val { color: #ff4d4f; line-height: 1; }
+.price-val .cur { font-size: 14px; font-weight: 700; }
+.price-val .num { font-size: 28px; font-weight: 900; }
+.original-price { color: #999; font-size: 12px; text-decoration: line-through; margin-top: 4px; text-align: right; }
+
+.plan-book-btn { width: 80px; height: 36px; font-weight: 700; border-radius: 6px; }
+.inventory-tip { font-size: 11px; color: #fa8c16; margin-top: 4px; font-weight: 600; }
+
 .ota-form-card {
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
@@ -1887,6 +2051,18 @@ watch(() => appStore.userInfo, (newVal) => {
   box-shadow: 0 0 0 1px #008cff;
 }
 
+.payment-option-ctrip.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f5f5f5 !important;
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+}
+
+.payment-option-ctrip.disabled:hover {
+  border-color: #d9d9d9;
+}
+
 .payment-option-ctrip .icon-box {
   width: 40px;
   height: 40px;
@@ -1979,7 +2155,14 @@ watch(() => appStore.userInfo, (newVal) => {
 .room-name-box .name {
   font-weight: 700;
   font-size: 16px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.room-name-box .plan-name-tag {
+  font-size: 13px;
+  color: #008cff;
+  font-weight: 600;
+  margin-bottom: 2px;
 }
 
 .room-name-box .tags {
@@ -2062,6 +2245,46 @@ watch(() => appStore.userInfo, (newVal) => {
   font-weight: 800;
 }
 
+/* Debug Panel OTA Style */
+.debug-panel-ota {
+  margin: 16px 0;
+  padding: 12px;
+  background: #f8faff;
+  border: 1px dashed #d6e4ff;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.debug-header {
+  color: #1890ff;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.debug-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: #595959;
+}
+
+.debug-item span:last-child {
+  font-family: monospace;
+  font-weight: 600;
+  color: #262626;
+}
+
+.debug-item.tip {
+  margin-top: 8px;
+  color: #fa8c16;
+  font-style: italic;
+  display: block;
+  text-align: center;
+}
+
 .ctrip-confirm-btn {
   height: 50px;
   font-size: 18px;
@@ -2112,13 +2335,15 @@ watch(() => appStore.userInfo, (newVal) => {
   font-size: 16px;
 }
 
-.payment-vendor .icon {
-  font-size: 24px;
+.payment-vendor .icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.payment-vendor .icon.wechat { color: #07c160; }
-.payment-vendor .icon.alipay { color: #1677ff; }
-.payment-vendor .icon.balance { color: #1890ff; }
+.payment-vendor .wechat-color { color: #07c160; }
+.payment-vendor .alipay-color { color: #1677ff; }
+.payment-vendor .balance-color { color: #1890ff; }
 
 .payment-qr-mock {
   width: 200px;

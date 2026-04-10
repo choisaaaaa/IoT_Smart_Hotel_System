@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import logger from '../utils/logger';
 import deviceRouter from './v1/devices';
 import userRouter from './v1/users';
 import authRouter from './v1/auth';
@@ -21,9 +22,15 @@ import frequentGuestRouter from './v1/frequent-guests';
 import healthRouter from './v1/health';
 import aiButlerRouter from './v1/ai-butler';
 import priceCalendarRouter from './v1/price-calendar';
+import ratePlanRouter from './v1/rate-plans';
 import systemConfigRouter from './v1/system-config';
 
 const router = Router();
+
+router.use((req, res, next) => {
+  logger.info(`路由进入 v1 index: ${req.method} ${req.url}`);
+  next();
+});
 
 router.use('/devices', deviceRouter);
 router.use('/users', userRouter);
@@ -34,6 +41,7 @@ router.use('/rooms', roomRouter);
 router.use('/room-types', roomTypeRouter);
 router.use('/floors', floorRouter);
 router.use('/bookings', bookingRouter);
+router.use('/booking', bookingRouter); // 同时支持单数以防万一
 router.use('/payments', paymentRouter);
 router.use('/members', memberRouter);
 router.use('/coupons', couponRouter);
@@ -47,6 +55,7 @@ router.use('/frequent-guests', frequentGuestRouter);
 router.use('/health', healthRouter);
 router.use('/ai-butler', aiButlerRouter);
 router.use('/price-calendar', priceCalendarRouter);
+router.use('/rate-plans', ratePlanRouter);
 router.use('/system-config', systemConfigRouter);
 
 export default router;

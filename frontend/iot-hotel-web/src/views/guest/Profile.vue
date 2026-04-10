@@ -1,5 +1,5 @@
 <template>
-  <div class="profile-page-container">
+  <div class="profile-page-container" :class="'theme-' + (memberInfo.member_level || 'standard')">
     <!-- 隐藏的头像上传输入框 -->
     <input
       type="file"
@@ -26,7 +26,7 @@
             <div class="user-info-section">
               <div class="user-name-row">
                 <div class="user-avatar-wrapper" @click="handleAvatarClick">
-                  <a-avatar :size="64" :src="userInfo.avatar" class="premium-avatar">
+                  <a-avatar :size="64" :src="getImageUrl(userInfo.avatar)" class="premium-avatar">
                     <template #icon><UserOutlined /></template>
                   </a-avatar>
                   <div class="avatar-edit-overlay">
@@ -74,28 +74,28 @@
           <div class="stats-header-modern">我的资产</div>
           <div class="asset-grid-modern">
             <div class="asset-item-modern" @click="activeTab = 'coupons'">
-              <div class="asset-icon-bg coupon-bg"><TagFilled /></div>
+              <div class="asset-icon-bg"><TagFilled /></div>
               <div class="asset-info-modern">
                 <div class="asset-num">{{ memberInfo.coupons_count || 0 }}<span class="unit">张</span></div>
                 <div class="asset-name">优惠券</div>
               </div>
             </div>
             <div class="asset-item-modern">
-              <div class="asset-icon-bg points-bg"><ThunderboltFilled /></div>
+              <div class="asset-icon-bg"><ThunderboltFilled /></div>
               <div class="asset-info-modern">
                 <div class="asset-num">{{ memberInfo.points || 0 }}</div>
                 <div class="asset-name">积分</div>
               </div>
             </div>
             <div class="asset-item-modern">
-              <div class="asset-icon-bg balance-bg"><WalletFilled /></div>
+              <div class="asset-icon-bg"><WalletFilled /></div>
               <div class="asset-info-modern">
                 <div class="asset-num"><span class="currency">¥</span>{{ memberInfo.balance || '0.00' }}</div>
                 <div class="asset-name">余额</div>
               </div>
             </div>
             <div class="asset-item-modern">
-              <div class="asset-icon-bg stays-bg"><HomeFilled /></div>
+              <div class="asset-icon-bg"><HomeFilled /></div>
               <div class="asset-info-modern">
                 <div class="asset-num">{{ memberInfo.total_stays || 0 }}<span class="unit">次</span></div>
                 <div class="asset-name">累计入住</div>
@@ -353,7 +353,7 @@
                       赠 ¥{{ getBonusAmount(amount) }}
                     </span>
                     <span v-if="getBonusAmount(amount) > 0" class="bonus-tip">
-                      立享 {{ ((1 / discountRate - 1) * 100).toFixed(0) }}% 优惠
+                      立享 {{ ((1 - discountRate) * 100).toFixed(0) }}% 优惠
                     </span>
                   </div>
                 </div>
@@ -374,7 +374,7 @@
                   <InfoCircleOutlined class="icon" />
                   <div class="text">
                     <strong>充值说明：</strong><br/>
-                    您的当前等级为 <strong>{{ memberInfo?.level_label }}</strong>，充值立享 <strong>{{ ((1 / discountRate - 1) * 100).toFixed(0) }}%</strong> 额度赠送（等同于您的房价折扣力度）。充值后的余额可用于预订房费支付，享受折上折，余额永不过期。
+                    您的当前等级为 <strong>{{ memberInfo?.level_label }}</strong>，充值立享 <strong>{{ ((1 - discountRate) * 100).toFixed(0) }}%</strong> 额度赠送（等同于您的房价折扣力度）。充值后的余额可用于预订房费支付，享受折上折，余额永不过期。
                   </div>
                 </div>
               </div>
@@ -406,15 +406,20 @@
             :class="{ active: rechargeVendor === 'wechat', 'wechat-active': rechargeVendor === 'wechat' }"
             @click="rechargeVendor = 'wechat'"
           >
-            <WechatOutlined class="icon wechat-color" />
+            <div class="icon-wrapper wechat-color">
+              <WechatOutlined style="font-size: 28px" />
+            </div>
             <div class="name">微信支付</div>
           </div>
+          
           <div 
             class="vendor-item" 
             :class="{ active: rechargeVendor === 'alipay', 'alipay-active': rechargeVendor === 'alipay' }"
             @click="rechargeVendor = 'alipay'"
           >
-            <AlipayCircleOutlined class="icon alipay-color" />
+            <div class="icon-wrapper alipay-color">
+              <AlipayCircleOutlined style="font-size: 28px" />
+            </div>
             <div class="name">支付宝</div>
           </div>
         </div>
@@ -484,11 +489,15 @@ import {
   WalletFilled,
   HomeFilled,
   PercentageOutlined,
-  CameraOutlined
+  CameraOutlined,
+  WechatOutlined,
+  AlipayCircleOutlined,
+  QrcodeOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { userApi } from '@/api/user'
 import request from '@/api/request'
+import { getImageUrl } from '@/utils/url'
 import { systemConfigApi } from '@/api/system-config'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import dayjs from 'dayjs'
@@ -508,10 +517,10 @@ const rechargeLoading = ref(false)
 const discountRate = computed(() => {
   const level = memberInfo.value?.member_level || 'standard'
   const rates: Record<string, number> = {
-    'diamond': 0.7,
-    'platinum': 0.8,
-    'gold': 0.85,
-    'silver': 0.9,
+    'diamond': 0.80,
+    'platinum': 0.85,
+    'gold': 0.88,
+    'silver': 0.95,
     'standard': 1.0
   }
   return rates[level] || 1.0
@@ -519,8 +528,8 @@ const discountRate = computed(() => {
 
 const getBonusAmount = (amount: number) => {
   if (discountRate.value >= 1) return 0
-  const credit = Math.floor((amount / discountRate.value) * 100) / 100
-  return Math.floor((credit - amount) * 100) / 100
+  const bonusRate = 1 - discountRate.value
+  return Math.floor((amount * bonusRate) * 100) / 100
 }
 
 const handleOpenRechargePayment = () => {
@@ -907,6 +916,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 会员等级主题色变量 */
+.profile-page-container.theme-standard { --level-color: #4b6cb7; --level-bg: #f0f5ff; }
+.profile-page-container.theme-silver { --level-color: #90a4ae; --level-bg: #f0f4f8; }
+.profile-page-container.theme-gold { --level-color: #d4af37; --level-bg: #fffdf0; }
+.profile-page-container.theme-platinum { --level-color: #535c68; --level-bg: #f1f2f6; }
+.profile-page-container.theme-diamond { --level-color: #30cfd0; --level-bg: #f0fbff; }
+
 .profile-page-container {
   padding: 40px 24px;
   max-width: 1400px;
@@ -919,6 +935,24 @@ onMounted(() => {
   grid-template-columns: 450px 1fr;
   gap: 40px;
 }
+
+/* 统一配色适配 */
+.stats-header-modern::before { background: var(--level-color) !important; }
+.asset-icon-bg { background: var(--level-bg) !important; color: var(--level-color) !important; }
+.balance-display-large { background: var(--level-bg) !important; border-color: var(--level-color) !important; }
+.recharge-item.active { border-color: var(--level-color) !important; background: var(--level-bg) !important; }
+.recharge-btn-large { background: var(--level-color) !important; border-color: var(--level-color) !important; }
+.bonus-explain { background: var(--level-bg) !important; border-color: var(--level-color) !important; }
+.bonus-explain .icon, .bonus-explain strong { color: var(--level-color) !important; }
+.rights-subtitle { color: var(--level-color) !important; background: var(--level-bg) !important; border-color: var(--level-color) !important; }
+.right-box.active, .right-box:not(.disabled) { background: var(--level-bg) !important; border-color: var(--level-color) !important; }
+.right-icon-wrapper { color: var(--level-color) !important; }
+.right-value { color: var(--level-color) !important; }
+.profile-tabs :deep(.ant-tabs-tab-active .ant-tabs-tab-btn) { color: var(--level-color) !important; }
+.profile-tabs :deep(.ant-tabs-ink-bar) { background: var(--level-color) !important; }
+.edit-link { color: var(--level-color) !important; }
+.guest-card-modern:hover { border-color: var(--level-color) !important; }
+.guest-card-body .info-row .icon { color: var(--level-color) !important; }
 
 /* 新版会员卡样式 */
 .member-card-new {
@@ -1406,8 +1440,11 @@ onMounted(() => {
 .vendor-item.active { border-color: #008cff; }
 .vendor-item.wechat-active { background: #e6fffb; border-color: #07c160; }
 .vendor-item.alipay-active { background: #e6f7ff; border-color: #1677ff; }
-.vendor-item .icon { font-size: 24px; display: block; margin-bottom: 8px; }
-.vendor-item .name { font-size: 13px; font-weight: 600; }
+.vendor-item .icon-wrapper { margin-bottom: 8px; display: flex; justify-content: center; align-items: center; height: 32px; }
+.vendor-item .icon-wrapper.wechat-color { color: #07c160 !important; }
+.vendor-item .icon-wrapper.alipay-color { color: #1677ff !important; }
+.vendor-item .name { font-size: 13px; font-weight: 600; text-align: center; color: #595959; }
+.vendor-item.active .name { color: var(--level-color); }
 
 .wechat-color { color: #07c160; }
 .alipay-color { color: #1677ff; }

@@ -4,30 +4,15 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { hashPassword, comparePassword } from '../utils/password';
 
-// 会员等级折扣映射 (可由总部系统用户通过 updateLevelDiscounts 接口指定)
-let LEVEL_DISCOUNTS: Record<string, number> = {
-  'diamond': 0.80,
-  'platinum': 0.85,
-  'gold': 0.88,
-  'silver': 0.95,
-  'standard': 1.0
-};
-
-// 会员等级积分倍率映射 (消费1元获得的基本积分 * 倍率)
-const LEVEL_POINTS_MULTIPLIER: Record<string, number> = {
-  'diamond': 15,
-  'platinum': 12,
-  'gold': 9,
-  'silver': 3,
-  'standard': 1
-};
+import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 
 export const updateLevelDiscounts = async (req: AuthRequest, res: Response) => {
   try {
     const { discounts } = req.body;
     if (!discounts) return res.status(400).json(errorResponse('缺少参数'));
     
-    LEVEL_DISCOUNTS = { ...LEVEL_DISCOUNTS, ...discounts };
+    // 使用 Object.assign 更新对象属性，而不是对导入的常量进行重新赋值
+    Object.assign(LEVEL_DISCOUNTS, discounts);
     res.json(successResponse(LEVEL_DISCOUNTS, '更新会员折扣成功'));
   } catch (error) {
     logger.error('更新会员折扣失败:', error);
@@ -62,11 +47,9 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
     const member = memberRows[0];
     const discountRate = LEVEL_DISCOUNTS[member.member_level] || 1.0;
     
-    // 按照会员等级给跟房价优惠相同的充值优惠 (例如 8.5折房费 -> 充值 100 得到 100/0.85 余额)
-    // 或者理解为：赠送金额 = 充值金额 * (1 - 折扣率) / 折扣率 ? 
-    // 更直观的逻辑：实际到账 = 充值金额 / 折扣率
-    const creditAmount = Math.floor((amount / discountRate) * 100) / 100;
-    const bonusAmount = Math.floor((creditAmount - amount) * 100) / 100;
+    const bonusRate = 1 - discountRate;
+    const bonusAmount = Math.floor((amount * bonusRate) * 100) / 100;
+    const creditAmount = Math.floor((amount + bonusAmount) * 100) / 100;
     const newBalance = Number(member.balance || 0) + creditAmount;
 
     await pool.query(
@@ -87,8 +70,6 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
     res.status(500).json(errorResponse('会员充值失败'));
   }
 };
-
-export { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER };
 
 /**
  * 获取等级标签

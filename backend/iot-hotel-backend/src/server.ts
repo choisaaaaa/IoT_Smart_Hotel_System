@@ -21,13 +21,70 @@ async function startServer() {
       try {
         await pool.query('ALTER TABLE bookings ADD COLUMN used_points INT DEFAULT 0 AFTER coupon_id');
         await pool.query('ALTER TABLE bookings ADD COLUMN points_discount DECIMAL(10,2) DEFAULT 0.00 AFTER used_points');
-        logger.info('数据库表 bookings 修复成功');
+        logger.info('数据库表 bookings 基础修复成功');
       } catch (schemaError: any) {
-        if (schemaError.code === 'ER_DUP_COLUMN_NAME') {
-          logger.info('数据库表 bookings 已包含 used_points/points_discount 字段');
-        } else {
-          logger.warn('修复数据库 schema 失败:', schemaError.message);
+        if (schemaError.code !== 'ER_DUP_COLUMN_NAME' && schemaError.errno !== 1060) {
+          logger.warn('修复数据库 bookings 基础 schema 失败:', schemaError.code, schemaError.message);
         }
+      }
+
+      // 子房价系统修复 (rate_plans)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS rate_plans (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            hotel_id INT NOT NULL,
+            room_type_id INT NOT NULL,
+            plan_name VARCHAR(100) NOT NULL,
+            base_price DECIMAL(10,2) DEFAULT 0.00,
+            meal_plan ENUM('none', 'breakfast', 'half_board', 'full_board') DEFAULT 'none',
+            breakfast_count INT DEFAULT 0,
+            cancellation_policy ENUM('free', 'no_cancel', 'restricted') DEFAULT 'free',
+            cancel_time_limit INT DEFAULT 0,
+            payment_type ENUM('all', 'online_only', 'front_desk_only') DEFAULT 'all',
+            is_guaranteed TINYINT(1) DEFAULT 0,
+            prepayment_ratio DECIMAL(5,2) DEFAULT 0.00,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_hotel_room (hotel_id, room_type_id)
+          )
+        `);
+        
+        // 扩展字段
+        const addColumns = [
+          'ALTER TABLE rate_plans ADD COLUMN breakfast_count INT DEFAULT 0 AFTER meal_plan',
+          'ALTER TABLE rate_plans ADD COLUMN cancel_time_limit INT DEFAULT 0 AFTER cancellation_policy',
+          'ALTER TABLE rate_plans ADD COLUMN is_guaranteed TINYINT(1) DEFAULT 0 AFTER payment_type',
+          'ALTER TABLE rate_plans ADD COLUMN prepayment_ratio DECIMAL(5,2) DEFAULT 0.00 AFTER is_guaranteed',
+          'ALTER TABLE rate_plans ADD COLUMN base_price DECIMAL(10,2) DEFAULT 0.00 AFTER plan_name'
+        ];
+
+        for (const sql of addColumns) {
+          try {
+            await pool.query(sql);
+            logger.info(`数据库列添加成功: ${sql.split(' ').slice(-1)[0]}`);
+          } catch (e: any) { 
+            // 同时检查 code 和 errno (1060 为 Duplicate column name)
+            if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {
+              logger.warn(`列扩展失败 (${sql}):`, e.code, e.message);
+            }
+          }
+        }
+
+        // 为 room_prices 增加 rate_plan_id
+        try {
+          await pool.query('ALTER TABLE room_prices ADD COLUMN rate_plan_id INT DEFAULT NULL AFTER room_type_id');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+
+        // 为 bookings 增加 rate_plan_id
+        try {
+          await pool.query('ALTER TABLE bookings ADD COLUMN rate_plan_id INT DEFAULT NULL AFTER room_id');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+
+        logger.info('子房价系统数据库修复/升级成功');
+      } catch (schemaError: any) {
+        logger.error('子房价系统数据库修复失败:', schemaError.code, schemaError.message);
       }
     } catch (cleanupError) {
       logger.warn('清理通话记录失败:', cleanupError);

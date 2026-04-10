@@ -52,21 +52,19 @@ class HotelApi {
     return payload?.hotel || payload
   }
 
-  async getRoomAvailability(hotelId: number, checkIn: string, checkOut: string): Promise<RoomInfo[]> {
-    const response: any = await request.get<ApiResponse<{ rooms: RoomInfo[] }>>(
+  async getRoomAvailability(hotelId: number, checkIn: string, checkOut: string): Promise<any> {
+    const response: any = await request.get<ApiResponse<{ roomTypes: any[] }>>(
       `/hotels/${hotelId}/rooms/availability`,
       {
         params: { check_in: checkIn, check_out: checkOut }
       }
     )
-    const payload = response?.data
-    if (Array.isArray(payload?.rooms)) return payload.rooms
-    if (Array.isArray(payload)) return payload
-    return []
+    return response.data || response
   }
 
   async createBooking(bookingData: {
     room_id: number
+    rate_plan_id?: number
     check_in_date: string
     check_out_date: string
     guest_name: string

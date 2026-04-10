@@ -20,6 +20,7 @@ import aiButler from './ai-butler';
 import environment from './environment';
 import roomTypes from './room-types';
 import priceCalendar from './price-calendar';
+import ratePlans from './rate-plans';
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.use('/bookings', bookings);
 router.use('/rooms', rooms);
 router.use('/room-types', roomTypes);
 router.use('/price-calendar', priceCalendar);
+router.use('/rate-plans', ratePlans);
 router.use('/payments', payments);
 router.use('/members', members);
 router.use('/coupons', coupons);

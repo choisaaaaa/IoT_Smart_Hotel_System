@@ -57,7 +57,10 @@ app.get('/', (_req: Request, res: Response) => {
   });
 });
 
-app.use(appConfig.apiPrefix, routes);
+app.use(appConfig.apiPrefix, (req, res, next) => {
+  logger.info(`路由进入 API Prefix: ${req.method} ${req.url}`);
+  next();
+}, routes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

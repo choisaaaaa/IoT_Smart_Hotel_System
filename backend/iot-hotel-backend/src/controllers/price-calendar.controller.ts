@@ -6,18 +6,24 @@ import logger from '../utils/logger';
 
 export const getPriceCalendar = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_type_id, start_date, end_date } = req.query;
+    const { room_type_id, rate_plan_id, start_date, end_date } = req.query;
     const hotelId = req.user?.hotel_id;
 
     if (!room_type_id || !start_date || !end_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
     }
 
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM room_prices WHERE room_type_id = ? AND hotel_id = ? AND price_date BETWEEN ? AND ?',
-      [room_type_id, hotelId, start_date, end_date]
-    );
+    let sql = 'SELECT * FROM room_prices WHERE room_type_id = ? AND hotel_id = ? AND price_date BETWEEN ? AND ?';
+    const params: any[] = [room_type_id, hotelId, start_date, end_date];
 
+    if (rate_plan_id) {
+      sql += ' AND rate_plan_id = ?';
+      params.push(rate_plan_id);
+    } else {
+      sql += ' AND rate_plan_id IS NULL';
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(sql, params);
     res.json(successResponse(rows, '获取价格日历成功'));
   } catch (error) {
     logger.error('获取价格日历失败:', error);
@@ -27,7 +33,7 @@ export const getPriceCalendar = async (req: AuthRequest, res: Response) => {
 
 export const setPriceCalendar = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_type_id, prices } = req.body; // prices: [{date, discount_rate, base_price}]
+    const { room_type_id, rate_plan_id, prices } = req.body; // prices: [{date, discount_rate, base_price}]
     const hotelId = req.user?.hotel_id;
 
     if (!room_type_id || !prices || !Array.isArray(prices)) {
@@ -39,10 +45,10 @@ export const setPriceCalendar = async (req: AuthRequest, res: Response) => {
       const finalPrice = base_price * (discount_rate || 1.0);
       
       await pool.query(
-        `INSERT INTO room_prices (room_type_id, hotel_id, price_date, discount_rate, base_price, final_price) 
-         VALUES (?, ?, ?, ?, ?, ?) 
+        `INSERT INTO room_prices (room_type_id, rate_plan_id, hotel_id, price_date, discount_rate, base_price, final_price) 
+         VALUES (?, ?, ?, ?, ?, ?, ?) 
          ON DUPLICATE KEY UPDATE discount_rate = ?, base_price = ?, final_price = ?`,
-        [room_type_id, hotelId, date, discount_rate, base_price, finalPrice, discount_rate, base_price, finalPrice]
+        [room_type_id, rate_plan_id || null, hotelId, date, discount_rate, base_price, finalPrice, discount_rate, base_price, finalPrice]
       );
     }
 

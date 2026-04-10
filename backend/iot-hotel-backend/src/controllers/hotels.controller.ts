@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest, successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import dayjs from 'dayjs';
 import db from '../config/database';
+import { LEVEL_DISCOUNTS } from '../config/constants';
 
 const router = Router();
 
@@ -104,78 +105,140 @@ export async function detail(req: AuthRequest, res: Response) {
 }
 
 // 获取房型可用性
-export async function roomAvailability(req: AuthRequest, res: Response) {
+export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
   try {
-    const { id: hotelId } = req.params;
+    const { hotelId } = req.params;
     const { check_in, check_out } = req.query;
 
     if (!check_in || !check_out) {
       return sendError(res, errorResponse('请选择入住和退房日期', 400));
     }
 
-    const sql = `
+    // 获取当前登录用户的会员折扣
+    let discountRate = 1.0;
+    const userPhone = req.user?.phone || req.user?.username;
+    if (userPhone) {
+      const [memberRows]: any = await db.execute('SELECT member_level FROM members WHERE phone = ?', [userPhone]);
+      if (memberRows.length > 0) {
+        discountRate = LEVEL_DISCOUNTS[memberRows[0].member_level] || 1.0;
+      }
+    }
+
+    // 1. 获取物理房间及其房型元数据
+    const roomsSql = `
       SELECT 
-        r.id,
+        r.id as room_id,
         r.room_number,
         r.room_name,
-        r.room_type,
+        r.room_type as code,
         r.room_price,
         r.floor,
         r.area,
         r.bed_type,
         r.max_guests,
         r.room_status,
-        r.facilities,
-        COALESCE(r.images, rt_meta.images) as images,
-        rt.available_count
+        r.facilities as room_facilities,
+        rt.name as type_name,
+        rt.id as room_type_id,
+        COALESCE(r.facilities, rt.facilities) as facilities,
+        COALESCE(r.images, rt.images) as images
       FROM rooms r
-      INNER JOIN (
-        SELECT room_type, COUNT(*) as available_count
-        FROM rooms
-        WHERE hotel_id = ? AND room_status = 'available'
-        GROUP BY room_type
-      ) rt ON rt.room_type = r.room_type
-      LEFT JOIN (
-        SELECT *, ROW_NUMBER() OVER(PARTITION BY code ORDER BY hotel_id DESC) as rn
-        FROM room_types
-        WHERE hotel_id = ? OR hotel_id = 0
-      ) rt_meta ON r.room_type = rt_meta.code
-      WHERE r.hotel_id = ? AND r.room_status = 'available' AND (rt_meta.rn = 1 OR rt_meta.rn IS NULL)
-      GROUP BY r.room_type, r.id
+      LEFT JOIN room_types rt ON r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0)
+      WHERE r.hotel_id = ? AND r.room_status = 'available'
     `;
 
-    const [rooms]: any = await db.execute(sql, [hotelId, hotelId, hotelId]);
+    const [rooms]: any = await db.execute(roomsSql, [hotelId]);
 
-    sendSuccess(res, {
-      rooms: rooms.map((r: any) => {
-        const facilities = parseFacilities(r.facilities);
-        const images = parseFacilities(r.images);
-        return ({
-          id: r.id,
-          room_number: r.room_number,
-          room_name: r.room_name,
-          room_type: r.room_type,
-          room_price: r.room_price,
-          floor: r.floor,
+    // 2. 获取所有相关的子房价方案
+    const [ratePlans]: any = await db.execute(
+      'SELECT * FROM rate_plans WHERE hotel_id = ? AND is_active = 1',
+      [hotelId]
+    );
+
+    // 3. 按房型分组并组合方案
+    const groupedRooms: any = {};
+    
+    rooms.forEach((r: any) => {
+      if (!groupedRooms[r.code]) {
+        groupedRooms[r.code] = {
+          code: r.code,
+          name: r.type_name || r.room_name,
+          room_type_id: r.room_type_id,
+          room_id: r.room_id,
+          hotel_id: r.hotel_id || hotelId,
           area: r.area,
-          bed_type: r.bed_type,
-          max_guests: r.max_guests,
-          room_status: r.room_status,
-          facilities,
-          image: images.length > 0 ? images[0] : '/room-placeholder.jpg',
-          available_count: r.available_count || 0,
-          name: r.room_name,
-          description: `${r.room_type} · ${r.floor}楼`,
           bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
           maxGuests: r.max_guests,
-          hasBreakfast: facilities.some((item) => item.includes('早餐')),
-          freeCancel: facilities.some((item) => item.includes('免费取消')),
-          hasWifi: facilities.some((item) => /wifi/i.test(item))
+          facilities: parseFacilities(r.facilities),
+          images: parseFacilities(r.images),
+          availableCount: 0,
+          room_price: r.room_price,
+          plans: []
+        };
+      }
+      groupedRooms[r.code].availableCount++;
+    });
+
+    // 为每个房型匹配方案并计算今日价格 (简化处理，取第一天的价格)
+    for (const code in groupedRooms) {
+      const type = groupedRooms[code];
+      const typePlans = ratePlans.filter((p: any) => p.room_type_id === type.room_type_id);
+      
+      // 始终包含一个标准方案 (id: null)
+      const allPlans = [
+        {
+          id: null,
+          plan_name: '标准价',
+          base_price: 0, // 标准价直接用房型基准价
+          meal_plan: 'none',
+          breakfast_count: 0,
+          cancellation_policy: 'free',
+          cancel_time_limit: 0,
+          payment_type: 'all',
+          is_guaranteed: 0,
+          prepayment_ratio: 0
+        },
+        ...typePlans
+      ];
+
+      for (const plan of allPlans) {
+        // 查询该日期该方案的价格
+        const [priceRows]: any = await db.execute(
+          'SELECT final_price FROM room_prices WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
+          [type.room_type_id, check_in, plan.id, plan.id]
+        );
+
+        const baseRoomPrice = rooms.find((r: any) => r.code === code)?.room_price || 0;
+        // 优先级：日历价格 > 方案底价 > 房型底价
+        let finalPrice = baseRoomPrice;
+        if (priceRows.length > 0) {
+          finalPrice = priceRows[0].final_price;
+        } else if (plan.id && plan.base_price > 0) {
+          finalPrice = plan.base_price;
+        }
+
+        type.plans.push({
+          id: plan.id,
+          name: plan.plan_name,
+          price: finalPrice, // 选房列表显示方案原价，明细里再算优惠
+          mealPlan: plan.meal_plan,
+          breakfastCount: plan.breakfast_count || 0,
+          cancelPolicy: plan.cancellation_policy,
+          cancelTimeLimit: plan.cancel_time_limit || 0,
+          paymentType: plan.payment_type,
+          isGuaranteed: !!plan.is_guaranteed,
+          prepaymentRatio: plan.prepayment_ratio || 0,
+          hasBreakfast: plan.meal_plan !== 'none',
+          freeCancel: plan.cancellation_policy === 'free'
         });
-      })
+      }
+    }
+
+    sendSuccess(res, {
+      roomTypes: Object.values(groupedRooms)
     });
   } catch (error) {
-    console.error('查询客房余量失败:', error);
+    console.error('查询客房可用性失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
 }

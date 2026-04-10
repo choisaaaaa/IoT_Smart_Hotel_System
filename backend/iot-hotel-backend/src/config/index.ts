@@ -8,7 +8,8 @@ export default {
     host: process.env.APP_HOST || '127.0.0.1',
     port: parseInt(process.env.APP_PORT || '3000'),
     env: process.env.NODE_ENV || 'development',
-    apiPrefix: process.env.API_PREFIX || '/api/v1'
+    apiPrefix: process.env.API_PREFIX || '/api/v1',
+    publicUrl: process.env.APP_PUBLIC_URL || '' // 增加公网访问 URL 配置
   },
   database: {
     host: process.env.DB_HOST || 'localhost',
