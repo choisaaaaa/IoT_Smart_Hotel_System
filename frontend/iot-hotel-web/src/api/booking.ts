@@ -37,6 +37,9 @@ export const bookingApi = {
       room_pin: string
     }>>(`/bookings/${id}/checkin-online`, data),
 
+  getCalculatedPrice: (params: { room_id: number; check_in_date: string; check_out_date: string; guest_phone?: string; coupon_id?: number }) =>
+    request.get<ApiResponse<{ total_price: number; discount_rate: number }>>('/bookings/calculate-price', { params }),
+
   updateBookingStatus: (id: number, status: string, hotelId?: number) =>
     request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) })
 }

@@ -4,12 +4,6 @@ import { normalizeRole } from '@/api/auth'
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/Login.vue'),
-    meta: { title: '登录', requiresAuth: false }
-  },
-  {
     path: '/',
     redirect: '/guest/booking'
   },
@@ -96,6 +90,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '酒店信息编辑', icon: 'BankOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
       },
       {
+        path: 'hotel/price-calendar',
+        name: 'PriceCalendar',
+        component: () => import('@/views/admin/PriceCalendar.vue'),
+        meta: { title: '价格日历', icon: 'CalendarOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
+      },
+      {
+        path: 'hotel/coupons',
+        name: 'AdminCoupons',
+        component: () => import('@/views/admin/CouponManage.vue'),
+        meta: { title: '优惠券管理', icon: 'TagOutlined', requiresAuth: true, roles: ['admin', 'manager'] }
+      },
+      {
         path: 'reports',
         name: 'AdminReports',
         component: () => import('@/views/admin/AdminReports.vue'),
@@ -161,10 +167,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
-        path: 'price-settings',
-        name: 'PriceSettings',
-        component: () => import('@/views/reception/PriceSettings.vue'),
-        meta: { title: '房价设置', icon: 'TagsOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
+        path: 'price-calendar',
+        name: 'ReceptionPriceCalendar',
+        component: () => import('@/views/admin/PriceCalendar.vue'),
+        meta: { title: '价格日历', icon: 'CalendarOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
+      },
+      {
+        path: 'coupons',
+        name: 'ReceptionCoupons',
+        component: () => import('@/views/admin/CouponManage.vue'),
+        meta: { title: '优惠券管理', icon: 'TagOutlined', requiresAuth: true, roles: ['admin', 'manager', 'staff'] }
       },
       {
         path: 'bills',
@@ -268,11 +280,11 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // 需要认证但未登录，重定向到登录页
+  // 需要认证但未登录，重定向到首页并开启登录弹窗
   if (!token || !userInfo) {
     next({
-      path: '/login',
-      query: { redirect: to.fullPath }
+      path: '/guest/booking',
+      query: { login: '1', redirect: to.fullPath }
     })
     return
   }
@@ -303,7 +315,7 @@ router.beforeEach((to, from, next) => {
         next('/guest/booking')
         break
       default:
-        next('/login')
+        next('/guest/booking?login=1')
     }
     return
   }

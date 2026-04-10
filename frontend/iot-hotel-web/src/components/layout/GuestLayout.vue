@@ -42,17 +42,29 @@
               <a-tag v-if="appStore.userStatus.is_member" color="gold">会员</a-tag>
               <a-tag v-if="appStore.userStatus.is_checked_in" color="cyan">已入住</a-tag>
             </div>
+            
+            <!-- 切端按钮：仅对非普通用户显示 -->
+            <a-button 
+              v-if="userInfo.role && userInfo.role !== 'user'"
+              type="link" 
+              class="switch-side-btn"
+              @click="$router.push('/reception/dashboard')"
+            >
+              <template #icon><SwapOutlined /></template>
+              切换管理端
+            </a-button>
+
             <a-dropdown>
-              <a class="user-dropdown" @click.prevent>
-                <a-tag color="blue">{{ userInfo.username }}</a-tag>
+              <a class="user-dropdown-wrapper" @click.prevent>
+                <a-avatar :size="32" :src="userInfo.avatar" class="header-avatar">
+                  <template #icon><UserOutlined /></template>
+                </a-avatar>
+                <span class="header-username">{{ userInfo.username }}</span>
               </a>
               <template #overlay>
                 <a-menu>
                   <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                     <UserOutlined /> 个人中心
-                  </a-menu-item>
-                  <a-menu-item key="orders" @click="$router.push('/guest/orders')">
-                    <OrderedListOutlined /> 我的订单
                   </a-menu-item>
                   <a-menu-divider />
                   <a-menu-item key="logout" @click="handleLogout">
@@ -80,7 +92,7 @@
       :footer="null"
       :closable="true"
       width="420px"
-      @cancel="appStore.showLoginModal = false"
+      @cancel="handleLoginCancel"
     >
       <template #title>
         <div style="text-align: center; font-size: 18px; font-weight: 600;">
@@ -274,7 +286,8 @@ import {
   MailOutlined,
   PhoneOutlined,
   LogoutOutlined,
-  OrderedListOutlined
+  OrderedListOutlined,
+  SwapOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, normalizeRole } from '@/api/auth'
@@ -303,6 +316,16 @@ const fetchUserStatus = async () => {
 
 onMounted(() => {
   fetchUserStatus()
+  // 检查 URL 是否带 login 参数
+  if (route.query.login === '1') {
+    appStore.showLoginModal = true
+  }
+})
+
+watch(() => route.query.login, (newVal) => {
+  if (newVal === '1') {
+    appStore.showLoginModal = true
+  }
 })
 
 watch(() => appStore.userInfo, (newVal) => {
@@ -394,17 +417,39 @@ function redirectByRole(rawRole?: string) {
   }
 }
 
-// 处理登录
+const handleLoginCancel = () => {
+  appStore.showLoginModal = false
+  if (route.query.login === '1') {
+    const query = { ...route.query }
+    delete query.login
+    router.replace({ query })
+  }
+}
+
+// 登录处理
 const handleLogin = async () => {
   try {
     loginLoading.value = true
     const { user } = await authService.login(loginForm)
 
-    message.success('登录成功')
     appStore.showLoginModal = false
+    message.success('登录成功')
 
-    // 根据角色跳转
-    redirectByRole(user.role)
+    // 处理重定向
+    const redirect = route.query.redirect as string
+    if (redirect) {
+      router.push(redirect)
+    } else {
+      // 根据角色重定向
+      const role = normalizeRole(user.role)
+      switch (role) {
+        case 'system': router.push('/system/dashboard'); break
+        case 'admin':
+        case 'manager': router.push('/hotel-admin/dashboard'); break
+        case 'staff': router.push('/reception/dashboard'); break
+        default: fetchUserStatus()
+      }
+    }
   } catch (error) {
     console.error('登录失败:', error)
   } finally {
@@ -524,7 +569,33 @@ const handleLogout = async () => {
 .header-nav .ant-btn.active { background: #e6f7ff; color: #1890ff; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .user-status-tags { display: flex; gap: 4px; align-items: center; }
-.user-dropdown { cursor: pointer; }
+.user-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 20px;
+  transition: background 0.3s;
+}
+.user-dropdown-wrapper:hover {
+  background: #f0f2f5;
+}
+.header-avatar {
+  border: 1px solid #e8e8e8;
+}
+.header-username {
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+.switch-side-btn {
+  font-weight: 600;
+  color: #1890ff;
+}
+.switch-side-btn:hover {
+  color: #40a9ff;
+}
 .guest-content {
   max-width: 1200px;
   margin: 0 auto;

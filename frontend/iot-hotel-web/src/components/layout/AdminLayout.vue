@@ -36,6 +36,14 @@
           <template #icon><BankOutlined /></template>
           <span>酒店信息</span>
         </a-menu-item>
+        <a-menu-item key="/hotel-admin/hotel/price-calendar">
+          <template #icon><CalendarOutlined /></template>
+          <span>价格日历</span>
+        </a-menu-item>
+        <a-menu-item key="/hotel-admin/hotel/coupons">
+          <template #icon><TagOutlined /></template>
+          <span>优惠券管理</span>
+        </a-menu-item>
         <a-menu-item key="/hotel-admin/reports">
           <template #icon><FileTextOutlined /></template>
           <span>账单报表</span>
@@ -104,7 +112,8 @@ import {
   HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined,
-  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined
+  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
+  CalendarOutlined, TagOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'

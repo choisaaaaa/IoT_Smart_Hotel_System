@@ -46,9 +46,13 @@
           <template #icon><PhoneOutlined /></template>
           <span>语音通话</span>
         </a-menu-item>
-        <a-menu-item key="/reception/price-settings">
-          <template #icon><TagsOutlined /></template>
-          <span>房价设置</span>
+        <a-menu-item key="/reception/price-calendar">
+          <template #icon><CalendarOutlined /></template>
+          <span>价格日历</span>
+        </a-menu-item>
+        <a-menu-item key="/reception/coupons">
+          <template #icon><TagOutlined /></template>
+          <span>优惠券管理</span>
         </a-menu-item>
         <a-menu-item key="/reception/bills">
           <template #icon><DollarOutlined /></template>
@@ -106,7 +110,7 @@ import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
   PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, LogoutOutlined
+  BellOutlined, LogoutOutlined, TagOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'

@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 const router = Router();
 
 router.get('/lookup', bookingController.lookupForGuest);
+router.get('/calculate-price', authenticate as any, bookingController.getCalculatedPrice);
 router.post('/:id/checkin-online', bookingController.checkinOnline);
 router.get('/', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.get);
 router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system', 'user']), bookingController.getById);
