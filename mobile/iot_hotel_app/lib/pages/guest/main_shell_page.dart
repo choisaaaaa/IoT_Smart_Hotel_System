@@ -37,6 +37,17 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
         BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
         BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
       ];
+    } else if (mode == AppMode.system) {
+      pages = [
+        const HomePage(),
+        const HotelListPage(),
+        const ProfilePage(),
+      ];
+      navItems = const [
+        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+        BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+        BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '系统'),
+      ];
     } else if (mode == AppMode.reception || mode == AppMode.manager) {
       pages = [
         const HomePage(),

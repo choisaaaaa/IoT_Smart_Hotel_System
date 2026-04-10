@@ -2,19 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../services/auth_service.dart';
 
-class FavoritesPage extends StatefulWidget {
+class FavoritesPage extends ConsumerStatefulWidget {
   const FavoritesPage({super.key});
 
   @override
-  State<FavoritesPage> createState() => _FavoritesPageState();
+  ConsumerState<FavoritesPage> createState() => _FavoritesPageState();
 }
 
-class _FavoritesPageState extends State<FavoritesPage> {
+class _FavoritesPageState extends ConsumerState<FavoritesPage> {
   List<Map<String, dynamic>> _favorites = [];
   bool _isLoading = true;
+
+  String get _favKey {
+    final userId = ref.read(authServiceProvider).currentUser?.id ?? 'guest';
+    return '${AppConstants.favoriteHotelsKey}_$userId';
+  }
 
   @override
   void initState() {
@@ -26,7 +33,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
+      final raw = prefs.getString(_favKey) ?? '[]';
       final List<dynamic> decoded = jsonDecode(raw);
       setState(() => _favorites = decoded.cast<Map<String, dynamic>>().toList());
     } catch (e) {
@@ -40,7 +47,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final removed = _favorites[index];
     setState(() => _favorites.removeAt(index));
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(_favorites));
+    await prefs.setString(_favKey, jsonEncode(_favorites));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -49,7 +56,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             label: '撤销',
             onPressed: () async {
               setState(() => _favorites.insert(index, removed));
-              await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(_favorites));
+              await prefs.setString(_favKey, jsonEncode(_favorites));
             },
           ),
         ),

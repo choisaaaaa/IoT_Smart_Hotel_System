@@ -11,6 +11,7 @@ import '../../services/review_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
 import '../../services/auth_service.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../core/logic/member_logic.dart';
 
 class HotelDetailPage extends ConsumerStatefulWidget {
@@ -53,16 +54,21 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     if (mounted) setState(() => _isFavorited = favorites.any((f) => f['id'] == hotelId));
   }
 
+  String get _favKey {
+    final userId = ref.read(authStateProvider).userId ?? 'guest';
+    return '${AppConstants.favoriteHotelsKey}_$userId';
+  }
+
   Future<List<Map<String, dynamic>>> _getFavoritesList() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
+    final raw = prefs.getString(_favKey) ?? '[]';
     final List<dynamic> decoded = jsonDecode(raw);
     return decoded.cast<Map<String, dynamic>>().toList();
   }
 
   void _toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
+    final raw = prefs.getString(_favKey) ?? '[]';
     final List<dynamic> decoded = jsonDecode(raw);
     final favorites = decoded.cast<Map<String, dynamic>>().toList();
     final hotelId = widget.hotelId ?? 1;
@@ -78,7 +84,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         'location': _hotelInfo?['location'] ?? '',
       });
     }
-    await prefs.setString(AppConstants.favoriteHotelsKey, jsonEncode(favorites));
+    await prefs.setString(_favKey, jsonEncode(favorites));
     setState(() => _isFavorited = !_isFavorited);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

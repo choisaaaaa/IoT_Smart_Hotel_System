@@ -76,7 +76,7 @@ class UserService {
   Future<ApiResult<void>> updateUserRole(int userId, String role) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.users}$userId/role',
+        '${ApiConstants.users}$userId',
         data: {'role': role},
       );
 
@@ -91,9 +91,9 @@ class UserService {
 
   Future<ApiResult<void>> disableUser(int userId, {String? reason}) async {
     try {
-      final response = await _dioClient.post(
-        '${ApiConstants.users}$userId/disable',
-        data: {'reason': reason},
+      final response = await _dioClient.put(
+        '${ApiConstants.users}$userId',
+        data: {'status': 'disabled', if (reason != null) 'disable_reason': reason},
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -107,7 +107,10 @@ class UserService {
 
   Future<ApiResult<void>> enableUser(int userId) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.users}$userId/enable');
+      final response = await _dioClient.put(
+        '${ApiConstants.users}$userId',
+        data: {'status': 'active'},
+      );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);

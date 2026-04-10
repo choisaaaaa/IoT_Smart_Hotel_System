@@ -252,7 +252,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     return FutureBuilder(
       future: memberService.getMyAssets(),
       builder: (context, snapshot) {
-        final apiResult = snapshot.data as ApiResult<Map<String, dynamic>>?;
+        final apiResult = snapshot.data;
         final assets = apiResult?.data ?? {};
         final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
         final level = MemberLevel.fromExperience(totalSpent.floor());

@@ -37,24 +37,28 @@ class DeviceService {
         final roomId = checkedIn.first['room_id'];
         if (roomId == null) return ApiResult.success([]);
 
-        final response = await _dioClient.get(
-          ApiConstants.devices,
-          queryParameters: {'room_id': roomId},
-        );
+        try {
+          final response = await _dioClient.get(
+            ApiConstants.devices,
+            queryParameters: {'room_id': roomId},
+          );
 
-        if (response.statusCode == 200 && _isSuccess(response.data)) {
-          final devData = response.data['data'];
-          if (devData is List) return ApiResult.success(List<dynamic>.from(devData));
-          return ApiResult.success(List<dynamic>.from(devData['list'] ?? []));
-        }
+          if (response.statusCode == 200 && _isSuccess(response.data)) {
+            final devData = response.data['data'];
+            if (devData is List) return ApiResult.success(List<dynamic>.from(devData));
+            return ApiResult.success(List<dynamic>.from(devData['list'] ?? []));
+          }
+        } catch (_) {}
+
+        try {
+          final roomResponse = await _dioClient.get('${ApiConstants.rooms}$roomId');
+          if (roomResponse.statusCode == 200 && _isSuccess(roomResponse.data)) {
+            final roomData = roomResponse.data['data'];
+            final devices = roomData['devices'];
+            if (devices is List) return ApiResult.success(List<dynamic>.from(devices));
+          }
+        } catch (_) {}
       }
-
-      try {
-        final response = await _dioClient.get(ApiConstants.devices);
-        if (response.statusCode == 200 && _isSuccess(response.data)) {
-          return ApiResult.success(List<dynamic>.from(response.data['data']));
-        }
-      } catch (_) {}
 
       return ApiResult.success([]);
     } catch (e) {

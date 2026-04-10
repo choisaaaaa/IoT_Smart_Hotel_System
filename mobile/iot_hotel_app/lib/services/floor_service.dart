@@ -14,10 +14,41 @@ class FloorService {
         if (data is List) return ApiResult.success(List<dynamic>.from(data));
         return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
       }
-      return ApiResult.failure(response.data['message'] ?? '获取楼层列表失败');
+      return await _getFloorsFallback();
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return await _getFloorsFallback();
     }
+  }
+
+  Future<ApiResult<List<dynamic>>> _getFloorsFallback() async {
+    try {
+      final response = await _dioClient.get(ApiConstants.rooms);
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        List<dynamic> rooms = [];
+        if (data is List) {
+          rooms = List<dynamic>.from(data);
+        } else if (data is Map) {
+          rooms = List<dynamic>.from(data['list'] ?? data['rooms'] ?? []);
+        }
+        final Set<String> floorSet = {};
+        final List<Map<String, dynamic>> floors = [];
+        for (final room in rooms) {
+          final floorNum = room['floor_number']?.toString() ?? room['floor']?.toString();
+          if (floorNum != null && !floorSet.contains(floorNum)) {
+            floorSet.add(floorNum);
+            floors.add({
+              'id': floors.length + 1,
+              'floor_number': int.tryParse(floorNum) ?? floors.length + 1,
+              'floor_name': '${floorNum}F',
+            });
+          }
+        }
+        floors.sort((a, b) => (a['floor_number'] as int).compareTo(b['floor_number'] as int));
+        return ApiResult.success(floors);
+      }
+    } catch (_) {}
+    return ApiResult.success([]);
   }
 
   Future<ApiResult<Map<String, dynamic>>> createFloor(Map<String, dynamic> data) async {

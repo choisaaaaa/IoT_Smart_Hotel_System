@@ -32,8 +32,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     if (!mounted) return;
     setState(() => _user = user);
 
+    final dio = DioClient();
+
     try {
-      final dio = DioClient();
       final meResponse = await dio.get(ApiConstants.authMe);
       if (meResponse.statusCode == 200 && meResponse.data['code'] == 200) {
         final data = meResponse.data['data'];
@@ -41,22 +42,31 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
           setState(() => _hotels = List<Map<String, dynamic>>.from(data['managed_hotels']));
         }
       }
+    } catch (e) {
+      debugPrint('Error loading managed hotels: $e');
+    }
 
+    try {
       final appResponse = await dio.get('${ApiConstants.baseUrl}auth/role-applications');
       if (appResponse.statusCode == 200 && appResponse.data['code'] == 200) {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
       }
+    } catch (e) {
+      debugPrint('Error loading applications: $e');
+    }
 
-      final hotelResponse = await dio.get('${ApiConstants.hotels}search', queryParameters: {'pageSize': 100});
+    try {
+      final hotelResponse = await dio.get('${ApiConstants.hotels}search');
       if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
         final list = hotelResponse.data['data']?['hotels'] ?? hotelResponse.data['data'] ?? [];
+        debugPrint('Loaded ${list.length} hotels for selection');
         setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
       }
     } catch (e) {
-      debugPrint('Error loading data: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('Error loading hotels list: $e');
     }
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override

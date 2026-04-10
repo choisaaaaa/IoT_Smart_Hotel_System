@@ -11,7 +11,6 @@ import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
 import '../../core/network/api_result.dart';
-import '../../models/user.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -75,7 +74,6 @@ class ProfilePage extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final authService = ref.watch(authServiceProvider);
-    final authState = ref.watch(authStateProvider);
     
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -92,7 +90,7 @@ class ProfilePage extends ConsumerWidget {
             child: FutureBuilder(
               future: authService.getCurrentUser(),
               builder: (context, snapshot) {
-                final user = snapshot.data as User?;
+                final user = snapshot.data;
                 final displayName = user?.username ?? '未登录';
                 return GestureDetector(
                   onTap: () => context.push('/personal-info'),
@@ -120,26 +118,23 @@ class ProfilePage extends ConsumerWidget {
   Widget _buildModeSwitchButton(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
     final currentMode = authState.currentMode;
-    final roleLevel = authState.roleLevel;
 
     String modeLabel;
-    IconData modeIcon;
     switch (currentMode) {
       case AppMode.guest:
         modeLabel = '游客';
-        modeIcon = Icons.visibility_outlined;
         break;
       case AppMode.customer:
         modeLabel = '顾客';
-        modeIcon = Icons.person_outline;
         break;
       case AppMode.reception:
         modeLabel = '前台';
-        modeIcon = Icons.desktop_windows_outlined;
         break;
       case AppMode.manager:
         modeLabel = '管理';
-        modeIcon = Icons.admin_panel_settings_outlined;
+        break;
+      case AppMode.system:
+        modeLabel = '系统';
         break;
     }
 
@@ -165,6 +160,7 @@ class ProfilePage extends ConsumerWidget {
       if (authState.canSwitchTo(AppMode.customer)) AppMode.customer,
       if (authState.canSwitchTo(AppMode.reception)) AppMode.reception,
       if (authState.canSwitchTo(AppMode.manager)) AppMode.manager,
+      if (authState.canSwitchTo(AppMode.system)) AppMode.system,
     ];
 
     final modeLabels = {
@@ -172,6 +168,7 @@ class ProfilePage extends ConsumerWidget {
       AppMode.customer: {'label': '顾客端', 'desc': '预订、入住、客房服务', 'icon': Icons.person_outline},
       AppMode.reception: {'label': '前台端', 'desc': '前台接待、客房管理', 'icon': Icons.desktop_windows_outlined},
       AppMode.manager: {'label': '管理端', 'desc': '酒店管理、数据报表', 'icon': Icons.admin_panel_settings_outlined},
+      AppMode.system: {'label': '系统管理', 'desc': '系统管理、酒店审核', 'icon': Icons.security_outlined},
     };
 
     showDialog(
@@ -210,7 +207,10 @@ class ProfilePage extends ConsumerWidget {
         context.go('/reception');
         break;
       case AppMode.manager:
-        context.go('/reception');
+        context.go('/admin');
+        break;
+      case AppMode.system:
+        context.go('/system');
         break;
     }
   }
@@ -341,7 +341,7 @@ class ProfilePage extends ConsumerWidget {
       child: FutureBuilder(
         future: memberService.getMyAssets(),
         builder: (context, snapshot) {
-          final assets = (snapshot.data as ApiResult<Map<String, dynamic>>?)?.data ?? {};
+          final assets = snapshot.data?.data ?? {};
           final points = assets['points'] ?? '0';
           final coupons = assets['coupons_count'] ?? '0';
           

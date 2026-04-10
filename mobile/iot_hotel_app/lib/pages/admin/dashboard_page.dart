@@ -7,6 +7,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/room_service.dart';
+import '../../core/network/dio_client.dart';
+import '../../core/constants/api_constants.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
@@ -28,6 +31,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     NavigationItem(icon: Icons.door_back_door_rounded, label: '房间'),
     NavigationItem(icon: Icons.hotel_rounded, label: '酒店'),
     NavigationItem(icon: Icons.assessment_rounded, label: '报表'),
+    NavigationItem(icon: Icons.fact_check_rounded, label: '审核'),
   ];
 
   late final List<Widget> _pages;
@@ -41,6 +45,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       const RoomManagePage(),
       const HotelEditPage(),
       const ReportsPage(),
+      const _AdminReviewTab(),
     ];
   }
 
@@ -61,11 +66,13 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                 await ref.read(authServiceProvider).logout();
                 if (!context.mounted) return;
                 context.go('/login');
+              } else if (value == 'switch_mode') {
+                _showModeSwitchDialog();
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(value: 'switch_mode', child: Row(children: [Icon(Icons.swap_horiz), SizedBox(width: 8), Text('切换模式')])),
               const PopupMenuItem(value: 'profile', child: Text('个人信息')),
-              const PopupMenuItem(value: 'settings', child: Text('系统设置')),
               const PopupMenuItem(value: 'logout', child: Text('退出登录')),
             ],
           ),
@@ -93,6 +100,47 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
         ),
       ),
     );
+  }
+
+  void _showModeSwitchDialog() {
+    final authState = ref.read(authStateProvider);
+    final modes = <AppMode, String>{
+      AppMode.customer: '顾客端',
+      AppMode.reception: '前台端',
+      AppMode.manager: '管理端',
+      AppMode.guest: '游客端',
+    };
+
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('切换模式'),
+        children: modes.entries.where((e) => authState.canSwitchTo(e.key)).map((e) {
+          return SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(authStateProvider.notifier).switchMode(e.key);
+              context.go('/');
+            },
+            child: Row(children: [
+              Icon(_modeIcon(e.key), color: AppColors.primary),
+              const SizedBox(width: 12),
+              Text(e.value, style: const TextStyle(fontSize: 16)),
+            ]),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  IconData _modeIcon(AppMode mode) {
+    switch (mode) {
+      case AppMode.guest: return Icons.visibility_outlined;
+      case AppMode.customer: return Icons.person_outline;
+      case AppMode.reception: return Icons.support_agent_outlined;
+      case AppMode.manager: return Icons.admin_panel_settings_outlined;
+      case AppMode.system: return Icons.security_outlined;
+    }
   }
 }
 
@@ -300,6 +348,138 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           _ActivityItem(title: '新预订：401房', time: '2小时前', icon: Icons.add_business_rounded, color: Colors.orange),
         ],
       ),
+    );
+  }
+}
+
+class _AdminReviewTab extends StatefulWidget {
+  const _AdminReviewTab();
+  @override
+  State<_AdminReviewTab> createState() => _AdminReviewTabState();
+}
+
+class _AdminReviewTabState extends State<_AdminReviewTab> {
+  List<Map<String, dynamic>> _applications = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApplications();
+  }
+
+  Future<void> _loadApplications() async {
+    try {
+      final dio = DioClient();
+      final res = await dio.get('${ApiConstants.baseUrl}auth/role-applications');
+      if (res.statusCode == 200 && res.data['code'] == 200) {
+        setState(() => _applications = List<Map<String, dynamic>>.from(res.data['data'] ?? []));
+      }
+    } catch (e) {
+      debugPrint('Error loading applications: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _reviewApplication(int id, String status, {String? note}) async {
+    try {
+      final dio = DioClient();
+      final res = await dio.put('${ApiConstants.baseUrl}auth/role-applications/$id/review', data: {
+        'status': status,
+        if (note != null) 'review_note': note,
+      });
+      if (res.statusCode == 200 && res.data['code'] == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'approved' ? '已通过' : '已拒绝'), backgroundColor: AppColors.success));
+          _loadApplications();
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+    }
+  }
+
+  void _showReviewDialog(Map<String, dynamic> app) {
+    final noteCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('审核申请 #${app['id']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('申请人: ${app['username'] ?? '-'}'),
+            Text('类型: ${app['application_type'] == 'create_hotel' ? '创建酒店' : '绑定员工'}'),
+            if (app['target_hotel_name'] != null) Text('酒店: ${app['target_hotel_name']}'),
+            if (app['reason'] != null) Text('理由: ${app['reason']}'),
+            const SizedBox(height: 12),
+            TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: '审核备注 (可选)'), maxLines: 2),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(onPressed: () { Navigator.pop(ctx); _reviewApplication(app['id'], 'rejected', note: noteCtrl.text.trim()); }, child: const Text('拒绝', style: TextStyle(color: AppColors.error))),
+          FilledButton(onPressed: () { Navigator.pop(ctx); _reviewApplication(app['id'], 'approved', note: noteCtrl.text.trim()); }, child: const Text('通过')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    final pending = _applications.where((a) => a['status'] == 'pending').toList();
+    final reviewed = _applications.where((a) => a['status'] != 'pending').toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadApplications,
+      child: DefaultTabController(
+        length: 2,
+        child: Column(children: [
+          const TabBar(tabs: [Tab(text: '待审核'), Tab(text: '已审核')]),
+          Expanded(child: TabBarView(children: [_buildList(pending, true), _buildList(reviewed, false)])),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildList(List<Map<String, dynamic>> apps, bool showActions) {
+    if (apps.isEmpty) return const Center(child: Text('暂无数据'));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: apps.length,
+      itemBuilder: (ctx, i) {
+        final app = apps[i];
+        final status = app['status'] ?? 'pending';
+        Color sc; String st;
+        switch (status) {
+          case 'approved': sc = AppColors.success; st = '已通过'; break;
+          case 'rejected': sc = AppColors.error; st = '已拒绝'; break;
+          default: sc = AppColors.warning; st = '待审核';
+        }
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(app['application_type'] == 'create_hotel' ? Icons.add_business : Icons.badge, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(app['application_type'] == 'create_hotel' ? '创建酒店: ${app['hotel_name'] ?? '-'}' : '绑定员工: ${app['target_hotel_name'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: sc.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Text(st, style: TextStyle(color: sc, fontSize: 11, fontWeight: FontWeight.bold))),
+              ]),
+              const SizedBox(height: 8),
+              Text('申请人: ${app['username'] ?? '-'} | ${app['created_at']?.toString().substring(0, 10) ?? '-'}'),
+              if (showActions) ...[
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [OutlinedButton(onPressed: () => _showReviewDialog(app), style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary), child: const Text('审核'))]),
+              ],
+            ]),
+          ),
+        );
+      },
     );
   }
 }

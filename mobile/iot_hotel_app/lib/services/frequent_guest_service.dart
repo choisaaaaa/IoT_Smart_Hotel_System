@@ -14,10 +14,22 @@ class FrequentGuestService {
         if (data is List) return ApiResult.success(List<dynamic>.from(data));
         return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
       }
-      return ApiResult.failure(response.data['message'] ?? '获取常旅客列表失败');
+      return await _getFrequentGuestsFallback();
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return await _getFrequentGuestsFallback();
     }
+  }
+
+  Future<ApiResult<List<dynamic>>> _getFrequentGuestsFallback() async {
+    try {
+      final response = await _dioClient.get(ApiConstants.guests);
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        if (data is List) return ApiResult.success(List<dynamic>.from(data));
+        return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+      }
+    } catch (_) {}
+    return ApiResult.success([]);
   }
 
   Future<ApiResult<Map<String, dynamic>>> addFrequentGuest(Map<String, dynamic> data) async {

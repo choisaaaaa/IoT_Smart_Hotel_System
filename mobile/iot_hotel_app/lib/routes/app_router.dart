@@ -4,6 +4,7 @@ import '../pages/auth/login_page.dart';
 import '../pages/auth/register_page.dart';
 import '../pages/admin/dashboard_page.dart';
 import '../pages/reception/dashboard_page.dart';
+import '../pages/system/dashboard_page.dart';
 import '../pages/guest/main_shell_page.dart';
 import '../pages/guest/hotel_list_page.dart';
 import '../pages/guest/hotel_detail_page.dart';
@@ -19,11 +20,9 @@ import '../pages/guest/coupon_center_page.dart';
 import '../pages/guest/extend_stay_page.dart';
 import '../pages/guest/frequent_guest_page.dart';
 import '../pages/guest/personal_info_page.dart';
-import '../services/auth_service.dart';
 import '../core/auth/auth_state_notifier.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authService = ref.watch(authServiceProvider);
   final authState = ref.watch(authStateProvider);
 
   return GoRouter(
@@ -41,6 +40,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (isLoggedIn && isLoggingIn) {
         switch (authState.currentMode) {
+          case AppMode.system:
+            return '/system';
           case AppMode.manager:
             return '/admin';
           case AppMode.reception:
@@ -62,6 +63,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (currentPath.startsWith('/admin') && !authState.canSwitchTo(AppMode.manager)) {
           return '/';
         }
+        if (currentPath.startsWith('/system') && !authState.canSwitchTo(AppMode.system)) {
+          return '/';
+        }
       }
 
       return null;
@@ -71,6 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
       GoRoute(path: '/admin', builder: (context, state) => const AdminDashboardPage()),
+      GoRoute(path: '/system', builder: (context, state) => const SystemDashboardPage()),
       GoRoute(path: '/reception', builder: (context, state) => const ReceptionDashboardPage()),
       GoRoute(path: '/hotel-list', builder: (context, state) => const HotelListPage()),
       GoRoute(

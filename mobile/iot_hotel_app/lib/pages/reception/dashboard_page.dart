@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../services/auth_service.dart';
+import '../../core/auth/auth_state_notifier.dart';
+import '../../services/voice_call_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/booking_service.dart';
@@ -97,9 +99,12 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
                 await ref.read(authServiceProvider).logout();
                 if (!context.mounted) return;
                 context.go('/login');
+              } else if (value == 'switch_mode') {
+                _showModeSwitchDialog();
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(value: 'switch_mode', child: Row(children: [Icon(Icons.swap_horiz), SizedBox(width: 8), Text('切换模式')])),
               const PopupMenuItem(value: 'profile', child: Text('个人信息')),
               const PopupMenuItem(value: 'logout', child: Text('退出登录')),
             ],
@@ -135,6 +140,48 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
         ],
       ),
     );
+  }
+
+  void _showModeSwitchDialog() {
+    final authState = ref.read(authStateProvider);
+    final modes = <AppMode, String>{
+      AppMode.customer: '顾客端',
+      AppMode.reception: '前台端',
+      AppMode.manager: '管理端',
+      AppMode.system: '系统管理',
+      AppMode.guest: '游客端',
+    };
+
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('切换模式'),
+        children: modes.entries.where((e) => authState.canSwitchTo(e.key)).map((e) {
+          return SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(authStateProvider.notifier).switchMode(e.key);
+              context.go('/');
+            },
+            child: Row(children: [
+              Icon(_modeIcon(e.key), color: AppColors.primary),
+              const SizedBox(width: 12),
+              Text(e.value, style: const TextStyle(fontSize: 16)),
+            ]),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  IconData _modeIcon(AppMode mode) {
+    switch (mode) {
+      case AppMode.guest: return Icons.visibility_outlined;
+      case AppMode.customer: return Icons.person_outline;
+      case AppMode.reception: return Icons.support_agent_outlined;
+      case AppMode.manager: return Icons.admin_panel_settings_outlined;
+      case AppMode.system: return Icons.security_outlined;
+    }
   }
 
   void _showNotificationPanel() {
@@ -1027,7 +1074,9 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
   bool _isOnline = false;
+  Map<String, dynamic>? _currentCall;
   late TabController _callTabController;
+  Stream<Map<String, dynamic>>? _callEvents;
 
   @override
   void initState() {
@@ -1038,6 +1087,9 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
 
   @override
   void dispose() {
+    if (_isOnline) {
+      VoiceCallService().hangup('current');
+    }
     _callTabController.dispose();
     super.dispose();
   }
@@ -1222,14 +1274,98 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
   void _toggleOnline() {
     setState(() => _isOnline = !_isOnline);
     if (_isOnline) {
+      final authState = ref.read(authStateProvider);
+      final userId = authState.userId ?? 'reception_app';
+      final callService = VoiceCallService();
+      callService.init('front_desk_$userId');
+      _callEvents = callService.callEvents;
+      _callEvents?.listen(_handleCallEvent);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已上线，可以发起呼叫'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('已上线，可以发起和接收呼叫'), backgroundColor: AppColors.success),
       );
     } else {
+      VoiceCallService().hangup('current');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已下线')),
       );
     }
+  }
+
+  void _handleCallEvent(Map<String, dynamic> event) {
+    if (!mounted) return;
+    final type = event['type'];
+    final data = event['data'] as Map<String, dynamic>? ?? {};
+
+    switch (type) {
+      case 'incoming_call':
+        setState(() => _currentCall = data);
+        _showIncomingCallDialog(data);
+        break;
+      case 'call_answered':
+        setState(() => _currentCall = data);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('对方已接听'), backgroundColor: AppColors.success),
+        );
+        break;
+      case 'call_rejected':
+        setState(() => _currentCall = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('对方已拒绝')),
+        );
+        Navigator.of(context, rootNavigator: true).pop();
+        break;
+      case 'call_hungup':
+        setState(() => _currentCall = null);
+        Navigator.of(context, rootNavigator: true).pop();
+        break;
+    }
+  }
+
+  void _showIncomingCallDialog(Map<String, dynamic> callData) {
+    final callerName = callData['caller_name'] ?? callData['caller_id'] ?? '未知';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            CircleAvatar(radius: 32, backgroundColor: AppColors.success.withValues(alpha: 0.1), child: const Icon(Icons.call, size: 32, color: AppColors.success)),
+            const SizedBox(height: 16),
+            Text(callerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('来电中...', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              FloatingActionButton(
+                heroTag: 'reject',
+                onPressed: () {
+                  VoiceCallService().hangup(callData['call_id']?.toString() ?? '');
+                  Navigator.pop(ctx);
+                },
+                backgroundColor: AppColors.error,
+                child: const Icon(Icons.call_end, color: Colors.white),
+              ),
+              FloatingActionButton(
+                heroTag: 'answer',
+                onPressed: () {
+                  VoiceCallService().answerCall(
+                    callData['call_id']?.toString() ?? '',
+                    callData['caller_id']?.toString() ?? '',
+                    callData['caller_type']?.toString() ?? 'room',
+                  );
+                  Navigator.pop(ctx);
+                },
+                backgroundColor: AppColors.success,
+                child: const Icon(Icons.call, color: Colors.white),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
   }
 
   Color _roomStatusColor(String status) => switch (status) {
