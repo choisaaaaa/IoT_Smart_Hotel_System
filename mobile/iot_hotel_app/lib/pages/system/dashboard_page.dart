@@ -48,7 +48,8 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
             onSelected: (value) async {
               if (value == 'logout') {
                 await ref.read(authServiceProvider).logout();
-                if (mounted) context.go('/login');
+                if (!context.mounted) return;
+                context.go('/login');
               } else if (value == 'switch_mode') {
                 _showModeSwitchDialog();
               }
@@ -471,15 +472,16 @@ class _ReviewTabState extends State<_ReviewTab> {
         if (note != null) 'review_note': note,
       });
       if (res.statusCode == 200 && res.data['code'] == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'approved' ? '已通过' : '已拒绝'), backgroundColor: AppColors.success));
-          _loadApplications();
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'approved' ? '已通过' : '已拒绝'), backgroundColor: AppColors.success));
+        _loadApplications();
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.data['message'] ?? '操作失败')));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.data['message'] ?? '操作失败')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
     }
   }
 

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../core/constants/api_constants.dart';
 
 typedef RTCPeerConnection = dynamic;
@@ -13,7 +13,7 @@ class VoiceCallService {
   factory VoiceCallService() => _instance;
   VoiceCallService._internal();
 
-  IO.Socket? _socket;
+  io.Socket? _socket;
   bool _isInitialized = false;
   bool _isRegistered = false;
   String? _clientId;
@@ -32,7 +32,7 @@ class VoiceCallService {
   void init(String userId) {
     if (_isInitialized) return;
 
-    _socket = IO.io(ApiConstants.serverHost, <String, dynamic>{
+    _socket = io.io(ApiConstants.serverHost, <String, dynamic>{
       'transports': ['websocket', 'polling'],
       'autoConnect': true,
       'reconnection': true,

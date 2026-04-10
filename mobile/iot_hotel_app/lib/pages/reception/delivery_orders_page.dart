@@ -310,12 +310,11 @@ class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
               .createDeliveryOrder(data);
           if (result.success) {
             _loadOrders();
-            if (mounted) {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('订单创建成功')),
-              );
-            }
+            if (!context.mounted) return;
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('订单创建成功')),
+            );
           }
         },
       ),
@@ -345,7 +344,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -406,7 +405,7 @@ class _DeliveryOrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -420,7 +419,7 @@ class _DeliveryOrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _getCategoryColor(order['item_category']).withOpacity(0.1),
+                  color: _getCategoryColor(order['item_category']).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -436,7 +435,7 @@ class _DeliveryOrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -657,7 +656,7 @@ class _CreateDeliveryModalState extends State<_CreateDeliveryModal> {
                 ),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<int>(
-                  value: _selectedRoomId,
+                  initialValue: _selectedRoomId,
                   decoration: const InputDecoration(
                     labelText: '目标房间 *',
                     border: OutlineInputBorder(),
@@ -681,7 +680,7 @@ class _CreateDeliveryModalState extends State<_CreateDeliveryModal> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _itemCategory,
+                  initialValue: _itemCategory,
                   decoration: const InputDecoration(
                     labelText: '物品类别 *',
                     border: OutlineInputBorder(),

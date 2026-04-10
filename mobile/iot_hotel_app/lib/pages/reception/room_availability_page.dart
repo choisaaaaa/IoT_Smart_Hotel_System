@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
@@ -349,7 +349,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
@@ -411,7 +411,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: _statusColor(status).withOpacity(0.1),
+              backgroundColor: _statusColor(status).withValues(alpha: 0.1),
               child: Icon(
                 _statusIcon(status),
                 color: _statusColor(status),
@@ -429,7 +429,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: _statusColor(status).withOpacity(0.1),
+                color: _statusColor(status).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -488,7 +488,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _statusColor(status).withOpacity(0.1),
+                    color: _statusColor(status).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -525,7 +525,7 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
               ].map((s) => ChoiceChip(
                 label: Text(_statusText(s)),
                 selected: status == s,
-                selectedColor: _statusColor(s).withOpacity(0.2),
+                selectedColor: _statusColor(s).withValues(alpha: 0.2),
                 onSelected: status == s
                     ? null
                     : (_) => _updateRoomStatus(room, s),
@@ -720,10 +720,10 @@ class _RoomGridCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: statusColor.withOpacity(0.3)),
+          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),

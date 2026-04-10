@@ -88,12 +88,6 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
     }
   }
 
-  double _getFinalPrice(Map<String, dynamic> priceData) {
-    final basePrice = (priceData['base_price'] ?? 0).toDouble();
-    final discountRate = (priceData['discount_rate'] ?? 1.0).toDouble();
-    return basePrice * discountRate;
-  }
-
   void _previousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
@@ -183,7 +177,8 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
                       .deletePriceForDate(existingPrice['id']);
                   if (result.success) {
                     _loadPriceCalendar();
-                    if (mounted) Navigator.pop(ctx);
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
                   }
                 }
               },
@@ -213,12 +208,12 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
 
               if (result.success) {
                 _loadPriceCalendar();
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('价格设置成功')),
-                  );
-                }
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('价格设置成功')),
+                );
               }
             },
             child: const Text('保存'),
@@ -338,7 +333,7 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
           const SizedBox(width: 12),
           Expanded(
             child: DropdownButtonFormField<int>(
-              value: _selectedRoomTypeId,
+              initialValue: _selectedRoomTypeId,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -500,7 +495,7 @@ class _CalendarDayCell extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
-          color: isToday ? AppColors.primary.withOpacity(0.05) : Colors.white,
+          color: isToday ? AppColors.primary.withValues(alpha: 0.05) : Colors.white,
           border: Border.all(
             color: isToday ? AppColors.primary : borderColor,
             width: isToday ? 2 : 1,
@@ -531,7 +526,7 @@ class _CalendarDayCell extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -565,7 +560,7 @@ class _LegendItem extends StatelessWidget {
           width: 12,
           height: 12,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.2),
+            color: color.withValues(alpha: 0.2),
             border: Border.all(color: color),
             borderRadius: BorderRadius.circular(2),
           ),

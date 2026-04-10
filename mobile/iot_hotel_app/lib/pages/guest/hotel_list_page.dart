@@ -171,7 +171,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
     final cities = ['全部', '北京', '上海', '广州', '深圳', '珠海', '杭州', '成都'];
     final result = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => Container(
+      builder: (ctx) => SizedBox(
         height: 300,
         child: ListView.builder(
           itemCount: cities.length,
@@ -297,7 +297,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (ctx, _, __) => Container(height: 200, color: AppColors.divider, child: const Icon(Icons.hotel, size: 48, color: AppColors.textHint)),
+                  errorBuilder: (ctx, _, e) => Container(height: 200, color: AppColors.divider, child: const Icon(Icons.hotel, size: 48, color: AppColors.textHint)),
                 ),
                 Positioned(
                   top: 12,

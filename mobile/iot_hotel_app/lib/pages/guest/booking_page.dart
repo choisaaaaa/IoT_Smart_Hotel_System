@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../services/auth_service.dart';
-import '../../../services/booking_service.dart';
-import '../../../services/room_type_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../services/auth_service.dart';
+import '../../services/booking_service.dart';
+import '../../services/room_type_service.dart';
 
 class BookingPage extends ConsumerStatefulWidget {
   const BookingPage({super.key});
@@ -541,7 +541,7 @@ class _PopularRoomsState extends ConsumerState<_PopularRooms> {
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.secondary)),
-                          Text('最多${maxGuests}人',
+                          Text('最多$maxGuests人',
                               style: const TextStyle(
                                   fontSize: 11, color: AppColors.textHint)),
                         ],

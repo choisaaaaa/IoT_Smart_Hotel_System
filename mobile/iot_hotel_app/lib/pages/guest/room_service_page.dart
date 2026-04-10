@@ -730,7 +730,7 @@ class _ContactFrontDeskTab extends ConsumerStatefulWidget {
 
 class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   final _messageController = TextEditingController();
-  List<Map<String, dynamic>> _messages = [];
+  final List<Map<String, dynamic>> _messages = [];
   final VoiceCallService _callService = VoiceCallService();
   bool _isOnline = false;
   String? _clientName;

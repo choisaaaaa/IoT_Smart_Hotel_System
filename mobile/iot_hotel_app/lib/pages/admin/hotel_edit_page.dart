@@ -75,7 +75,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
               decoration: const InputDecoration(labelText: '星级', prefixIcon: Icon(Icons.star)),
               items: ['1','2','3','4','5'].map((s) => DropdownMenuItem(value: s, child: Text('$s星级'))).toList(),
               onChanged: (value) => setState(() => _selectedStar = value!),
-              value: _selectedStar,
+              initialValue: _selectedStar,
             ),
             const SizedBox(height: 24),
             SizedBox(

@@ -140,6 +140,54 @@ class PaymentService {
       return ApiResult.failure('网络错误：$e');
     }
   }
+
+  Future<ApiResult<Map<String, dynamic>>> getRevenueStats({String? range}) async {
+    try {
+      final response = await _dioClient.get(
+        '${ApiConstants.payments}stats/revenue',
+        queryParameters: {
+          if (range != null) 'range': range,
+        },
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.success({
+        'today_revenue': 0.0,
+        'month_revenue': 0.0,
+        'pending_bills': 0,
+        'revenue_trend': <dynamic>[],
+        'income_breakdown': <String, dynamic>{},
+      });
+    } catch (e) {
+      return ApiResult.success({
+        'today_revenue': 0.0,
+        'month_revenue': 0.0,
+        'pending_bills': 0,
+        'revenue_trend': <dynamic>[],
+        'income_breakdown': <String, dynamic>{},
+      });
+    }
+  }
+
+  Future<ApiResult<List<dynamic>>> getBills({int? limit}) async {
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.payments,
+        queryParameters: {
+          'pageSize': limit ?? 20,
+        },
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        if (data is List) return ApiResult.success(List<dynamic>.from(data));
+        return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+      }
+      return ApiResult.success(<dynamic>[]);
+    } catch (e) {
+      return ApiResult.success(<dynamic>[]);
+    }
+  }
 }
 
 final paymentServiceProvider = Provider((ref) => PaymentService());

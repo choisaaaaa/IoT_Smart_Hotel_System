@@ -97,7 +97,7 @@ class ProfilePage extends ConsumerWidget {
                   child: Row(
                     children: [
                       Flexible(child: Text(displayName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
                     ],
                   ),
@@ -473,7 +473,7 @@ class ProfilePage extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.history_rounded, size: 18, color: AppColors.textSecondary),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Text('我看过的 19 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),

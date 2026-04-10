@@ -6,15 +6,47 @@ import '../core/constants/api_constants.dart';
 class CouponService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<List<dynamic>>> getCoupons() async {
+  Future<ApiResult<List<dynamic>>> getCoupons({String? status}) async {
     try {
-      final response = await _dioClient.get(ApiConstants.coupons);
+      final response = await _dioClient.get(
+        ApiConstants.coupons,
+        queryParameters: {
+          if (status != null && status.isNotEmpty) 'status': status,
+        },
+      );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         if (data is List) return ApiResult.success(List<dynamic>.from(data));
         return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
       }
       return ApiResult.failure(response.data['message'] ?? '获取优惠券列表失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> deleteCoupon(int id) async {
+    try {
+      final response = await _dioClient.delete('${ApiConstants.coupons}$id');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '删除优惠券失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> distributeCoupon(int couponId, int userId) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.coupons}$couponId/distribute',
+        data: {'user_id': userId},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '发放优惠券失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

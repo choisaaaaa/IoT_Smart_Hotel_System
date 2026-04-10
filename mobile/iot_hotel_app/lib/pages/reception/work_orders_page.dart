@@ -385,12 +385,11 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
               .createWorkOrder(data);
           if (result.success) {
             _loadMaintenanceOrders();
-            if (mounted) {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('工单创建成功')),
-              );
-            }
+            if (!context.mounted) return;
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('工单创建成功')),
+            );
           }
         },
       ),
@@ -424,7 +423,7 @@ class _StatCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -523,7 +522,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -537,7 +536,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: priorityColor.withOpacity(0.1),
+                  color: priorityColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -553,7 +552,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -672,7 +671,7 @@ class _CleaningTaskCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -684,7 +683,7 @@ class _CleaningTaskCard extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: isCleaning ? AppColors.warning.withOpacity(0.1) : AppColors.success.withOpacity(0.1),
+              color: isCleaning ? AppColors.warning.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -714,7 +713,7 @@ class _CleaningTaskCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: isCleaning ? AppColors.warning.withOpacity(0.1) : AppColors.success.withOpacity(0.1),
+                    color: isCleaning ? AppColors.warning.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -763,7 +762,6 @@ class _CreateWorkOrderModalState extends State<_CreateWorkOrderModal> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   String _priority = 'medium';
-  int? _roomId;
 
   @override
   void dispose() {
@@ -834,7 +832,7 @@ class _CreateWorkOrderModalState extends State<_CreateWorkOrderModal> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _priority,
+                  initialValue: _priority,
                   decoration: const InputDecoration(
                     labelText: '优先级',
                     border: OutlineInputBorder(),

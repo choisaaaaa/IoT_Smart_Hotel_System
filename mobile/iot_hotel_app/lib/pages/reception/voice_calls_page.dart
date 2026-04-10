@@ -18,7 +18,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   bool _isOnline = false;
   String? _clientName;
   Map<String, dynamic>? _onlineStatus;
-  List<Map<String, dynamic>> _callHistory = [];
+  final List<Map<String, dynamic>> _callHistory = [];
   List<dynamic> _rooms = [];
   StreamSubscription? _callEventSubscription;
   bool _isLoading = true;
@@ -108,7 +108,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.phone_in_talk, size: 40, color: AppColors.primary),
@@ -294,7 +294,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -306,7 +306,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: _isOnline ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              color: _isOnline ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -553,7 +553,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -609,7 +609,7 @@ class _CallButton extends StatelessWidget {
           color: isOnline ? Colors.white : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isOnline ? AppColors.primary.withOpacity(0.3) : Colors.grey[300]!,
+            color: isOnline ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey[300]!,
           ),
         ),
         child: Column(
@@ -620,7 +620,7 @@ class _CallButton extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isOnline ? AppColors.primary.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                    color: isOnline ? AppColors.primary.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(

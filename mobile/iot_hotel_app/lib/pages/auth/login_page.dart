@@ -82,7 +82,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   phoneCtrl.text.trim(),
                   pwdCtrl.text,
                 );
-                if (ctx.mounted) {
+                if (result.success) {
+                  if (!ctx.mounted || !mounted) return;
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -92,7 +93,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   );
                 }
               } catch (e) {
-                if (ctx.mounted) Navigator.pop(ctx);
+                if (!ctx.mounted || !mounted) return;
+                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('重置失败：$e')),
                 );

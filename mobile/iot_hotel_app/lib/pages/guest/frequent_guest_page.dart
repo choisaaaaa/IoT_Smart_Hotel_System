@@ -92,7 +92,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: roomTypePreference,
+                    initialValue: roomTypePreference,
                     decoration: InputDecoration(
                       labelText: '房型偏好',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -108,7 +108,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: floorPreference,
+                    initialValue: floorPreference,
                     decoration: InputDecoration(
                       labelText: '楼层偏好',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

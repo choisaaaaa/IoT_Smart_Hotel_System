@@ -24,7 +24,7 @@ class HotelDetailPage extends ConsumerStatefulWidget {
 }
 
 class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
-  List<dynamic> _reviews = [];
+  final List<dynamic> _reviews = [];
   bool _isLoadingReviews = false;
   bool _hasMoreReviews = true;
   int _reviewPage = 1;
@@ -262,8 +262,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         background: Image.network(
           imageUrl,
           fit: BoxFit.cover,
-          errorBuilder: (ctx, _, __) => Container(color: AppColors.divider, child: const Icon(Icons.hotel, size: 64, color: AppColors.textHint)),
-        ),
+          errorBuilder: (ctx, _, e) => Container(color: AppColors.divider, child: const Icon(Icons.hotel, size: 64, color: AppColors.textHint))),
       ),
     );
   }
@@ -504,16 +503,15 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                             onPressed: () async {
                               final isLoggedIn = await ref.read(authServiceProvider).isLoggedIn();
                               if (!isLoggedIn) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('请先登录后再预订'), backgroundColor: AppColors.warning),
-                                  );
-                                  context.push('/login');
-                                }
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('请先登录后再预订'), backgroundColor: AppColors.warning),
+                                );
+                                context.push('/login');
                                 return;
                               }
-                              if (mounted) {
-                                context.push('/booking-flow', extra: {
+                              if (!context.mounted) return;
+                              context.push('/booking-flow', extra: {
                                   'hotelName': _hotelInfo?['name'] ?? '智联酒店',
                                   'hotelId': widget.hotelId,
                                   'roomType': roomName,
@@ -522,7 +520,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                                   'checkInDate': _checkInDate,
                                   'checkOutDate': _checkOutDate,
                                 });
-                              }
                             },
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,

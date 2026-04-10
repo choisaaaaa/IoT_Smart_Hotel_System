@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/network/api_result.dart';
 import '../../services/room_type_service.dart';
 
 class RoomTypeManagePage extends ConsumerStatefulWidget {
@@ -224,12 +225,12 @@ class _RoomTypeManagePageState extends ConsumerState<RoomTypeManagePage> {
 
                     if (result.success) {
                       _loadRoomTypes();
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(isEdit ? '房型已更新' : '房型已创建')),
-                        );
-                      }
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(isEdit ? '房型已更新' : '房型已创建')),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -331,7 +332,7 @@ class _RoomTypeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -345,7 +346,7 @@ class _RoomTypeCard extends StatelessWidget {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.hotel, color: AppColors.primary, size: 32),
@@ -364,7 +365,7 @@ class _RoomTypeCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(

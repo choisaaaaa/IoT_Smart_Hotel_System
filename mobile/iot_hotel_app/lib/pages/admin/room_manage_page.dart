@@ -220,14 +220,14 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
         DropdownButtonFormField<int>(
           decoration: const InputDecoration(labelText: '房型 *'),
           items: roomTypes.map<DropdownMenuItem<int>>((rt) => DropdownMenuItem(value: rt['id'] as int, child: Text(rt['name'] ?? rt['type_name'] ?? '房型${rt['id']}'))).toList(),
-          value: selectedRoomTypeId,
+          initialValue: selectedRoomTypeId,
           onChanged: (v) => setDialogState(() => selectedRoomTypeId = v),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<int>(
           decoration: const InputDecoration(labelText: '楼层 *'),
           items: floors.map<DropdownMenuItem<int>>((f) => DropdownMenuItem(value: f['id'] as int, child: Text('${f['floor_number'] ?? f['name'] ?? f['id']}F'))).toList(),
-          value: selectedFloorId,
+          initialValue: selectedFloorId,
           onChanged: (v) => setDialogState(() => selectedFloorId = v),
         ),
         const SizedBox(height: 12),

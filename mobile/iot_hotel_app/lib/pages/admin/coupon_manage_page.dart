@@ -148,7 +148,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: couponType,
+                            initialValue: couponType,
                             decoration: const InputDecoration(
                               labelText: '优惠券类型',
                               border: OutlineInputBorder(),
@@ -295,12 +295,12 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                       final result = await ref.read(couponServiceProvider).createCoupon(data);
                       if (result.success) {
                         _loadCoupons();
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('优惠券创建成功')),
-                          );
-                        }
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('优惠券创建成功')),
+                        );
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -361,7 +361,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -408,12 +408,12 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                       userId,
                     );
                     if (result.success) {
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('优惠券发放成功')),
-                        );
-                      }
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('优惠券发放成功')),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -606,7 +606,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -729,7 +729,7 @@ class _CouponCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -747,7 +747,7 @@ class _CouponCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -763,7 +763,7 @@ class _CouponCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

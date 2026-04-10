@@ -135,10 +135,10 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
     final type = coupon['type']?.toString();
     if (type == 'discount') {
       final discount = coupon['discount'] ?? coupon['value'];
-      return '${discount}折';
+      return '$discount折';
     }
     final value = coupon['value'] ?? coupon['amount'] ?? 0;
-    return '¥${value}';
+    return '¥$value';
   }
 
   String _getCouponTypeLabel(String? type) {

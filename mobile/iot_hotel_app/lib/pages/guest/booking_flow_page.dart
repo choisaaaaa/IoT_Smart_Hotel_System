@@ -38,7 +38,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   final _idNumberController = TextEditingController();
   final _specialRequestController = TextEditingController();
   bool _isLoading = false;
-  int _roomCount = 1;
+  final int _roomCount = 1;
   List<dynamic> _coupons = [];
   dynamic _selectedCoupon;
   // ignore: unused_field
@@ -266,9 +266,17 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
             ]),
             const SizedBox(height: 12),
             _buildSectionCard('支付方式', [
-              _buildPaymentOption('balance', Icons.account_balance_wallet_outlined, '余额支付 (推荐)', Colors.blue),
-              _buildPaymentOption('wechat', Icons.wechat_outlined, '微信支付', Colors.green),
-              _buildPaymentOption('alipay', Icons.payment_outlined, '支付宝', Colors.blueAccent),
+              RadioGroup<String>(
+                groupValue: _paymentMethod,
+                onChanged: (v) => setState(() => _paymentMethod = v!),
+                child: Column(
+                  children: [
+                    _buildPaymentOption('balance', Icons.account_balance_wallet_outlined, '余额支付 (推荐)', Colors.blue),
+                    _buildPaymentOption('wechat', Icons.wechat_outlined, '微信支付', Colors.green),
+                    _buildPaymentOption('alipay', Icons.payment_outlined, '支付宝', Colors.blueAccent),
+                  ],
+                ),
+              ),
             ]),
             const SizedBox(height: 100),
           ],
@@ -425,8 +433,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           children: [
             Radio<String>(
               value: value,
-              groupValue: _paymentMethod,
-              onChanged: (v) => setState(() => _paymentMethod = v!),
               activeColor: AppColors.primary,
             ),
             Icon(icon, color: iconColor, size: 20),

@@ -348,19 +348,16 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       });
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('申请已提交，请等待审核'), backgroundColor: AppColors.success));
-          _loadData();
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('申请已提交，请等待审核'), backgroundColor: AppColors.success));
+        _loadData();
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.data['message'] ?? '提交失败')));
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.data['message'] ?? '提交失败')));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('提交异常：$e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('提交异常：$e')));
     }
   }
 

@@ -20,7 +20,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
   final _idNumberController = TextEditingController();
   final _plateController = TextEditingController();
   String _idType = 'idcard';
-  String _arrivalTime = '';
+  final String _arrivalTime = '';
   bool _isSearching = false;
   bool _isConfirming = false;
   Map<String, dynamic>? _foundBooking;
@@ -376,7 +376,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                       const Text('证件类型', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String>(
-                        value: _idType,
+                        initialValue: _idType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

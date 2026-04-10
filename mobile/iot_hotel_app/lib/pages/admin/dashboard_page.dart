@@ -14,8 +14,6 @@ import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
 import 'reports_page.dart';
-import 'environment_monitor_page.dart';
-import 'price_calendar_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});
@@ -410,13 +408,13 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
         if (note != null) 'review_note': note,
       });
       if (res.statusCode == 200 && res.data['code'] == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'approved' ? '已通过' : '已拒绝'), backgroundColor: AppColors.success));
-          _loadApplications();
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'approved' ? '已通过' : '已拒绝'), backgroundColor: AppColors.success));
+        _loadApplications();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
     }
   }
 
