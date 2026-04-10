@@ -727,7 +727,7 @@ export class AIButlerService {
               if (!isResolved) {
                 isResolved = true;
                 if (audioChunks.length > 0) {
-                  const fullAudio = Buffer.concat(audioChunks);
+                  const fullAudio = Buffer.concat(audioChunks as Uint8Array[]);
                   logger.info(`🎉 [超拟人] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
                   resolve(fullAudio.toString('base64'));
                 } else {
@@ -747,7 +747,7 @@ export class AIButlerService {
           if (!isResolved) {
             isResolved = true;
             if (audioChunks.length > 0) {
-              resolve(Buffer.concat(audioChunks).toString('base64'));
+              resolve(Buffer.concat(audioChunks as Uint8Array[]).toString('base64'));
             } else {
               reject(new Error('连接关闭无数据'));
             }
@@ -828,7 +828,7 @@ export class AIButlerService {
               if (!isResolved) {
                 isResolved = true;
                 if (audioChunks.length > 0) {
-                  const fullAudio = Buffer.concat(audioChunks);
+                  const fullAudio = Buffer.concat(audioChunks as Uint8Array[]);
                   logger.info(`🎉 [TTS v2] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
                   resolve(fullAudio.toString('base64'));
                 } else {
@@ -848,7 +848,7 @@ export class AIButlerService {
           if (!isResolved) {
             isResolved = true;
             if (audioChunks.length > 0) {
-              resolve(Buffer.concat(audioChunks).toString('base64'));
+              resolve(Buffer.concat(audioChunks as Uint8Array[]).toString('base64'));
             } else {
               reject(new Error('连接关闭无数据'));
             }
