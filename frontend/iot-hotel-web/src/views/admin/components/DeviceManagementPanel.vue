@@ -106,7 +106,7 @@
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="controlModalVisible" :title="`控制设备 - ${currentDevice?.device_name} (${currentDevice?.room_number})`" @ok="executeControl" :confirmLoading="controlling" width="500px">
+    <a-modal v-model:open="controlModalVisible" :title="`控制设备 - ${currentDevice?.device_name} (${currentDevice ? getRoomNumber(currentDevice.room_id) : ''})`" @ok="executeControl" :confirmLoading="controlling" width="500px">
       <a-form layout="vertical" v-if="currentDevice">
         <a-alert message="设备控制" :description="`正在控制 ${currentDevice.device_name}，当前状态: ${currentDevice.is_running ? '运行中' : '已关闭'}，当前值: ${currentDevice.current_value}${currentDevice.unit}`" show-icon style="margin-bottom: 16px;" />
 
@@ -140,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import { CheckCircleFilled, PlayCircleFilled, MinusCircleFilled, CloseCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type DeviceInfo } from '@/api/environment'
