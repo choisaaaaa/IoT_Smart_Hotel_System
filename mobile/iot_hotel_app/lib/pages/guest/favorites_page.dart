@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
-import '../../services/auth_service.dart';
 import '../../core/auth/auth_state_notifier.dart';
 
 class FavoritesPage extends ConsumerStatefulWidget {

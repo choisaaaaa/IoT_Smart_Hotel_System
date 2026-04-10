@@ -62,7 +62,7 @@ class ProfilePage extends ConsumerWidget {
               _buildMemberCard(ref),
               _buildAssetStats(ref),
               _buildOrderSection(context),
-              _buildFavoritesRow(context),
+              _buildFavoritesRow(context, ref),
               _buildToolSection(context),
               const SizedBox(height: 40),
             ],
@@ -434,7 +434,7 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildFavoritesRow(BuildContext context) {
+  Widget _buildFavoritesRow(BuildContext context, WidgetRef ref) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -454,7 +454,7 @@ class ProfilePage extends ConsumerWidget {
                   const Icon(Icons.star_border_rounded, size: 18, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
                   FutureBuilder<int>(
-                    future: _getFavoritesCount(),
+                    future: _getFavoritesCount(ref),
                     builder: (context, snapshot) {
                       final count = snapshot.data ?? 0;
                       return Text('我收藏的 $count >', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary));
@@ -484,10 +484,12 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Future<int> _getFavoritesCount() async {
+  Future<int> _getFavoritesCount(WidgetRef ref) async {
     try {
+      final userId = ref.read(authStateProvider).userId ?? '';
+      if (userId.isEmpty) return 0;
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(AppConstants.favoriteHotelsKey) ?? '[]';
+      final raw = prefs.getString('${AppConstants.favoriteHotelsKey}_$userId') ?? '[]';
       final List<dynamic> decoded = jsonDecode(raw);
       return decoded.length;
     } catch (e) {

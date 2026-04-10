@@ -515,6 +515,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                               if (mounted) {
                                 context.push('/booking-flow', extra: {
                                   'hotelName': _hotelInfo?['name'] ?? '智联酒店',
+                                  'hotelId': widget.hotelId,
                                   'roomType': roomName,
                                   'price': discountedPrice,
                                   'roomId': room['id'],

@@ -13,6 +13,7 @@ class BookingFlowPage extends ConsumerStatefulWidget {
   final String roomType;
   final double price;
   final int roomId;
+  final int hotelId;
   final DateTime checkInDate;
   final DateTime checkOutDate;
 
@@ -22,6 +23,7 @@ class BookingFlowPage extends ConsumerStatefulWidget {
     required this.roomType,
     required this.price,
     required this.roomId,
+    required this.hotelId,
     required this.checkInDate,
     required this.checkOutDate,
   });
@@ -39,6 +41,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   int _roomCount = 1;
   List<dynamic> _coupons = [];
   dynamic _selectedCoupon;
+  // ignore: unused_field
   bool _isLoadingCoupons = false;
   String _paymentMethod = 'balance'; // balance, wechat, alipay
 
@@ -63,6 +66,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     }
   }
 
+  // ignore: unused_element
   void _showCouponSelector() async {
     final selected = await showModalBottomSheet<dynamic>(
       context: context,
@@ -106,6 +110,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     try {
       // 1. 创建预订 (状态为待支付)
       final result = await ref.read(bookingServiceProvider).createBooking({
+        'hotel_id': widget.hotelId,
         'room_id': widget.roomId,
         'guest_name': _nameController.text.trim(),
         'guest_phone': _phoneController.text.trim(),

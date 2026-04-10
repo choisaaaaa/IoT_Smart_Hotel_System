@@ -17,7 +17,7 @@ class RoomServicePage extends ConsumerStatefulWidget {
 }
 
 class _RoomServicePageState extends ConsumerState<RoomServicePage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   bool _isLoading = true;
   bool _isCheckedIn = false;
@@ -29,14 +29,24 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     _checkCheckinStatus();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _mqttService.disconnect();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当应用从后台返回前台时，重新检测入住状态
+    if (state == AppLifecycleState.resumed) {
+      _checkCheckinStatus();
+    }
   }
 
   Future<void> _checkCheckinStatus() async {
@@ -52,6 +62,14 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           });
           _fetchDevices();
           _connectMqtt();
+        } else {
+          // 没有checked_in状态的预订，重置状态
+          setState(() {
+            _isCheckedIn = false;
+            _currentStay = null;
+            _devices = [];
+          });
+          _mqttService.disconnect();
         }
       }
     } catch (e) {
@@ -198,7 +216,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
 
   Widget _buildDeviceControlTab() {
     return RefreshIndicator(
-      onRefresh: _fetchDevices,
+      onRefresh: _checkCheckinStatus,
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _devices.isEmpty

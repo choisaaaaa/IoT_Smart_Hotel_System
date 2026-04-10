@@ -94,6 +94,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             roomType: extra['roomType'] ?? '标准间',
             price: extra['price'] ?? 0.0,
             roomId: extra['roomId'] ?? 0,
+            hotelId: extra['hotelId'] ?? 1,
             checkInDate: extra['checkInDate'] ?? DateTime.now(),
             checkOutDate: extra['checkOutDate'] ?? DateTime.now().add(const Duration(days: 1)),
           );

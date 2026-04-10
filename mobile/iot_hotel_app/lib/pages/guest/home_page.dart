@@ -30,7 +30,6 @@ class HomePage extends ConsumerWidget {
               _buildSearchCard(context),
               _buildQuickActions(context),
               _buildBanner(),
-              _buildMemberPrivilege(ref),
               const SizedBox(height: 40),
             ],
           ),
@@ -256,71 +255,6 @@ class HomePage extends ConsumerWidget {
           gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent]),
         ),
         child: const Text('把春天装进眼睛里\n花间赏花季邀您入画', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildMemberPrivilege(WidgetRef ref) {
-    final memberService = ref.watch(memberServiceProvider);
-
-    return FutureBuilder(
-      future: memberService.getMyAssets(),
-      builder: (context, snapshot) {
-        final assets = (snapshot.data as ApiResult?)?.data ?? {};
-        final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
-        final level = MemberLevel.fromExperience(totalSpent.floor());
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF8E1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.gold),
-                        child: const Text('H', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(level.label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF795548))),
-                      const SizedBox(width: 8),
-                      Text('您可享受${level.index * 20 + 5}项特权', style: TextStyle(fontSize: 12, color: Colors.brown.withValues(alpha: 0.7))),
-                    ],
-                  ),
-                  const Text('更多玩法 >', style: TextStyle(fontSize: 12, color: Colors.brown)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildPrivilegeItem('月月领券', '每月1号见'),
-                  _buildPrivilegeItem('积分游乐园', '抽10000积分'),
-                  _buildPrivilegeItem('超值特权卡', '积分间夜限时加倍'),
-                ],
-              ),
-            ],
-          ),
-        );
-      }
-    );
-  }
-
-  Widget _buildPrivilegeItem(String title, String sub) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.brown)),
-          Text(sub, style: const TextStyle(fontSize: 10, color: Colors.brown)),
-        ],
       ),
     );
   }

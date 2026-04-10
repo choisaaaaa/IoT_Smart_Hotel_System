@@ -68,7 +68,31 @@ class BookingService {
       }
       return ApiResult.failure(response.data['message'] ?? '查询订单失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      try {
+        final listResponse = await _dioClient.get(
+          ApiConstants.bookings,
+          queryParameters: {'pageSize': 50},
+        );
+        if (listResponse.statusCode == 200 && listResponse.data['code'] == 200) {
+          final data = listResponse.data['data'];
+          List<dynamic> bookings = [];
+          if (data is Map && data.containsKey('list')) {
+            bookings = List<dynamic>.from(data['list'] ?? []);
+          } else if (data is List) {
+            bookings = List<dynamic>.from(data);
+          }
+          for (final b in bookings) {
+            if (b['id']?.toString() == keyword ||
+                b['booking_number']?.toString() == keyword ||
+                b['booking_no']?.toString() == keyword ||
+                b['guest_phone']?.toString() == keyword ||
+                b['guest_name']?.toString() == keyword) {
+              return ApiResult.success(Map<String, dynamic>.from(b));
+            }
+          }
+        }
+      } catch (_) {}
+      return ApiResult.failure('未找到匹配的预订');
     }
   }
 

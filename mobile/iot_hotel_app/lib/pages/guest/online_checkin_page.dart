@@ -111,6 +111,12 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         final data = result.data;
         setState(() {
           _roomPin = data?['room_pin']?.toString() ?? '';
+          // 更新房间信息
+          if (_foundBooking != null && data != null) {
+            _foundBooking!['room_name'] = data['room_name'];
+            _foundBooking!['room_number'] = data['room_number'];
+            _foundBooking!['status'] = 'checked_in';
+          }
           _currentStep = 3;
         });
       } else if (mounted) {
@@ -509,7 +515,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                   const Text('入住房间', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
                   const SizedBox(height: 4),
                   Text(
-                    _foundBooking?['room_type'] ?? '${_foundBooking?['room_id'] ?? '-'}号房',
+                    _foundBooking?['room_name'] ?? _foundBooking?['room_number'] ?? '${_foundBooking?['room_id'] ?? '-'}号房',
                     style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                   if (_roomPin.isNotEmpty) ...[
