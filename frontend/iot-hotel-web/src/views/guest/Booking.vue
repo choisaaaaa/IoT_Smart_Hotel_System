@@ -560,15 +560,15 @@
                       <span>¥{{ priceBaseTotal }}</span>
                     </div>
                     <!-- 强制显示所有优惠项以便 Debug，包含为 0 的情况 -->
-                    <div class="item discount">
+                    <div v-if="priceMemberDiscount > 0" class="item discount">
                       <span>会员优惠 ({{ memberLevelLabel || '未获取' }})</span>
                       <span>-¥{{ priceMemberDiscount }}</span>
                     </div>
-                    <div class="item discount">
+                    <div v-if="priceCouponDiscount > 0" class="item discount">
                       <span>优惠券</span>
                       <span>-¥{{ priceCouponDiscount }}</span>
                     </div>
-                    <div class="item discount">
+                    <div v-if="pricePointsDiscount > 0" class="item discount">
                       <span>积分抵扣</span>
                       <span>-¥{{ pricePointsDiscount }}</span>
                     </div>
@@ -580,17 +580,6 @@
                       <span class="unit">¥</span>
                       <span class="num">{{ finalTotalPrice }}</span>
                     </div>
-                  </div>
-
-                  <!-- Debug Info for User -->
-                  <div v-if="priceDebugInfo" class="debug-panel-ota">
-                    <div class="debug-header"><InfoCircleOutlined /> 计算诊断</div>
-                    <div class="debug-item"><span>识别手机号:</span> <span>{{ priceDebugInfo.received_phone }}</span></div>
-                    <div class="debug-item"><span>会员等级:</span> <span>{{ priceDebugInfo.member_level_raw }} ({{ priceDebugInfo.member_found ? '已识别' : '未匹配' }})</span></div>
-                    <div class="debug-item"><span>应用折扣:</span> <span>{{ (priceDebugInfo.discount_rate_applied * 10).toFixed(1) }} 折</span></div>
-                    <div class="debug-item"><span>房费底价:</span> <span>¥{{ priceDebugInfo.base_price_raw }}</span></div>
-                    <div class="debug-item"><span>会员价后:</span> <span>¥{{ priceDebugInfo.total_after_member_discount }}</span></div>
-                    <div class="debug-item tip">※ 若折扣异常，请核对手机号是否正确。</div>
                   </div>
 
                   <a-button type="primary" block class="ctrip-confirm-btn" :loading="submitting" @click="handlePreSubmit">
@@ -908,7 +897,6 @@ const priceCouponDiscount = ref(0)
 const pricePointsDiscount = ref(0)
 
 const priceBaseTotal = ref(0)
-const priceDebugInfo = ref<any>(null)
 
 // 当选中的房型或日期变化时，重置所有价格
 watch([selectedRoom, nights], () => {
@@ -940,7 +928,6 @@ const updateCalculatedPrice = async () => {
     })
     
     const data = res.data
-    priceDebugInfo.value = data.debug // 存储调试信息
     finalTotalPrice.value = data.total_price
     memberDiscountRate.value = data.discount_rate
     priceBaseTotal.value = data.base_price || priceBaseTotal.value
@@ -2243,46 +2230,6 @@ watch(() => appStore.userInfo, (newVal) => {
 .final-total-ctrip .val .num {
   font-size: 36px;
   font-weight: 800;
-}
-
-/* Debug Panel OTA Style */
-.debug-panel-ota {
-  margin: 16px 0;
-  padding: 12px;
-  background: #f8faff;
-  border: 1px dashed #d6e4ff;
-  border-radius: 8px;
-  font-size: 12px;
-}
-
-.debug-header {
-  color: #1890ff;
-  font-weight: 600;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.debug-item {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  color: #595959;
-}
-
-.debug-item span:last-child {
-  font-family: monospace;
-  font-weight: 600;
-  color: #262626;
-}
-
-.debug-item.tip {
-  margin-top: 8px;
-  color: #fa8c16;
-  font-style: italic;
-  display: block;
-  text-align: center;
 }
 
 .ctrip-confirm-btn {
