@@ -58,4 +58,12 @@ class LocalStorage {
     await remove(AppConstants.tokenKey);
     await remove(AppConstants.sessionTokenKey);
   }
+
+  Future<void> saveUserRole(String role) async {
+    await save(AppConstants.userRoleKey, role);
+  }
+
+  Future<String?> getUserRole() async {
+    return read(AppConstants.userRoleKey);
+  }
 }

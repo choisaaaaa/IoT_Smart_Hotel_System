@@ -7,6 +7,7 @@ class AppConstants {
   static const String userInfoKey = 'user_info';
   static const String guestCheckinInfoKey = 'guest_checkin_info';
   static const String favoriteHotelsKey = 'hotel_favorites';
+  static const String userRoleKey = 'user_role';
 
   static const List<String> userRoles = ['admin', 'system', 'receptionist', 'staff', 'user'];
 

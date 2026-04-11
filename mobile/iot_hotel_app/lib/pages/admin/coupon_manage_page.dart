@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/storage/local_storage.dart';
 import '../../services/coupon_service.dart';
 
 class CouponManagePage extends ConsumerStatefulWidget {
@@ -16,17 +17,39 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
   bool _isLoading = true;
   List<dynamic> _coupons = [];
   String _statusFilter = '';
+  int? _selectedHotelId;
+  List<dynamic> _hotels = [];
+  bool _isSystemAdmin = false;
+  bool _isStaff = false;
 
   @override
   void initState() {
     super.initState();
+    _checkUserRole();
+    _loadHotels();
     _loadCoupons();
+  }
+
+  Future<void> _checkUserRole() async {
+    final role = await LocalStorage.getUserRole();
+    setState(() {
+      _isSystemAdmin = role == 'system';
+      _isStaff = role == 'staff';
+    });
+  }
+
+  Future<void> _loadHotels() async {
+    final result = await ref.read(couponServiceProvider).getHotels();
+    if (result.success && mounted) {
+      setState(() => _hotels = result.data ?? []);
+    }
   }
 
   Future<void> _loadCoupons() async {
     setState(() => _isLoading = true);
     final result = await ref.read(couponServiceProvider).getCoupons(
           status: _statusFilter.isEmpty ? null : _statusFilter,
+          hotelId: _selectedHotelId,
         );
     if (result.success && mounted) {
       setState(() => _coupons = result.data ?? []);
@@ -76,17 +99,53 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
     }
   }
 
+  Future<void> _redeemCoupon(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('核销优惠券'),
+        content: const Text('确定要核销此优惠券吗？核销后不可恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('确认核销'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final result = await ref.read(couponServiceProvider).redeemCoupon(id);
+      if (result.success) {
+        _loadCoupons();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('优惠券已核销')),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '核销失败')),
+        );
+      }
+    }
+  }
+
   void _showCreateDialog() {
     final codeController = TextEditingController();
     final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
     final discountController = TextEditingController();
     final minAmountController = TextEditingController();
-    final maxDiscountController = TextEditingController();
     final quantityController = TextEditingController(text: '100');
     String couponType = 'percentage';
     DateTime? startDate;
     DateTime? endDate;
+    int? selectedHotelForCreate;
 
     showModalBottomSheet(
       context: context,
@@ -155,11 +214,11 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             ),
                             items: const [
                               DropdownMenuItem(
-                                value: 'percentage',
+                                value: 'discount',
                                 child: Text('折扣券 (百分比折扣)'),
                               ),
                               DropdownMenuItem(
-                                value: 'fixed',
+                                value: 'cash',
                                 child: Text('直减券 (固定金额)'),
                               ),
                             ],
@@ -173,10 +232,10 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           TextField(
                             controller: discountController,
                             decoration: InputDecoration(
-                              labelText: couponType == 'percentage' ? '折扣率 (%) *' : '减免金额 (元) *',
-                              hintText: couponType == 'percentage' ? '如：20 表示8折' : '如：50',
-                              border: const OutlineInputBorder(),
-                              suffixText: couponType == 'percentage' ? '%' : '元',
+                              labelText: couponType == 'discount' ? '折扣率 (%) *' : '减免金额 (元) *',
+                              hintText: couponType == 'discount' ? '如：20 表示8折' : '如：50',
+                              border: OutlineInputBorder(),
+                              suffixText: couponType == 'discount' ? '%' : '元',
                             ),
                             keyboardType: TextInputType.number,
                           ),
@@ -191,19 +250,6 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             ),
                             keyboardType: TextInputType.number,
                           ),
-                          if (couponType == 'percentage') ...[
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: maxDiscountController,
-                              decoration: const InputDecoration(
-                                labelText: '最高减免金额',
-                                hintText: '0 表示无限制',
-                                border: OutlineInputBorder(),
-                                prefixText: '¥',
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ],
                           const SizedBox(height: 12),
                           TextField(
                             controller: quantityController,
@@ -214,6 +260,32 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             keyboardType: TextInputType.number,
                           ),
                           const SizedBox(height: 12),
+                          if (_isSystemAdmin && _hotels.isNotEmpty) ...[
+                            DropdownButtonFormField<int>(
+                              decoration: const InputDecoration(
+                                labelText: '选择门店 *',
+                                border: OutlineInputBorder(),
+                                helperText: '不选则创建为通用券（所有门店可用）',
+                              ),
+                              value: selectedHotelForCreate,
+                              items: [
+                                const DropdownMenuItem<int>(
+                                  value: 0,
+                                  child: Text('通用券（所有门店可用）'),
+                                ),
+                                ..._hotels.map<DropdownMenuItem<int>>((hotel) {
+                                  return DropdownMenuItem<int>(
+                                    value: hotel['id'] as int,
+                                    child: Text(hotel['hotel_name']?.toString() ?? ''),
+                                  );
+                                }),
+                              ],
+                              onChanged: (val) {
+                                setModalState(() => selectedHotelForCreate = val);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           ListTile(
                             title: const Text('开始日期'),
                             subtitle: Text(
@@ -254,16 +326,6 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                               }
                             },
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: descriptionController,
-                            decoration: const InputDecoration(
-                              labelText: '优惠券描述',
-                              hintText: '使用说明、限制条件等',
-                              border: OutlineInputBorder(),
-                            ),
-                            maxLines: 2,
-                          ),
                         ],
                       ),
                     ),
@@ -271,26 +333,23 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () async {
-                      final data = {
-                        'code': codeController.text.toUpperCase(),
-                        'name': nameController.text,
-                        'type': couponType,
+                      final data = <String, dynamic>{
+                        'coupon_code': codeController.text.toUpperCase().trim(),
+                        'coupon_name': nameController.text.trim(),
+                        'coupon_type': couponType,
                         'discount_value': double.tryParse(discountController.text) ?? 0,
                         'min_amount': double.tryParse(minAmountController.text) ?? 0,
-                        'max_discount': couponType == 'percentage'
-                            ? (double.tryParse(maxDiscountController.text) ?? 0)
-                            : null,
-                        'quantity': int.tryParse(quantityController.text) ?? 100,
-                        'start_date': startDate != null
+                        'total_count': int.tryParse(quantityController.text) ?? 100,
+                        'valid_from': startDate != null
                             ? DateFormat('yyyy-MM-dd').format(startDate!)
                             : null,
-                        'end_date': endDate != null
+                        'valid_to': endDate != null
                             ? DateFormat('yyyy-MM-dd').format(endDate!)
                             : null,
-                        'description': descriptionController.text.isEmpty
-                            ? null
-                            : descriptionController.text,
                       };
+                      if (_isSystemAdmin && selectedHotelForCreate != null) {
+                        data['hotel_id'] = selectedHotelForCreate;
+                      }
 
                       final result = await ref.read(couponServiceProvider).createCoupon(data);
                       if (result.success) {
@@ -320,7 +379,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
   }
 
   void _showDistributeDialog(dynamic coupon) {
-    final userIdController = TextEditingController();
+    final phoneController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -368,7 +427,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        coupon['name'] ?? '',
+                        coupon['coupon_name'] ?? '',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -376,7 +435,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '代码: ${coupon['code']}',
+                        '代码: ${coupon['coupon_code']}',
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                     ],
@@ -384,28 +443,28 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                 ),
                 const SizedBox(height: 20),
                 TextField(
-                  controller: userIdController,
+                  controller: phoneController,
                   decoration: const InputDecoration(
-                    labelText: '用户ID *',
-                    hintText: '输入要发放的用户ID',
+                    labelText: '用户手机号 *',
+                    hintText: '输入要发放的用户手机号',
                     border: OutlineInputBorder(),
                   ),
-                  keyboardType: TextInputType.number,
+                  keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () async {
-                    final userId = int.tryParse(userIdController.text);
-                    if (userId == null) {
+                    final phone = phoneController.text.trim();
+                    if (phone.isEmpty || phone.length < 11) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('请输入有效的用户ID')),
+                        const SnackBar(content: Text('请输入有效的手机号')),
                       );
                       return;
                     }
 
                     final result = await ref.read(couponServiceProvider).distributeCoupon(
                       coupon['id'],
-                      userId,
+                      phone,
                     );
                     if (result.success) {
                       if (!ctx.mounted) return;
@@ -438,7 +497,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('优惠券管理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+        title: Text(_isStaff ? '优惠券核销' : '优惠券管理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
@@ -450,7 +509,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
       ),
       body: Column(
         children: [
-          _buildStatCards(statusCounts),
+          if (!_isStaff) _buildStatCards(statusCounts),
           _buildFilterBar(),
           Expanded(
             child: _isLoading
@@ -462,13 +521,15 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           children: [
                             Icon(Icons.local_offer_outlined, size: 64, color: Colors.grey[300]),
                             const SizedBox(height: 16),
-                            Text('暂无优惠券', style: TextStyle(color: Colors.grey[500])),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: _showCreateDialog,
-                              icon: const Icon(Icons.add),
-                              label: const Text('创建优惠券'),
-                            ),
+                            Text('暂无优惠券', style: TextStyle(color: grey[500])),
+                            if (!_isStaff) ...[
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _showCreateDialog,
+                                icon: const Icon(Icons.add),
+                                label: const Text('创建优惠券'),
+                              ),
+                            ],
                           ],
                         ),
                       )
@@ -483,6 +544,9 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                               coupon: coupon,
                               onDistribute: () => _showDistributeDialog(coupon),
                               onDelete: () => _deleteCoupon(coupon['id']),
+                              onRedeem: () => _redeemCoupon(coupon['id']),
+                              isStaff: _isStaff,
+                              isSystemAdmin: _isSystemAdmin,
                             );
                           },
                         ),
@@ -490,12 +554,13 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateDialog,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add),
-        label: const Text('新建优惠券'),
-      ),
+      if (!_isStaff)
+        FloatingActionButton.extended(
+          onPressed: _showCreateDialog,
+          backgroundColor: AppColors.primary,
+          icon: const Icon(Icons.add),
+          label: const Text('新建优惠券'),
+        ),
     );
   }
 
@@ -544,9 +609,9 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
           children: [
             _FilterChip(
               label: '全部',
-              isSelected: _statusFilter.isEmpty,
+              isSelected: _statusFilter.isEmpty && _selectedHotelId == null,
               onTap: () {
-                setState(() => _statusFilter = '');
+                setState(() { _statusFilter = ''; _selectedHotelId = null; });
                 _loadCoupons();
               },
             ),
@@ -577,6 +642,33 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                 _loadCoupons();
               },
             ),
+            if (_isSystemAdmin && _hotels.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  hint: const Text('筛选门店', style: TextStyle(fontSize: 13)),
+                  value: _selectedHotelId,
+                  iconSize: 18,
+                  style: const TextStyle(fontSize: 13, color: AppColors.primary),
+                  items: [
+                    const DropdownMenuItem<int>(
+                      value: -1,
+                      child: Text('所有门店', style: TextStyle(fontSize: 13)),
+                    ),
+                    ..._hotels.map<DropdownMenuItem<int>>((h) {
+                      return DropdownMenuItem<int>(
+                        value: h['id'] as int,
+                        child: Text(h['hotel_name']?.toString() ?? '', style: const TextStyle(fontSize: 13)),
+                      );
+                    }),
+                  ],
+                  onChanged: (val) {
+                    setState(() => _selectedHotelId = val == -1 ? null : val);
+                    _loadCoupons();
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -606,7 +698,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -659,7 +751,7 @@ class _FilterChip extends StatelessWidget {
           color: isSelected ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey[300]!,
+            color: isSelected ? AppColors.primary : grey[300]!,
           ),
         ),
         child: Text(
@@ -679,27 +771,35 @@ class _CouponCard extends StatelessWidget {
   final dynamic coupon;
   final VoidCallback onDistribute;
   final VoidCallback onDelete;
+  final VoidCallback onRedeem;
+  final bool isStaff;
+  final bool isSystemAdmin;
 
   const _CouponCard({
     required this.coupon,
     required this.onDistribute,
     required this.onDelete,
+    required this.onRedeem,
+    required this.isStaff,
+    required this.isSystemAdmin,
   });
 
   @override
   Widget build(BuildContext context) {
-    final type = coupon['type'] ?? 'percentage';
+    final type = coupon['coupon_type'] ?? 'discount';
     final status = coupon['status'] ?? 'active';
     final discountValue = coupon['discount_value'] ?? 0;
-    final usedCount = coupon['used_count'] ?? 0;
-    final totalQuantity = coupon['quantity'] ?? 0;
-    final remaining = totalQuantity - usedCount;
+    final receivedCount = coupon['received_count'] ?? 0;
+    final totalQuantity = coupon['total_count'] ?? 0;
+    final remaining = totalQuantity > 0 ? totalQuantity - receivedCount : -1;
+    final hotelName = coupon['hotel_name'];
+    final isGeneral = (coupon['hotel_id'] ?? 0) == 0;
 
     String discountText;
-    if (type == 'percentage') {
+    if (type == 'discount') {
       discountText = '${discountValue.toStringAsFixed(0)}% OFF';
     } else {
-      discountText = '¥${discountValue.toStringAsFixed(0)}';
+      discountText = '\u00a5${discountValue.toStringAsFixed(0)}';
     }
 
     Color statusColor;
@@ -729,7 +829,7 @@ class _CouponCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -775,19 +875,34 @@ class _CouponCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Spacer(),
-                    Text(
-                      '#${coupon['code']}',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
+                    if (hotelName != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isGeneral ? Colors.blue.withValues(alpha: 0.1) : Colors.purple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isGeneral ? '通用' : hotelName.toString(),
+                          style: TextStyle(
+                            color: isGeneral ? Colors.blue : purple,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
+                    const Spacer(),
+                    if (coupon['coupon_code'] != null)
+                      Text(
+                        '#${coupon['coupon_code']}',
+                        style: TextStyle(color: grey[400], fontSize: 12),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  coupon['name'] ?? '',
+                  coupon['coupon_name'] ?? '',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -798,61 +913,66 @@ class _CouponCard extends StatelessWidget {
                   children: [
                     _InfoChip(
                       icon: Icons.confirmation_number,
-                      text: '剩余 $remaining/$totalQuantity',
+                      text: remaining >= 0 ? '剩余 $remaining/$totalQuantity' : '不限量',
                     ),
                     const SizedBox(width: 16),
                     if (coupon['min_amount'] != null && coupon['min_amount'] > 0)
                       _InfoChip(
                         icon: Icons.shopping_cart,
-                        text: '满¥${coupon['min_amount']}可用',
+                        text: '\u00a5${coupon['min_amount']}起',
                       ),
                   ],
                 ),
-                if (coupon['start_date'] != null || coupon['end_date'] != null) ...[
+                if (coupon['valid_from'] != null || coupon['valid_to'] != null) ...[
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.date_range, size: 14, color: Colors.grey[500]),
+                      Icon(Icons.date_range, size: 14, color: grey[500]),
                       const SizedBox(width: 4),
                       Text(
-                        '${coupon['start_date'] ?? '即日起'} 至 ${coupon['end_date'] ?? '长期有效'}',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        '${coupon['valid_from'] ?? '即日起'} 至 ${coupon['valid_to'] ?? '长期有效'}',
+                        style: TextStyle(color: grey[600], fontSize: 12),
                       ),
                     ],
-                  ),
-                ],
-                if (coupon['description'] != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    coupon['description'],
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],
             ),
           ),
-          const Divider(height: 1),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: status == 'active' ? onDistribute : null,
-                  icon: const Icon(Icons.send, size: 18),
-                  label: const Text('发放'),
+          if (!isStaff || status == 'active') const Divider(height: 1),
+          if (isStaff && status == 'active')
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: onRedeem,
+                    icon: const Icon(Icons.qr_code_scanner, size: 18),
+                    label: const Text('核销'),
+                    style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 1, height: 40, child: VerticalDivider()),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                  label: const Text('删除', style: TextStyle(color: Colors.red)),
+              ],
+            )
+          else if (!isStaff)
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: status == 'active' ? onDistribute : null,
+                    icon: const Icon(Icons.send, size: 18),
+                    label: const Text('发放'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 1, height: 40, child: VerticalDivider()),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                    label: const Text('删除', style: TextStyle(color: Colors.red)),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -870,11 +990,11 @@ class _InfoChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.grey[500]),
+        Icon(icon, size: 14, color: grey[500]),
         const SizedBox(width: 4),
         Text(
           text,
-          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          style: TextStyle(color: grey[600], fontSize: 12),
         ),
       ],
     );
