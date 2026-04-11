@@ -81,12 +81,21 @@ class HomePage extends ConsumerWidget {
                     final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
                     final level = MemberLevel.fromExperience(totalSpent.floor());
                     
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('早上好,', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 16)),
-                        Text('${level.label} $displayName ${user != null ? '先生/女士' : ''}', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      ],
+                    return Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('早上好,', style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 16)),
+                          Flexible(
+                            child: Text(
+                              '${level.label} $displayName ${user != null ? '先生/女士' : ''}', 
+                              style: GoogleFonts.notoSansSc(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),

@@ -35,7 +35,7 @@ class BookingService {
 
   Future<ApiResult<Map<String, dynamic>>> getBookingById(int id) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.bookings}$id');
+      final response = await _dioClient.get('${ApiConstants.bookings}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -60,7 +60,7 @@ class BookingService {
   Future<ApiResult<Map<String, dynamic>>> lookupBooking(String keyword) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.bookings}lookup',
+        '${ApiConstants.bookings}/lookup',
         queryParameters: {'keyword': keyword},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -98,7 +98,7 @@ class BookingService {
 
   Future<ApiResult<void>> confirmBooking(int id) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.bookings}$id/confirm');
+      final response = await _dioClient.put('${ApiConstants.bookings}/$id/confirm');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
@@ -110,7 +110,7 @@ class BookingService {
 
   Future<ApiResult<void>> checkin(int id) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.bookings}$id/checkin');
+      final response = await _dioClient.put('${ApiConstants.bookings}/$id/checkin');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
@@ -122,7 +122,7 @@ class BookingService {
 
   Future<ApiResult<void>> checkout(int id) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.bookings}$id/checkout');
+      final response = await _dioClient.put('${ApiConstants.bookings}/$id/checkout');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
@@ -134,7 +134,7 @@ class BookingService {
 
   Future<ApiResult<void>> cancelBooking(int id) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.bookings}$id/cancel');
+      final response = await _dioClient.put('${ApiConstants.bookings}/$id/cancel');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
@@ -146,7 +146,7 @@ class BookingService {
 
   Future<ApiResult<Map<String, dynamic>>> checkinOnline(int bookingId, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.bookings}$bookingId/checkin-online', data: data);
+      final response = await _dioClient.post('${ApiConstants.bookings}/$bookingId/checkin-online', data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -169,7 +169,7 @@ class BookingService {
       if (invoiceType != null) data['invoice_type'] = invoiceType;
       if (remark != null) data['checkout_remark'] = remark;
       final response = await _dioClient.put(
-        '${ApiConstants.bookings}$bookingId/checkout',
+        '${ApiConstants.bookings}/$bookingId/checkout',
         data: data.isNotEmpty ? data : null,
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -186,13 +186,61 @@ class BookingService {
   }) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.bookings}$bookingId/extend',
+        '${ApiConstants.bookings}/$bookingId/extend',
         data: {'check_out_date': newCheckOutDate.toIso8601String().split('T')[0]},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>? ?? {});
       }
       return ApiResult.failure(response.data['message'] ?? '续住申请失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  /// 拒绝预入住申请
+  Future<ApiResult<void>> rejectPreCheckin(int bookingId) async {
+    try {
+      final response = await _dioClient.put(
+        '${ApiConstants.bookings}/$bookingId/reject-pre-checkin',
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '拒绝预入住失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  /// 计算预订价格
+  Future<ApiResult<Map<String, dynamic>>> calculatePrice({
+    required int roomId,
+    required DateTime checkInDate,
+    required DateTime checkOutDate,
+    String? guestPhone,
+    int? couponId,
+    int? usedPoints,
+    int? ratePlanId,
+  }) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.bookings}/calculate-price',
+        data: {
+          'room_id': roomId,
+          'check_in_date': checkInDate.toIso8601String().split('T')[0],
+          'check_out_date': checkOutDate.toIso8601String().split('T')[0],
+          if (guestPhone != null) 'guest_phone': guestPhone,
+          if (couponId != null) 'coupon_id': couponId,
+          if (usedPoints != null) 'used_points': usedPoints,
+          if (ratePlanId != null) 'rate_plan_id': ratePlanId,
+        },
+      );
+      
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '计算价格失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
@@ -247,13 +295,13 @@ class BookingService {
         final keyword = userData['phone'] ?? userData['username'] ?? '';
         if (keyword.isNotEmpty) {
           final lookupResponse = await _dioClient.get(
-            '${ApiConstants.bookings}lookup',
+            '${ApiConstants.bookings}/lookup',
             queryParameters: {'keyword': keyword},
           );
           if (lookupResponse.statusCode == 200 && lookupResponse.data['code'] == 200) {
             final lookupData = lookupResponse.data['data'];
             if (lookupData != null && lookupData['status'] == 'checked_in') {
-              final fullResponse = await _dioClient.get('${ApiConstants.bookings}${lookupData['id']}');
+              final fullResponse = await _dioClient.get('${ApiConstants.bookings}/${lookupData['id']}');
               if (fullResponse.statusCode == 200 && fullResponse.data['code'] == 200) {
                 return ApiResult.success(Map<String, dynamic>.from(fullResponse.data['data']));
               }

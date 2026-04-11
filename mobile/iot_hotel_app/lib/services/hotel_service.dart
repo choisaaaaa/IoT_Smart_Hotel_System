@@ -25,7 +25,7 @@ class HotelService {
       if (destination != null) queryParams['destination'] = destination;
 
       final response = await _dioClient.get(
-        '${ApiConstants.hotels}search',
+        '${ApiConstants.hotels}/search',
         queryParameters: queryParams..removeWhere((key, value) => value == null),
       );
 
@@ -40,7 +40,7 @@ class HotelService {
 
   Future<ApiResult<Map<String, dynamic>>> getHotelById(int hotelId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.hotels}$hotelId');
+      final response = await _dioClient.get('${ApiConstants.hotels}/$hotelId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -54,7 +54,7 @@ class HotelService {
   Future<ApiResult<List<dynamic>>> getRoomAvailability(int hotelId, String checkIn, String checkOut) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.hotels}$hotelId/rooms/availability',
+        '${ApiConstants.hotels}/$hotelId/rooms/availability',
         queryParameters: {
           'check_in': checkIn,
           'check_out': checkOut,
@@ -63,7 +63,9 @@ class HotelService {
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
-        if (data is Map && data.containsKey('rooms')) {
+        if (data is Map && data.containsKey('roomTypes')) {
+          return ApiResult.success(List<dynamic>.from(data['roomTypes'] ?? []));
+        } else if (data is Map && data.containsKey('rooms')) {
           return ApiResult.success(List<dynamic>.from(data['rooms'] ?? []));
         } else if (data is Map && data.containsKey('list')) {
           return ApiResult.success(List<dynamic>.from(data['list'] ?? []));

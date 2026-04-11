@@ -6,6 +6,7 @@ import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
+import 'system_settings_page.dart';
 
 class SystemDashboardPage extends ConsumerStatefulWidget {
   const SystemDashboardPage({super.key});
@@ -23,6 +24,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
     _NavItem(icon: Icons.devices_rounded, label: '设备'),
     _NavItem(icon: Icons.people_rounded, label: '账户'),
     _NavItem(icon: Icons.fact_check_rounded, label: '审核'),
+    _NavItem(icon: Icons.settings_rounded, label: '设置'),
   ];
 
   @override
@@ -33,6 +35,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
       const _DevicesTab(),
       const _UsersTab(),
       const _ReviewTab(),
+      const SystemSettingsPage(),
     ];
 
     return Scaffold(
@@ -197,8 +200,8 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
         const SizedBox(height: 24),
         const Text('快捷操作', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        _quickAction(Icons.add_business, '新增酒店', () => context.push('/system/hotel-add')),
-        _quickAction(Icons.person_add, '新增用户', () => context.push('/system/user-add')),
+        _quickAction(Icons.add_business, '新增酒店', () => _showCreateHotelDialog()),
+        _quickAction(Icons.person_add, '新增用户', () => _showCreateUserDialog()),
       ]),
     );
   }
@@ -221,6 +224,64 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
 
   Widget _quickAction(IconData icon, String label, VoidCallback onTap) {
     return ListTile(leading: Icon(icon, color: AppColors.primary), title: Text(label), trailing: const Icon(Icons.chevron_right), onTap: onTap);
+  }
+
+  void _showCreateHotelDialog() {
+    final nameCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新增酒店'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '酒店名称', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: '酒店地址', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('酒店创建功能开发中')));
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateUserDialog() {
+    final usernameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新增用户'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: usernameCtrl, decoration: const InputDecoration(labelText: '用户名', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: '手机号', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('用户创建功能开发中')));
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

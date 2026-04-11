@@ -236,7 +236,6 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('语音通话', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

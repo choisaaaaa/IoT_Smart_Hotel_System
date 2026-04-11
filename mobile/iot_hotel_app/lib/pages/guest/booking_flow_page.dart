@@ -44,12 +44,67 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   // ignore: unused_field
   bool _isLoadingCoupons = false;
   String _paymentMethod = 'balance'; // balance, wechat, alipay
+  Map<String, dynamic>? _priceDetails;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('📝 [BookingFlow] Initialized with roomId: ${widget.roomId}, hotelName: ${widget.hotelName}');
     _loadUserInfo();
+    _loadMemberInfo();
     _loadCoupons();
+    _calculatePrice();
+    _phoneController.addListener(_onPhoneChanged);
+  }
+
+  void _onPhoneChanged() {
+    // 只有当输入了完整的手机号（11位）时才重新计算价格，避免频繁调用
+    if (_phoneController.text.trim().length == 11) {
+      _calculatePrice();
+    }
+  }
+
+  Future<void> _calculatePrice() async {
+    final phone = _phoneController.text.trim().isNotEmpty 
+        ? _phoneController.text.trim() 
+        : (await ref.read(authServiceProvider).getCurrentUser())?.phone;
+
+    final result = await ref.read(bookingServiceProvider).calculatePrice(
+      roomId: widget.roomId,
+      checkInDate: widget.checkInDate,
+      checkOutDate: widget.checkOutDate,
+      guestPhone: phone,
+      couponId: _selectedCoupon?['id'],
+      usedPoints: _usePoints ? _pointsToUse : 0,
+    );
+
+    if (result.success && mounted) {
+      setState(() {
+        _priceDetails = result.data;
+        if (_usePoints && result.data?['used_points'] != null) {
+          _pointsToUse = result.data!['used_points'];
+        }
+      });
+    } else if (mounted) {
+      debugPrint('❌ [BookingFlow] Price calculation failed: ${result.message}');
+      // 如果后端报错房间不存在，说明可能是 roomId 传递错误
+      if (result.message?.contains('房间不存在') == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('获取房间信息失败，请尝试重新选择房间'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  bool _usePoints = false;
+  int _pointsToUse = 0;
+  Map<String, dynamic>? _memberInfo;
+
+  Future<void> _loadMemberInfo() async {
+    final result = await ref.read(memberServiceProvider).getMyAssets();
+    if (result.success && mounted) {
+      setState(() => _memberInfo = result.data);
+    }
   }
 
   Future<void> _loadCoupons() async {
@@ -66,7 +121,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     }
   }
 
-  // ignore: unused_element
   void _showCouponSelector() async {
     final selected = await showModalBottomSheet<dynamic>(
       context: context,
@@ -75,8 +129,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       builder: (ctx) => _CouponBottomSheet(coupons: _coupons, selectedCoupon: _selectedCoupon),
     );
 
-    if (selected != null && mounted) {
+    if (mounted) {
       setState(() => _selectedCoupon = selected);
+      _calculatePrice();
     }
   }
 
@@ -105,6 +160,11 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       return;
     }
 
+    if (widget.roomId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间信息异常，请返回重新选择房型'), backgroundColor: AppColors.error));
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -120,15 +180,28 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         'guest_count': _roomCount,
         'payment_method': _paymentMethod,
         'special_requests': _specialRequestController.text.trim(),
+        'coupon_id': _selectedCoupon?['id'],
+        'used_points': _usePoints ? _pointsToUse : 0,
       });
 
       if (!mounted) return;
 
       if (result.success) {
-        final orderId = result.data!['id'];
-        final totalPrice = result.data!['total_price'] ?? result.data!['total_amount'] ?? widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
+        final orderIdRaw = result.data!['id'];
+        // 确保 orderId 是 int 类型
+        final orderId = orderIdRaw is int ? orderIdRaw : int.tryParse(orderIdRaw.toString()) ?? 0;
+        if (orderId == 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('订单ID无效')));
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+        
+        final totalPrice = _priceDetails?['total_price'] ?? result.data!['total_price'] ?? result.data!['total_amount'] ?? widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
 
         // 2. 创建支付记录
+        debugPrint('💳 [BookingFlow] Creating payment for orderId: $orderId, amount: $totalPrice');
         final createPayResult = await ref.read(paymentServiceProvider).createPayment({
           'order_type': 'booking',
           'order_id': orderId,
@@ -136,23 +209,37 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           'payment_method': _paymentMethod,
         });
 
-        if (!createPayResult.success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createPayResult.message ?? '创建支付订单失败')));
-          context.go('/orders');
+        debugPrint('💳 [BookingFlow] Create payment result: success=${createPayResult.success}, data=${createPayResult.data}');
+
+        if (!createPayResult.success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createPayResult.message ?? '创建支付订单失败')));
+            // 取消自动跳转到订单页，让用户留在当前页处理
+          }
+          setState(() => _isLoading = false);
           return;
         }
 
         // 3. 模拟支付确认流程
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在跳转支付...')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在确认支付状态...')));
         await Future.delayed(const Duration(seconds: 1));
 
         // 4. 确认支付
-        final paymentId = createPayResult.data?['id'];
-        if (paymentId == null) {
+        final paymentIdRaw = createPayResult.data?['id'];
+        if (paymentIdRaw == null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单创建异常，请稍后在订单中查看')));
-            context.go('/orders');
           }
+          setState(() => _isLoading = false);
+          return;
+        }
+        // 确保 paymentId 是 int 类型
+        final paymentId = paymentIdRaw is int ? paymentIdRaw : int.tryParse(paymentIdRaw.toString()) ?? 0;
+        if (paymentId == 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单ID无效')));
+          }
+          setState(() => _isLoading = false);
           return;
         }
         final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
@@ -163,7 +250,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           _showSuccessDialog(bookingId, bookingNo);
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(payResult.message ?? '支付确认失败，请稍后在订单中重试')));
-          context.go('/orders');
+          // 取消自动跳转，保持在当前预订流程页
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '预订失败')));
@@ -278,6 +365,48 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
                 ),
               ),
             ]),
+            const SizedBox(height: 12),
+            _buildSectionCard('优惠与抵扣', [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('使用优惠券', style: TextStyle(fontSize: 14)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _selectedCoupon != null 
+                        ? (_selectedCoupon!['coupon_type'] == 'discount' 
+                            ? '${_selectedCoupon!['discount_value']}折' 
+                            : '-¥${_selectedCoupon!['discount_value']}')
+                        : (_coupons.isNotEmpty ? '${_coupons.length}张可用' : '无可用'),
+                      style: TextStyle(
+                        color: _selectedCoupon != null ? AppColors.secondary : AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
+                  ],
+                ),
+                onTap: _showCouponSelector,
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('积分抵扣', style: TextStyle(fontSize: 14)),
+                subtitle: Text('可用 ${_memberInfo?['points'] ?? 0} 积分', style: const TextStyle(fontSize: 12)),
+                value: _usePoints,
+                activeThumbColor: AppColors.primary,
+                onChanged: (val) {
+                  setState(() {
+                    _usePoints = val;
+                    if (val) {
+                      _pointsToUse = _memberInfo?['points'] ?? 0;
+                    }
+                  });
+                  _calculatePrice();
+                },
+              ),
+            ]),
             const SizedBox(height: 100),
           ],
         ),
@@ -355,52 +484,89 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Widget _buildBottomPayBar() {
+    final double basePrice = widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
+    double totalPrice = _priceDetails?['total_price']?.toDouble() ?? basePrice;
+    double discountRate = _priceDetails?['discount_rate']?.toDouble() ?? 1.0;
+    int pointsUsed = _priceDetails?['used_points'] ?? 0;
+    double pointsDiscount = _priceDetails?['points_discount']?.toDouble() ?? 0.0;
+    double couponDiscount = _priceDetails?['coupon_discount']?.toDouble() ?? 0.0;
+    
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
+        ],
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text('总计', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text('应付总额 ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                    Text('¥', style: TextStyle(color: AppColors.secondary, fontSize: 14, fontWeight: FontWeight.bold)),
-                    Text(widget.price.toStringAsFixed(0), style: const TextStyle(color: AppColors.secondary, fontSize: 24, fontWeight: FontWeight.bold)),
+                    const Text('¥', style: TextStyle(color: AppColors.secondary, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      totalPrice.toStringAsFixed(2),
+                      style: const TextStyle(color: AppColors.secondary, fontSize: 26, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
-                const Row(
-                  children: [
-                    Icon(Icons.security, size: 12, color: AppColors.textHint),
-                    SizedBox(width: 4),
-                    Text('安全支付保障', style: TextStyle(color: AppColors.textHint, fontSize: 11)),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (discountRate < 1.0)
+                        _buildPriceTag('会员${(discountRate * 10).toStringAsFixed(1)}折', AppColors.gold),
+                      if (couponDiscount > 0)
+                        _buildPriceTag('优惠券-¥${couponDiscount.toStringAsFixed(0)}', Colors.redAccent),
+                      if (pointsUsed > 0)
+                        _buildPriceTag('积分抵¥${pointsDiscount.toStringAsFixed(1)}', Colors.orange),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 16),
           SizedBox(
             width: 140,
-            height: 48,
-            child: FilledButton(
+            child: ElevatedButton(
               onPressed: _isLoading ? null : _submitBookingAndPay,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              child: _isLoading 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('确认支付', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('立即预订', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPriceTag(String text, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(right: 4, top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }

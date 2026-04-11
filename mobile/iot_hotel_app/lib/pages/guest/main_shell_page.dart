@@ -26,56 +26,62 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
     final List<Widget> pages;
     final List<BottomNavigationBarItem> navItems;
 
-    if (mode == AppMode.guest) {
-      pages = [
-        const HomePage(),
-        const HotelListPage(),
-        const ProfilePage(),
-      ];
-      navItems = const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-        BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
-      ];
-    } else if (mode == AppMode.system) {
-      pages = [
-        const HomePage(),
-        const HotelListPage(),
-        const ProfilePage(),
-      ];
-      navItems = const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-        BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '系统'),
-      ];
-    } else if (mode == AppMode.reception || mode == AppMode.manager) {
-      pages = [
-        const HomePage(),
-        const HotelListPage(),
-        const RoomServicePage(),
-        const ProfilePage(),
-      ];
-      navItems = [
-        const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-        const BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-        const BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
-        BottomNavigationBarItem(icon: const Icon(Icons.person_outline), activeIcon: const Icon(Icons.person), label: mode == AppMode.manager ? '管理' : '前台'),
-      ];
-    } else {
-      pages = [
-        const HomePage(),
-        const HotelListPage(),
-        const RoomServicePage(),
-        const MemberPage(),
-        const ProfilePage(),
-      ];
-      navItems = const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-        BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-        BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
-        BottomNavigationBarItem(icon: Icon(Icons.card_membership_outlined), activeIcon: Icon(Icons.card_membership), label: '会员'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
-      ];
+    switch (mode) {
+      case AppMode.guest:
+        pages = [
+          const HomePage(),
+          const HotelListPage(),
+          const ProfilePage(),
+        ];
+        navItems = const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
+        ];
+        break;
+      case AppMode.customer:
+        pages = [
+          const HomePage(),
+          const HotelListPage(),
+          const RoomServicePage(),
+          const MemberPage(),
+          const ProfilePage(),
+        ];
+        navItems = const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
+          BottomNavigationBarItem(icon: Icon(Icons.card_membership_outlined), activeIcon: Icon(Icons.card_membership), label: '会员'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
+        ];
+        break;
+      case AppMode.system:
+        pages = [
+          const HomePage(),
+          const HotelListPage(),
+          const ProfilePage(),
+        ];
+        navItems = const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '系统'),
+        ];
+        break;
+      case AppMode.manager:
+      case AppMode.reception:
+        pages = [
+          const HomePage(),
+          const HotelListPage(),
+          const RoomServicePage(),
+          const ProfilePage(),
+        ];
+        navItems = [
+          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          const BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          const BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
+          BottomNavigationBarItem(icon: const Icon(Icons.person_outline), activeIcon: const Icon(Icons.person), label: mode == AppMode.manager ? '管理' : '前台'),
+        ];
+        break;
     }
 
     if (_currentIndex >= pages.length) _currentIndex = 0;

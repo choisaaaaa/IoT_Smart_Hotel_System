@@ -299,7 +299,6 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('价格日历', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

@@ -49,8 +49,13 @@ export const create = async (req: AuthRequest, res: Response) => {
     const { order_type, order_id, amount, payment_method, description } = req.body;
     let hotel_id = req.user?.hotel_id || 0;
 
+    logger.info(`[Payment Create] Request body: ${JSON.stringify(req.body)}, user hotel_id: ${hotel_id}`);
+
     if (!hotel_id && order_type === 'booking' && order_id) {
-      const [rows] = await pool.query('SELECT hotel_id FROM bookings WHERE id = ?', [Number(order_id)]);
+      const numericOrderId = Number(order_id);
+      logger.info(`[Payment Create] Looking up booking with id: ${numericOrderId}`);
+      const [rows] = await pool.query('SELECT hotel_id FROM bookings WHERE id = ?', [numericOrderId]);
+      logger.info(`[Payment Create] Booking lookup result: ${JSON.stringify(rows)}`);
       if (Array.isArray(rows) && rows.length > 0) {
         hotel_id = (rows[0] as any).hotel_id || 1;
       }
@@ -58,6 +63,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     if (!hotel_id) hotel_id = 1;
 
+    logger.info(`[Payment Create] Creating payment with hotel_id: ${hotel_id}, order_id: ${Number(order_id)}`);
     const result = await PaymentService.createPayment({
       hotel_id,
       order_type,
@@ -66,6 +72,7 @@ export const create = async (req: AuthRequest, res: Response) => {
       payment_method,
       description
     });
+    logger.info(`[Payment Create] Payment created: ${JSON.stringify(result)}`);
     res.json(successResponse(result, '创建支付订单成功'));
   } catch (error) {
     logger.error('创建支付订单失败:', error);
@@ -79,14 +86,21 @@ export const pay = async (req: AuthRequest, res: Response) => {
     const { transaction_no } = req.body;
     let hotelId = req.user?.hotel_id || 0;
 
+    logger.info(`[Payment Pay] Request params: ${JSON.stringify(req.params)}, body: ${JSON.stringify(req.body)}, user hotel_id: ${hotelId}`);
+
     if (!hotelId) {
-      const [rows] = await pool.query('SELECT hotel_id FROM payments WHERE id = ?', [Number(id)]);
+      const numericId = Number(id);
+      logger.info(`[Payment Pay] Looking up payment with id: ${numericId}`);
+      const [rows] = await pool.query('SELECT hotel_id FROM payments WHERE id = ?', [numericId]);
+      logger.info(`[Payment Pay] Payment lookup result: ${JSON.stringify(rows)}`);
       if (Array.isArray(rows) && rows.length > 0) {
         hotelId = (rows[0] as any).hotel_id || 1;
       }
     }
 
+    logger.info(`[Payment Pay] Processing payment with id: ${Number(id)}, hotelId: ${hotelId || 1}`);
     const success = await PaymentService.payPayment(Number(id), hotelId || 1, transaction_no || 'T' + Date.now());
+    logger.info(`[Payment Pay] Payment result: ${success}`);
     if (!success) {
       return res.status(404).json(errorResponse('支付失败或支付记录不存在'));
     }

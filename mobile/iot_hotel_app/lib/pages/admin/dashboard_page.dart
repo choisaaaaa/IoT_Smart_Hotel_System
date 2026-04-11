@@ -14,6 +14,11 @@ import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
 import 'reports_page.dart';
+import 'environment_monitor_page.dart';
+import 'floor_manage_page.dart';
+import 'price_calendar_page.dart';
+import 'coupon_manage_page.dart';
+import 'user_manage_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});
@@ -32,6 +37,11 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     NavigationItem(icon: Icons.hotel_rounded, label: '酒店'),
     NavigationItem(icon: Icons.assessment_rounded, label: '报表'),
     NavigationItem(icon: Icons.fact_check_rounded, label: '审核'),
+    NavigationItem(icon: Icons.thermostat_rounded, label: '环境'),
+    NavigationItem(icon: Icons.layers_rounded, label: '楼层'),
+    NavigationItem(icon: Icons.price_check_rounded, label: '价格'),
+    NavigationItem(icon: Icons.local_offer_rounded, label: '优惠券'),
+    NavigationItem(icon: Icons.people_rounded, label: '用户'),
   ];
 
   late final List<Widget> _pages;
@@ -46,6 +56,11 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       const HotelEditPage(),
       const ReportsPage(),
       const _AdminReviewTab(),
+      const EnvironmentMonitorPage(),
+      const FloorManagePage(),
+      const PriceCalendarPage(),
+      const CouponManagePage(),
+      const UserManagePage(),
     ];
   }
 

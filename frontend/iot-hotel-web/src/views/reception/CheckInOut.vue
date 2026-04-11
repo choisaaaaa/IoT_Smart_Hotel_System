@@ -777,23 +777,50 @@ async function handleCheckIn() {
   if (!checkinForm.guest_name || !checkinForm.phone || !checkinForm.room_id) {
     message.warning('请填写必填项'); return
   }
+  if (!hotelStore.hotelInfo?.id) {
+    message.warning('未获取到门店信息，请刷新页面重试'); return
+  }
   submitting.value = true
   try {
-    const payload: any = {
-      ...checkinForm,
-      check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
-      check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
-      status: 'checked_in',
-      guest_phone: checkinForm.phone,
-      total_price: estimatedPrice.value, // 使用计算后的价格
-      companions: companions.value.filter(item => item.name || item.phone || item.id_number)
+    // 先查找顾客是否有待确认的预订
+    let existingBookingId: number | null = null
+    try {
+      const lookupRes: any = await bookingApi.lookupBooking(checkinForm.phone)
+      if (lookupRes.data && lookupRes.data.status === 'pre_checked_in') {
+        existingBookingId = lookupRes.data.id
+        console.log('找到顾客待确认的预订:', existingBookingId)
+      }
+    } catch (e) {
+      // 查找失败不影响后续流程
+      console.log('查找预订失败:', e)
     }
-    const res: any = await bookingApi.createBooking(payload)
-    lastCreatedBookingId.value = res.data?.id
-    message.success(`入住成功！${checkinForm.guest_name} 已分配房间`)
+
+    let res: any
+    if (existingBookingId) {
+      // 如果找到待确认的预订，更新状态为已入住
+      res = await bookingApi.updateBookingStatus(existingBookingId, 'checked_in', hotelStore.hotelInfo.id)
+      message.success(`入住成功！${checkinForm.guest_name} 的预入住申请已确认`)
+    } else {
+      // 如果没有找到，创建新预订并直接办理入住
+      const payload: any = {
+        ...checkinForm,
+        hotel_id: hotelStore.hotelInfo.id,
+        check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
+        check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
+        status: 'checked_in',
+        guest_phone: checkinForm.phone,
+        total_price: estimatedPrice.value,
+        companions: companions.value.filter(item => item.name || item.phone || item.id_number)
+      }
+      res = await bookingApi.createBooking(payload)
+      message.success(`入住成功！${checkinForm.guest_name} 已分配房间`)
+    }
+
+    lastCreatedBookingId.value = res.data?.id || existingBookingId
+    
     // 自动打开对应房号的发卡弹窗
     openCardModal('issue', {
-      id: res.data?.id,
+      id: res.data?.id || existingBookingId,
       room_number: selectedRoom.value?.room_number,
       guest_name: checkinForm.guest_name
     })

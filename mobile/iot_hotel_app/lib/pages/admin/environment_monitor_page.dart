@@ -78,7 +78,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('环境监测', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

@@ -20,7 +20,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _fetchOrders();
   }
 
@@ -31,8 +31,11 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
   }
 
   Future<void> _fetchOrders() async {
+    if (_isLoading) return; // 防止重复请求
+    
     setState(() => _isLoading = true);
     try {
+      debugPrint('📦 [Orders] Fetching bookings...');
       final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
       if (result.success) {
         setState(() {
@@ -103,10 +106,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
           isScrollable: false,
           tabs: const [
             Tab(text: '全部'),
-            Tab(text: '待支付'),
-            Tab(text: '待入住'),
-            Tab(text: '待评价'),
-            Tab(text: '取消'),
+            Tab(text: '待付款'),    // pending
+            Tab(text: '已支付'),    // confirmed（可办理预入住）
+            Tab(text: '待确认'),    // pre_checked_in（已申请预入住，等待审核）
           ],
         ),
       ),
@@ -116,10 +118,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
             controller: _tabController,
             children: [
               _buildOrderList('all'),
-              _buildOrderList('pending'),
-              _buildOrderList('confirmed'),
-              _buildOrderList('checked_out'),
-              _buildOrderList('cancelled'),
+              _buildOrderList('pending'),         // 待付款
+              _buildOrderList('confirmed'),      // 已支付
+              _buildOrderList('pre_checked_in'), // 待确认
             ],
           ),
     );
@@ -153,18 +154,19 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
           if (index == 1) return _buildSortBar();
           
           final order = filteredOrders[index - 2];
+          final rawStatus = order['status']?.toString() ?? '';
           return GestureDetector(
             onTap: () => context.push('/order-detail/${order['id']}'),
             child: _buildOrderItem(
               orderId: order['id'] ?? 0,
               hotelName: order['hotel_name'] ?? '智联酒店',
-              status: _getStatusText(order['status']),
+              status: _getStatusText(rawStatus),
               dateRange: '${_formatDate(order['check_in_date'])} - ${_formatDate(order['check_out_date'])}',
               nights: _calculateNights(order['check_in_date'], order['check_out_date']),
               roomType: order['room_type'] ?? '标准间',
               rooms: order['guest_count'] ?? 1,
               price: order['total_price']?.toString() ?? '0.00',
-              isCompleted: order['status'] == 'checked_out',
+              isCompleted: rawStatus == 'checked_out',
               orderData: order,
             ),
           );
@@ -174,10 +176,11 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
   }
 
   String _getStatusText(String? status) {
-    switch (status) {
-      case 'pending': return '待支付';
-      case 'confirmed': return '待入住';
-      case 'checked_in': return '已入住';
+    switch (status?.toLowerCase()) {
+      case 'pending': return '待付款';           // 输入信息但未支付
+      case 'confirmed': return '已支付';        // 已支付，可办理预入住
+      case 'pre_checked_in': return '待确认';   // 已办理预入住，等待前台审核
+      case 'checked_in': return '已入住';       // 前台审核通过，正式入住
       case 'checked_out': return '已完成';
       case 'cancelled': return '已取消';
       default: return '未知状态';
@@ -217,6 +220,49 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('支付异常：$e')),
         );
+      }
+    }
+  }
+
+  Future<void> _showCancelDialog(dynamic order) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('取消订单'),
+        content: const Text('确定要取消此订单吗？取消后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('再想想'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('确认取消'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && order != null) {
+      try {
+        final result = await ref.read(bookingServiceProvider).cancelBooking(order['id']);
+        if (result.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('订单已取消'), backgroundColor: AppColors.success),
+          );
+          _fetchOrders();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? '取消失败')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('取消异常：$e')),
+          );
+        }
       }
     }
   }
@@ -387,7 +433,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              if (status == '待支付')
+              if (orderData?['status'] == 'pending') ...[
                 FilledButton(
                   onPressed: () => _handlePay(orderData),
                   style: FilledButton.styleFrom(
@@ -397,7 +443,18 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                   ),
                   child: const Text('去支付', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-              if (status == '待入住')
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _showCancelDialog(orderData),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.divider),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('取消订单', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                ),
+              ],
+              if (orderData?['status'] == 'confirmed') ...[
                 FilledButton(
                   onPressed: () => context.push('/online-checkin', extra: {'bookingId': orderData?['id'] ?? orderId}),
                   style: FilledButton.styleFrom(
@@ -405,30 +462,62 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  child: const Text('办理入住', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('预入住', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-              if (status == '已入住') ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _showCancelDialog(orderData),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.divider),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('取消订单', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                ),
+              ],
+              if (orderData?['status'] == 'pre_checked_in') ...[
+                OutlinedButton(
+                  onPressed: null, // 待确认状态不可按
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.divider),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('待确认', style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _showCancelDialog(orderData),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.divider),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: const Text('取消订单', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                ),
+              ],
+              if (orderData?['status'] == 'checked_in') ...[
                 FilledButton(
-                  onPressed: () => context.push('/extend-stay', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  onPressed: () => context.push('/room-service', extra: {'bookingId': orderData?['id'] ?? orderId}),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  child: const Text('续住', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('进入房间', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => context.push('/checkout', extra: {'bookingId': orderData?['id'] ?? orderId}),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.error,
+                OutlinedButton(
+                  onPressed: () => context.push('/extend-stay', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.divider),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  child: const Text('退房', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('续住', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
                 ),
               ],
-              if (status == '已完成')
+              if (orderData?['status'] == 'checked_out')
                 FilledButton(
                   onPressed: () => context.push('/review-submit', extra: {
                     'bookingId': orderData?['id'] ?? orderId,

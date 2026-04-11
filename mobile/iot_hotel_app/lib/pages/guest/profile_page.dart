@@ -10,7 +10,6 @@ import '../../core/logic/member_logic.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
-import '../../core/network/api_result.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -59,11 +58,11 @@ class ProfilePage extends ConsumerWidget {
           child: Column(
             children: [
               _buildHeader(context, ref),
-              _buildMemberCard(ref),
-              _buildAssetStats(ref),
+              _buildMemberCard(context, ref),
+              _buildAssetStats(context, ref),
               _buildOrderSection(context),
               _buildFavoritesRow(context, ref),
-              _buildToolSection(context),
+              _buildToolSection(context, ref),
               const SizedBox(height: 40),
             ],
           ),
@@ -231,21 +230,19 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMemberCard(WidgetRef ref) {
-    final memberService = ref.watch(memberServiceProvider);
+  Widget _buildMemberCard(BuildContext context, WidgetRef ref) {
+    final assetsAsync = ref.watch(myAssetsProvider);
 
-    return FutureBuilder(
-      future: memberService.getMyAssets(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data == null) return const SizedBox.shrink();
-        final apiResult = snapshot.data as ApiResult<Map<String, dynamic>>;
+    return assetsAsync.when(
+      loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
+      error: (err, stack) => const SizedBox.shrink(),
+      data: (apiResult) {
         if (!apiResult.success) return const SizedBox.shrink();
-        final result = apiResult.data ?? {};
-        final assets = result;
+        final assets = apiResult.data ?? {};
         final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
-        final int currentExp = totalSpent.floor();
+        final int currentExp = (assets['experience'] as num?)?.toInt() ?? totalSpent.floor();
         
-        final level = MemberLevel.fromExperience(currentExp);
+        final level = MemberLevel.fromKey(assets['member_level']?.toString() ?? 'standard');
         final nextExp = level.nextLevelExperience();
         final progress = (currentExp / nextExp).clamp(0.0, 1.0);
 
@@ -328,8 +325,8 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildAssetStats(WidgetRef ref) {
-    final memberService = ref.watch(memberServiceProvider);
+  Widget _buildAssetStats(BuildContext context, WidgetRef ref) {
+    final assetsAsync = ref.watch(myAssetsProvider);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -337,21 +334,25 @@ class ProfilePage extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
-      child: FutureBuilder(
-        future: memberService.getMyAssets(),
-        builder: (context, snapshot) {
-          final assets = snapshot.data?.data ?? {};
+      child: assetsAsync.when(
+        loading: () => const SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+        error: (err, stack) => const SizedBox.shrink(),
+        data: (apiResult) {
+          final assets = apiResult.data ?? {};
           final points = assets['points'] ?? '0';
           final coupons = assets['coupons_count'] ?? '0';
+          final balance = assets['balance'] ?? '0.00';
           
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildAssetItem(coupons.toString(), '优惠券'),
-              _buildAssetItem(points.toString(), '积分'),
-              _buildAssetItem('0.00', '余额'),
-              _buildAssetItem('5', '礼品卡'),
+              _buildAssetItem(coupons.toString(), '优惠券', onTap: () => context.push('/coupons')),
+              _buildAssetItem(points.toString(), '积分', onTap: () {}),
+              _buildAssetItem('¥$balance', '余额', onTap: () => context.push('/wallet')),
             ],
           );
         },
@@ -359,16 +360,16 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildAssetItem(String value, String label) {
+  Widget _buildAssetItem(String value, String label, {VoidCallback? onTap}) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Column(
           children: [
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 6),
             Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
         ),
@@ -497,13 +498,16 @@ class ProfilePage extends ConsumerWidget {
     }
   }
 
-  Widget _buildToolSection(BuildContext context) {
+  Widget _buildToolSection(BuildContext context, WidgetRef ref) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,12 +520,14 @@ class ProfilePage extends ConsumerWidget {
             physics: const NeverScrollableScrollPhysics(),
             childAspectRatio: 1.0,
             children: [
-              _buildToolItem(Icons.confirmation_num_outlined, '优惠券', onTap: () => context.push('/coupons')),
-              _buildToolItem(Icons.people_outline, '常旅客', onTap: () => context.push('/frequent-guests')),
+              _buildToolItem(Icons.person_outline_rounded, '账号管理', onTap: () => context.push('/personal-info')),
+              _buildToolItem(Icons.people_outline_rounded, '常旅客', onTap: () => context.push('/frequent-guests')),
+              _buildToolItem(Icons.receipt_long_outlined, '我的订单', onTap: () => context.push('/orders')),
+              _buildToolItem(Icons.headset_mic_outlined, '在线客服'),
               _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
               _buildToolItem(Icons.card_travel_outlined, '自助退房', onTap: () => context.push('/orders')),
               _buildToolItem(Icons.update_outlined, '在线续住', onTap: () => context.push('/orders')),
-              _buildToolItem(Icons.rate_review_outlined, '我的评价', onTap: () => context.push('/review-submit')),
+              _buildToolItem(Icons.logout_rounded, '退出登录', onTap: () => _showLogoutConfirmation(context, ref)),
             ],
           ),
         ],

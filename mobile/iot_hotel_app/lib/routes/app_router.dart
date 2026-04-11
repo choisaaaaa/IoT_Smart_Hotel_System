@@ -1,10 +1,26 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'route_observer.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/register_page.dart';
 import '../pages/admin/dashboard_page.dart';
+import '../pages/admin/environment_monitor_page.dart';
+import '../pages/admin/room_type_manage_page.dart';
+import '../pages/admin/floor_manage_page.dart';
+import '../pages/admin/price_calendar_page.dart';
+import '../pages/admin/coupon_manage_page.dart';
+import '../pages/admin/user_manage_page.dart';
 import '../pages/reception/dashboard_page.dart';
+import '../pages/reception/device_management_page.dart';
+import '../pages/reception/work_orders_page.dart';
+import '../pages/reception/delivery_orders_page.dart';
+import '../pages/reception/room_availability_page.dart';
+import '../pages/reception/voice_calls_page.dart';
+import '../pages/reception/bills_page.dart';
 import '../pages/system/dashboard_page.dart';
+import '../pages/system/system_settings_page.dart';
 import '../pages/guest/main_shell_page.dart';
 import '../pages/guest/hotel_list_page.dart';
 import '../pages/guest/hotel_detail_page.dart';
@@ -20,25 +36,56 @@ import '../pages/guest/coupon_center_page.dart';
 import '../pages/guest/extend_stay_page.dart';
 import '../pages/guest/frequent_guest_page.dart';
 import '../pages/guest/personal_info_page.dart';
+import '../pages/guest/wallet_page.dart';
+import '../pages/guest/member_page.dart';
+import '../pages/guest/room_service_page.dart';
 import '../core/auth/auth_state_notifier.dart';
+import '../core/network/api_interceptor.dart';
+
+/// 路由状态通知器，确保 GoRouter 实例稳定
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+  RouterNotifier(this._ref) {
+    _ref.listen(authStateProvider, (_, _) => notifyListeners());
+  }
+}
+
+final routerNotifierProvider = Provider((ref) => RouterNotifier(ref));
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final routerNotifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
+    navigatorKey: AppRouter.navigatorKey,
+    observers: [AppRouteObserver()],
+    refreshListenable: routerNotifier,
     initialLocation: '/',
     redirect: (context, state) async {
+      final authState = ref.read(authStateProvider);
+      
+      // 如果认证状态尚未初始化完成，不执行任何重定向逻辑，等待初始化
+      if (!authState.isInitialized) {
+        debugPrint('⏳ [Router Redirect] Auth not initialized, skipping...');
+        return null;
+      }
+
       final isLoggedIn = authState.isAuthenticated;
       final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
       final currentPath = state.matchedLocation;
 
+      debugPrint('🛡️ [Router Redirect] path: "$currentPath", isLoggedIn: $isLoggedIn, mode: ${authState.currentMode}');
+
       final publicPaths = ['/', '/hotel-list', '/hotel-detail', '/login', '/register'];
 
       if (!isLoggedIn && !publicPaths.any((p) => currentPath == p || currentPath.startsWith('$p/'))) {
-        if (currentPath != '/login') return '/login';
+        if (currentPath != '/login') {
+          debugPrint('🚩 [Router] Not logged in, redirecting from "$currentPath" to "/login"');
+          return '/login';
+        }
       }
 
       if (isLoggedIn && isLoggingIn) {
+        debugPrint('🚩 [Router] Already logged in, redirecting from "$currentPath" to dashboard');
         switch (authState.currentMode) {
           case AppMode.system:
             return '/system';
@@ -52,8 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoggedIn) {
-        final protectedPaths = ['/booking-flow', '/orders', '/order-detail', '/online-checkin', '/checkout', '/extend-stay', '/review-submit', '/favorites', '/personal-info'];
-        if (protectedPaths.any((p) => currentPath.startsWith(p)) && authState.currentMode == AppMode.guest) {
+        final protectedPaths = ['/booking-flow', '/orders', '/order-detail', '/online-checkin', '/checkout', '/extend-stay', '/review-submit', '/favorites', '/personal-info', '/wallet', '/coupons'];
+        if (protectedPaths.any((p) => currentPath.startsWith(p)) && 
+            (authState.currentMode != AppMode.guest && authState.currentMode != AppMode.customer)) {
+          debugPrint('🚫 [Router Access Denied] Path "$currentPath" not allowed for mode "${authState.currentMode}"');
           return '/login';
         }
 
@@ -86,14 +135,23 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const MainShellPage()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
-      GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
-      GoRoute(path: '/admin', builder: (context, state) => const AdminDashboardPage()),
-      GoRoute(path: '/system', builder: (context, state) => const SystemDashboardPage()),
-      GoRoute(path: '/reception', builder: (context, state) => const ReceptionDashboardPage()),
-      GoRoute(path: '/hotel-list', builder: (context, state) => const HotelListPage()),
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterPage(),
+      ),
+      GoRoute(path: '/admin', name: 'admin', builder: (context, state) => const AdminDashboardPage()),
+      GoRoute(path: '/system', name: 'system', builder: (context, state) => const SystemDashboardPage()),
+      GoRoute(path: '/reception', name: 'reception', builder: (context, state) => const ReceptionDashboardPage()),
+      GoRoute(path: '/hotel-list', name: 'hotel-list', builder: (context, state) => const HotelListPage()),
       GoRoute(
         path: '/hotel-detail',
+        name: 'hotel-detail',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           return HotelDetailPage(hotelId: extra['hotelId']);
@@ -101,6 +159,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/booking-flow',
+        name: 'booking-flow',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           return BookingFlowPage(
@@ -114,63 +173,125 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(path: '/orders', builder: (context, state) => const OrderListPage()),
       GoRoute(
-        path: '/order-detail/:orderId',
+        path: '/orders',
+        name: 'orders',
+        builder: (context, state) => const OrderListPage(),
+      ),
+      GoRoute(
+        path: '/order-detail/:id',
+        name: 'order-detail',
         builder: (context, state) {
-          final orderId = int.tryParse(state.pathParameters['orderId'] ?? '0') ?? 0;
-          return OrderDetailPage(orderId: orderId);
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          return OrderDetailPage(orderId: id);
         },
       ),
-      GoRoute(path: '/favorites', builder: (context, state) => const FavoritesPage()),
       GoRoute(
-        path: '/online-checkin',
+        path: '/favorites',
+        name: 'favorites',
+        builder: (context, state) => const FavoritesPage(),
+      ),
+      GoRoute(
+        path: '/online-checkin/:id',
+        name: 'online-checkin',
         builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          return OnlineCheckinPage(bookingId: extra['bookingId'] as int?);
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          final extra = state.extra as Map<String, dynamic>?;
+          final bookingId = extra?['bookingId'] as int? ?? id;
+          return OnlineCheckinPage(bookingId: bookingId);
         },
       ),
       GoRoute(
         path: '/notifications',
+        name: 'notifications',
         builder: (context, state) => const NotificationCenterPage(),
       ),
       GoRoute(
-        path: '/review-submit',
+        path: '/review-submit/:id',
+        name: 'review-submit',
         builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
           final extra = state.extra as Map<String, dynamic>? ?? {};
+          final bookingId = extra['bookingId'] as int? ?? id;
           return ReviewSubmitPage(
-            bookingId: extra['bookingId'] as int? ?? 0,
+            bookingId: bookingId,
             hotelId: extra['hotelId'] as int?,
             hotelName: extra['hotelName'] as String?,
           );
         },
       ),
       GoRoute(
-        path: '/checkout',
+        path: '/checkout/:id',
+        name: 'checkout',
         builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          return CheckoutPage(bookingId: extra['bookingId'] as int? ?? 0);
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          final extra = state.extra as Map<String, dynamic>?;
+          final bookingId = extra?['bookingId'] as int? ?? id;
+          return CheckoutPage(bookingId: bookingId);
         },
       ),
       GoRoute(
         path: '/coupons',
+        name: 'coupons',
         builder: (context, state) => const CouponCenterPage(),
       ),
       GoRoute(
-        path: '/extend-stay',
+        path: '/extend-stay/:id',
+        name: 'extend-stay',
         builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          return ExtendStayPage(bookingId: extra['bookingId'] as int? ?? 0);
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          final extra = state.extra as Map<String, dynamic>?;
+          final bookingId = extra?['bookingId'] as int? ?? id;
+          return ExtendStayPage(bookingId: bookingId);
         },
       ),
       GoRoute(
         path: '/frequent-guests',
+        name: 'frequent-guests',
         builder: (context, state) => const FrequentGuestPage(),
       ),
       GoRoute(
         path: '/personal-info',
+        name: 'personal-info',
         builder: (context, state) => const PersonalInfoPage(),
       ),
+      GoRoute(
+        path: '/wallet', 
+        name: 'wallet', 
+        builder: (context, state) => const WalletPage()
+      ),
+      GoRoute(
+        path: '/member',
+        name: 'member',
+        builder: (context, state) => const MemberPage(),
+      ),
+      GoRoute(
+        path: '/room-service',
+        name: 'room-service',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return RoomServicePage(bookingId: extra?['bookingId'] as int?);
+        },
+      ),
+      // Admin routes
+      GoRoute(path: '/admin/environment', builder: (context, state) => const EnvironmentMonitorPage()),
+      GoRoute(path: '/admin/room-types', builder: (context, state) => const RoomTypeManagePage()),
+      GoRoute(path: '/admin/floors', builder: (context, state) => const FloorManagePage()),
+      GoRoute(path: '/admin/price-calendar', builder: (context, state) => const PriceCalendarPage()),
+      GoRoute(path: '/admin/coupons', builder: (context, state) => const CouponManagePage()),
+      GoRoute(path: '/admin/users', builder: (context, state) => const UserManagePage()),
+      // Reception routes
+      GoRoute(path: '/reception/devices', builder: (context, state) => const DeviceManagementPage()),
+      GoRoute(path: '/reception/work-orders', builder: (context, state) => const WorkOrdersPage()),
+      GoRoute(path: '/reception/delivery', builder: (context, state) => const DeliveryOrdersPage()),
+      GoRoute(path: '/reception/room-availability', builder: (context, state) => const RoomAvailabilityPage()),
+      GoRoute(path: '/reception/voice-calls', builder: (context, state) => const VoiceCallsPage()),
+      GoRoute(path: '/reception/bills', builder: (context, state) => const BillsPage()),
+      GoRoute(path: '/reception/environment', builder: (context, state) => const EnvironmentMonitorPage()),
+      GoRoute(path: '/reception/price-calendar', builder: (context, state) => const PriceCalendarPage()),
+      GoRoute(path: '/reception/coupons', builder: (context, state) => const CouponManagePage()),
+      // System routes
+      GoRoute(path: '/system/settings', builder: (context, state) => const SystemSettingsPage()),
     ],
   );
 });

@@ -124,17 +124,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import { bookingApi } from '@/api/booking'
 
+const route = useRoute()
 const currentStep = ref(0)
 const searchKey = ref('')
 const searching = ref(false)
 const confirming = ref(false)
 const foundBooking = ref<any>(null)
 const roomPin = ref('')
+
+// 页面加载时，如果有传递预订号，自动填充并查询
+onMounted(() => {
+  const bookingNo = route.query.booking_no as string
+  if (bookingNo) {
+    searchKey.value = bookingNo
+    // 自动查询预订
+    searchBooking()
+  }
+})
 
 const checkinForm = reactive({
   real_name: '', id_type: 'idcard', id_number: '', arrival_time: null as any, plate_number: ''

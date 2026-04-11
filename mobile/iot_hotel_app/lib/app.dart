@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'core/network/dio_client.dart';
-import 'core/network/api_interceptor.dart';
 import 'core/auth/auth_state_notifier.dart';
 import 'core/storage/local_storage.dart';
 import 'core/constants/app_constants.dart';
@@ -30,14 +29,14 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
       final localStorage = LocalStorage();
       final token = await localStorage.getToken();
       if (token == null || token.isEmpty) {
-        authStateNotifier.clearAuth();
+        ref.read(authStateProvider.notifier).clearAuth();
         return;
       }
 
       final userInfoStr = await localStorage.read(AppConstants.userInfoKey);
       if (userInfoStr != null) {
         final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
-        authStateNotifier.setAuth(
+        ref.read(authStateProvider.notifier).setAuth(
           token: token,
           userId: userMap['id']?.toString() ?? '',
           username: userMap['username'] as String? ?? '',
@@ -55,7 +54,7 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
           final user = data['user'] as Map<String, dynamic>?;
           if (user != null) {
             await localStorage.save(AppConstants.userInfoKey, jsonEncode(user));
-            authStateNotifier.setAuth(
+            ref.read(authStateProvider.notifier).setAuth(
               token: token,
               userId: user['id']?.toString() ?? '',
               username: user['username'] as String? ?? '',
@@ -70,7 +69,9 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
       }
     } catch (e) {
       debugPrint('Restore auth state failed: $e');
-      authStateNotifier.clearAuth();
+      ref.read(authStateProvider.notifier).clearAuth();
+    } finally {
+      ref.read(authStateProvider.notifier).markInitialized();
     }
   }
 
@@ -85,15 +86,6 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: router,
-      builder: (context, child) {
-        return Navigator(
-          key: AppRouter.navigatorKey,
-          onDidRemovePage: (Page<void> page) {},
-          pages: [
-            MaterialPage(child: child ?? const SizedBox.shrink()),
-          ],
-        );
-      },
     );
   }
 }

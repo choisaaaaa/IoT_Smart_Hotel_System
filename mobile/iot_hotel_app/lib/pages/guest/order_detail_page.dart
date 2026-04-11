@@ -66,6 +66,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     switch (status) {
       case 'pending': return Colors.orange;
       case 'confirmed': return AppColors.primary;
+      case 'pre_checked_in': return Colors.cyan;
       case 'checked_in': return AppColors.success;
       case 'checked_out': return AppColors.textSecondary;
       case 'cancelled': return AppColors.error;
@@ -75,8 +76,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   String _getStatusText(String? status) {
     switch (status) {
-      case 'pending': return '待支付';
-      case 'confirmed': return '待入住';
+      case 'pending': return '待付款';
+      case 'confirmed': return '已支付';
+      case 'pre_checked_in': return '待确认';
       case 'checked_in': return '已入住';
       case 'checked_out': return '已完成';
       case 'cancelled': return '已取消';
@@ -120,7 +122,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       const SizedBox(height: 12),
                       _buildPriceDetailCard(),
                       const SizedBox(height: 12),
-                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending' || _order!['status'] == 'checked_in' || _order!['status'] == 'checked_out')
+                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending' || _order!['status'] == 'pre_checked_in' || _order!['status'] == 'checked_in' || _order!['status'] == 'checked_out')
                         _buildActionButtons(),
                       const SizedBox(height: 32),
                     ],
@@ -270,7 +272,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          if (_order!['status'] == 'pending')
+          if (_order!['status'] == 'pending') ...[
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -279,13 +281,44 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 child: const Text('立即支付', style: TextStyle(fontSize: 16)),
               ),
             ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _handleCancel,
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('取消订单'),
+              ),
+            ),
+          ],
           if (_order!['status'] == 'confirmed') ...[
             SizedBox(
               width: double.infinity,
               height: 48,
               child: FilledButton(
                 onPressed: _handleCheckIn,
-                child: const Text('办理入住', style: TextStyle(fontSize: 16)),
+                child: const Text('预入住', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _handleCancel,
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('取消订单'),
+              ),
+            ),
+          ],
+          if (_order!['status'] == 'pre_checked_in') ...[
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: null,
+                child: const Text('待确认', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(height: 12),
@@ -304,9 +337,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               width: double.infinity,
               height: 48,
               child: FilledButton(
-                onPressed: () => context.push('/checkout', extra: {'bookingId': widget.orderId}),
-                style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                child: const Text('自助退房', style: TextStyle(fontSize: 16)),
+                onPressed: () => context.go('/room-service'),
+                child: const Text('进入房间', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(height: 12),
@@ -317,6 +349,16 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 onPressed: () => context.push('/extend-stay', extra: {'bookingId': widget.orderId}),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
                 child: const Text('在线续住'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/checkout', extra: {'bookingId': widget.orderId}),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('自助退房'),
               ),
             ),
           ],
@@ -371,7 +413,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 }
 
                 // 2. 执行支付（模拟第三方支付回调后的确认）
-                final paymentId = createResult.data!['id'];
+                final paymentIdRaw = createResult.data!['id'];
+                // 确保 paymentId 是 int 类型
+                final paymentId = paymentIdRaw is int ? paymentIdRaw : int.tryParse(paymentIdRaw.toString()) ?? 0;
+                if (paymentId == 0) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单ID无效')));
+                  return;
+                }
                 final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
                 
                 if (payResult.success && mounted) {

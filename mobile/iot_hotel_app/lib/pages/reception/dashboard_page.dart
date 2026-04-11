@@ -3,18 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/network/dio_client.dart';
-import '../../../core/constants/api_constants.dart';
 import '../../services/auth_service.dart';
 import '../../core/auth/auth_state_notifier.dart';
-import '../../services/voice_call_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/booking_service.dart';
-import '../../services/room_service.dart';
 import '../../services/delivery_service.dart';
-import '../../services/payment_service.dart';
 import '../../services/room_type_service.dart';
+import 'device_management_page.dart';
+import 'work_orders_page.dart';
+import 'delivery_orders_page.dart';
+import 'room_availability_page.dart';
+import 'voice_calls_page.dart';
+import 'bills_page.dart';
+import '../admin/environment_monitor_page.dart';
+import '../admin/price_calendar_page.dart';
+import '../admin/coupon_manage_page.dart';
 
 class ReceptionDashboardPage extends ConsumerStatefulWidget {
   const ReceptionDashboardPage({super.key});
@@ -33,10 +37,14 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
     _NavItem(icon: Icons.how_to_reg_rounded, label: '入住退房'),
     _NavItem(icon: Icons.calendar_month_rounded, label: '预订'),
     _NavItem(icon: Icons.door_back_door_rounded, label: '客房'),
+    _NavItem(icon: Icons.devices_rounded, label: '设备'),
     _NavItem(icon: Icons.build_rounded, label: '工单处理'),
     _NavItem(icon: Icons.delivery_dining_rounded, label: '客房送物'),
     _NavItem(icon: Icons.phone_in_talk_rounded, label: '语音通话'),
+    _NavItem(icon: Icons.thermostat_rounded, label: '环境监测'),
     _NavItem(icon: Icons.price_change_rounded, label: '房价设置'),
+    _NavItem(icon: Icons.calendar_today_rounded, label: '价格日历'),
+    _NavItem(icon: Icons.local_offer_rounded, label: '优惠券'),
     _NavItem(icon: Icons.receipt_long_rounded, label: '账单报表'),
   ];
 
@@ -132,10 +140,14 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
           const CheckInOutPage(),
           const BookingsPage(),
           const RoomAvailabilityPage(),
+          const DeviceManagementPage(),
           const WorkOrdersPage(),
           const DeliveryOrdersPage(),
           const VoiceCallsPage(),
+          const EnvironmentMonitorPage(),
           const PriceSettingsPage(),
+          const PriceCalendarPage(),
+          const CouponManagePage(),
           const BillsPage(),
         ],
       ),
@@ -526,21 +538,37 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final preCheckIns = _todayBookings.where((b) => b['status'] == 'pre_checked_in').toList();
     final checkIns = _todayBookings.where((b) => b['status'] == 'confirmed').toList();
     final checkOuts = _todayBookings.where((b) => b['status'] == 'checked_in').toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('入住退房')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadData,
               child: DefaultTabController(
-                length: 2,
+                length: 3,
                 child: Column(
                   children: [
-                    const TabBar(tabs: [Tab(text: '待入住'), Tab(text: '待退房')]),
+                    TabBar(tabs: [
+                      Tab(text: '预入住审核${preCheckIns.isNotEmpty ? '(${preCheckIns.length})' : ''}'),
+                      const Tab(text: '待入住'),
+                      const Tab(text: '待退房'),
+                    ]),
                     Expanded(child: TabBarView(children: [
+                      _buildPreCheckinList(preCheckIns),
                       _buildBookingList(checkIns, 'checkin'),
                       _buildBookingList(checkOuts, 'checkout'),
                     ])),
@@ -549,6 +577,98 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
               ),
             ),
     );
+  }
+
+  Widget _buildPreCheckinList(List<dynamic> bookings) {
+    if (bookings.isEmpty) return const Center(child: Text('暂无预入住申请', style: TextStyle(color: AppColors.textSecondary)));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookings.length,
+      itemBuilder: (context, index) {
+        final b = bookings[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('${b['room_number'] ?? b['room_id'] ?? '-'}号房 · ${b['room_type'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: const Text('待审核', style: TextStyle(fontSize: 12, color: AppColors.warning))),
+              ]),
+              const SizedBox(height: 8),
+              Text('客人：${b['guest_name'] ?? '-'}  ${b['guest_phone'] ?? ''}', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              if (b['guest_id_number'] != null) ...[
+                const SizedBox(height: 4),
+                Text('身份证号：${b['guest_id_number']}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _handlePreCheckinReview(b, false),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                      child: const Text('拒绝'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => _handlePreCheckinReview(b, true),
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+                      child: const Text('审核通过'),
+                    ),
+                  ),
+                ],
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handlePreCheckinReview(Map<String, dynamic> booking, bool approved) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(approved ? '确认通过审核' : '确认拒绝'),
+        content: Text('客人：${booking['guest_name'] ?? '-'}，房间：${booking['room_number'] ?? booking['room_id'] ?? '-'}号房'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: approved ? AppColors.success : AppColors.error),
+            child: Text(approved ? '确认通过' : '确认拒绝'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      if (approved) {
+        // 审核通过，办理正式入住
+        final result = await ref.read(bookingServiceProvider).checkin(booking['id']);
+        if (result.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('审核通过，入住办理成功')));
+          _loadData();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '操作失败')));
+        }
+      } else {
+        // 拒绝审核，退回为 confirmed 状态
+        final result = await ref.read(bookingServiceProvider).rejectPreCheckin(booking['id']);
+        if (result.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已拒绝预入住申请')));
+          _loadData();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '操作失败')));
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
   }
 
   Widget _buildBookingList(List<dynamic> bookings, String action) {
@@ -641,7 +761,17 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('预订管理')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadBookings,
+          ),
+        ],
+      ),
       body: Column(children: [
         SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: ['all', 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadBookings(); })))).toList())),
         Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _bookings.isEmpty ? Center(child: Text('暂无预订', style: TextStyle(color: AppColors.textSecondary))) : RefreshIndicator(onRefresh: _loadBookings, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _bookings.length, itemBuilder: (context, i) {
@@ -655,1159 +785,6 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       ]),
     );
   }
-}
-
-class RoomAvailabilityPage extends ConsumerStatefulWidget {
-  const RoomAvailabilityPage({super.key});
-  @override
-  ConsumerState<RoomAvailabilityPage> createState() => _RoomAvailabilityPageState();
-}
-
-class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
-  List<dynamic> _rooms = [];
-  bool _isLoading = true;
-  String _filterStatus = 'all';
-  String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRooms();
-  }
-
-  Future<void> _loadRooms() async {
-    setState(() => _isLoading = true);
-    try {
-      final result = await ref.read(roomServiceProvider).getRooms(status: _filterStatus == 'all' ? null : _filterStatus);
-      if (result.success && mounted) setState(() => _rooms = result.data ?? []);
-    } catch (e) {
-      debugPrint('Error: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Color _statusColor(String s) => switch (s) { 'available' => AppColors.roomAvailable, 'occupied' => AppColors.roomOccupied, 'cleaning' => AppColors.roomCleaning, 'maintenance' => AppColors.roomMaintenance, 'reserved' => Colors.orange, _ => AppColors.textHint };
-  String _statusText(String s) => switch (s) { 'available' => '空闲', 'occupied' => '已住', 'cleaning' => '清洁中', 'maintenance' => '维修中', 'reserved' => '已预订', _ => s };
-
-  List<dynamic> get _filteredRooms {
-    if (_searchQuery.isEmpty) return _rooms;
-    return _rooms.where((r) {
-      final roomNum = (r['room_number'] ?? r['id']?.toString() ?? '').toString().toLowerCase();
-      return roomNum.contains(_searchQuery.toLowerCase());
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filteredRooms;
-    return Scaffold(
-      appBar: AppBar(title: const Text('客房管理')),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: '搜索房间号...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              isDense: true,
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v),
-          ),
-        ),
-        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: Row(children: ['all', 'available', 'occupied', 'reserved', 'cleaning', 'maintenance'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadRooms(); })))).toList())),
-        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : filtered.isEmpty ? Center(child: Text('暂无房间', style: TextStyle(color: AppColors.textSecondary))) : RefreshIndicator(onRefresh: _loadRooms, child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 1.0), itemCount: filtered.length, itemBuilder: (context, i) {
-          final r = filtered[i];
-          final status = r['room_status']?.toString() ?? r['status']?.toString() ?? 'available';
-          return GestureDetector(
-            onTap: () => _showRoomDetail(r),
-            child: Card(
-              color: _statusColor(status).withValues(alpha: 0.05),
-              child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text('${r['room_number'] ?? r['id']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 4),
-                Text(r['room_type'] ?? r['room_type_name'] ?? '', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                const SizedBox(height: 4),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _statusColor(status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)), child: Text(_statusText(status), style: TextStyle(fontSize: 10, color: _statusColor(status), fontWeight: FontWeight.bold))),
-                if (status == 'reserved' || status == 'occupied') ...[
-                  const SizedBox(height: 4),
-                  Text('不可分配', style: TextStyle(fontSize: 9, color: AppColors.error)),
-                ],
-              ])),
-            ),
-          );
-        }))),
-      ]),
-    );
-  }
-
-  void _showRoomDetail(Map<String, dynamic> room) {
-    final status = room['room_status']?.toString() ?? room['status']?.toString() ?? 'available';
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            Text('${room['room_number'] ?? room['id']}号房', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('房型：${room['room_type'] ?? room['room_type_name'] ?? '-'}', style: const TextStyle(color: AppColors.textSecondary)),
-            Text('楼层：${room['floor'] ?? '-'}楼', style: const TextStyle(color: AppColors.textSecondary)),
-            Text('当前状态：${_statusText(status)}', style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            const Text('修改房间状态', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: ['available', 'occupied', 'reserved', 'cleaning', 'maintenance'].map((s) => ChoiceChip(
-                label: Text(_statusText(s)),
-                selected: status == s,
-                onSelected: status == s ? null : (_) => _updateRoomStatus(room, s),
-              )).toList(),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _updateRoomStatus(Map<String, dynamic> room, String newStatus) async {
-    final roomId = room['id'] as int?;
-    if (roomId == null) return;
-
-    final currentStatus = room['room_status']?.toString() ?? room['status']?.toString() ?? 'available';
-    if ((currentStatus == 'reserved' || currentStatus == 'occupied') && newStatus == 'available') {
-      final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('确认释放房间'),
-        content: Text('${room['room_number'] ?? roomId}号房当前状态为${_statusText(currentStatus)}，确定要释放为空闲吗？'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认释放'))],
-      ));
-      if (confirm != true) return;
-    }
-
-    try {
-      final result = await ref.read(roomServiceProvider).updateRoomStatus(roomId, newStatus);
-      if (result.success && mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间状态已更新')));
-        _loadRooms();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '更新失败')));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
-    }
-  }
-}
-
-class WorkOrdersPage extends ConsumerStatefulWidget {
-  const WorkOrdersPage({super.key});
-  @override
-  ConsumerState<WorkOrdersPage> createState() => _WorkOrdersPageState();
-}
-
-class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage> {
-  List<dynamic> _orders = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    setState(() => _isLoading = true);
-    try {
-      final result = await ref.read(maintenanceServiceProvider).getWorkOrders(pageSize: 50);
-      if (result.success && mounted) setState(() => _orders = result.data ?? []);
-    } catch (e) {
-      debugPrint('Error: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('工单处理')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _orders.isEmpty
-              ? Center(child: Text('暂无工单', style: TextStyle(color: AppColors.textSecondary)))
-              : RefreshIndicator(onRefresh: _loadOrders, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _orders.length, itemBuilder: (context, i) {
-                  final o = _orders[i];
-                  final isUrgent = o['is_urgent'] == true || o['priority'] == 'high';
-                  return Card(margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Row(children: [Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房', style: const TextStyle(fontWeight: FontWeight.bold)), if (isUrgent) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(4)), child: const Text('加急', style: TextStyle(color: Colors.white, fontSize: 9)))]],),
-                      Text(o['type'] ?? '其他', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(o['description'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-                    const SizedBox(height: 12),
-                    if (o['status'] == 'pending') Row(children: [
-                      Expanded(child: OutlinedButton(onPressed: () => _updateStatus(o['id'], 'in_progress'), child: const Text('接单'))),
-                      const SizedBox(width: 8),
-                      Expanded(child: FilledButton(onPressed: () => _updateStatus(o['id'], 'completed'), child: const Text('完成'))),
-                    ]),
-                    if (o['status'] == 'in_progress') Row(children: [
-                      Expanded(child: FilledButton(onPressed: () => _updateStatus(o['id'], 'completed'), child: const Text('标记完成'))),
-                      const SizedBox(width: 8),
-                      Expanded(child: OutlinedButton(onPressed: () => _deleteOrder(o['id']), style: OutlinedButton.styleFrom(foregroundColor: AppColors.error), child: const Text('删除'))),
-                    ]),
-                    if (o['status'] == 'completed') Row(children: [
-                      Expanded(child: OutlinedButton(onPressed: () => _deleteOrder(o['id']), style: OutlinedButton.styleFrom(foregroundColor: AppColors.error), child: const Text('删除'))),
-                    ]),
-                  ])));
-                })),
-    );
-  }
-
-  Future<void> _updateStatus(int id, String status) async {
-    try {
-      final result = await ref.read(maintenanceServiceProvider).updateWorkOrderStatus(id, status);
-      if (result.success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('状态更新成功')));
-        _loadOrders();
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
-    }
-  }
-
-  Future<void> _deleteOrder(int id) async {
-    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('确认删除'),
-      content: const Text('确定要删除此工单吗？删除后不可恢复。'),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: AppColors.error), child: const Text('删除'))],
-    ));
-    if (confirm != true) return;
-
-    try {
-      final result = await ref.read(maintenanceServiceProvider).deleteWorkOrder(id);
-      if (result.success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('工单已删除')));
-        _loadOrders();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '删除失败')));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：$e')));
-    }
-  }
-}
-
-class DeliveryOrdersPage extends ConsumerStatefulWidget {
-  const DeliveryOrdersPage({super.key});
-  @override
-  ConsumerState<DeliveryOrdersPage> createState() => _DeliveryOrdersPageState();
-}
-
-class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
-  List<dynamic> _orders = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    setState(() => _isLoading = true);
-    try {
-      final result = await ref.read(deliveryServiceProvider).getDeliveryOrders(pageSize: 50);
-      if (result.success && mounted) setState(() => _orders = result.data ?? []);
-    } catch (e) {
-      debugPrint('Error: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'delivering' => AppColors.primary, 'completed' => AppColors.success, 'delivered' => AppColors.success, _ => AppColors.textHint };
-  String _statusText(String? s) => switch (s) { 'pending' => '待配送', 'delivering' => '配送中', 'completed' => '已送达', 'delivered' => '已送达', _ => s ?? '未知' };
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('客房送物')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _orders.isEmpty
-              ? Center(child: Text('暂无送物订单', style: TextStyle(color: AppColors.textSecondary)))
-              : RefreshIndicator(onRefresh: _loadOrders, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _orders.length, itemBuilder: (context, i) {
-                  final o = _orders[i];
-                  final status = o['status']?.toString() ?? 'pending';
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.room_rounded, size: 18, color: AppColors.primary),
-                              const SizedBox(width: 6),
-                              Text('${o['room_number'] ?? o['room_id'] ?? '-'}号房', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(color: _statusColor(status).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                                child: Text(_statusText(status), style: TextStyle(color: _statusColor(status), fontSize: 11, fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(o['item_name'] ?? o['items'] ?? '送物品', style: const TextStyle(fontSize: 14)),
-                          if ((o['guest_name']?.toString() ?? '').isNotEmpty || (o['note']?.toString() ?? '').isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text('${o['guest_name'] ?? ''}${o['note'] != null && o['note'].toString().isNotEmpty ? ' · ${o['note']}' : ''}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
-                            ),
-                          if (status == 'pending' || status == 'delivering') ...[
-                            const Divider(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                if (status == 'pending')
-                                  OutlinedButton.icon(
-                                    onPressed: () => _updateStatus(o['id'], 'delivering'),
-                                    icon: const Icon(Icons.local_shipping_outlined, size: 16),
-                                    label: const Text('接单配送'),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      textStyle: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                if (status == 'delivering') ...[
-                                  OutlinedButton.icon(
-                                    onPressed: () => _updateStatus(o['id'], 'completed'),
-                                    icon: const Icon(Icons.check_circle_outline, size: 16),
-                                    label: const Text('确认送达'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.success,
-                                      side: BorderSide(color: AppColors.success),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      textStyle: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                })),
-    );
-  }
-
-  Future<void> _updateStatus(int id, String status) async {
-    try {
-      final result = await ref.read(deliveryServiceProvider).updateDeliveryStatus(id, status);
-      if (result.success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('状态更新成功')));
-        _loadOrders();
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
-    }
-  }
-}
-
-class BillsPage extends ConsumerStatefulWidget {
-  const BillsPage({super.key});
-  @override
-  ConsumerState<BillsPage> createState() => _BillsPageState();
-}
-
-class _BillsPageState extends ConsumerState<BillsPage> {
-  List<dynamic> _payments = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPayments();
-  }
-
-  Future<void> _loadPayments() async {
-    setState(() => _isLoading = true);
-    try {
-      final result = await ref.read(paymentServiceProvider).getPaymentHistory(pageSize: 50);
-      if (result.success && mounted) setState(() => _payments = result.data ?? []);
-    } catch (e) {
-      debugPrint('Error: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Color _statusColor(String? s) => switch (s) { 'paid' => AppColors.success, 'pending' => Colors.orange, 'refunded' => AppColors.textSecondary, _ => AppColors.textHint };
-  String _statusText(String? s) => switch (s) { 'paid' => '已支付', 'pending' => '待支付', 'refunded' => '已退款', _ => s ?? '未知' };
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('账单报表')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _payments.isEmpty
-              ? Center(child: Text('暂无账单记录', style: TextStyle(color: AppColors.textSecondary)))
-              : RefreshIndicator(onRefresh: _loadPayments, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _payments.length, itemBuilder: (context, i) {
-                  final p = _payments[i];
-                  return GestureDetector(
-                    onTap: () => _showPaymentDetail(p),
-                    child: Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
-                    leading: CircleAvatar(backgroundColor: _statusColor(p['status']).withValues(alpha: 0.1), child: Icon(Icons.receipt_long, color: _statusColor(p['status']), size: 20)),
-                    title: Text('${p['guest_name'] ?? '客人'} · ${p['room_number'] ?? ''}号房'),
-                    subtitle: Text('${p['created_at'] ?? ''} · ${p['payment_method'] ?? ''}'),
-                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('¥${p['amount'] ?? '0'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(_statusText(p['status']), style: TextStyle(color: _statusColor(p['status']), fontSize: 11)),
-                    ]),
-                  )),
-                  );
-                })),
-    );
-  }
-
-  void _showPaymentDetail(Map<String, dynamic> payment) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('账单详情', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(payment['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(payment['status']), style: TextStyle(color: _statusColor(payment['status']), fontSize: 12))),
-            ]),
-            const Divider(height: 24),
-            _buildDetailRow('客人姓名', '${payment['guest_name'] ?? '-'}'),
-            _buildDetailRow('房间号', '${payment['room_number'] ?? '-'}'),
-            _buildDetailRow('金额', '¥${payment['amount'] ?? '0'}'),
-            _buildDetailRow('支付方式', '${payment['payment_method'] ?? '-'}'),
-            _buildDetailRow('订单类型', '${payment['order_type'] ?? '-'}'),
-            _buildDetailRow('交易号', '${payment['transaction_no'] ?? '-'}'),
-            _buildDetailRow('创建时间', '${payment['created_at'] ?? '-'}'),
-            if (payment['paid_at'] != null) _buildDetailRow('支付时间', '${payment['paid_at']}'),
-            if (payment['note'] != null || payment['remark'] != null) _buildDetailRow('备注', '${payment['note'] ?? payment['remark'] ?? '-'}'),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14))),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-        ],
-      ),
-    );
-  }
-}
-
-class VoiceCallsPage extends ConsumerStatefulWidget {
-  const VoiceCallsPage({super.key});
-  @override
-  ConsumerState<VoiceCallsPage> createState() => _VoiceCallsPageState();
-}
-
-class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage>
-    with SingleTickerProviderStateMixin {
-  List<dynamic> _callHistory = [];
-  List<dynamic> _rooms = [];
-  List<dynamic> _users = [];
-  Map<String, dynamic> _stats = {};
-  bool _isLoading = true;
-  bool _isOnline = false;
-  String? _currentCallId;
-  Map<String, dynamic>? _currentCall;
-  late TabController _callTabController;
-  Stream<Map<String, dynamic>>? _callEvents;
-
-  @override
-  void initState() {
-    super.initState();
-    _callTabController = TabController(length: 4, vsync: this);
-    _loadData();
-  }
-
-  @override
-  void dispose() {
-    if (_isOnline) {
-      VoiceCallService().hangup('current');
-    }
-    _callTabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    try {
-      await Future.wait([
-        _loadCallHistory(),
-        _loadRooms(),
-        _loadUsers(),
-        _loadStats(),
-      ]);
-    } catch (e) {
-      debugPrint('Error loading voice calls data: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadCallHistory() async {
-    try {
-      final response = await DioClient().get('${ApiConstants.calls}history', queryParameters: {'limit': 50, 'page': 1});
-      debugPrint('VoiceCalls history response: ${response.statusCode} - ${response.data}');
-      
-      if (response.statusCode == 200) {
-        final code = response.data['code'];
-        final data = response.data['data'];
-        
-        List<dynamic> historyList = [];
-        
-        if (data != null) {
-          if (data is List) {
-            historyList = data;
-          } else if (data is Map) {
-            historyList = List<dynamic>.from(
-              data['items'] ?? 
-              data['list'] ?? 
-              data['records'] ?? 
-              data['calls'] ?? 
-              data['history'] ?? 
-              []
-            );
-            
-            if (historyList.isEmpty && data.isNotEmpty) {
-              debugPrint('VoiceCalls history data keys: ${data.keys.toList()}');
-            }
-          }
-        }
-        
-        if (code == 200 || code == 0) {
-          if (mounted) setState(() => _callHistory = historyList);
-          debugPrint('VoiceCalls loaded ${historyList.length} call records');
-        } else {
-          debugPrint('VoiceCalls history error code: $code, message: ${response.data['message']}');
-          if (mounted) setState(() => _callHistory = []);
-        }
-      } else {
-        debugPrint('VoiceCalls history HTTP error: ${response.statusCode}');
-        if (mounted) setState(() => _callHistory = []);
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error loading call history: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) setState(() => _callHistory = []);
-    }
-  }
-
-  Future<void> _loadRooms() async {
-    try {
-      final result = await ref.read(roomServiceProvider).getRooms(pageSize: 200);
-      if (result.success && mounted) {
-        setState(() => _rooms = result.data ?? []);
-      }
-    } catch (e) {
-      debugPrint('Error loading rooms: $e');
-      if (mounted) setState(() => _rooms = []);
-    }
-  }
-
-  Future<void> _loadUsers() async {
-    try {
-      final response = await DioClient().get(ApiConstants.users, queryParameters: {'limit': 100});
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
-        if (mounted) {
-          setState(() {
-            _users = data is List ? data : (data is Map ? (data['users'] ?? data['list'] ?? []) : []);
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading users: $e');
-      if (mounted) setState(() => _users = []);
-    }
-  }
-
-  Future<void> _loadStats() async {
-    try {
-      final response = await DioClient().get('${ApiConstants.calls}stats');
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        if (mounted) {
-          setState(() => _stats = response.data['data'] as Map<String, dynamic>? ?? {});
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading call stats: $e');
-      if (mounted) setState(() => _stats = {});
-    }
-  }
-
-  List<Map<String, dynamic>> get _callableTargets {
-    final list = <Map<String, dynamic>>[];
-
-    for (final room in _rooms) {
-      final roomNumber = room['room_number']?.toString() ?? room['id']?.toString() ?? '';
-      final roomStatus = room['room_status']?.toString() ?? 'available';
-      list.add({
-        'id': room['id'],
-        'clientId': roomNumber,
-        'name': '房间 $roomNumber',
-        'desc': room['room_type'] ?? room['room_name'] ?? '',
-        'type': 'room',
-        'status': roomStatus,
-        'isOnline': roomStatus == 'occupied',
-      });
-    }
-
-    for (final user in _users) {
-      final username = user['username']?.toString() ?? '';
-      final role = user['role']?.toString() ?? '';
-      if (role == 'user') continue;
-      list.add({
-        'id': user['id'],
-        'clientId': username,
-        'name': username,
-        'desc': role == 'admin' ? '管理员' : (role == 'staff' || role == 'receptionist') ? '前台' : role,
-        'type': 'front_desk',
-        'status': 'available',
-        'isOnline': true,
-      });
-    }
-
-    return list;
-  }
-
-  int get _onlineCount => _callableTargets.where((t) => t['isOnline'] == true).length;
-
-  Future<void> _makeCall(Map<String, dynamic> target) async {
-    if (!_isOnline) {
-      showDialog(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('提示'),
-        content: const Text('您尚未上线，无法发起呼叫。是否现在上线？'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')), FilledButton(onPressed: () { Navigator.pop(ctx); _toggleOnline(); }, child: const Text('上线'))],
-      ));
-      return;
-    }
-
-    try {
-      final response = await DioClient().post('${ApiConstants.calls}outbound', data: {
-        'caller_id': 'reception_app',
-        'callee_type': target['type'],
-        'callee_id': target['clientId'],
-        'caller_type': 'front_desk',
-      });
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        final callData = response.data['data'];
-        if (callData != null && mounted) {
-          setState(() => _currentCallId = callData['call_id']?.toString());
-        }
-      }
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 16),
-                CircleAvatar(radius: 32, backgroundColor: AppColors.primary.withValues(alpha: 0.1), child: Icon(Icons.person, size: 32, color: AppColors.primary)),
-                const SizedBox(height: 16),
-                Text(target['name'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                const Text('正在呼叫中...', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-                const SizedBox(height: 20),
-                FloatingActionButton(
-                  onPressed: () {
-                    _hangupCall();
-                    Navigator.pop(ctx);
-                  },
-                  backgroundColor: AppColors.error,
-                  child: const Icon(Icons.call_end, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('呼叫失败：$e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _hangupCall() async {
-    try {
-      final callId = _currentCallId;
-      if (callId != null && callId.isNotEmpty) {
-        await DioClient().post('${ApiConstants.calls}$callId/hangup');
-        setState(() => _currentCallId = null);
-      }
-    } catch (e) {
-      debugPrint('Error hanging up: $e');
-    }
-  }
-
-  void _toggleOnline() {
-    setState(() => _isOnline = !_isOnline);
-    if (_isOnline) {
-      final authState = ref.read(authStateProvider);
-      final userId = authState.userId ?? 'reception_app';
-      final callService = VoiceCallService();
-      callService.init('front_desk_$userId');
-      _callEvents = callService.callEvents;
-      _callEvents?.listen(_handleCallEvent);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已上线，可以发起和接收呼叫'), backgroundColor: AppColors.success),
-      );
-    } else {
-      VoiceCallService().hangup('current');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已下线')),
-      );
-    }
-  }
-
-  void _handleCallEvent(Map<String, dynamic> event) {
-    if (!mounted) return;
-    final type = event['type'];
-    final data = event['data'] as Map<String, dynamic>? ?? {};
-
-    switch (type) {
-      case 'incoming_call':
-        setState(() {
-          _currentCall = data;
-          _currentCallId = data['call_id']?.toString() ?? data['id']?.toString();
-        });
-        _showIncomingCallDialog(data);
-        break;
-      case 'call_answered':
-        setState(() => _currentCall = data);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('对方已接听'), backgroundColor: AppColors.success),
-        );
-        break;
-      case 'call_rejected':
-        setState(() {
-          _currentCall = null;
-          _currentCallId = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('对方已拒绝')),
-        );
-        Navigator.of(context, rootNavigator: true).pop();
-        break;
-      case 'call_hungup':
-        setState(() {
-          _currentCall = null;
-          _currentCallId = null;
-        });
-        Navigator.of(context, rootNavigator: true).pop();
-        break;
-    }
-  }
-
-  void _showIncomingCallDialog(Map<String, dynamic> callData) {
-    final callerName = callData['caller_name'] ?? callData['caller_id'] ?? '未知';
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            CircleAvatar(radius: 32, backgroundColor: AppColors.success.withValues(alpha: 0.1), child: const Icon(Icons.call, size: 32, color: AppColors.success)),
-            const SizedBox(height: 16),
-            Text(callerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('来电中...', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-            const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              FloatingActionButton(
-                heroTag: 'reject',
-                onPressed: () {
-                  VoiceCallService().hangup(callData['call_id']?.toString() ?? '');
-                  Navigator.pop(ctx);
-                },
-                backgroundColor: AppColors.error,
-                child: const Icon(Icons.call_end, color: Colors.white),
-              ),
-              FloatingActionButton(
-                heroTag: 'answer',
-                onPressed: () {
-                  VoiceCallService().answerCall(
-                    callData['call_id']?.toString() ?? '',
-                    callData['caller_id']?.toString() ?? '',
-                    callData['caller_type']?.toString() ?? 'room',
-                  );
-                  Navigator.pop(ctx);
-                },
-                backgroundColor: AppColors.success,
-                child: const Icon(Icons.call, color: Colors.white),
-              ),
-            ]),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _roomStatusColor(String status) => switch (status) {
-    'available' => AppColors.success,
-    'occupied' => AppColors.error,
-    'cleaning' => AppColors.info,
-    'maintenance' => AppColors.warning,
-    'reserved' => Colors.orange,
-    _ => AppColors.textHint,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final targets = _callableTargets;
-    final roomTargets = targets.where((t) => t['type'] == 'room').toList();
-    final staffTargets = targets.where((t) => t['type'] != 'room').toList();
-
-    return Column(
-      children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Colors.white,
-            child: Row(
-              children: [
-                _buildStatItem('活跃通话', '${_stats['active_calls'] ?? 0}', AppColors.primary, Icons.phone_in_talk_rounded),
-                const SizedBox(width: 8),
-                _buildStatItem('在线终端', '$_onlineCount', AppColors.success, Icons.devices_rounded),
-                const SizedBox(width: 8),
-                _buildStatItem('接通率', '${((_stats['answer_rate'] ?? 0) * 100).toInt()}%', AppColors.warning, Icons.trending_up_rounded),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _toggleOnline,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: (_isOnline ? AppColors.success : AppColors.textHint).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: (_isOnline ? AppColors.success : AppColors.textHint).withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(_isOnline ? '在线' : '离线', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isOnline ? AppColors.success : AppColors.textHint)),
-                          const SizedBox(height: 2),
-                          Text(_currentCall != null ? '通话中' : (_isOnline ? '点击下线' : '点击上线'), style: TextStyle(fontSize: 9, color: _currentCall != null ? AppColors.error : AppColors.textSecondary)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _callTabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              labelStyle: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold),
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [
-                Tab(text: '全部(${targets.length})'),
-                Tab(text: '客房(${roomTargets.length})'),
-                Tab(text: '员工(${staffTargets.length})'),
-                Tab(text: '通话记录'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _callTabController,
-              children: [
-                _buildCallGrid(targets),
-                _buildCallGrid(roomTargets),
-                _buildCallGrid(staffTargets),
-                _buildCallHistory(),
-              ],
-            ),
-          ),
-        ],
-      );
-  }
-
-  Widget _buildStatItem(String label, String value, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 9, color: AppColors.textSecondary)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCallGrid(List<Map<String, dynamic>> targets) {
-    if (targets.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.phone_disabled_outlined, size: 48, color: AppColors.textHint.withValues(alpha: 0.3)),
-            const SizedBox(height: 12),
-            const Text('暂无可呼叫目标', style: TextStyle(color: AppColors.textSecondary)),
-          ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: targets.length,
-      itemBuilder: (context, index) {
-        final target = targets[index];
-        final isRoom = target['type'] == 'room';
-        final isOnline = target['isOnline'] == true;
-        final status = target['status']?.toString() ?? '';
-
-        final borderColor = isRoom ? _roomStatusColor(status) : AppColors.primary;
-        
-        return GestureDetector(
-          onTap: () => _makeCall(target),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor.withValues(alpha: 0.3), width: 1),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: borderColor, width: 4)),
-                ),
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isRoom ? Icons.door_back_door_rounded : Icons.person_rounded,
-                            color: isRoom ? AppColors.info : AppColors.primary,
-                            size: 28,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            target['name'],
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            target['desc'] ?? '',
-                            style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          if (isRoom && status.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: _roomStatusColor(status).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _roomStatusText(status),
-                                style: TextStyle(fontSize: 9, color: _roomStatusColor(status), fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isOnline ? AppColors.success : AppColors.textHint,
-                          boxShadow: isOnline ? [BoxShadow(color: AppColors.success.withValues(alpha: 0.6), blurRadius: 4)] : null,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _roomStatusText(String s) => switch (s) {
-    'available' => '空闲',
-    'occupied' => '已住',
-    'cleaning' => '清洁中',
-    'maintenance' => '维修中',
-    'reserved' => '已预订',
-    _ => s,
-  };
-
-  Widget _buildCallHistory() {
-    debugPrint('_buildCallHistory: _callHistory.length = ${_callHistory.length}, _isLoading = $_isLoading');
-    
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    if (_callHistory.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.history_rounded, size: 48, color: AppColors.textHint.withValues(alpha: 0.3)),
-            const SizedBox(height: 12),
-            const Text('暂无通话记录', style: TextStyle(color: AppColors.textSecondary)),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadCallHistory,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _callHistory.length,
-        itemBuilder: (context, i) {
-          final call = _callHistory[i];
-          debugPrint('Building call history item $i: $call');
-          final isOutbound = call['direction'] == 'outbound' || call['caller_type'] == 'front_desk';
-          final callerId = call['caller_id']?.toString() ?? '';
-          final calleeId = call['callee_id']?.toString() ?? '';
-          final displayId = isOutbound ? calleeId : callerId;
-          final startedAt = call['started_at']?.toString() ?? '';
-          final duration = call['duration_sec'] ?? call['duration'] ?? 0;
-          final status = call['status']?.toString() ?? 'unknown';
-          
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              dense: true,
-              leading: CircleAvatar(
-                radius: 18,
-                backgroundColor: (isOutbound ? AppColors.success : AppColors.primary).withValues(alpha: 0.1),
-                child: Icon(
-                  isOutbound ? Icons.call_made_rounded : Icons.call_received_rounded,
-                  color: isOutbound ? AppColors.success : AppColors.primary,
-                  size: 18,
-                ),
-              ),
-              title: Text(displayId.isEmpty ? '未知' : displayId, style: const TextStyle(fontSize: 14)),
-              subtitle: Text('$startedAt · $duration秒', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _callStatusColor(status).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(_callStatusText(status), style: TextStyle(fontSize: 10, color: _callStatusColor(status), fontWeight: FontWeight.bold)),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Color _callStatusColor(String? s) => switch (s) {
-    'completed' => AppColors.success,
-    'missed' => AppColors.error,
-    'cancelled' => AppColors.textSecondary,
-    'calling' => AppColors.primary,
-    'connected' => AppColors.info,
-    _ => AppColors.textHint,
-  };
-
-  String _callStatusText(String? s) => switch (s) {
-    'completed' => '已完成',
-    'missed' => '未接听',
-    'cancelled' => '已取消',
-    'calling' => '呼叫中',
-    'connected' => '通话中',
-    _ => s ?? '未知',
-  };
 }
 
 class PriceSettingsPage extends ConsumerStatefulWidget {
@@ -1865,6 +842,17 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadRoomTypes,
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _roomTypes.isEmpty

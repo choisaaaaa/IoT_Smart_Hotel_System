@@ -31,7 +31,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
   }
 
   Future<void> _checkUserRole() async {
-    final role = await LocalStorage.getUserRole();
+    final role = await LocalStorage().getUserRole();
     setState(() {
       _isSystemAdmin = role == 'system';
       _isStaff = role == 'staff';
@@ -214,11 +214,11 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             ),
                             items: const [
                               DropdownMenuItem(
-                                value: 'discount',
+                                value: 'percentage',
                                 child: Text('折扣券 (百分比折扣)'),
                               ),
                               DropdownMenuItem(
-                                value: 'cash',
+                                value: 'fixed',
                                 child: Text('直减券 (固定金额)'),
                               ),
                             ],
@@ -232,10 +232,10 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           TextField(
                             controller: discountController,
                             decoration: InputDecoration(
-                              labelText: couponType == 'discount' ? '折扣率 (%) *' : '减免金额 (元) *',
-                              hintText: couponType == 'discount' ? '如：20 表示8折' : '如：50',
+                              labelText: couponType == 'percentage' ? '折扣率 (%) *' : '减免金额 (元) *',
+                              hintText: couponType == 'percentage' ? '如：20 表示8折' : '如：50',
                               border: OutlineInputBorder(),
-                              suffixText: couponType == 'discount' ? '%' : '元',
+                              suffixText: couponType == 'percentage' ? '%' : '元',
                             ),
                             keyboardType: TextInputType.number,
                           ),
@@ -267,7 +267,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                                 border: OutlineInputBorder(),
                                 helperText: '不选则创建为通用券（所有门店可用）',
                               ),
-                              value: selectedHotelForCreate,
+                              initialValue: selectedHotelForCreate,
                               items: [
                                 const DropdownMenuItem<int>(
                                   value: 0,
@@ -497,7 +497,6 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_isStaff ? '优惠券核销' : '优惠券管理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
@@ -521,7 +520,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           children: [
                             Icon(Icons.local_offer_outlined, size: 64, color: Colors.grey[300]),
                             const SizedBox(height: 16),
-                            Text('暂无优惠券', style: TextStyle(color: grey[500])),
+                            Text('暂无优惠券', style: TextStyle(color: Colors.grey[500])),
                             if (!_isStaff) ...[
                               const SizedBox(height: 16),
                               ElevatedButton.icon(
@@ -554,13 +553,14 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
           ),
         ],
       ),
-      if (!_isStaff)
-        FloatingActionButton.extended(
-          onPressed: _showCreateDialog,
-          backgroundColor: AppColors.primary,
-          icon: const Icon(Icons.add),
-          label: const Text('新建优惠券'),
-        ),
+      floatingActionButton: !_isStaff
+          ? FloatingActionButton.extended(
+              onPressed: _showCreateDialog,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add),
+              label: const Text('新建优惠券'),
+            )
+          : null,
     );
   }
 
@@ -698,7 +698,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -751,7 +751,7 @@ class _FilterChip extends StatelessWidget {
           color: isSelected ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.primary : grey[300]!,
+            color: isSelected ? AppColors.primary : Colors.grey[300]!,
           ),
         ),
         child: Text(
@@ -829,7 +829,7 @@ class _CouponCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -884,58 +884,58 @@ class _CouponCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          isGeneral ? '通用' : hotelName.toString(),
-                          style: TextStyle(
-                            color: isGeneral ? Colors.blue : purple,
-                            fontSize: 11,
+                            isGeneral ? '通用' : hotelName.toString(),
+                            style: TextStyle(
+                              color: isGeneral ? Colors.blue : Colors.purple,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
+                      const Spacer(),
+                      if (coupon['coupon_code'] != null)
+                        Text(
+                          '#${coupon['coupon_code']}',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        ),
                     ],
-                    const Spacer(),
-                    if (coupon['coupon_code'] != null)
-                      Text(
-                        '#${coupon['coupon_code']}',
-                        style: TextStyle(color: grey[400], fontSize: 12),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  coupon['coupon_name'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _InfoChip(
-                      icon: Icons.confirmation_number,
-                      text: remaining >= 0 ? '剩余 $remaining/$totalQuantity' : '不限量',
+                  const SizedBox(height: 12),
+                  Text(
+                    coupon['coupon_name'] ?? '',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                    const SizedBox(width: 16),
-                    if (coupon['min_amount'] != null && coupon['min_amount'] > 0)
-                      _InfoChip(
-                        icon: Icons.shopping_cart,
-                        text: '\u00a5${coupon['min_amount']}起',
-                      ),
-                  ],
-                ),
-                if (coupon['valid_from'] != null || coupon['valid_to'] != null) ...[
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.date_range, size: 14, color: grey[500]),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${coupon['valid_from'] ?? '即日起'} 至 ${coupon['valid_to'] ?? '长期有效'}',
-                        style: TextStyle(color: grey[600], fontSize: 12),
+                      _InfoChip(
+                        icon: Icons.confirmation_number,
+                        text: remaining >= 0 ? '剩余 $remaining/$totalQuantity' : '不限量',
                       ),
+                      const SizedBox(width: 16),
+                      if (coupon['min_amount'] != null && coupon['min_amount'] > 0)
+                        _InfoChip(
+                          icon: Icons.shopping_cart,
+                          text: '\u00a5${coupon['min_amount']}起',
+                        ),
                     ],
                   ),
-                ],
+                  if (coupon['valid_from'] != null || coupon['valid_to'] != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.date_range, size: 14, color: Colors.grey[500]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${coupon['valid_from'] ?? '即日起'} 至 ${coupon['valid_to'] ?? '长期有效'}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
               ],
             ),
           ),
@@ -990,11 +990,11 @@ class _InfoChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: grey[500]),
+        Icon(icon, size: 14, color: Colors.grey[500]),
         const SizedBox(width: 4),
         Text(
           text,
-          style: TextStyle(color: grey[600], fontSize: 12),
+          style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
       ],
     );

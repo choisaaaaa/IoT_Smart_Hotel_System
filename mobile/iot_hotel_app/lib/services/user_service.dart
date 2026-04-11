@@ -36,7 +36,7 @@ class UserService {
 
   Future<ApiResult<Map<String, dynamic>>> getUserById(int userId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.users}$userId');
+      final response = await _dioClient.get('${ApiConstants.users}/$userId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -62,7 +62,7 @@ class UserService {
 
   Future<ApiResult<void>> updateUser(int userId, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.users}$userId', data: data);
+      final response = await _dioClient.put('${ApiConstants.users}/$userId', data: data);
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
@@ -76,7 +76,7 @@ class UserService {
   Future<ApiResult<void>> updateUserRole(int userId, String role) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.users}$userId',
+        '${ApiConstants.users}/$userId',
         data: {'role': role},
       );
 
@@ -92,7 +92,7 @@ class UserService {
   Future<ApiResult<void>> disableUser(int userId, {String? reason}) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.users}$userId',
+        '${ApiConstants.users}/$userId',
         data: {'status': 'disabled', if (reason != null) 'disable_reason': reason},
       );
 
@@ -108,7 +108,7 @@ class UserService {
   Future<ApiResult<void>> enableUser(int userId) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.users}$userId',
+        '${ApiConstants.users}/$userId',
         data: {'status': 'active'},
       );
 

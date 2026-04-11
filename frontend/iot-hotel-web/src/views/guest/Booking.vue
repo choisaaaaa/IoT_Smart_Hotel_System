@@ -704,6 +704,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
 import { hotelApi } from '@/api/hotel'
+import { paymentApi } from '@/api/payment'
 import request from '@/api/request'
 import { useAppStore } from '@/stores/app'
 import {
@@ -1155,12 +1156,36 @@ const submitBooking = async () => {
       }
     }
 
+    // 1. 创建预订
     const booking = await hotelApi.createBooking(payload)
+    const bookingId = booking?.id
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
+
+    // 2. 如果是在线支付（非到店支付），创建支付记录并确认支付
+    if (paymentMethod.value !== 'front_desk' && bookingId) {
+      console.log('创建支付记录...')
+      const payment = await paymentApi.createPayment({
+        order_type: 'booking',
+        order_id: bookingId,
+        amount: finalTotalPrice.value,
+        payment_method: paymentMethod.value,
+        description: `预订支付 - ${bookingNo.value}`
+      })
+      console.log('支付记录创建成功:', payment)
+
+      // 3. 确认支付
+      if (payment?.id) {
+        console.log('确认支付...')
+        await paymentApi.payPayment(payment.id)
+        console.log('支付确认成功')
+      }
+    }
+
     currentStep.value = 4
     message.success('预订成功！')
-  } catch (error) {
-    message.error('预订失败，请稍后重试')
+  } catch (error: any) {
+    console.error('预订或支付失败:', error)
+    message.error(error?.message || '预订失败，请稍后重试')
   } finally {
     submitting.value = false
   }

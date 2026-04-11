@@ -396,8 +396,33 @@ export const create = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const userId = req.user?.id || null;
+    // 对于前台端办理入住，需要根据顾客手机号查找或创建顾客用户
+    let userId = req.user?.id || null;
     const phone = guest_phone || req.user?.phone || req.user?.username;
+    
+    // 如果当前用户是前台/管理员，且提供了顾客手机号，则查找顾客用户
+    if (req.user?.role === 'reception' || req.user?.role === 'admin') {
+      if (guest_phone) {
+        // 查找顾客用户
+        const [userRows] = await connection.query<RowDataPacket[]>(
+          'SELECT id FROM users WHERE phone = ? AND role = "guest" LIMIT 1',
+          [guest_phone]
+        );
+        if (userRows.length > 0) {
+          userId = (userRows[0] as any).id;
+          logger.info(`前台端办理入住：找到顾客用户 ID=${userId}, phone=${guest_phone}`);
+        } else {
+          // 如果没有找到顾客用户，创建一个新顾客用户
+          const [createResult] = await connection.query<ResultSetHeader>(
+            `INSERT INTO users (username, phone, role, status, created_at, updated_at) 
+             VALUES (?, ?, 'guest', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [guest_name || guest_phone, guest_phone]
+          );
+          userId = createResult.insertId;
+          logger.info(`前台端办理入住：创建新顾客用户 ID=${userId}, phone=${guest_phone}`);
+        }
+      }
+    }
 
     // 使用辅助函数计算最终价格 (集成价格日历、子房价方案、会员折扣、优惠券、积分抵扣)
     const { total_price, discount_rate, used_points: actualUsedPoints, points_discount } = await calculateBookingPrice(
@@ -445,10 +470,10 @@ export const create = async (req: AuthRequest, res: Response) => {
     // 如果是直接办理入住，插入到 guests 表
     if (bookingStatus === 'checked_in') {
       await connection.query(
-        `INSERT INTO guests (booking_id, hotel_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
-        [bookingId, hotelId, guest_name, guest_phone, guest_id_number || null, room_id]
+        [bookingId, guest_name, guest_phone, guest_id_number || null, room_id]
       );
 
       // 同步更新房间状态为“在住”
@@ -549,31 +574,29 @@ export const checkinOnline = async (req: Request, res: Response) => {
       return;
     }
 
-    if (!['pending', 'confirmed', 'checked_in'].includes(booking.status)) {
+    if (!['pending', 'confirmed', 'pre_checked_in'].includes(booking.status)) {
       await connection.rollback();
       res.status(400).json(errorResponse('当前预订状态不允许办理入住'));
       return;
     }
 
+    // 在线办理入住：状态改为 pre_checked_in（预入住），等待前台核实
     await connection.query<ResultSetHeader>(
       `UPDATE bookings
-       SET guest_name = ?, guest_id_number = ?, status = ?, check_in_time = CURRENT_TIMESTAMP
+       SET guest_name = ?, guest_id_number = ?, status = ?, pre_checkin_time = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [real_name, id_number, 'checked_in', id]
+      [real_name, id_number, 'pre_checked_in', id]
     );
 
-    // 插入到 guests 表
+    // 插入到 guests 表，状态为预入住
     await connection.query(
-      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
+      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, status, check_in_time)
+       VALUES (?, ?, ?, ?, ?, 'pre_checked_in', CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id), status = 'pre_checked_in'`,
       [id, real_name, guest_phone, id_number, booking.room_id]
     );
 
-    // 同步更新房间状态为“在住”
-    if (booking.room_id) {
-      await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['occupied', booking.room_id]);
-    }
+    // 预入住状态不更新房间状态，等待前台核实后才更新
 
     await connection.commit();
     const roomPin = uuidv4().replace(/-/g, '').slice(0, 6).toUpperCase();
@@ -644,7 +667,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     const { user_id, guest_name, guest_phone, guest_id_number, special_requests } = req.body || {};
 
     // 获取订单信息
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number, status FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
@@ -652,6 +675,13 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     }
     const booking = bookingRows[0] as any;
     const roomId = booking.room_id;
+
+    // 检查状态：支持 confirmed 和 pre_checked_in 转为 checked_in
+    if (!['confirmed', 'pre_checked_in'].includes(booking.status)) {
+      await connection.rollback();
+      res.status(400).json(errorResponse('当前预订状态不允许办理入住'));
+      return;
+    }
 
     // 构建更新字段
     const updateFields: string[] = ['status = ?', 'check_in_time = CURRENT_TIMESTAMP'];
@@ -705,6 +735,52 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     await connection.rollback();
     logger.error('办理入住失败:', error);
     res.status(500).json(errorResponse('办理入住失败'));
+  } finally {
+    connection.release();
+  }
+};
+
+// 拒绝预入住申请
+export const rejectPreCheckin = async (req: AuthRequest, res: Response) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { id } = req.params;
+
+    // 获取订单信息
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT status FROM bookings WHERE id = ?', [id]);
+    if (bookingRows.length === 0) {
+      await connection.rollback();
+      res.status(404).json(errorResponse('预订不存在'));
+      return;
+    }
+    const booking = bookingRows[0] as any;
+
+    // 检查状态
+    if (booking.status !== 'pre_checked_in') {
+      await connection.rollback();
+      res.status(400).json(errorResponse('当前预订不是预入住状态'));
+      return;
+    }
+
+    // 退回为 confirmed 状态
+    await connection.query<ResultSetHeader>(
+      'UPDATE bookings SET status = ?, pre_checkin_time = NULL WHERE id = ?',
+      ['confirmed', id]
+    );
+
+    // 更新 guests 表状态
+    await connection.query(
+      'UPDATE guests SET status = ? WHERE booking_id = ?',
+      ['confirmed', id]
+    );
+
+    await connection.commit();
+    res.json(successResponse(null, '已拒绝预入住申请'));
+  } catch (error) {
+    await connection.rollback();
+    logger.error('拒绝预入住失败:', error);
+    res.status(500).json(errorResponse('拒绝预入住失败'));
   } finally {
     connection.release();
   }

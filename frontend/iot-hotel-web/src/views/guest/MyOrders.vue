@@ -87,18 +87,26 @@
                 进入房间
               </a-button>
               <a-button
+                v-if="order.status === 'confirmed'"
+                type="primary"
+                @click="handleCheckIn(order)"
+              >
+                预入住
+              </a-button>
+              <a-button
                 v-if="order.status === 'pending' || order.status === 'confirmed'"
                 @click="handleCancel(order.id)"
               >
                 取消订单
               </a-button>
-              <a-button
-                v-if="order.status === 'confirmed'"
-                type="primary"
-                @click="handleCheckIn(order.id)"
-              >
-                在线入住
-              </a-button>
+              <template v-if="order.status === 'pre_checked_in'">
+                <a-button disabled style="margin-right: 8px;">
+                  待确认
+                </a-button>
+                <a-button @click="handleCancel(order.id)">
+                  取消订单
+                </a-button>
+              </template>
             </div>
           </div>
         </a-card>
@@ -132,11 +140,12 @@ const isLoggedIn = computed(() => !!appStore.userInfo)
 // 获取状态颜色
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
-    pending: 'orange',
-    confirmed: 'blue',
-    checked_in: 'green',
-    checked_out: 'gray',
-    cancelled: 'red'
+    pending: 'orange',        // 待付款
+    confirmed: 'blue',        // 已支付（已确认）
+    pre_checked_in: 'cyan',   // 待确认（预入住审核中）
+    checked_in: 'green',      // 已入住
+    checked_out: 'gray',      // 已退房
+    cancelled: 'red'          // 已取消
   }
   return colors[status] || 'default'
 }
@@ -144,9 +153,10 @@ const getStatusColor = (status: string) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const texts: Record<string, string> = {
-    pending: '待确认',
-    confirmed: '已确认',
-    checked_in: '已入住',
+    pending: '待付款',           // 输入信息但未支付
+    confirmed: '已支付',         // 已支付，可办理预入住
+    pre_checked_in: '待确认',    // 已办理预入住，等待前台审核
+    checked_in: '已入住',        // 前台审核通过，正式入住
     checked_out: '已退房',
     cancelled: '已取消'
   }
@@ -210,10 +220,11 @@ const goToRoom = (roomId: any) => {
 }
 
 // 在线入住
-const handleCheckIn = (bookingId: number) => {
+const handleCheckIn = (order: any) => {
+  const bookingNumber = order.booking_number || order.booking_no
   router.push({
     path: '/guest/checkin-online',
-    query: { booking_id: bookingId }
+    query: { booking_no: bookingNumber }
   })
 }
 

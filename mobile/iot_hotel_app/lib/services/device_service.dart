@@ -102,6 +102,26 @@ class DeviceService {
       return ApiResult.failure('网络错误：$e');
     }
   }
+
+  Future<ApiResult<Map<String, dynamic>>> aiChat(int roomId, String text, {String? audioData}) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.aiButler}chat',
+        data: {
+          'room_id': roomId,
+          'text': text,
+          if (audioData != null) 'audio': audioData,
+        },
+      );
+
+      if (response.statusCode == 200 && _isSuccess(response.data)) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? 'AI管家暂时无法回答');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
 }
 
 final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService());

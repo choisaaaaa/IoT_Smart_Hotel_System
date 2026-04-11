@@ -12,7 +12,7 @@ class MemberService {
 
   Future<ApiResult<Map<String, dynamic>>> getMyAssets() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.members}me');
+      final response = await _dioClient.get('${ApiConstants.members}/me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         _assets = response.data['data'] as Map<String, dynamic>;
         return ApiResult.success(_assets!);
@@ -23,9 +23,24 @@ class MemberService {
     }
   }
 
+  Future<ApiResult<Map<String, dynamic>>> recharge(double amount) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.members}/recharge',
+        data: {'amount': amount},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '充值失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<List<dynamic>>> getMyCoupons() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.coupons}me');
+      final response = await _dioClient.get('${ApiConstants.coupons}/me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(List<dynamic>.from(response.data['data']));
       }
@@ -38,38 +53,37 @@ class MemberService {
   Future<CheckinResult> checkin() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    final lastCheckin = prefs.getString('last_checkin_date') ?? '';
-    if (lastCheckin == today) {
-      return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
-    }
 
     try {
-      final response = await _dioClient.post('${ApiConstants.members}checkin');
+      final response = await _dioClient.post('${ApiConstants.members}/checkin');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'] as Map<String, dynamic>?;
         if (data != null) {
+          // 同步更新本地状态，确保即使不调用 getMyAssets 也能维持本地一致性
+          await prefs.setString('last_checkin_date', today);
           return CheckinResult(
             alreadyCheckedIn: data['already_checked_in'] ?? false,
             experience: data['experience'] ?? 10,
             couponName: data['coupon_name'],
           );
         }
+      } else if (response.data['code'] == 400 || response.data['message']?.toString().contains('今日已签到') == true) {
+        // 后端明确返回已签到
+        await prefs.setString('last_checkin_date', today);
+        return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
       }
     } catch (e) {
-      debugPrint('Backend checkin not available, using local fallback: $e');
+      debugPrint('Backend checkin failed: $e');
+      // 如果后端失败，回退到本地检查
+      final lastCheckin = prefs.getString('last_checkin_date') ?? '';
+      if (lastCheckin == today) {
+        return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
+      }
     }
 
+    // 本地 fallback (仅当后端彻底不可用时)
     final expGain = 10 + (DateTime.now().weekday == 7 ? 20 : 0);
-    final currentExp = prefs.getInt('checkin_experience') ?? 0;
-    await prefs.setInt('checkin_experience', currentExp + expGain);
     await prefs.setString('last_checkin_date', today);
-    final checkinDays = prefs.getInt('checkin_streak') ?? 0;
-    final lastDate = lastCheckin.isNotEmpty ? DateTime.tryParse(lastCheckin) : null;
-    if (lastDate != null && DateTime.now().difference(lastDate).inDays == 1) {
-      await prefs.setInt('checkin_streak', checkinDays + 1);
-    } else {
-      await prefs.setInt('checkin_streak', 1);
-    }
     return CheckinResult(alreadyCheckedIn: false, experience: expGain, couponName: null);
   }
 
@@ -88,3 +102,8 @@ class CheckinResult {
 }
 
 final memberServiceProvider = Provider<MemberService>((ref) => MemberService());
+
+final myAssetsProvider = FutureProvider<ApiResult<Map<String, dynamic>>>((ref) async {
+  final service = ref.watch(memberServiceProvider);
+  return service.getMyAssets();
+});

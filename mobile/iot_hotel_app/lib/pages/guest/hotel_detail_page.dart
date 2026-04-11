@@ -41,6 +41,11 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   @override
   void initState() {
     super.initState();
+    // 确保初始日期是“今天”和“明天”，避免因本地时间偏移导致查询跨度异常
+    final now = DateTime.now();
+    _checkInDate = DateTime(now.year, now.month, now.day);
+    _checkOutDate = _checkInDate.add(const Duration(days: 1));
+    
     _fetchHotelDetail();
     _fetchRooms();
     _fetchReviews();
@@ -144,13 +149,23 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     setState(() => _isLoadingRooms = true);
     try {
       final dateFormat = DateFormat('yyyy-MM-dd');
+      final checkIn = dateFormat.format(_checkInDate);
+      final checkOut = dateFormat.format(_checkOutDate);
+      
+      debugPrint('[HotelDetail] 正在查询房型: hotel_id=${widget.hotelId}, range=$checkIn to $checkOut');
+      
       final result = await ref.read(hotelServiceProvider).getRoomAvailability(
         widget.hotelId ?? 1,
-        dateFormat.format(_checkInDate),
-        dateFormat.format(_checkOutDate),
+        checkIn,
+        checkOut,
       );
+      
       if (result.success && mounted) {
-        setState(() => _rooms = result.data ?? []);
+        final rooms = result.data ?? [];
+        debugPrint('🏨 [HotelDetail] Loaded rooms: ${rooms.length} types. First room ID: ${rooms.isNotEmpty ? (rooms[0]['room_id'] ?? rooms[0]['id']) : 'none'}');
+        setState(() => _rooms = rooms);
+      } else if (mounted) {
+        debugPrint('[HotelDetail] 房型查询失败: ${result.message}');
       }
     } catch (e) {
       debugPrint('Error fetching rooms: $e');
@@ -513,10 +528,10 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                               if (!context.mounted) return;
                               context.push('/booking-flow', extra: {
                                   'hotelName': _hotelInfo?['name'] ?? '智联酒店',
-                                  'hotelId': widget.hotelId,
+                                  'hotelId': widget.hotelId ?? 1,
                                   'roomType': roomName,
                                   'price': discountedPrice,
-                                  'roomId': room['id'],
+                                  'roomId': room['room_id'] ?? room['id'] ?? 0,
                                   'checkInDate': _checkInDate,
                                   'checkOutDate': _checkOutDate,
                                 });

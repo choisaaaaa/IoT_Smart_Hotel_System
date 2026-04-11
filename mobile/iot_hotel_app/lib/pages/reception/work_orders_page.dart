@@ -126,7 +126,6 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('工单处理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

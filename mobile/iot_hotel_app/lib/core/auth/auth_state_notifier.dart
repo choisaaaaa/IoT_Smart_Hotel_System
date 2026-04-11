@@ -22,6 +22,7 @@ int roleToLevel(String? role) {
 
 class AuthState {
   final bool isAuthenticated;
+  final bool isInitialized;
   final String? token;
   final String? userId;
   final String? username;
@@ -32,6 +33,7 @@ class AuthState {
 
   const AuthState({
     this.isAuthenticated = false,
+    this.isInitialized = false,
     this.token,
     this.userId,
     this.username,
@@ -56,6 +58,7 @@ class AuthState {
 
   AuthState copyWith({
     bool? isAuthenticated,
+    bool? isInitialized,
     String? token,
     String? userId,
     String? username,
@@ -66,6 +69,7 @@ class AuthState {
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      isInitialized: isInitialized ?? this.isInitialized,
       token: token ?? this.token,
       userId: userId ?? this.userId,
       username: username ?? this.username,
@@ -100,6 +104,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     }
     state = AuthState(
       isAuthenticated: true,
+      isInitialized: true,
       token: token,
       userId: userId,
       username: username,
@@ -110,6 +115,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  void markInitialized() {
+    state = state.copyWith(isInitialized: true);
+  }
+
   void switchMode(AppMode mode) {
     if (state.canSwitchTo(mode)) {
       state = state.copyWith(currentMode: mode);
@@ -117,7 +126,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }
 
   void clearAuth() {
-    state = const AuthState();
+    state = const AuthState(isInitialized: true);
   }
 }
 

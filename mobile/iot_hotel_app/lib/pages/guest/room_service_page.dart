@@ -11,7 +11,8 @@ import '../../../services/voice_call_service.dart';
 import '../../../services/booking_service.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
-  const RoomServicePage({super.key});
+  final int? bookingId;
+  const RoomServicePage({super.key, this.bookingId});
 
   @override
   ConsumerState<RoomServicePage> createState() => _RoomServicePageState();
@@ -29,7 +30,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addObserver(this);
     _checkCheckinStatus();
   }
@@ -53,6 +54,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   Future<void> _checkCheckinStatus() async {
     setState(() => _isLoading = true);
     try {
+      // 首先检查是否已入住
       final result = await ref.read(bookingServiceProvider).getMyCurrentStay();
       if (result.success && mounted) {
         final stay = result.data;
@@ -63,15 +65,91 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           });
           _fetchDevices();
           _connectMqtt();
-        } else {
-          // 没有checked_in状态的预订，重置状态
+          return;
+        }
+      }
+
+      // 检查是否有已确认（已支付）的预订，需要办理入住
+      final bookingsResult = await ref.read(bookingServiceProvider).getBookings(
+        status: 'confirmed',
+        pageSize: 10,
+      );
+      if (bookingsResult.success && mounted) {
+        final bookings = bookingsResult.data?['list'] as List<dynamic>? ?? [];
+        if (bookings.isNotEmpty) {
+          // 有已确认的预订，自动跳转到在线办理入住
+          final booking = bookings.first;
+          final bookingId = booking['id'] as int?;
+          if (bookingId != null && mounted) {
+            // 显示提示后跳转
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('检测到您的预订，正在跳转至在线办理入住...'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            await Future.delayed(const Duration(seconds: 1));
+            if (mounted) {
+              context.push('/online-checkin', extra: {'bookingId': bookingId});
+            }
+            return;
+          }
+        }
+      }
+
+      // 检查是否有预入住状态的预订
+      final preCheckinResult = await ref.read(bookingServiceProvider).getBookings(
+        status: 'pre_checked_in',
+        pageSize: 10,
+      );
+      if (preCheckinResult.success && mounted) {
+        final preCheckinBookings = preCheckinResult.data?['list'] as List<dynamic>? ?? [];
+        if (preCheckinBookings.isNotEmpty) {
+          final booking = preCheckinBookings.first;
           setState(() {
             _isCheckedIn = false;
             _currentStay = null;
-            _devices = [];
+            _isLoading = false;
           });
-          _mqttService.disconnect();
+          // 显示预入住状态提示
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('入住审核中'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.pending_actions, size: 64, color: AppColors.warning),
+                  const SizedBox(height: 16),
+                  Text('您的预订 ${booking['booking_number'] ?? booking['id']} 已提交预入住申请'),
+                  const SizedBox(height: 8),
+                  const Text('请等待前台核实信息后完成入住', style: TextStyle(color: AppColors.textSecondary)),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/');
+                  },
+                  child: const Text('返回首页'),
+                ),
+              ],
+            ),
+          );
+          return;
         }
+      }
+
+      // 没有任何预订状态
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = false;
+          _currentStay = null;
+          _devices = [];
+        });
+        _mqttService.disconnect();
       }
     } catch (e) {
       debugPrint('Error checking check-in status: $e');
@@ -190,26 +268,29 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
-          labelStyle: GoogleFonts.notoSansSc(
-              fontSize: 14, fontWeight: FontWeight.bold),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'AI管家'),
+            Tab(text: '控制中心'),
             Tab(text: '客房送物'),
             Tab(text: '联系前台'),
-            Tab(text: '设备控制'),
+            Tab(text: '更多服务'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _AiButlerTab(),
+          _AiButlerTab(roomId: _currentStay?['room_id']),
+          _buildDeviceControlTab(),
           _DeliveryTab(roomId: _currentStay?['room_id'], roomNumber: _currentStay?['room_number']?.toString(), currentStay: _currentStay),
           _ContactFrontDeskTab(roomId: _currentStay?['room_id']),
-          _buildDeviceControlTab(),
+          _MoreServicesTab(isCheckedIn: _currentStay != null),
         ],
       ),
     );
@@ -220,39 +301,111 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
       onRefresh: _checkCheckinStatus,
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _devices.isEmpty
-              ? _buildEmptyDevices()
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.8,
+          : CustomScrollView(
+              slivers: [
+                // 智能场景预设
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('智能场景', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _buildSceneCard('欢迎模式', Icons.wb_sunny_rounded, Colors.orange, 'welcome'),
+                            const SizedBox(width: 12),
+                            _buildSceneCard('睡眠模式', Icons.bedtime_rounded, Colors.indigo, 'sleep'),
+                            const SizedBox(width: 12),
+                            _buildSceneCard('外出模式', Icons.exit_to_app_rounded, Colors.blueGrey, 'leave'),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  itemCount: _devices.length,
-                  itemBuilder: (context, index) {
-                    final device = _devices[index];
-                    return _DeviceControlTile(
-                      icon: _getDeviceIcon(device['device_type'] ?? device['type']),
-                      name: device['device_name'] ?? '未知设备',
-                      status: (device['device_status'] ?? device['status'] ?? 'off') == 'on' ? '开启' : '关闭',
-                      isOn: (device['device_status'] ?? device['status'] ?? 'off') == 'on',
-                      onTap: () => _toggleDevice(device),
-                    );
-                  },
                 ),
+                // 设备列表
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                    child: const Text('所有设备', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                _devices.isEmpty
+                    ? SliverFillRemaining(child: _buildEmptyDevices())
+                    : SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.8,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final device = _devices[index];
+                              return _DeviceControlTile(
+                                icon: _getDeviceIcon(device['device_type'] ?? device['type']),
+                                name: device['device_name'] ?? '未知设备',
+                                status: (device['device_status'] ?? device['status'] ?? 'off') == 'on' ? '开启' : '关闭',
+                                isOn: (device['device_status'] ?? device['status'] ?? 'off') == 'on',
+                                onTap: () => _toggleDevice(device),
+                              );
+                            },
+                            childCount: _devices.length,
+                          ),
+                        ),
+                      ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildSceneCard(String title, IconData icon, Color color, String scene) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () async {
+          final result = await ref.read(deviceServiceProvider).controlDevice(
+            _devices.isNotEmpty ? _devices[0]['id'] : 0, // 假设房间有一个主控设备或后台处理场景
+            'scene',
+            scene
+          );
+          if (result.success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已激活 $title'), backgroundColor: color));
+            _fetchDevices();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildEmptyDevices() {
-    return ListView(
-      children: [
-        Container(
-          padding:
-              const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.devices_other_rounded,
                   size: 64,
@@ -271,20 +424,41 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _AiButlerTab extends StatefulWidget {
+class _AiButlerTab extends ConsumerStatefulWidget {
+  final int? roomId;
+  const _AiButlerTab({this.roomId});
   @override
-  State<_AiButlerTab> createState() => _AiButlerTabState();
+  ConsumerState<_AiButlerTab> createState() => _AiButlerTabState();
 }
 
-class _AiButlerTabState extends State<_AiButlerTab> {
+class _AiButlerTabState extends ConsumerState<_AiButlerTab> {
   final List<_ChatMessage> _messages = [];
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _isTyping = false;
+
+  final List<Map<String, String>> _quickChips = [
+    {'icon': '💡', 'label': '开灯', 'text': '打开灯光'},
+    {'icon': '🏠', 'label': '房间状态', 'text': '查询房间状态'},
+    {'icon': '🧹', 'label': '保洁', 'text': '需要保洁服务'},
+    {'icon': '📶', 'label': 'WiFi', 'text': '查询WiFi密码'},
+    {'icon': '👨‍💼', 'label': '转人工', 'text': '转接人工'},
+  ];
+
+  List<String> _suggestions = [];
+
+  final Map<String, List<String>> _suggestionMap = {
+    '灯光': ['调暗一点', '关闭灯光', '打开所有灯'],
+    '空调': ['调到26度', '开启制冷模式', '关闭空调'],
+    '保洁': ['现在就来', '1小时后', '只整理床铺'],
+    'WiFi': ['连接不上怎么办', '密码是什么', '网速太慢'],
+    '默认': ['还需要什么帮助？', '查询酒店设施', '叫醒服务'],
+  };
 
   @override
   void initState() {
@@ -303,56 +477,68 @@ class _AiButlerTabState extends State<_AiButlerTab> {
     super.dispose();
   }
 
-  void _sendMessage(String text) {
-    if (text.trim().isEmpty) return;
+  Future<void> _sendMessage(String text) async {
+    if (text.trim().isEmpty || _isTyping) return;
+    
+    final roomId = widget.roomId;
+    if (roomId == null) return;
+
     setState(() {
-      _messages
-          .add(_ChatMessage(isUser: true, text: text, time: DateTime.now()));
+      _messages.add(_ChatMessage(isUser: true, text: text, time: DateTime.now()));
+      _isTyping = true;
     });
     _inputController.clear();
     _scrollToBottom();
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      final response = _generateAiResponse(text);
-      setState(() {
-        _messages
-            .add(_ChatMessage(isUser: false, text: response, time: DateTime.now()));
-      });
-      _scrollToBottom();
-    });
+    try {
+      final result = await ref.read(deviceServiceProvider).aiChat(roomId, text);
+      if (result.success && mounted) {
+        setState(() {
+          _messages.add(_ChatMessage(
+            isUser: false, 
+            text: result.data!['response'] ?? '收到，正在为您处理。', 
+            time: DateTime.now()
+          ));
+          _updateSuggestions(text);
+        });
+      } else if (mounted) {
+        setState(() {
+          _messages.add(_ChatMessage(
+            isUser: false, 
+            text: '抱歉，我现在遇到了一点问题，请稍后再试。', 
+            time: DateTime.now()
+          ));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(_ChatMessage(
+            isUser: false, 
+            text: '网络连接异常，请检查您的网络。', 
+            time: DateTime.now()
+          ));
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTyping = false);
+        _scrollToBottom();
+      }
+    }
   }
 
-  String _generateAiResponse(String input) {
-    final lower = input.toLowerCase();
-    if (lower.contains('空调') || lower.contains('温度') || lower.contains('冷') || lower.contains('热')) {
-      return '好的，我来帮您调节空调温度。请问您希望设定多少度？推荐24-26度最为舒适。您也可以在"设备控制"标签页直接操作空调开关和温度。';
+  void _updateSuggestions(String lastUserMessage) {
+    String matchedKey = '默认';
+    for (final key in _suggestionMap.keys) {
+      if (lastUserMessage.contains(key)) {
+        matchedKey = key;
+        break;
+      }
     }
-    if (lower.contains('送水') || lower.contains('矿泉水') || lower.contains('水')) {
-      return '好的，我来帮您安排送水服务。请切换到"客房送物"标签页，选择饮品分类下的矿泉水即可下单，前台会尽快为您配送。';
-    }
-    if (lower.contains('毛巾') || lower.contains('送物') || lower.contains('配送')) {
-      return '好的，请切换到"客房送物"标签页选择需要的物品，前台会尽快为您配送。';
-    }
-    if (lower.contains('几点') || lower.contains('时间') || lower.contains('现在')) {
-      final now = DateTime.now();
-      return '现在是${now.year}年${now.month}月${now.day}日 ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}。';
-    }
-    if (lower.contains('天气')) {
-      return '今天天气晴朗，气温适宜，非常适合出行。如需帮助叫车服务，请告诉我。';
-    }
-    if (lower.contains('续住') || lower.contains('延住') || lower.contains('多住')) {
-      return '好的，续住需求已记录。请联系前台确认续住日期和费用，您可以在"联系前台"标签页直接拨打前台电话。';
-    }
-    if (lower.contains('退房') || lower.contains('离开')) {
-      return '退房时间为中午12:00前。如需延迟退房，请联系前台确认。您可以在"联系前台"标签页与我们沟通。';
-    }
-    if (lower.contains('wifi') || lower.contains('网络') || lower.contains('上网')) {
-      return '酒店WiFi名称为 SmartHotel-Guest，密码在房间桌面上的服务卡上。如遇网络问题，请联系前台。';
-    }
-    if (lower.contains('早餐') || lower.contains('吃饭') || lower.contains('餐厅')) {
-      return '早餐时间为7:00-10:00，地点在一楼自助餐厅。金卡及以上会员可享受免费早餐。';
-    }
-    return '收到您的消息，我正在处理中。如需更详细的帮助，您可以通过"联系前台"标签页直接与我们沟通，或切换到"客房送物"标签页下单配送服务。';
+    setState(() {
+      _suggestions = _suggestionMap[matchedKey]!;
+    });
   }
 
   void _scrollToBottom() {
@@ -369,15 +555,6 @@ class _AiButlerTabState extends State<_AiButlerTab> {
 
   @override
   Widget build(BuildContext context) {
-    final quickQuestions = [
-      '帮我打开空调',
-      '送两瓶矿泉水',
-      '现在几点了',
-      '明天天气怎么样',
-      '我想续住一晚',
-      'WiFi密码是多少',
-    ];
-
     return Column(
       children: [
         Expanded(
@@ -388,46 +565,95 @@ class _AiButlerTabState extends State<_AiButlerTab> {
             itemBuilder: (context, i) => _buildMessageBubble(_messages[i]),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          color: Colors.white,
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: quickQuestions
-                .map((q) => ActionChip(
-                      label: Text(q, style: const TextStyle(fontSize: 11)),
-                      onPressed: () => _sendMessage(q),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ))
-                .toList(),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          color: Colors.white,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _inputController,
-                  decoration: InputDecoration(
-                    hintText: '输入您的问题...',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    isDense: true,
+        if (_suggestions.isNotEmpty && !_isTyping)
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    label: Text(_suggestions[index], style: const TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.white,
+                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    onPressed: () => _sendMessage(_suggestions[index]),
                   ),
-                  onSubmitted: _sendMessage,
+                );
+              },
+            ),
+          ),
+        Container(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_messages.length <= 1)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: _quickChips.map((chip) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: InkWell(
+                        onTap: () => _sendMessage(chip['text']!),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(chip['icon']!, style: const TextStyle(fontSize: 14)),
+                              const SizedBox(width: 4),
+                              Text(chip['label']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )).toList(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: () => _sendMessage(_inputController.text),
-                icon: const Icon(Icons.send, size: 18),
-                style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TextField(
+                        controller: _inputController,
+                        decoration: const InputDecoration(
+                          hintText: '输入您的问题...',
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(fontSize: 14),
+                        ),
+                        onSubmitted: _sendMessage,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton.filled(
+                    onPressed: _isTyping ? null : () => _sendMessage(_inputController.text),
+                    icon: const Icon(Icons.send_rounded),
+                    style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1169,6 +1395,85 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _MoreServicesTab extends StatelessWidget {
+  final bool isCheckedIn;
+  const _MoreServicesTab({required this.isCheckedIn});
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Map<String, String>> services = [
+      {'icon': '🚗', 'name': '叫车服务', 'desc': '预约出租车/专车'},
+      {'icon': '🧺', 'name': '洗衣服务', 'desc': '衣物清洗熨烫'},
+      {'icon': '⏰', 'name': '叫醒服务', 'desc': '定时叫醒'},
+      {'icon': '🅿️', 'name': '停车服务', 'desc': '代客泊车'},
+      {'icon': '🔧', 'name': '报修服务', 'desc': '设备故障报修'},
+      {'icon': '📅', 'name': '续住申请', 'desc': '延长住宿时间'},
+    ];
+
+    return Stack(
+      children: [
+        GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 1.4,
+          ),
+          itemCount: services.length,
+          itemBuilder: (context, index) {
+            final svc = services[index];
+            return InkWell(
+              onTap: isCheckedIn ? () {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已收到 ${svc['name']} 请求，前台将尽快处理')));
+              } : null,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(svc['icon']!, style: const TextStyle(fontSize: 32)),
+                    const SizedBox(height: 8),
+                    Text(svc['name']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    Text(svc['desc']!, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        if (!isCheckedIn)
+          Container(
+            color: Colors.white.withValues(alpha: 0.6),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_outline_rounded, size: 48, color: AppColors.textHint),
+                  const SizedBox(height: 16),
+                  const Text('请先办理入住后再使用此服务', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => context.push('/online-checkin'),
+                    child: const Text('立即办理'),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

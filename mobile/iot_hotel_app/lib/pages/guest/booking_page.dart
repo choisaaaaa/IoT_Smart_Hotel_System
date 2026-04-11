@@ -606,18 +606,20 @@ class _MyBookingsState extends ConsumerState<_MyBookings> {
     }
   }
 
-  Color _statusColor(String? s) => switch (s) {
+  Color _statusColor(String? s) => switch (s?.toLowerCase()) {
         'confirmed' => AppColors.success,
         'pending' => AppColors.warning,
-        'checked_in' => AppColors.info,
+        'pre_checked_in' => AppColors.info,
+        'checked_in' => AppColors.primary,
         'checked_out' => AppColors.textSecondary,
         'cancelled' => AppColors.error,
         _ => AppColors.textHint,
       };
 
-  String _statusText(String? s) => switch (s) {
-        'confirmed' => '已确认',
-        'pending' => '待确认',
+  String _statusText(String? s) => switch (s?.toLowerCase()) {
+        'confirmed' => '已支付',
+        'pending' => '待付款',
+        'pre_checked_in' => '待确认',
         'checked_in' => '已入住',
         'checked_out' => '已退房',
         'cancelled' => '已取消',

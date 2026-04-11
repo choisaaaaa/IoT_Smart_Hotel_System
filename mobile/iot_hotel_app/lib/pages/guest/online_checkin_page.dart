@@ -111,11 +111,11 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         final data = result.data;
         setState(() {
           _roomPin = data?['room_pin']?.toString() ?? '';
-          // 更新房间信息
+          // 更新房间信息 - 状态改为 pre_checked_in（预入住）
           if (_foundBooking != null && data != null) {
             _foundBooking!['room_name'] = data['room_name'];
             _foundBooking!['room_number'] = data['room_number'];
-            _foundBooking!['status'] = 'checked_in';
+            _foundBooking!['status'] = 'pre_checked_in'; // 预入住状态，等待前台核实
           }
           _currentStep = 3;
         });
@@ -497,11 +497,32 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            const Icon(Icons.check_circle, color: AppColors.success, size: 64),
+            const Icon(Icons.pending_actions, color: AppColors.warning, size: 64),
             const SizedBox(height: 16),
-            const Text('在线入住办理成功！', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text('预入住申请已提交！', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('您的房间已准备就绪，到店后请向前台出示此页面领取房卡。', style: TextStyle(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+            const Text('您的入住信息已提交，请等待前台核实后完成正式入住。', style: TextStyle(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.warning, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '到店后请向前台出示身份证件进行核实，核实通过后即可领取房卡正式入住。',
+                      style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(20),
@@ -512,7 +533,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
               ),
               child: Column(
                 children: [
-                  const Text('入住房间', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                  const Text('预订房间', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
                   const SizedBox(height: 4),
                   Text(
                     _foundBooking?['room_name'] ?? _foundBooking?['room_number'] ?? '${_foundBooking?['room_id'] ?? '-'}号房',
@@ -520,7 +541,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                   ),
                   if (_roomPin.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text('房卡密码：$_roomPin', style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                    Text('临时密码：$_roomPin', style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
                   ],
                 ],
               ),

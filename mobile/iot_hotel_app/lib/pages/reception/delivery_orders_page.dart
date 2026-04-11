@@ -119,7 +119,6 @@ class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('客房送物', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

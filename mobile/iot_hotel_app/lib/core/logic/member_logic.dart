@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 enum MemberLevel {
-  none(label: '普通会员', color: AppColors.textSecondary, discount: 1.0, pointsMultiplier: 1),
+  standard(label: '普通会员', color: AppColors.textSecondary, discount: 1.0, pointsMultiplier: 1),
   silver(label: '银会员', color: Color(0xFF9E9E9E), discount: 0.95, pointsMultiplier: 3),
-  gold(label: '金会员', color: Color(0xFF795548), discount: 0.88, pointsMultiplier: 9),
+  gold(label: '金会员', color: Color(0xFFD4AF37), discount: 0.88, pointsMultiplier: 9),
   platinum(label: '铂金会员', color: Color(0xFF455A64), discount: 0.85, pointsMultiplier: 12),
   diamond(label: '钻石会员', color: Color(0xFF212121), discount: 0.80, pointsMultiplier: 15);
 
@@ -25,12 +25,22 @@ enum MemberLevel {
     if (experience >= 2000) return MemberLevel.platinum;
     if (experience >= 500) return MemberLevel.gold;
     if (experience >= 100) return MemberLevel.silver;
-    return MemberLevel.none;
+    return MemberLevel.standard;
+  }
+
+  static MemberLevel fromKey(String key) {
+    switch (key.toLowerCase()) {
+      case 'diamond': return MemberLevel.diamond;
+      case 'platinum': return MemberLevel.platinum;
+      case 'gold': return MemberLevel.gold;
+      case 'silver': return MemberLevel.silver;
+      default: return MemberLevel.standard;
+    }
   }
 
   int nextLevelExperience() {
     switch (this) {
-      case MemberLevel.none: return 100;
+      case MemberLevel.standard: return 100;
       case MemberLevel.silver: return 500;
       case MemberLevel.gold: return 2000;
       case MemberLevel.platinum: return 5000;

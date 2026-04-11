@@ -81,7 +81,14 @@ class Booking {
         'created_at': createdAt?.toIso8601String()};
 
   String get statusText {
-    const map = {'pending': '待确认', 'confirmed': '已确认', 'checked_in': '已入住', 'checked_out': '已退房', 'cancelled': '已取消'};
+    const map = {
+      'pending': '待付款',           // 输入信息但未支付
+      'confirmed': '已支付',         // 已支付，可办理预入住
+      'pre_checked_in': '待确认',    // 已办理预入住，等待前台审核
+      'checked_in': '已入住',        // 前台审核通过，正式入住
+      'checked_out': '已退房',
+      'cancelled': '已取消'
+    };
     return map[status] ?? status;
   }
 

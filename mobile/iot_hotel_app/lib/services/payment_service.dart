@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -8,13 +9,16 @@ class PaymentService {
 
   Future<ApiResult<Map<String, dynamic>>> createPayment(Map<String, dynamic> data) async {
     try {
+      debugPrint('💳 [PaymentService] Creating payment with data: $data');
       final response = await _dioClient.post(ApiConstants.payments, data: data);
+      debugPrint('💳 [PaymentService] Response: status=${response.statusCode}, data=${response.data}');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '创建支付订单失败');
     } catch (e) {
+      debugPrint('💳 [PaymentService] Error creating payment: $e');
       return ApiResult.failure('网络错误：$e');
     }
   }
@@ -22,7 +26,7 @@ class PaymentService {
   Future<ApiResult<void>> pay(int paymentId, {String? transactionNo}) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.payments}$paymentId/pay',
+        '${ApiConstants.payments}/$paymentId/pay',
         data: {'transaction_no': transactionNo},
       );
 
@@ -37,7 +41,7 @@ class PaymentService {
 
   Future<ApiResult<Map<String, dynamic>>> getPaymentStatus(String paymentId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.payments}$paymentId');
+      final response = await _dioClient.get('${ApiConstants.payments}/$paymentId');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -129,7 +133,7 @@ class PaymentService {
   Future<ApiResult<void>> refundPayment(int bookingId, {String? reason}) async {
     try {
       final cancelResult = await _dioClient.put(
-        '${ApiConstants.bookings}$bookingId/cancel',
+        '${ApiConstants.bookings}/$bookingId/cancel',
         data: {'reason': reason},
       );
       if (cancelResult.statusCode == 200 && cancelResult.data['code'] == 200) {
@@ -144,7 +148,7 @@ class PaymentService {
   Future<ApiResult<Map<String, dynamic>>> getRevenueStats({String? range}) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.payments}stats/revenue',
+        '${ApiConstants.payments}/stats/revenue',
         queryParameters: {
           if (range != null) 'range': range,
         },
