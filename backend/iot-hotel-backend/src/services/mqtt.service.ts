@@ -63,7 +63,7 @@ class MQTTService {
       try {
         this.client = mqtt.connect(url, options);
       } catch (error) {
-        logger.error(`MQTT连接地址无效: ${url}`, error);
+        logger.error(`MQTT连接地址无效: ${url} - ${error.message}`);
         this.scheduleReconnect();
         resolve(false);
         return;
@@ -307,7 +307,7 @@ class MQTTService {
         timestamp: now.toISOString()
       });
     } catch (error) {
-      logger.error('处理设备状态更新失败:', error);
+      logger.error('处理设备状态更新失败:', error.message);
     }
   }
 
@@ -329,7 +329,7 @@ class MQTTService {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('处理传感器数据失败:', error);
+      logger.error('处理传感器数据失败:', error.message);
     }
   }
 
@@ -355,7 +355,7 @@ class MQTTService {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('处理指令结果失败:', error);
+      logger.error('处理指令结果失败:', error.message);
     }
   }
 
@@ -382,7 +382,7 @@ class MQTTService {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('处理安防事件失败:', error);
+      logger.error('处理安防事件失败:', error.message);
     }
   }
 
@@ -465,7 +465,7 @@ class MQTTService {
       logger.info(`发送设备指令 (已签名): #${commandId} -> ${deviceId}/${commandType}=${commandValue}`);
       return commandId;
     } catch (error) {
-      logger.error('发送设备指令失败:', error);
+      logger.error('发送设备指令失败:', error.message);
       return null;
     }
   }
@@ -512,7 +512,7 @@ class MQTTService {
       );
       return rows;
     } catch (error) {
-      logger.error('获取在线设备列表失败:', error);
+      logger.error('获取在线设备列表失败:', error.message);
       return [];
     }
   }
@@ -525,7 +525,7 @@ class MQTTService {
       );
       return rows;
     } catch (error) {
-      logger.error('获取传感器数据失败:', error);
+      logger.error('获取传感器数据失败:', error.message);
       return [];
     }
   }

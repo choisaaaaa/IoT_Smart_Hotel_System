@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -34,7 +34,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
         setState(() => _reportData = result.data);
       }
     } catch (e) {
-      debugPrint('Error loading report: $e');
+      debugPrint('鉁?report: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

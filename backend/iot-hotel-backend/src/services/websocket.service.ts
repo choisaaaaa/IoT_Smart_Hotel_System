@@ -82,7 +82,7 @@ class WebSocketService {
             }
           }
         } catch (error) {
-          logger.error('获取房间信息失败:', error);
+          logger.error('获取房间信息失败:', error.message);
         }
       });
 
@@ -179,7 +179,7 @@ class WebSocketService {
           // 广播更新在线列表
           this.broadcastOnlineStatus();
         } catch (error) {
-          logger.error('注册客户端失败:', error);
+          logger.error('注册客户端失败:', error.message);
           socket.emit('error', { message: '注册失败' });
         }
       });
@@ -331,7 +331,7 @@ class WebSocketService {
           
           logger.info(`通话发起: ${caller_type}/${caller_id} -> ${callee_type}/${callee_id} (${callId})`);
         } catch (error) {
-          logger.error('发起语音通话失败:', error);
+          logger.error('发起语音通话失败:', error.message);
           socket.emit('call_error', { message: '发起语音通话失败' });
         }
       });
@@ -587,7 +587,7 @@ class WebSocketService {
           
           logger.info(`通话接听: ${callId}`);
         } catch (error) {
-          logger.error('接听语音通话失败:', error);
+          logger.error('接听语音通话失败:', error.message);
           socket.emit('call_error', { message: '接听语音通话失败' });
         }
       });
@@ -636,7 +636,7 @@ class WebSocketService {
           
           logger.info(`通话拒接: ${callId}`);
         } catch (error) {
-          logger.error('拒接语音通话失败:', error);
+          logger.error('拒接语音通话失败:', error.message);
           socket.emit('call_error', { message: '拒接语音通话失败' });
         }
       });
@@ -700,7 +700,7 @@ class WebSocketService {
           
           logger.info(`通话挂断: ${callId}, 时长: ${durationSec}秒`);
         } catch (error) {
-          logger.error('挂断语音通话失败:', error);
+          logger.error('挂断语音通话失败:', error.message);
           socket.emit('call_error', { message: '挂断语音通话失败' });
         }
       });
@@ -727,7 +727,7 @@ class WebSocketService {
             timestamp: new Date().toISOString()
           });
         } catch (error) {
-          logger.error('获取房间状态失败:', error);
+          logger.error('获取房间状态失败:', error.message);
           socket.emit('error', { message: '获取房间状态失败' });
         }
       });
@@ -737,7 +737,7 @@ class WebSocketService {
           const devices = await mqttService.getOnlineDevices();
           socket.emit('online_devices', devices);
         } catch (error) {
-          logger.error('获取在线设备失败:', error);
+          logger.error('获取在线设备失败:', error.message);
         }
       });
 
@@ -832,7 +832,7 @@ class WebSocketService {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('获取在线状态失败:', error);
+      logger.error('获取在线状态失败:', error.message);
     }
   }
 
@@ -866,7 +866,7 @@ class WebSocketService {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('广播在线状态失败:', error);
+      logger.error('广播在线状态失败:', error.message);
     }
   }
 

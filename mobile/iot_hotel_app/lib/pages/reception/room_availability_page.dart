@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/room_service.dart';
 import '../../services/floor_service.dart';
+import '../../services/maintenance_service.dart';
 
 class RoomAvailabilityPage extends ConsumerStatefulWidget {
   const RoomAvailabilityPage({super.key});
@@ -508,6 +509,20 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
             _buildDetailRow('床型', room['bed_type'] ?? '-'),
             _buildDetailRow('最大入住', '${room['max_guests'] ?? 2}人'),
             const SizedBox(height: 20),
+            if (status != 'maintenance')
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _reportMaintenance(room),
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('报修'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            if (status != 'maintenance') const SizedBox(height: 16),
             const Text(
               '修改房间状态',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -610,7 +625,38 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$e')),
+          const SnackBar(content: Text('操作失败，请重试')),
+        );
+      }
+    }
+  }
+
+  Future<void> _reportMaintenance(Map<String, dynamic> room) async {
+    final roomId = room['id'] as int?;
+    if (roomId == null) return;
+
+    try {
+      final result = await ref.read(maintenanceServiceProvider).createWorkOrder({
+        'room_id': roomId,
+        'fault_type': '设备故障',
+        'fault_description': '${room['room_number']}房间需要维修',
+        'priority': 'medium',
+      });
+      if (result.success && mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('报修工单已创建，房间状态已更新为维修中')),
+        );
+        _loadRooms();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '创建报修工单失败')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('操作失败，请重试')),
         );
       }
     }

@@ -99,6 +99,8 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
     switch (status) {
       case 'pending':
         return '待处理';
+      case 'assigned':
+        return '已分配';
       case 'processing':
         return '处理中';
       case 'completed':
@@ -112,6 +114,8 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
     switch (status) {
       case 'pending':
         return AppColors.warning;
+      case 'assigned':
+        return Colors.purple;
       case 'processing':
         return AppColors.primary;
       case 'completed':
@@ -235,6 +239,12 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
             ),
             const SizedBox(width: 8),
             _FilterChip(
+              label: '已分配',
+              isSelected: _statusFilter == 'assigned',
+              onTap: () => _filterByStatus('assigned'),
+            ),
+            const SizedBox(width: 8),
+            _FilterChip(
               label: '处理中',
               isSelected: _statusFilter == 'processing',
               onTap: () => _filterByStatus('processing'),
@@ -283,7 +293,10 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
           onStart: order['status'] == 'pending'
               ? () => _startProcess(order['id'])
               : null,
-          onComplete: order['status'] == 'processing'
+          onWork: order['status'] == 'assigned'
+              ? () => _startWork(order['id'])
+              : null,
+          onComplete: order['status'] == 'assigned' || order['status'] == 'processing'
               ? () => _completeOrder(order['id'])
               : null,
         );
@@ -326,12 +339,26 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
   Future<void> _startProcess(int orderId) async {
     final result = await ref
         .read(maintenanceServiceProvider)
-        .updateWorkOrderStatus(orderId, 'in_progress');
+        .updateWorkOrderStatus(orderId, 'assigned');
     if (result.success) {
       _loadMaintenanceOrders();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已开始处理工单')),
+          const SnackBar(content: Text('工单已分配，可开始维修')),
+        );
+      }
+    }
+  }
+
+  Future<void> _startWork(int orderId) async {
+    final result = await ref
+        .read(maintenanceServiceProvider)
+        .updateWorkOrderStatus(orderId, 'processing');
+    if (result.success) {
+      _loadMaintenanceOrders();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已开始维修')),
         );
       }
     }
@@ -499,6 +526,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
   final String statusText;
   final Color statusColor;
   final VoidCallback? onStart;
+  final VoidCallback? onWork;
   final VoidCallback? onComplete;
 
   const _MaintenanceOrderCard({
@@ -508,6 +536,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
     required this.statusText,
     required this.statusColor,
     this.onStart,
+    this.onWork,
     this.onComplete,
   });
 
@@ -608,7 +637,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
-          if (onStart != null || onComplete != null) ...[
+          if (onStart != null || onWork != null || onComplete != null) ...[
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -617,6 +646,11 @@ class _MaintenanceOrderCard extends StatelessWidget {
                   TextButton(
                     onPressed: onStart,
                     child: const Text('开始处理'),
+                  ),
+                if (onWork != null)
+                  TextButton(
+                    onPressed: onWork,
+                    child: const Text('开始维修'),
                   ),
                 if (onComplete != null)
                   ElevatedButton(

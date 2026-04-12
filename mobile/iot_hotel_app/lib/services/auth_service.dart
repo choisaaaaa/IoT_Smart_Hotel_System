@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -33,7 +33,7 @@ class AuthService {
           token: data['token'] as String? ?? '',
           userId: user?['id']?.toString() ?? '',
           username: user?['username'] as String? ?? '',
-          role: user?['role'] as String? ?? 'user',
+          role: user?['role'] as String? ?? 'customer',
           phone: user?['phone'] as String?,
           uid: user?['uid'] as String?,
         );
@@ -110,7 +110,7 @@ class AuthService {
         final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
         return User.fromJson(userMap);
       } catch (e) {
-        debugPrint('Error decoding user info: $e');
+        debugPrint('鉁?decodeUser: $e');
       }
     }
     return null;
@@ -144,7 +144,7 @@ class AuthService {
           token: token ?? '',
           userId: userMap['id']?.toString() ?? '',
           username: userMap['username'] as String? ?? '',
-          role: userMap['role'] as String? ?? 'user',
+          role: userMap['role'] as String? ?? 'customer',
           phone: userMap['phone'] as String?,
           uid: userMap['uid'] as String?,
         );

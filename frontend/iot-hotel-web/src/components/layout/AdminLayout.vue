@@ -123,7 +123,7 @@ import {
   EnvironmentOutlined, CalendarOutlined, TagOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
-import { authService } from '@/api/auth'
+import { authService, CANONICAL_ROLES } from '@/api/auth'
 import { hotelManageApi } from '@/api/hotel-manage'
 
 const route = useRoute()
@@ -150,7 +150,7 @@ function handleMenuClick({ key }: { key: string }) {
 }
 
 async function loadHotelInfo() {
-  if (appStore.userInfo?.role !== 'admin') {
+  if (appStore.userInfo?.role !== CANONICAL_ROLES.HOTEL_ADMIN) {
     return
   }
   hotelInfoLoading.value = true

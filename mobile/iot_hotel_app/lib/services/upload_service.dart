@@ -19,7 +19,7 @@ class UploadService {
       });
 
       final response = await _dioClient.post(
-        '${ApiConstants.upload}image',
+        '${ApiConstants.upload}/image',
         data: formData,
       );
 
@@ -50,7 +50,7 @@ class UploadService {
   Future<ApiResult<void>> deleteImage(String imageUrl) async {
     try {
       final response = await _dioClient.delete(
-        '${ApiConstants.upload}image',
+        '${ApiConstants.upload}/image',
         queryParameters: {'url': imageUrl},
       );
 

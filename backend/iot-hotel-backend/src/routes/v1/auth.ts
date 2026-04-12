@@ -5,7 +5,7 @@ import { generateToken, verifyToken, JwtPayload } from '../../utils/jwt';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../../types';
 import crypto from 'crypto';
 import db from '../../config/database';
-import { normalizeRole } from '../../utils/role';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
@@ -211,9 +211,9 @@ router.post('/login', async (req, res) => {
       return [];
     };
 
-    const isSystemAccount = normalizeRole(user.role) === 'system';
+    const isSystemAccount = normalizeRole(user.role) === CANONICAL_ROLES.SYSTEM_ADMIN;
     const role = isSystemAccount
-      ? 'system'
+      ? CANONICAL_ROLES.SYSTEM_ADMIN
       : normalizeRole(userRoles.length > 0 ? userRoles[0].role_name : user.role);
     const permissions = userRoles.length > 0
       ? parsePermissions(userRoles[0].permissions)
@@ -304,7 +304,7 @@ router.post('/register', async (req, res) => {
 
     const uid = `UID${Date.now()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-    const userRole = 'user';
+    const userRole = CANONICAL_ROLES.CUSTOMER;
 
     const [result]: any = await db.execute(
       `INSERT INTO users (username, password, phone, uid, email, role, hotel_id)
@@ -512,12 +512,12 @@ router.get('/role-applications', async (req: AuthRequest, res) => {
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
 
-    if (role === 'manager') {
+    if (isHotelAdmin(role)) {
       whereClause += ' AND ra.application_type = ? AND ra.hotel_id IN (SELECT hotel_id FROM user_hotels WHERE user_id = ?)';
       params.push('bind_employee', decoded.id);
     }
 
-    if (role === 'user') {
+    if (isCustomer(role)) {
       whereClause += ' AND ra.user_id = ?';
       params.push(decoded.id);
     }
@@ -558,6 +558,12 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
     const decoded = verifyToken(token);
     if (!decoded) { await connection.rollback(); return sendError(res, errorResponse('令牌无效', 401)); }
 
+    const reviewerRole = normalizeRole(decoded.role);
+    if (!isSystemAdmin(reviewerRole) && !isHotelAdmin(reviewerRole)) {
+      await connection.rollback();
+      return sendError(res, errorResponse('权限不足，仅管理员可审核', 403));
+    }
+
     const { id } = req.params;
     const { status, review_note } = req.body;
 
@@ -593,7 +599,7 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
 
         await connection.execute(
           'UPDATE users SET role = ? WHERE id = ?',
-          ['manager', app.user_id]
+          [CANONICAL_ROLES.HOTEL_ADMIN, app.user_id]
         );
 
         await connection.execute(
@@ -603,7 +609,7 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
 
         const [managerRole]: any = await connection.execute(
           'SELECT id FROM roles WHERE role_name = ?',
-          ['manager']
+          [CANONICAL_ROLES.HOTEL_ADMIN]
         );
         if (managerRole.length > 0) {
           await connection.execute(
@@ -618,7 +624,7 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
       } else if (app.application_type === 'bind_employee') {
         await connection.execute(
           'UPDATE users SET role = ? WHERE id = ?',
-          ['staff', app.user_id]
+          [CANONICAL_ROLES.STAFF, app.user_id]
         );
 
         if (app.hotel_id) {
@@ -630,7 +636,7 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
 
         const [staffRole]: any = await connection.execute(
           'SELECT id FROM roles WHERE role_name = ?',
-          ['staff']
+          [CANONICAL_ROLES.STAFF]
         );
         if (staffRole.length > 0) {
           await connection.execute(

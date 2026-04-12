@@ -11,9 +11,9 @@ async function run() {
   })
 
   const users = [
-    { username: 'reception_01', password: 'password123', role: 'receptionist', hotel_id: 1 },
-    { username: 'reception_02', password: 'password123', role: 'receptionist', hotel_id: 1 },
-    { username: 'manager_01', password: 'password123', role: 'admin', hotel_id: 1 }
+    { username: 'reception_01', password: 'password123', role: 'staff', hotel_id: 1 },
+    { username: 'reception_02', password: 'password123', role: 'staff', hotel_id: 1 },
+    { username: 'manager_01', password: 'password123', role: 'hotel_admin', hotel_id: 1 }
   ];
 
   // 使用一个已知的 bcrypt hash (对应密码 password123)

@@ -56,7 +56,7 @@ export class ReviewService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取评价列表失败:', error);
+      logger.error('获取评价列表失败:', error.message);
       throw new Error('获取评价列表失败');
     }
   }
@@ -69,7 +69,7 @@ export class ReviewService {
       );
       return (rows[0] as Review) || null;
     } catch (error) {
-      logger.error('获取评价详情失败:', error);
+      logger.error('获取评价详情失败:', error.message);
       throw new Error('获取评价详情失败');
     }
   }
@@ -92,7 +92,7 @@ export class ReviewService {
       
       return result.insertId;
     } catch (error) {
-      logger.error('创建评价失败:', error);
+      logger.error('创建评价失败:', error.message);
       throw new Error('创建评价失败');
     }
   }

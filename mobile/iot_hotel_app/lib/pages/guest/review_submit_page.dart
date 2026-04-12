@@ -65,7 +65,7 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择图片失败：$e')),
+          const SnackBar(content: Text('选择图片失败')),
         );
       }
     }
@@ -130,7 +130,7 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('提交异常：$e')),
+          const SnackBar(content: Text('提交失败，请重试')),
         );
       }
     } finally {

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import deviceService from '../services/device.service';
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
+import { isSystemAdmin } from '../utils/role';
 
 class DeviceController {
   /**
@@ -20,7 +21,7 @@ class DeviceController {
         data: result
       });
     } catch (error) {
-      logger.error('Register device error:', error);
+      logger.error('Register device error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -30,8 +31,9 @@ class DeviceController {
    */
   async audit(req: Request, res: Response) {
     try {
-      const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      let hotelId = (req as any).user?.hotel_id;
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
       const { status, room_id, area } = req.body;
@@ -53,7 +55,7 @@ class DeviceController {
         data: result
       });
     } catch (error) {
-      logger.error('Audit device error:', error);
+      logger.error('Audit device error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -68,7 +70,7 @@ class DeviceController {
 
       let targetHotelId: number | undefined;
 
-      if (user?.role === 'system') {
+      if (isSystemAdmin(user?.role)) {
         // 系统角色可以查看所有或指定酒店
         targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
       } else {
@@ -88,7 +90,7 @@ class DeviceController {
         data: result
       });
     } catch (error) {
-      logger.error('Get all devices error:', error);
+      logger.error('Get all devices error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -98,8 +100,9 @@ class DeviceController {
    */
   async getById(req: Request, res: Response) {
     try {
-      const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      let hotelId = (req as any).user?.hotel_id;
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
       const result = await deviceService.getDeviceById(id, hotelId);
@@ -111,7 +114,7 @@ class DeviceController {
         data: result
       });
     } catch (error) {
-      logger.error('Get device by id error:', error);
+      logger.error('Get device by id error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -121,8 +124,9 @@ class DeviceController {
    */
   async delete(req: Request, res: Response) {
     try {
-      const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      let hotelId = (req as any).user?.hotel_id;
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
       await deviceService.deleteDevice(id, hotelId);
@@ -131,7 +135,7 @@ class DeviceController {
         message: 'Device deleted successfully'
       });
     } catch (error) {
-      logger.error('Delete device error:', error);
+      logger.error('Delete device error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -141,8 +145,9 @@ class DeviceController {
    */
   async sendCommand(req: Request, res: Response) {
     try {
-      const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      let hotelId = (req as any).user?.hotel_id;
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
       const { command_type, command_value } = req.body;
@@ -181,7 +186,7 @@ class DeviceController {
         res.status(500).json({ success: false, message: 'Failed to send command via MQTT' });
       }
     } catch (error) {
-      logger.error('Send command error:', error);
+      logger.error('Send command error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -191,8 +196,9 @@ class DeviceController {
    */
   async handleRoomCard(req: Request, res: Response) {
     try {
-      const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      let hotelId = (req as any).user?.hotel_id;
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const { action, booking_id, id_last_four } = req.body;
       const user = (req as any).user;
@@ -263,7 +269,7 @@ class DeviceController {
         data: { command_id: commandId }
       });
     } catch (error) {
-      logger.error('Handle room card error:', error);
+      logger.error('Handle room card error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }

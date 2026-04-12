@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -115,7 +115,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         setState(() => _coupons = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('Error loading coupons: $e');
+      debugPrint('鉁?coupons: $e');
     } finally {
       if (mounted) setState(() => _isLoadingCoupons = false);
     }
@@ -257,7 +257,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -296,7 +296,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.push('/online-checkin', extra: {'bookingId': bookingId});
+              context.push('/online-checkin/$bookingId', extra: {'bookingId': bookingId});
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('在线办理入住'),

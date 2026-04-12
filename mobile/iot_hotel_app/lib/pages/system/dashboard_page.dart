@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -157,7 +157,7 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
   Future<void> _loadStats() async {
     try {
       final dio = DioClient();
-      final hotelRes = await dio.get('${ApiConstants.hotels}search');
+      final hotelRes = await dio.get('${ApiConstants.hotels}/search');
       int hotelCount = 0;
       if (hotelRes.statusCode == 200 && hotelRes.data['code'] == 200) {
         hotelCount = (hotelRes.data['data']?['hotels'] as List?)?.length ?? 0;
@@ -176,7 +176,7 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
       }
       if (mounted) setState(() => _stats = {'hotels': hotelCount, 'users': userCount, 'devices': deviceCount});
     } catch (e) {
-      debugPrint('Error loading system stats: $e');
+      debugPrint('鉁?systemStats: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -304,12 +304,12 @@ class _HotelsTabState extends State<_HotelsTab> {
   Future<void> _loadHotels() async {
     try {
       final dio = DioClient();
-      final res = await dio.get('${ApiConstants.hotels}search');
+      final res = await dio.get('${ApiConstants.hotels}/search');
       if (res.statusCode == 200 && res.data['code'] == 200) {
         setState(() => _hotels = List<Map<String, dynamic>>.from(res.data['data']?['hotels'] ?? []));
       }
     } catch (e) {
-      debugPrint('Error loading hotels: $e');
+      debugPrint('鉁?hotels: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -369,7 +369,7 @@ class _DevicesTabState extends State<_DevicesTab> {
         setState(() => _devices = List<Map<String, dynamic>>.from(data is List ? data : (data?['list'] ?? [])));
       }
     } catch (e) {
-      debugPrint('Error loading devices: $e');
+      debugPrint('✗ devices: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -438,29 +438,24 @@ class _UsersTabState extends State<_UsersTab> {
         setState(() => _users = List<Map<String, dynamic>>.from(data is List ? data : (data?['list'] ?? [])));
       }
     } catch (e) {
-      debugPrint('Error loading users: $e');
+      debugPrint('鉁?users: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Color _roleColor(String? role) {
-    switch (role) {
-      case 'system': return AppColors.error;
-      case 'admin': case 'manager': return AppColors.primary;
-      case 'staff': return AppColors.secondary;
+    final normalized = AppRoles.normalize(role);
+    switch (normalized) {
+      case AppRoles.systemAdmin: return AppColors.error;
+      case AppRoles.hotelAdmin: return AppColors.primary;
+      case AppRoles.staff: return AppColors.secondary;
       default: return AppColors.success;
     }
   }
 
   String _roleLabel(String? role) {
-    switch (role) {
-      case 'system': return '系统管理员';
-      case 'admin': case 'manager': return '酒店经理';
-      case 'staff': return '前台员工';
-      case 'user': return '顾客';
-      default: return '游客';
-    }
+    return AppRoles.displayName(AppRoles.normalize(role));
   }
 
   @override
@@ -475,7 +470,7 @@ class _UsersTabState extends State<_UsersTab> {
               itemCount: _users.length,
               itemBuilder: (ctx, i) {
                 final u = _users[i];
-                final role = u['role'] ?? 'user';
+                final role = u['role'] ?? 'customer';
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
@@ -519,7 +514,7 @@ class _ReviewTabState extends State<_ReviewTab> {
         setState(() => _applications = List<Map<String, dynamic>>.from(res.data['data'] ?? []));
       }
     } catch (e) {
-      debugPrint('Error loading applications: $e');
+      debugPrint('鉁?applications: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -542,7 +537,7 @@ class _ReviewTabState extends State<_ReviewTab> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
     }
   }
 

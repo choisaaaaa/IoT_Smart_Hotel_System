@@ -96,6 +96,16 @@
         <div class="detail-actions" style="margin-top: 24px">
           <a-space direction="vertical" block>
             <a-button
+              v-if="currentRoom.room_status !== 'maintenance'"
+              type="primary"
+              danger
+              block
+              @click="reportMaintenance(currentRoom)"
+            >
+              <template #icon><ToolOutlined /></template>
+              报修
+            </a-button>
+            <a-button
               v-if="currentRoom.room_status === 'cleaning'"
               type="primary"
               block
@@ -119,15 +129,18 @@ import { message } from 'ant-design-vue'
 import type { RoomInfo } from '@/types'
 import { useHotelStore } from '@/stores/hotel'
 import { roomApi } from '@/api/room'
+import { maintenanceApi } from '@/api/maintenance'
+import { useRouter } from 'vue-router'
 
 import {
   CheckCircleOutlined, CloseCircleOutlined,
   SyncOutlined, InfoCircleOutlined,
   RestOutlined,
-  CalendarOutlined
+  CalendarOutlined, ToolOutlined
 } from '@ant-design/icons-vue'
 
 const hotelStore = useHotelStore()
+const router = useRouter()
 const loading = ref(false)
 const viewMode = ref<'table' | 'grid'>('grid')
 const filterFloor = ref<number | undefined>()
@@ -193,6 +206,22 @@ async function updateStatus(roomId: number, status: string) {
     }
   } catch (error) {
     message.error('房态更新失败')
+  }
+}
+
+async function reportMaintenance(room: RoomInfo) {
+  try {
+    await maintenanceApi.create({
+      room_id: room.id,
+      fault_type: '设备故障',
+      fault_description: `${room.room_number}房间需要维修`,
+      priority: 'medium'
+    })
+    message.success('报修工单已创建，房间状态已更新为维修中')
+    drawerVisible.value = false
+    await refreshData()
+  } catch (error) {
+    message.error('创建报修工单失败')
   }
 }
 

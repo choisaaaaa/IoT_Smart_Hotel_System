@@ -82,7 +82,7 @@ CREATE TABLE users (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     email VARCHAR(100) DEFAULT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'user',
+    role VARCHAR(20) NOT NULL DEFAULT 'customer',
     permissions JSON DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -349,17 +349,16 @@ CREATE TABLE member_coupons (
 
 -- 角色
 INSERT INTO roles (role_name, role_description, permissions) VALUES
-('admin', '系统管理员，拥有所有权限', '["read","write","delete","manage_users","manage_roles","manage_devices","view_reports","system_config"]'),
+('system_admin', '系统管理员，拥有所有权限', '["read","write","delete","manage_users","manage_roles","manage_devices","view_reports","system_config"]'),
+('hotel_admin', '酒店管理员，拥有酒店管理权限', '["read","write","manage_bookings","manage_rooms","manage_orders","view_reports","manage_guests","hotel_manage"]'),
 ('staff', '酒店员工，拥有业务操作权限', '["read","write","manage_bookings","manage_rooms","manage_orders","view_reports","manage_guests"]'),
-('user', '普通用户，拥有基础权限', '["read","manage_own_bookings","manage_own_profile","use_services"]');
+('customer', '顾客，拥有基本服务权限', '["read","manage_own_bookings","manage_own_profile","use_services"]');
 
--- 用户 (密码均为 bcrypt 加密后的 admin123 / user123)
 INSERT INTO users (username, password, email, role, permissions) VALUES
-('admin', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'admin@iot-hotel.com', 'admin', '["read","write","delete","manage_users","manage_devices","view_reports"]'),
-('user', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'user@iot-hotel.com', 'user', '["read","manage_own_bookings"]');
+('admin', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'admin@iot-hotel.com', 'system_admin', '["read","write","delete","manage_users","manage_devices","view_reports"]'),
+('user', '$2a$10$N9qo8uLOickg2ZARZ5XpSOp/VOJJPYJZTqPqIwMf8KFNhFqXjQK7m', 'user@iot-hotel.com', 'customer', '["read","manage_own_bookings"]');
 
--- 关联角色
-INSERT INTO user_roles (user_id, role_id) VALUES (1, 1), (2, 3);
+INSERT INTO user_roles (user_id, role_id) VALUES (1, 1), (2, 4);
 
 -- 酒店
 INSERT INTO hotels (hotel_name, hotel_address, hotel_phone, hotel_star, total_rooms, occupied_rooms, occupancy_rate, description) 

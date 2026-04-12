@@ -45,7 +45,7 @@
 
             <!-- 切端按钮：仅对非普通用户显示 -->
             <a-button
-              v-if="userInfo.role && userInfo.role !== 'user'"
+              v-if="userInfo.role && userInfo.role !== CANONICAL_ROLES.CUSTOMER"
               type="link"
               class="switch-side-btn"
               @click="$router.push('/reception/dashboard')"
@@ -290,7 +290,7 @@ import {
   SwapOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
-import { authService, normalizeRole } from '@/api/auth'
+import { authService, normalizeRole, CANONICAL_ROLES } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -406,11 +406,11 @@ function isActive(path: string): boolean {
 
 function redirectByRole(rawRole?: string) {
   const role = normalizeRole(rawRole)
-  if (role === 'system') {
+  if (role === CANONICAL_ROLES.SYSTEM_ADMIN) {
     router.push('/system/dashboard')
-  } else if (role === 'admin' || role === 'manager') {
+  } else if (role === CANONICAL_ROLES.HOTEL_ADMIN) {
     router.push('/hotel-admin/dashboard')
-  } else if (role === 'staff') {
+  } else if (role === CANONICAL_ROLES.STAFF) {
     router.push('/reception/dashboard')
   } else {
     router.push('/guest/booking')
@@ -443,10 +443,9 @@ const handleLogin = async () => {
       // 根据角色重定向
       const role = normalizeRole(user.role)
       switch (role) {
-        case 'system': router.push('/system/dashboard'); break
-        case 'admin':
-        case 'manager': router.push('/hotel-admin/dashboard'); break
-        case 'staff': router.push('/reception/dashboard'); break
+        case CANONICAL_ROLES.SYSTEM_ADMIN: router.push('/system/dashboard'); break
+        case CANONICAL_ROLES.HOTEL_ADMIN: router.push('/hotel-admin/dashboard'); break
+        case CANONICAL_ROLES.STAFF: router.push('/reception/dashboard'); break
         default: fetchUserStatus()
       }
     }

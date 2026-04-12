@@ -248,6 +248,9 @@
                 :row-selection="{ selectedRowKeys: selectedBookingKeys, onChange: onBookingSelectionChange }"
               >
                 <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'status'">
+                    <a-tag :color="bookingStatusColor(record.status)">{{ bookingStatusText(record.status) }}</a-tag>
+                  </template>
                   <template v-if="column.key === 'registered'">
                     <a-tag v-if="getMemberByPhone(record.guest_phone)" color="gold">
                       {{ getLevelName(getMemberByPhone(record.guest_phone)) }}
@@ -632,9 +635,25 @@ const todayBookingColumns = [
   { title: '客人', dataIndex: 'guest_name', width: 70 },
   { title: '手机号', dataIndex: 'guest_phone', width: 105 },
   { title: '房号', dataIndex: 'room_number', width: 50 },
-  { title: '会员', key: 'registered', width: 85 },
+  { title: '入住', dataIndex: 'check_in_date', key: 'check_in_date', width: 100, customRender: ({ text }: { text: string }) => formatDateTime(text) },
+  { title: '退房', dataIndex: 'check_out_date', key: 'check_out_date', width: 100, customRender: ({ text }: { text: string }) => formatDateTime(text) },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 70 },
+  { title: '会员', key: 'registered', width: 70 },
   { title: '操作', key: 'action', width: 65 }
 ]
+
+function formatDateTime(val: string | null | undefined): string {
+  if (!val) return '-'
+  return dayjs(val).format('MM-DD HH:mm')
+}
+
+function bookingStatusText(s: string): string {
+  return ({ pending: '待确认', confirmed: '已确认', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
+}
+
+function bookingStatusColor(s: string): string {
+  return ({ pending: 'warning', confirmed: 'processing', pre_checked_in: 'cyan', checked_in: 'success', checked_out: 'default', cancelled: 'error' } as Record<string, string>)[s] || 'default'
+}
 
 function normalizePhone(phone: string): string {
   return String(phone || '').replace(/\D/g, '')
@@ -720,18 +739,29 @@ async function fetchMemberList() {
   }
 }
 
-async function fetchTodayBookings() {
-  if (todayBookingLoading.value) return
+async function fetchTodayBookings(force = false) {
+  if (todayBookingLoading.value && !force) return
   todayBookingLoading.value = true
   try {
-    // 改用后端过滤，支持 check_in_date=today 参数，且只查询待办理和已确认的
+    // 查询今日需要前台处理的订单：待确认(pending)和预入住待确认(pre_checked_in)
+    // 已确认(confirmed)的订单顾客可自行办理入住，不显示在此列表
     const res: any = await bookingApi.getBookingList({
       pageSize: 200,
       check_in_date: 'today'
     } as any)
-    const list = (res.data?.list || []).filter((item: any) =>
-      ['pending', 'confirmed'].includes(item.status)
+    const allList = res.data?.list || []
+    console.log('[今日预定清单] 原始数据:', allList.length, '条')
+
+    const list = allList.filter((item: any) =>
+      ['pending', 'confirmed', 'pre_checked_in'].includes(item.status)
     )
+    console.log('[今日预定清单] 过滤后:', list.length, '条, 状态分布:',
+      allList.reduce((acc: any, item: any) => {
+        acc[item.status] = (acc[item.status] || 0) + 1
+        return acc
+      }, {})
+    )
+
     todayBookings.value = list.map((item: any) => ({
       ...item,
       phone_registered: isPhoneRegistered(item.guest_phone)
@@ -774,12 +804,19 @@ function checkInSelectedBooking() {
 const lastCreatedBookingId = ref<number | null>(null)
 
 async function handleCheckIn() {
+  // 防重复提交检查
+  if (submitting.value) {
+    message.warning('正在办理入住中，请勿重复点击')
+    return
+  }
+  
   if (!checkinForm.guest_name || !checkinForm.phone || !checkinForm.room_id) {
     message.warning('请填写必填项'); return
   }
   if (!hotelStore.hotelInfo?.id) {
     message.warning('未获取到门店信息，请刷新页面重试'); return
   }
+  
   submitting.value = true
   try {
     // 先查找顾客是否有待确认的预订
@@ -830,21 +867,39 @@ async function handleCheckIn() {
       fetchTodayBookings(),
       hotelStore.fetchRooms({ pageSize: 300 })
     ])
-  } catch (error) {
-    message.error('办理入住失败')
+    
+    // 强制刷新今日预定清单，确保已入住的订单从列表中移除
+    setTimeout(() => {
+      fetchTodayBookings()
+    }, 500)
+    
+    // 入住成功后重置表单，防止重复提交
+    resetCheckinForm()
+    
+  } catch (error: any) {
+    console.error('办理入住失败:', error)
+    message.error(error?.response?.data?.message || '办理入住失败')
   } finally {
     submitting.value = false
   }
 }
 
 function resetCheckinForm() {
-  Object.assign(checkinForm, {
-    guest_name: '', phone: '', id_type: 'idcard', id_number: '',
-    room_id: undefined, guest_count: 1,
-    check_in_date: dayjs(), check_out_date: dayjs().add(2, 'day'),
-    payment_method: 'alipay', remark: ''
-  })
+  checkinForm.guest_name = ''
+  checkinForm.phone = ''
+  checkinForm.id_type = 'idcard'
+  checkinForm.id_number = ''
+  checkinForm.guest_count = 1
+  checkinForm.room_id = undefined
+  checkinForm.check_in_date = dayjs()
+  checkinForm.check_out_date = dayjs().add(1, 'day')
+  checkinForm.payment_method = 'front_desk'
+  checkinForm.remark = ''
+  checkinForm.manual_discount = 1
+  checkinForm.manual_reduce = 0
   companions.value = []
+  // selectedRoom 是计算属性，通过设置 room_id 为 undefined 来重置
+  estimatedPrice.value = 0
 }
 
 async function handleCheckout(record: any) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as callController from '../../controllers/call.controller';
 import { authenticate, authorize } from '../../middleware/auth';
+import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ router.post('/:call_id/answer', authenticate as any, callController.answerCall);
 router.post('/:call_id/reject', authenticate as any, callController.rejectCall);
 router.post('/:call_id/hangup', authenticate as any, callController.hangupCall);
 router.get('/:call_id/status', authenticate as any, callController.getCallStatus);
-router.get('/active', authenticate as any, authorize(['admin', 'staff', 'system']), callController.getActiveCalls);
-router.get('/history', authenticate as any, authorize(['admin', 'staff', 'system']), callController.getCallHistory);
-router.get('/stats', authenticate as any, authorize(['admin', 'staff', 'system']), callController.getCallStats);
+router.get('/active', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getActiveCalls);
+router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallHistory);
+router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallStats);
 
 export default router;

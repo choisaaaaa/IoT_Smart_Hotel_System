@@ -48,7 +48,7 @@ export class RoomTypeService {
       const [rows] = await pool.query<RoomType[]>(sql, params);
       return rows;
     } catch (error) {
-      logger.error('获取房型列表失败:', error);
+      logger.error('获取房型列表失败:', error.message);
       throw new Error('获取房型列表失败');
     }
   }
@@ -64,7 +64,7 @@ export class RoomTypeService {
       const [rows] = await pool.query<RoomType[]>(sql, params);
       return (rows[0] as RoomType) || null;
     } catch (error) {
-      logger.error('获取房型详情失败:', error);
+      logger.error('获取房型详情失败:', error.message);
       throw new Error('获取房型详情失败');
     }
   }
@@ -78,7 +78,7 @@ export class RoomTypeService {
       );
       return result.insertId;
     } catch (error) {
-      logger.error('创建房型失败:', error);
+      logger.error('创建房型失败:', error.message);
       const serviceError: ServiceError = new Error('创建房型失败');
       const dbError = error as { code?: string; sqlMessage?: string };
       const sqlMessage = dbError?.sqlMessage || '';
@@ -127,7 +127,7 @@ export class RoomTypeService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('更新房型失败:', error);
+      logger.error('更新房型失败:', error.message);
       const serviceError: ServiceError = new Error('更新房型失败');
       const dbError = error as { code?: string; sqlMessage?: string };
       const sqlMessage = dbError?.sqlMessage || '';
@@ -160,7 +160,7 @@ export class RoomTypeService {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM room_types WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('删除房型失败:', error);
+      logger.error('删除房型失败:', error.message);
       throw new Error('删除房型失败');
     }
   }

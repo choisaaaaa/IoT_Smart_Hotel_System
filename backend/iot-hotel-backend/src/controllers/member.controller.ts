@@ -3,6 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { hashPassword, comparePassword } from '../utils/password';
+import { isCustomer } from '../utils/role';
 
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 
@@ -15,7 +16,7 @@ export const updateLevelDiscounts = async (req: AuthRequest, res: Response) => {
     Object.assign(LEVEL_DISCOUNTS, discounts);
     res.json(successResponse(LEVEL_DISCOUNTS, '更新会员折扣成功'));
   } catch (error) {
-    logger.error('更新会员折扣失败:', error);
+    logger.error('更新会员折扣失败:', error.message);
     res.status(500).json(errorResponse('更新会员折扣失败'));
   }
 };
@@ -66,7 +67,7 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
       new_balance: newBalance
     }, '充值成功'));
   } catch (error) {
-    logger.error('会员充值失败:', error);
+    logger.error('会员充值失败:', error.message);
     res.status(500).json(errorResponse('会员充值失败'));
   }
 };
@@ -118,7 +119,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     const offset = (Number(page) - 1) * Number(pageSize);
 
     // 如果是普通用户且没有提供特定ID，返回自己的信息
-    if (req.user?.role === 'user') {
+    if (isCustomer(req.user?.role)) {
       const user = req.user as any;
       const phone = user.phone || user.username; // 优先使用 phone
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
@@ -168,7 +169,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取会员列表成功'));
   } catch (error) {
-    logger.error('获取会员列表失败:', error);
+    logger.error('获取会员列表失败:', error.message);
     res.status(500).json(errorResponse('获取会员列表失败'));
   }
 };
@@ -192,7 +193,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(member, '获取会员详情成功'));
   } catch (error) {
-    logger.error('获取会员详情失败:', error);
+    logger.error('获取会员详情失败:', error.message);
     res.status(500).json(errorResponse('获取会员详情失败'));
   }
 };
@@ -217,7 +218,7 @@ export const create = async (req: Request, res: Response) => {
 
     res.json(successResponse({ id: result.insertId }, '注册会员成功'));
   } catch (error) {
-    logger.error('注册会员失败:', error);
+    logger.error('注册会员失败:', error.message);
     res.status(500).json(errorResponse('注册会员失败'));
   }
 };
@@ -239,7 +240,7 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新会员信息成功'));
   } catch (error) {
-    logger.error('更新会员信息失败:', error);
+    logger.error('更新会员信息失败:', error.message);
     res.status(500).json(errorResponse('更新会员信息失败'));
   }
 };
@@ -254,7 +255,7 @@ export const fixDatabaseSchema = async (req: AuthRequest, res: Response) => {
     if (error.code === 'ER_DUP_COLUMN_NAME') {
       return res.json(successResponse(null, '字段已存在，无需修复'));
     }
-    logger.error('修复数据库失败:', error);
+    logger.error('修复数据库失败:', error.message);
     res.status(500).json(errorResponse('修复数据库失败: ' + error.message));
   }
 };
@@ -315,7 +316,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     logger.info(`获取会员资产成功: 手机号 ${phone}, 成长值 ${result.experience}, 等级 ${result.member_level}`);
     res.json(successResponse(result, '获取资产成功'));
   } catch (error) {
-    logger.error('获取会员资产失败:', error);
+    logger.error('获取会员资产失败:', error.message);
     res.status(500).json(errorResponse('获取资产失败'));
   }
 };
@@ -363,7 +364,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
       checkin_info: checkinInfo
     }, '获取状态成功'));
   } catch (error) {
-    logger.error('获取用户状态失败:', error);
+    logger.error('获取用户状态失败:', error.message);
     res.status(500).json(errorResponse('获取状态失败'));
   }
 };
@@ -396,7 +397,7 @@ export const login = async (req: Request, res: Response) => {
       balance: member.balance
     }, '登录成功'));
   } catch (error) {
-    logger.error('会员登录失败:', error);
+    logger.error('会员登录失败:', error.message);
     res.status(500).json(errorResponse('登录失败'));
   }
 };
@@ -470,7 +471,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       level_label: newLevelLabel
     }, '签到成功'));
   } catch (error) {
-    logger.error('会员签到失败:', error);
+    logger.error('会员签到失败:', error.message);
     res.status(500).json(errorResponse('签到失败'));
   }
 };

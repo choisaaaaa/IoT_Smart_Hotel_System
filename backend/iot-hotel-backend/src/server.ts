@@ -3,6 +3,8 @@ import config from './config';
 import logger from './utils/logger';
 import mqttService from './services/mqtt.service';
 import websocketService from './services/websocket.service';
+import { orderTimeoutService } from './services/order-timeout.service';
+import { autoCheckoutService } from './services/auto-checkout.service';
 import pool from './config/database';
 
 const PORT = config.app.port;
@@ -97,10 +99,17 @@ async function startServer() {
 
       try {
         websocketService.init(server);
-        await mqttService.connect();
-        await mqttService.subscribe('hotel/device/#');
+        orderTimeoutService.start();
+        autoCheckoutService.start();
       } catch (serviceError) {
         logger.warn(`服务初始化警告: ${(serviceError as Error).message}`);
+      }
+
+      try {
+        await mqttService.connect();
+        await mqttService.subscribe('hotel/device/#');
+      } catch (mqttError) {
+        logger.warn(`MQTT连接警告: ${(mqttError as Error).message}`);
       }
     });
 
@@ -117,6 +126,8 @@ async function startServer() {
 
     server.on('close', async () => {
       logger.info('服务器已关闭');
+      orderTimeoutService.stop();
+      autoCheckoutService.stop();
       await mqttService.disconnect();
       websocketService.close();
     });

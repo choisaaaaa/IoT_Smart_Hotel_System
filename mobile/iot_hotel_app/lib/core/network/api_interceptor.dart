@@ -21,14 +21,17 @@ class AuthInterceptor extends Interceptor {
     final path = err.requestOptions.path;
     final statusCode = err.response?.statusCode;
     
-    debugPrint('❌ [API Error] path: "$path", status: $statusCode');
+    // 屏蔽环境监测API的错误日志
+    if (!path.contains('/environment')) {
+      debugPrint('✗ $statusCode ${path.split('/').last}');
+    }
 
     if (statusCode == 401) {
       final isAuthMe = path.contains(ApiConstants.authMe);
       final isAuthLogin = path.contains(ApiConstants.authLogin);
       
       if (isAuthMe || isAuthLogin) {
-        debugPrint('🚪 [Auth] Critical 401 on "$path", forcing logout...');
+        debugPrint('🚪 401 auth fail, logout');
         await _clearAuthData();
         authStateNotifier.clearAuth();
         
@@ -40,8 +43,6 @@ class AuthInterceptor extends Interceptor {
             }
           });
         }
-      } else {
-        debugPrint('⚠️ [Auth] Non-critical 401 on "$path", skipping force logout.');
       }
     }
     handler.next(err);

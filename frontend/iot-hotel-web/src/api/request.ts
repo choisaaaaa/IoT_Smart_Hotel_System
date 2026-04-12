@@ -66,17 +66,19 @@ request.interceptors.response.use(
       res.code === 0 ||
       (Number.isFinite(code) && code >= 200 && code < 300)
     if (!isBusinessSuccess) {
-      message.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message))
+      const msg = res.message || '请求失败'
+      message.error(msg.length > 30 ? msg.substring(0, 30) + '...' : msg)
+      return Promise.reject(new Error(msg))
     }
     return response.data
   },
   (error) => {
     if (error.response) {
       const status = error.response.status
+      const serverMsg = error.response?.data?.message
       switch (status) {
         case 401:
-          message.error(error.response?.data?.message || '未授权')
+          message.error(serverMsg || '登录已过期，请重新登录')
           if (shouldClearAuth(error)) {
             localStorage.removeItem('auth_token')
             localStorage.removeItem('user_info')
@@ -84,21 +86,24 @@ request.interceptors.response.use(
           }
           break
         case 403:
-          message.error(error.response?.data?.message || '拒绝访问')
+          message.error(serverMsg || '无权限访问')
           break
         case 404:
-          message.error('请求的资源不存在')
+          message.error(serverMsg || '请求的资源不存在')
+          break
+        case 400:
+          message.error(serverMsg || '请求参数错误')
           break
         case 500:
-          message.error('服务器内部错误')
+          message.error('服务器异常，请稍后重试')
           break
         default:
-          message.error(error.response?.data?.message || `请求失败(${status})`)
+          message.error(serverMsg || `请求失败(${status})`)
       }
     } else if (error.code === 'ECONNABORTED') {
       message.error('请求超时，请稍后重试')
     } else {
-      message.error('网络错误，请检查网络连接')
+      message.error('网络连接异常')
     }
     return Promise.reject(error)
   }

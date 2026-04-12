@@ -79,7 +79,7 @@ router.post('/chat',
         data: result
       });
     } catch (error) {
-      logger.error('AI管家对话失败:', error);
+      logger.error('AI管家对话失败:', error.message);
       res.status(500).json({
         code: 500,
         message: 'AI服务暂时不可用',
@@ -123,7 +123,7 @@ router.post('/verify',
         }
       });
     } catch (error) {
-      logger.error('验证入住状态失败:', error);
+      logger.error('验证入住状态失败:', error.message);
       res.status(500).json({
         code: 500,
         message: '验证失败',
@@ -173,7 +173,7 @@ router.post('/wake',
         }
       });
     } catch (error) {
-      logger.error('唤醒检测失败:', error);
+      logger.error('唤醒检测失败:', error.message);
       res.status(500).json({
         code: 500,
         message: '检测失败',

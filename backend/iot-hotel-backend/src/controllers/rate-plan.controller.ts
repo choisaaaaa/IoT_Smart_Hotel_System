@@ -20,7 +20,7 @@ export const getRatePlans = async (req: AuthRequest, res: Response) => {
     const [rows] = await pool.query<RowDataPacket[]>(sql, params);
     res.json(successResponse(rows, '获取房价方案成功'));
   } catch (error) {
-    logger.error('获取房价方案失败:', error);
+    logger.error('获取房价方案失败:', error.message);
     res.status(500).json(errorResponse('获取房价方案失败'));
   }
 };
@@ -61,7 +61,7 @@ export const createRatePlan = async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(successResponse({ id: result.insertId }, '创建房价方案成功'));
   } catch (error) {
-    logger.error('创建房价方案失败:', error);
+    logger.error('创建房价方案失败:', error.message);
     res.status(500).json(errorResponse('创建房价方案失败'));
   }
 };
@@ -110,7 +110,7 @@ export const updateRatePlan = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新房价方案成功'));
   } catch (error) {
-    logger.error('更新房价方案失败:', error);
+    logger.error('更新房价方案失败:', error.message);
     res.status(500).json(errorResponse('更新房价方案失败'));
   }
 };
@@ -134,7 +134,7 @@ export const deleteRatePlan = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '删除房价方案成功'));
   } catch (error) {
-    logger.error('删除房价方案失败:', error);
+    logger.error('删除房价方案失败:', error.message);
     res.status(500).json(errorResponse('删除房价方案失败'));
   }
 };

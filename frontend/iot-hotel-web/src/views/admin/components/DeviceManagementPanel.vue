@@ -214,8 +214,6 @@ async function fetchDevices() {
       Object.assign(deviceSummary, data.summary)
     }
   } catch (err) {
-    console.error('Failed to fetch devices:', err)
-    message.error('获取设备数据失败')
   } finally {
     loading.value = false
   }

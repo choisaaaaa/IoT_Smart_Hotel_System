@@ -12,6 +12,7 @@ class BookingService {
     int pageSize = 10,
     String? status,
     String? guestName,
+    String? checkInDate,
   }) async {
     try {
       final response = await _dioClient.get(
@@ -21,6 +22,7 @@ class BookingService {
           'pageSize': pageSize,
           'status': status,
           'guest_name': guestName,
+          'check_in_date': checkInDate,
         }..removeWhere((key, value) => value == null),
       );
       

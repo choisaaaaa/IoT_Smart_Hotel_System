@@ -3,28 +3,23 @@ import logger from '../utils/logger';
 
 export function errorHandler(
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ): void {
   const statusCode = (err as any).statusCode || 500;
   
-  // 实时输出错误日志到终端
-  logger.error(`${_req.method} ${_req.url} - Error: ${err.message}`, {
-    stack: err.stack,
-    body: _req.body,
-    query: _req.query
-  });
+  logger.error(`${req.method} ${req.originalUrl} ${statusCode} - ${err.message}`);
 
   res.status(statusCode).json({
     code: statusCode,
     message: err.message || '服务器错误',
-    details: process.env.NODE_ENV === 'development' ? { stack: err.stack } : undefined,
     timestamp: Date.now()
   });
 }
 
-export function notFoundHandler(_req: Request, res: Response, _next: NextFunction): void {
+export function notFoundHandler(req: Request, res: Response, _next: NextFunction): void {
+  logger.warn(`${req.method} ${req.originalUrl} 404`);
   res.status(404).json({
     code: 404,
     message: '接口不存在',

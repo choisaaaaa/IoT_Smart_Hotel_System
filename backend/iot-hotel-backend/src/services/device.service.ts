@@ -105,7 +105,7 @@ class DeviceService {
         };
       }
     } catch (error) {
-      logger.error('Error registering device:', error);
+      logger.error('Error registering device:', error.message);
       throw error;
     }
   }
@@ -140,7 +140,7 @@ class DeviceService {
         device_key: status === 'approved' ? device_key : null
       };
     } catch (error) {
-      logger.error('Error auditing device:', error);
+      logger.error('Error auditing device:', error.message);
       throw error;
     }
   }
@@ -156,7 +156,7 @@ class DeviceService {
       );
       return rows as DeviceData[];
     } catch (error) {
-      logger.error('Error getting pending devices:', error);
+      logger.error('Error getting pending devices:', error.message);
       throw error;
     }
   }
@@ -220,7 +220,7 @@ class DeviceService {
       const [rows] = await pool.query<RowDataPacket[]>(query, params);
       return rows;
     } catch (error) {
-      logger.error('Error getting devices:', error);
+      logger.error('Error getting devices:', error.message);
       throw error;
     }
   }
@@ -252,7 +252,7 @@ class DeviceService {
       const [rows] = await pool.query<RowDataPacket[]>(query, params);
       return rows.length > 0 ? (rows[0] as DeviceData) : null;
     } catch (error) {
-      logger.error('Error getting device by id:', error);
+      logger.error('Error getting device by id:', error.message);
       throw error;
     }
   }
@@ -278,7 +278,7 @@ class DeviceService {
       }
       return true;
     } catch (error) {
-      logger.error('Error deleting device:', error);
+      logger.error('Error deleting device:', error.message);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
@@ -29,7 +29,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
         setState(() => _guests = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('Error loading guests: $e');
+      debugPrint('鉁?guests: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

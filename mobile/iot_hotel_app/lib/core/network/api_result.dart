@@ -45,7 +45,7 @@ class ApiResult<T> {
   factory ApiResult.fromResponse(Response response) {
     final data = response.data as Map<String, dynamic>?;
     if (data == null) {
-      return ApiResult<T>.failure('响应数据为空');
+      return ApiResult<T>.failure('响应为空');
     }
 
     final code = data['code'] ?? response.statusCode ?? 200;
@@ -61,7 +61,7 @@ class ApiResult<T> {
       try {
         return ApiResult<T>.success(resultData as T, code: code is int ? code : 200);
       } catch (e) {
-        return ApiResult<T>.failure('数据类型转换失败', code: code is int ? code : 200);
+        return ApiResult<T>.failure('数据解析失败', code: code is int ? code : 200);
       }
     }
     return ApiResult<T>.failure(message.isNotEmpty ? message : '操作失败', code: code is int ? code : -1);

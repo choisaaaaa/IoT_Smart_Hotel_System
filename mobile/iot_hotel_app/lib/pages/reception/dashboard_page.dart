@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,6 +16,7 @@ import 'delivery_orders_page.dart';
 import 'room_availability_page.dart';
 import 'voice_calls_page.dart';
 import 'bills_page.dart';
+import '../../services/environment_service.dart';
 import '../admin/environment_monitor_page.dart';
 import '../admin/price_calendar_page.dart';
 import '../admin/coupon_manage_page.dart';
@@ -31,6 +32,7 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _notificationCount = 0;
+  bool _hasEnvAlert = false;
 
   final List<_NavItem> _navItems = const [
     _NavItem(icon: Icons.dashboard_rounded, label: '总览'),
@@ -68,9 +70,15 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
       int count = 0;
       if (maintenanceResult.success) count += 1;
       if (deliveryResult.success) count += 1;
+      try {
+        final envResult = await ref.read(environmentServiceProvider).getEventLogs(limit: 5);
+        if (envResult.success && (envResult.data?.isNotEmpty ?? false)) {
+          _hasEnvAlert = true;
+          count += 1;
+        }
+      } catch (_) {}
       if (mounted) setState(() => _notificationCount = count);
     } catch (e) {
-      debugPrint('Error loading notifications: $e');
     }
   }
 
@@ -228,8 +236,10 @@ class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage>
             const SizedBox(height: 16),
             const Text('消息通知', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            _buildNotificationItem('工单处理', '有新的待处理工单', Icons.build_rounded, AppColors.warning, 4),
-            _buildNotificationItem('客房送物', '有新的送物请求', Icons.delivery_dining_rounded, AppColors.info, 5),
+            _buildNotificationItem('工单处理', '有新的待处理工单', Icons.build_rounded, AppColors.warning, 5),
+            _buildNotificationItem('客房送物', '有新的送物请求', Icons.delivery_dining_rounded, AppColors.info, 6),
+            if (_hasEnvAlert)
+              _buildNotificationItem('环境异常', '有环境异常告警', Icons.thermostat_rounded, AppColors.error, 8),
             const SizedBox(height: 16),
           ],
         ),
@@ -285,7 +295,7 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading dashboard: $e');
+      debugPrint('鉁?dashboard: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -524,13 +534,16 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
+      final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50, checkInDate: 'today');
       if (result.success && mounted) {
         final list = (result.data?['list'] as List<dynamic>?) ?? [];
-        setState(() => _todayBookings = list);
+        final filtered = list.where((b) =>
+          ['pending', 'confirmed', 'pre_checked_in', 'checked_in'].contains(b['status'])
+        ).toList();
+        setState(() => _todayBookings = filtered);
       }
     } catch (e) {
-      debugPrint('Error: $e');
+      debugPrint('✗ todayBookings: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -667,7 +680,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
     }
   }
 
@@ -721,7 +734,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '操作失败')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
     }
   }
 }
@@ -749,14 +762,24 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       final result = await ref.read(bookingServiceProvider).getBookings(status: _filterStatus == 'all' ? null : _filterStatus, pageSize: 50);
       if (result.success && mounted) setState(() => _bookings = (result.data?['list'] as List<dynamic>?) ?? []);
     } catch (e) {
-      debugPrint('Error: $e');
+      debugPrint('✗ bookings: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _statusText(String? s) => switch (s) { 'pending' => '待支付', 'confirmed' => '待入住', 'checked_in' => '已入住', 'checked_out' => '已完成', 'cancelled' => '已取消', 'paid' => '已支付', _ => s ?? '未知' };
-  Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'confirmed' => AppColors.primary, 'checked_in' => AppColors.success, 'checked_out' => AppColors.textSecondary, 'cancelled' => AppColors.error, 'paid' => AppColors.success, _ => AppColors.textHint };
+  String _statusText(String? s) => switch (s) { 'pending' => '待支付', 'confirmed' => '待入住', 'pre_checked_in' => '预入住', 'checked_in' => '已入住', 'checked_out' => '已完成', 'cancelled' => '已取消', 'paid' => '已支付', _ => s ?? '未知' };
+  Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'confirmed' => AppColors.primary, 'pre_checked_in' => Colors.cyan, 'checked_in' => AppColors.success, 'checked_out' => AppColors.textSecondary, 'cancelled' => AppColors.error, 'paid' => AppColors.success, _ => AppColors.textHint };
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.month}/${date.day} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -773,12 +796,12 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
         ],
       ),
       body: Column(children: [
-        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: ['all', 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadBookings(); })))).toList())),
+        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: ['all', 'pending', 'confirmed', 'pre_checked_in', 'checked_in', 'checked_out', 'cancelled'].map((s) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(s == 'all' ? '全部' : _statusText(s)), selected: _filterStatus == s, onSelected: (_) => setState(() { _filterStatus = s; _loadBookings(); })))).toList())),
         Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _bookings.isEmpty ? Center(child: Text('暂无预订', style: TextStyle(color: AppColors.textSecondary))) : RefreshIndicator(onRefresh: _loadBookings, child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _bookings.length, itemBuilder: (context, i) {
           final b = _bookings[i];
           return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
             title: Text('${b['guest_name'] ?? '-'} · ${b['room_type'] ?? ''}'),
-            subtitle: Text('${b['check_in_date'] ?? ''} ~ ${b['check_out_date'] ?? ''}'),
+            subtitle: Text('${_formatDate(b['check_in_date'])} ~ ${_formatDate(b['check_out_date'])}'),
             trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _statusColor(b['status']).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(_statusText(b['status']), style: TextStyle(color: _statusColor(b['status']), fontSize: 12))),
           ));
         }))),
@@ -811,7 +834,7 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
         setState(() => _roomTypes = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('Error loading room types: $e');
+      debugPrint('鉁?roomTypes: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -833,7 +856,7 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('更新失败：$e')),
+          const SnackBar(content: Text('更新失败，请重试')),
         );
       }
     }

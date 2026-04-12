@@ -26,8 +26,11 @@ export const maintenanceApi = {
   }) =>
     request.post<ApiResponse<{ id: number }>>('/maintenance', data),
 
-  assign: (id: number, staff_id: number) =>
-    request.put<ApiResponse<any>>(`/maintenance/${id}/assign`, { staff_id }),
+  assign: (id: number, repairer: string | number) =>
+    request.put<ApiResponse<any>>(`/maintenance/${id}/assign`, { repairer }),
+
+  updateStatus: (id: number, status: string) =>
+    request.put<ApiResponse<any>>(`/maintenance/${id}/status`, { status }),
 
   complete: (id: number) =>
     request.put<ApiResponse<any>>(`/maintenance/${id}/complete`)

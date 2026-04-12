@@ -191,7 +191,7 @@ export class AIButlerService {
       this.sessions.set(roomId, session);
       return session;
     } catch (error) {
-      logger.error('验证客人入住状态失败:', error);
+      logger.error('验证客人入住状态失败:', error.message);
       return null;
     }
   }
@@ -226,7 +226,7 @@ export class AIButlerService {
 
       throw new Error('ASR识别失败');
     } catch (error) {
-      logger.error('阿里云ASR识别失败:', error);
+      logger.error('阿里云ASR识别失败:', error.message);
       return '';
     }
   }
@@ -294,7 +294,7 @@ export class AIButlerService {
 
       throw new Error('LLM响应异常');
     } catch (error) {
-      logger.error('智谱GLM-4调用失败:', error);
+      logger.error('智谱GLM-4调用失败:', error.message);
       return {
         content: `您好${session.guestName}，小智正在学习中，马上为您转接前台。[TRANSFER:front_desk]`,
         tool_calls: null,
@@ -323,7 +323,7 @@ export class AIButlerService {
           return '抱歉，该功能暂不可用。';
       }
     } catch (error) {
-      logger.error(`工具调用失败 ${toolName}:`, error);
+      logger.error(`工具调用失败 ${toolName}: ${error.message}`);
       return `执行${toolName}时出现错误，请稍后重试或联系前台。`;
     }
   }
@@ -463,7 +463,7 @@ export class AIButlerService {
 
 还需要了解什么吗？`;
     } catch (error) {
-      logger.error('查询房间状态失败:', error);
+      logger.error('查询房间状态失败:', error.message);
       return '查询房间状态失败，请稍后重试。';
     }
   }
@@ -523,7 +523,7 @@ export class AIButlerService {
 
       return `已为您安排${serviceName}${urgencyText}，工作人员会尽快到达您的房间。预计等待时间：${urgency === 'emergency' ? '5分钟' : urgency === 'urgent' ? '15分钟' : '30分钟'}。`;
     } catch (error) {
-      logger.error('创建服务请求失败:', error);
+      logger.error('创建服务请求失败:', error.message);
       return '创建服务请求失败，请直接拨打前台电话或转接人工服务。';
     }
   }
@@ -1012,7 +1012,7 @@ export class AIButlerService {
         target
       };
     } catch (error) {
-      logger.error('AI管家处理请求失败:', error);
+      logger.error('AI管家处理请求失败:', error.message);
       return {
         text: '抱歉，服务暂时不可用，为您转接前台。',
         action: 'transfer',

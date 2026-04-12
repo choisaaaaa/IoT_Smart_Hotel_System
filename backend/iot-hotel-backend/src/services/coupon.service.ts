@@ -58,7 +58,7 @@ export class CouponService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取优惠券列表失败:', error);
+      logger.error('获取优惠券列表失败:', error.message);
       throw new Error('获取优惠券列表失败');
     }
   }
@@ -68,7 +68,7 @@ export class CouponService {
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM coupons WHERE id = ?', [id]);
       return (rows[0] as Coupon) || null;
     } catch (error) {
-      logger.error('获取优惠券详情失败:', error);
+      logger.error('获取优惠券详情失败:', error.message);
       throw new Error('获取优惠券详情失败');
     }
   }
@@ -92,7 +92,7 @@ export class CouponService {
       
       return result.insertId;
     } catch (error) {
-      logger.error('创建优惠券失败:', error);
+      logger.error('创建优惠券失败:', error.message);
       throw new Error('创建优惠券失败');
     }
   }
@@ -108,7 +108,7 @@ export class CouponService {
       
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('更新优惠券失败:', error);
+      logger.error('更新优惠券失败:', error.message);
       throw new Error('更新优惠券失败');
     }
   }
@@ -118,7 +118,7 @@ export class CouponService {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM coupons WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('删除优惠券失败:', error);
+      logger.error('删除优惠券失败:', error.message);
       throw new Error('删除优惠券失败');
     }
   }
@@ -146,7 +146,7 @@ export class CouponService {
       
       return { id: result.insertId };
     } catch (error) {
-      logger.error('领取优惠券失败:', error);
+      logger.error('领取优惠券失败:', error.message);
       throw new Error('领取优惠券失败');
     }
   }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -139,7 +139,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         }
       }
     } catch (e) {
-      debugPrint('Error fetching hotel detail: $e');
+      debugPrint('鉁?hotelDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoadingHotel = false);
     }
@@ -168,7 +168,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         debugPrint('[HotelDetail] 房型查询失败: ${result.message}');
       }
     } catch (e) {
-      debugPrint('Error fetching rooms: $e');
+      debugPrint('鉁?rooms: $e');
     } finally {
       if (mounted) setState(() => _isLoadingRooms = false);
     }
@@ -196,7 +196,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching reviews: $e');
+      debugPrint('鉁?reviews: $e');
     } finally {
       if (mounted) setState(() => _isLoadingReviews = false);
     }

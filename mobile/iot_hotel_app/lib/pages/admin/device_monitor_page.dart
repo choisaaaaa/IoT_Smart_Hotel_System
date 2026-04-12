@@ -40,9 +40,9 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading devices: $e');
+      debugPrint('✗ devices: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载设备失败：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('加载设备失败')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -172,7 +172,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
                         }
                       } catch (e) {
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
                       }
                     },
                     child: Text(device.deviceStatus == 'on' || device.deviceStatus == 'unlocked' ? '关闭${device.typeName}' : '打开${device.typeName}'),

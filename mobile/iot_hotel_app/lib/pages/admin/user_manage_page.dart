@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/api_result.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/user_service.dart';
 
 class UserManagePage extends ConsumerStatefulWidget {
@@ -51,7 +52,7 @@ class _UserManagePageState extends ConsumerState<UserManagePage> {
     final usernameController = TextEditingController(text: user?['username'] ?? '');
     final phoneController = TextEditingController(text: user?['phone'] ?? '');
     final emailController = TextEditingController(text: user?['email'] ?? '');
-    String selectedRole = user?['role'] ?? 'user';
+    String selectedRole = user?['role'] ?? AppRoles.customer;
     bool isActive = user?['is_active'] ?? true;
 
     showModalBottomSheet(
@@ -124,10 +125,10 @@ class _UserManagePageState extends ConsumerState<UserManagePage> {
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'user', child: Text('顾客')),
-                      DropdownMenuItem(value: 'staff', child: Text('前台员工')),
-                      DropdownMenuItem(value: 'admin', child: Text('酒店管理员')),
-                      DropdownMenuItem(value: 'system', child: Text('系统管理员')),
+                      DropdownMenuItem(value: AppRoles.customer, child: Text('顾客')),
+                      DropdownMenuItem(value: AppRoles.staff, child: Text('前台员工')),
+                      DropdownMenuItem(value: AppRoles.hotelAdmin, child: Text('酒店管理员')),
+                      DropdownMenuItem(value: AppRoles.systemAdmin, child: Text('系统管理员')),
                     ],
                     onChanged: (value) {
                       if (value != null) setModalState(() => selectedRole = value);
@@ -203,12 +204,13 @@ class _UserManagePageState extends ConsumerState<UserManagePage> {
   }
 
   Color _roleColor(String? role) {
-    switch (role) {
-      case 'system':
+    final normalized = AppRoles.normalize(role);
+    switch (normalized) {
+      case AppRoles.systemAdmin:
         return Colors.red;
-      case 'admin':
+      case AppRoles.hotelAdmin:
         return Colors.orange;
-      case 'staff':
+      case AppRoles.staff:
         return Colors.blue;
       default:
         return Colors.green;
@@ -216,16 +218,7 @@ class _UserManagePageState extends ConsumerState<UserManagePage> {
   }
 
   String _roleText(String? role) {
-    switch (role) {
-      case 'system':
-        return '系统管理员';
-      case 'admin':
-        return '酒店管理员';
-      case 'staff':
-        return '前台员工';
-      default:
-        return '顾客';
-    }
+    return AppRoles.displayName(AppRoles.normalize(role));
   }
 
   @override

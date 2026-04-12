@@ -8,14 +8,14 @@ class EnvironmentService {
 
   Future<ApiResult<Map<String, dynamic>>> getDashboardStats() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.environment}dashboard');
+      final response = await _dioClient.get('${ApiConstants.environment}/dashboard');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取环境数据失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
@@ -32,9 +32,9 @@ class EnvironmentService {
         }
         return ApiResult.success([]);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取环境数据失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
@@ -45,7 +45,7 @@ class EnvironmentService {
   }) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.environment}history',
+        '${ApiConstants.environment}/history',
         queryParameters: {
           'room_id': roomId,
           'start_time': startTime,
@@ -60,16 +60,16 @@ class EnvironmentService {
         }
         return ApiResult.success([]);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取历史数据失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
   Future<ApiResult<List<dynamic>>> getFireAlarms({String? status}) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.environment}fire-alarms',
+        '${ApiConstants.environment}/fire-alarms',
         queryParameters: {'status': status}..removeWhere((key, value) => value == null),
       );
 
@@ -80,59 +80,59 @@ class EnvironmentService {
         }
         return ApiResult.success([]);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取消防警报失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
   Future<ApiResult<void>> acknowledgeAlarm(int alarmId) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.environment}fire-alarms/$alarmId/acknowledge',
+        '${ApiConstants.environment}/fire-alarms/$alarmId/acknowledge',
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
-      return ApiResult.failure(response.data['message'] ?? '确认警报失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
   Future<ApiResult<void>> resolveAlarm(int alarmId) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.environment}fire-alarms/$alarmId/resolve',
+        '${ApiConstants.environment}/fire-alarms/$alarmId/resolve',
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
-      return ApiResult.failure(response.data['message'] ?? '解决警报失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
   Future<ApiResult<Map<String, dynamic>>> getEnergyConsumption() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.environment}energy');
+      final response = await _dioClient.get('${ApiConstants.environment}/energy');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取能耗数据失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 
   Future<ApiResult<List<dynamic>>> getEventLogs({int limit = 50}) async {
     try {
       final response = await _dioClient.get(
-        '${ApiConstants.environment}event-logs',
+        '${ApiConstants.environment}/event-logs',
         queryParameters: {'limit': limit},
       );
 
@@ -143,9 +143,9 @@ class EnvironmentService {
         }
         return ApiResult.success([]);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取事件日志失败');
+      return ApiResult.failure('环境监测服务暂未接入');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('环境监测服务暂未接入');
     }
   }
 }

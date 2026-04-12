@@ -166,7 +166,7 @@ const getStatusText = (status: string) => {
 // 格式化日期
 const formatDate = (date: string) => {
   if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD')
+  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 // 加载登录用户的订单

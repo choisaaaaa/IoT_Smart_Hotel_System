@@ -52,7 +52,7 @@ class DeliveryService {
       if (status == 'delivering') {
         // 开始配送 - 调用接单接口
         final response = await _dioClient.put(
-          '${ApiConstants.delivery}$deliveryId/status',
+          '${ApiConstants.delivery}/$deliveryId/status',
           data: {'status': 'delivering'},
         );
         if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -62,7 +62,7 @@ class DeliveryService {
       } else if (status == 'completed' || status == 'delivered') {
         // 完成配送
         final response = await _dioClient.put(
-          '${ApiConstants.delivery}$deliveryId/complete',
+          '${ApiConstants.delivery}/$deliveryId/complete',
         );
         if (response.statusCode == 200 && response.data['code'] == 200) {
           return ApiResult.success(null);

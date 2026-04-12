@@ -82,7 +82,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未找到匹配的预订')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('查询失败：$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('查询失败，请重试')));
     } finally {
       if (mounted) setState(() => _isSearching = false);
     }
@@ -123,7 +123,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '办理失败')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('办理异常：$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('办理失败，请重试')));
     } finally {
       if (mounted) setState(() => _isConfirming = false);
     }
@@ -312,7 +312,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                   width: double.infinity,
                   height: 48,
                   child: FilledButton(
-                    onPressed: () => context.go('/room-service'),
+                    onPressed: () => context.go('/room-service', extra: {'bookingId': widget.bookingId}),
                     child: const Text('前往客房服务'),
                   ),
                 ),

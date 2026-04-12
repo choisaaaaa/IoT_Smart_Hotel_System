@@ -27,7 +27,7 @@ export class HotelService {
       const [rows] = await pool.query<Hotel[]>('SELECT * FROM hotels ORDER BY id ASC');
       return rows;
     } catch (error) {
-      logger.error('获取所有酒店列表失败:', error);
+      logger.error('获取所有酒店列表失败:', error.message);
       throw new Error('获取所有酒店列表失败');
     }
   }
@@ -37,7 +37,7 @@ export class HotelService {
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM hotels WHERE id = ?', [id]);
       return (rows[0] as Hotel) || null;
     } catch (error) {
-      logger.error('获取酒店信息失败:', error);
+      logger.error('获取酒店信息失败:', error.message);
       throw new Error('获取酒店信息失败');
     }
   }
@@ -54,7 +54,7 @@ export class HotelService {
       );
       return result.insertId;
     } catch (error) {
-      logger.error('创建酒店失败:', error);
+      logger.error('创建酒店失败:', error.message);
       throw new Error('创建酒店失败');
     }
   }
@@ -82,7 +82,7 @@ export class HotelService {
       
       return true;
     } catch (error) {
-      logger.error('更新酒店信息失败:', error);
+      logger.error('更新酒店信息失败:', error.message);
       throw new Error('更新酒店信息失败');
     }
   }
@@ -95,7 +95,7 @@ export class HotelService {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM hotels WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('删除酒店失败:', error);
+      logger.error('删除酒店失败:', error.message);
       throw new Error('删除酒店失败');
     }
   }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -35,7 +35,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching order detail: $e');
+      debugPrint('鉁?orderDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -45,7 +45,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     if (dateStr == null) return '';
     try {
       final date = DateTime.parse(dateStr);
-      return '${date.year}年${date.month}月${date.day}日';
+      return '${date.year}年${date.month}月${date.day}日 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return dateStr;
     }
@@ -337,7 +337,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               width: double.infinity,
               height: 48,
               child: FilledButton(
-                onPressed: () => context.go('/room-service'),
+                onPressed: () => context.go('/room-service', extra: {'bookingId': widget.orderId}),
                 child: const Text('进入房间', style: TextStyle(fontSize: 16)),
               ),
             ),
@@ -346,7 +346,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
-                onPressed: () => context.push('/extend-stay', extra: {'bookingId': widget.orderId}),
+                onPressed: () => context.push('/extend-stay/${widget.orderId}', extra: {'bookingId': widget.orderId}),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
                 child: const Text('在线续住'),
               ),
@@ -356,7 +356,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
-                onPressed: () => context.push('/checkout', extra: {'bookingId': widget.orderId}),
+                onPressed: () => context.push('/checkout/${widget.orderId}', extra: {'bookingId': widget.orderId}),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
                 child: const Text('自助退房'),
               ),
@@ -367,7 +367,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
-                onPressed: () => context.push('/review-submit', extra: {
+                onPressed: () => context.push('/review-submit/${widget.orderId}', extra: {
                   'bookingId': widget.orderId,
                   'hotelId': _order?['hotel_id'],
                   'hotelName': _order?['hotel_name'],
@@ -430,7 +430,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('支付异常：$e')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付失败，请重试')));
                 }
               }
             },
@@ -442,7 +442,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   void _handleCheckIn() {
-    context.go('/room-service');
+    context.go('/room-service', extra: {'bookingId': widget.orderId});
   }
 
   Future<void> _handleCancel() async {

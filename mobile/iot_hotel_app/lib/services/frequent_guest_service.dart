@@ -46,7 +46,7 @@ class FrequentGuestService {
 
   Future<ApiResult<Map<String, dynamic>>> updateFrequentGuest(int id, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.frequentGuests}$id', data: data);
+      final response = await _dioClient.put('${ApiConstants.frequentGuests}/$id', data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -58,7 +58,7 @@ class FrequentGuestService {
 
   Future<ApiResult<void>> deleteFrequentGuest(int id) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.frequentGuests}$id');
+      final response = await _dioClient.delete('${ApiConstants.frequentGuests}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }

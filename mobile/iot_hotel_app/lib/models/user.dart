@@ -1,4 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
+import '../core/auth/auth_state_notifier.dart';
 
 class User {
   final int id;
@@ -21,7 +22,7 @@ class User {
     required this.username,
     this.email,
     this.hotelId,
-    this.role = 'user',
+    this.role = AppRoles.customer,
     this.phone,
     this.uid,
     this.avatar,
@@ -34,7 +35,7 @@ class User {
         username: json['username'] ?? '',
         email: json['email'],
         hotelId: json['hotel_id'],
-        role: json['role'] ?? 'user',
+        role: json['role'] ?? AppRoles.customer,
         phone: json['phone'],
         uid: json['uid'],
         avatar: json['avatar'],

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../core/theme/app_colors.dart';
 import '../../../services/room_service.dart';
 import '../../../services/room_type_service.dart';
 import '../../../services/floor_service.dart';
@@ -42,9 +42,9 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading rooms: $e');
+      debugPrint('✗ rooms: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载房间失败：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('加载房间失败')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -208,7 +208,7 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
       final fResult = await ref.read(floorServiceProvider).getFloors();
       if (fResult.success) floors = fResult.data ?? [];
     } catch (e) {
-      debugPrint('Error loading room types/floors: $e');
+      debugPrint('鉁?roomTypesFloors: $e');
     }
 
     if (!mounted) return;
@@ -256,7 +256,7 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '添加失败')));
             }
           } catch (e) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('添加失败：$e')));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('添加失败，请重试')));
           }
         }, child: const Text('确认添加')),
       ],
@@ -293,7 +293,7 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
               _loadRooms();
             }
           } catch (e) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('更新失败：$e')));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
           }
         }, child: const Text('保存修改')),
       ],
@@ -315,7 +315,7 @@ class _RoomManagePageState extends ConsumerState<RoomManagePage> {
               _loadRooms();
             }
           } catch (e) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：$e')));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('删除失败，请重试')));
           }
         }, child: const Text('确定删除')),
       ],

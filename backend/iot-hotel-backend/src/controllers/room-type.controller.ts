@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { RoomTypeService } from '../services/room-type.service';
 import logger from '../utils/logger';
-import { isSystemRole } from '../utils/role';
+import { isSystemAdmin } from '../utils/role';
 
 type ControllerError = Error & { statusCode?: number };
 
@@ -10,7 +10,7 @@ export class RoomTypeController {
   static async getRoomTypes(req: AuthRequest, res: Response) {
     try {
       let hotelId = req.user?.hotel_id;
-      if (isSystemRole(req.user?.role)) {
+      if (isSystemAdmin(req.user?.role)) {
         const queryHotelId = req.query.hotel_id;
         if (queryHotelId) {
           hotelId = parseInt(queryHotelId as string);
@@ -23,7 +23,7 @@ export class RoomTypeController {
         data: list
       });
     } catch (error) {
-      logger.error('获取房型列表失败:', error);
+      logger.error('获取房型列表失败:', error.message);
       res.status(500).json({ code: 500, message: '获取房型列表失败' });
     }
   }
@@ -39,7 +39,7 @@ export class RoomTypeController {
         res.status(404).json({ code: 404, message: '房型不存在' });
       }
     } catch (error) {
-      logger.error('获取房型详情失败:', error);
+      logger.error('获取房型详情失败:', error.message);
       res.status(500).json({ code: 500, message: '获取房型详情失败' });
     }
   }
@@ -50,7 +50,7 @@ export class RoomTypeController {
       const id = await RoomTypeService.createRoomType({ ...req.body, hotel_id: hotelId });
       res.status(201).json({ code: 201, message: '创建房型成功', data: { id } });
     } catch (error) {
-      logger.error('创建房型失败:', error);
+      logger.error('创建房型失败:', error.message);
       const err = error as ControllerError;
       const statusCode = err.statusCode || 500;
       res.status(statusCode).json({ code: statusCode, message: err.message || '创建房型失败' });
@@ -68,7 +68,7 @@ export class RoomTypeController {
         res.status(404).json({ code: 404, message: '房型不存在' });
       }
     } catch (error) {
-      logger.error('更新房型失败:', error);
+      logger.error('更新房型失败:', error.message);
       const err = error as ControllerError;
       const statusCode = err.statusCode || 500;
       res.status(statusCode).json({ code: statusCode, message: err.message || '更新房型失败' });
@@ -85,7 +85,7 @@ export class RoomTypeController {
         res.status(404).json({ code: 404, message: '房型不存在' });
       }
     } catch (error) {
-      logger.error('删除房型失败:', error);
+      logger.error('删除房型失败:', error.message);
       res.status(500).json({ code: 500, message: '删除房型失败' });
     }
   }

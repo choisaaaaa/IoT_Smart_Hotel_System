@@ -74,7 +74,7 @@ export const updateConfigs = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(null, '更新系统配置成功'));
   } catch (error) {
-    logger.error('更新系统配置失败:', error);
+    logger.error('更新系统配置失败:', error.message);
     res.status(500).json(errorResponse('更新系统配置失败'));
   }
 };

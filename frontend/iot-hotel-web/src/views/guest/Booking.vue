@@ -1115,8 +1115,14 @@ const saveGuest = async () => {
 }
 
 const submitBooking = async () => {
-  if (!bookingForm.guestName || !bookingForm.phone || !bookingForm.idNumber) {
-    return message.warning('请完善入住人信息')
+  if (!bookingForm.guestName) {
+    return message.warning('请填写入住人姓名')
+  }
+  if (!bookingForm.phone || bookingForm.phone.length < 11) {
+    return message.warning('请填写正确的手机号码')
+  }
+  if (!bookingForm.idNumber || bookingForm.idNumber.length < 15) {
+    return message.warning('请填写正确的身份证号码')
   }
 
   const roomId = Number(selectedRoom.value?.id || selectedRoom.value?.room_id)
@@ -1143,7 +1149,6 @@ const submitBooking = async () => {
   console.log('提交预订数据:', payload)
   submitting.value = true
   try {
-    // 如果勾选了保存为常用联系人，且该联系人不在列表中
     if (saveAsFrequent.value) {
       const exists = frequentGuests.value.some(g => g.id_number === bookingForm.idNumber)
       if (!exists) {
@@ -1156,10 +1161,11 @@ const submitBooking = async () => {
       }
     }
 
-    // 1. 创建预订
+    // 1. 创建预订（后端会悲观锁锁定房间，15分钟内需完成支付）
     const booking = await hotelApi.createBooking(payload)
     const bookingId = booking?.id
     bookingNo.value = booking?.booking_number || booking?.booking_no || ('BK' + Date.now().toString().slice(-8))
+    const paymentDeadline = booking?.payment_deadline
 
     // 2. 如果是在线支付（非到店支付），创建支付记录并确认支付
     if (paymentMethod.value !== 'front_desk' && bookingId) {
@@ -1173,7 +1179,6 @@ const submitBooking = async () => {
       })
       console.log('支付记录创建成功:', payment)
 
-      // 3. 确认支付
       if (payment?.id) {
         console.log('确认支付...')
         await paymentApi.payPayment(payment.id)
@@ -1182,10 +1187,18 @@ const submitBooking = async () => {
     }
 
     currentStep.value = 4
-    message.success('预订成功！')
+    if (paymentDeadline && paymentMethod.value === 'front_desk') {
+      message.success(`预订成功！请在15分钟内到店支付，超时订单将自动取消`)
+    } else {
+      message.success('预订成功！')
+    }
   } catch (error: any) {
     console.error('预订或支付失败:', error)
-    message.error(error?.message || '预订失败，请稍后重试')
+    if (error?.response?.status === 409) {
+      message.error('该房间已被其他顾客预订，请选择其他房间')
+    } else {
+      message.error(error?.response?.data?.message || error?.message || '预订失败，请稍后重试')
+    }
   } finally {
     submitting.value = false
   }

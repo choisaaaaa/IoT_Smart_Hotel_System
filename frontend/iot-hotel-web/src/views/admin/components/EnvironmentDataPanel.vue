@@ -127,8 +127,6 @@ async function fetchData() {
       Object.assign(summary, data.summary)
     }
   } catch (err) {
-    console.error('Failed to fetch environment data:', err)
-    message.error('获取数据失败')
   } finally {
     loading.value = false
   }
