@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -37,7 +37,7 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
       final List<dynamic> decoded = jsonDecode(raw);
       setState(() => _favorites = decoded.cast<Map<String, dynamic>>().toList());
     } catch (e) {
-      debugPrint('Error loading favorites: $e');
+      debugPrint('鉁?favorites: $e');
     } finally {
       setState(() => _isLoading = false);
     }

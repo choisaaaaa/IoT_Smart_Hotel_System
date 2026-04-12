@@ -57,7 +57,7 @@
             <a-tag :color="getRoleColor(record.role)">{{ getRoleText(record.role) }}</a-tag>
           </template>
           <template v-if="column.key === 'hotel'">
-            <span v-if="record.role === 'system'">系统级</span>
+            <span v-if="record.role === CANONICAL_ROLES.SYSTEM_ADMIN">系统级</span>
             <span v-else-if="record.hotel_name">{{ record.hotel_name }}</span>
             <span v-else style="color: #999">未绑定</span>
           </template>
@@ -134,6 +134,7 @@ import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
 import axios from '@/api/request'
 import { hotelManageApi } from '@/api/hotel-manage'
+import { CANONICAL_ROLES } from '@/api/auth'
 
 interface UserItem {
   id: number
@@ -153,7 +154,7 @@ interface HotelOption {
 }
 
 const appStore = useAppStore()
-const isSystem = computed(() => appStore.userInfo?.role === 'system')
+const isSystem = computed(() => appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN)
 
 const filteredHotelOptions = computed(() => {
   if (isSystem.value) {

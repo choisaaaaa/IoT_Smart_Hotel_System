@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -214,7 +214,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading dashboard data: $e');
+      debugPrint('鉁?dashboard: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -409,7 +409,7 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
         setState(() => _applications = List<Map<String, dynamic>>.from(res.data['data'] ?? []));
       }
     } catch (e) {
-      debugPrint('Error loading applications: $e');
+      debugPrint('鉁?applications: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -429,7 +429,7 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作异常：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
     }
   }
 

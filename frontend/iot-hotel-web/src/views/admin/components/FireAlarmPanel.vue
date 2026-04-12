@@ -197,8 +197,6 @@ async function fetchAlarms() {
       Object.assign(alarmSummary, data.summary)
     }
   } catch (err) {
-    console.error('Failed to fetch fire alarms:', err)
-    message.error('获取消防报警数据失败')
   } finally {
     loading.value = false
   }

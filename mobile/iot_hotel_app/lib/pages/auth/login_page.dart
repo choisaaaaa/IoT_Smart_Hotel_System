@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -96,7 +97,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 if (!ctx.mounted || !mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('重置失败：$e')),
+                  const SnackBar(content: Text('重置失败，请重试')),
                 );
               }
             },
@@ -119,17 +120,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         if (!context.mounted) return;
         // 根据用户角色导航到对应页面
         final user = result.data?['user'] as Map<String, dynamic>?;
-        final role = user?['role'] as String? ?? 'user';
-        switch (role) {
-          case 'admin':
-          case 'system':
+        final normalizedRole = AppRoles.normalize(user?['role'] as String?);
+        switch (normalizedRole) {
+          case AppRoles.systemAdmin:
             context.go('/system');
             break;
-          case 'manager':
+          case AppRoles.hotelAdmin:
             context.go('/admin');
             break;
-          case 'staff':
-          case 'receptionist':
+          case AppRoles.staff:
             context.go('/reception');
             break;
           default:
@@ -137,7 +136,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         }
       } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '登录失败'), behavior: SnackBarBehavior.floating)); }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录异常：$e'), behavior: SnackBarBehavior.floating));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('登录失败，请重试'), behavior: SnackBarBehavior.floating));
     } finally { if (mounted) setState(() => _isLoading = false); }
   }
 

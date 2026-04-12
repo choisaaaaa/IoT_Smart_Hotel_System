@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../services/hotel_service.dart';
@@ -37,7 +37,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading hotel info: $e');
+      debugPrint('鉁?hotelInfo: $e');
     }
   }
 
@@ -121,7 +121,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存异常：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

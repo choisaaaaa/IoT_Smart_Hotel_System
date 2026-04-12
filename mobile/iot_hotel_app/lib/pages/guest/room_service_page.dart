@@ -1,14 +1,15 @@
-import 'dart:async';
+﻿﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/mqtt/mqtt_service.dart';
-import '../../../services/device_service.dart';
-import '../../../services/delivery_service.dart';
-import '../../../services/voice_call_service.dart';
-import '../../../services/booking_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/mqtt/mqtt_service.dart';
+import '../../core/auth/auth_state_notifier.dart';
+import '../../services/device_service.dart';
+import '../../services/delivery_service.dart';
+import '../../services/voice_call_service.dart';
+import '../../services/booking_service.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
   final int? bookingId;
@@ -26,13 +27,36 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   Map<String, dynamic>? _currentStay;
   List<dynamic> _devices = [];
   final MqttService _mqttService = MqttService();
+  String? _lastUserId;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addObserver(this);
+    _lastUserId = ref.read(authStateProvider).userId;
     _checkCheckinStatus();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 检测用户切换，强制刷新状态
+    final currentUserId = ref.read(authStateProvider).userId;
+    if (_lastUserId != currentUserId) {
+      _lastUserId = currentUserId;
+      _resetState();
+      _checkCheckinStatus();
+    }
+  }
+
+  void _resetState() {
+    setState(() {
+      _isCheckedIn = false;
+      _currentStay = null;
+      _devices = [];
+    });
+    _mqttService.disconnect();
   }
 
   @override
@@ -90,7 +114,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
             );
             await Future.delayed(const Duration(seconds: 1));
             if (mounted) {
-              context.push('/online-checkin', extra: {'bookingId': bookingId});
+              context.push('/online-checkin/$bookingId', extra: {'bookingId': bookingId});
             }
             return;
           }
@@ -152,7 +176,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         _mqttService.disconnect();
       }
     } catch (e) {
-      debugPrint('Error checking check-in status: $e');
+      debugPrint('鉁?checkinStatus: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -176,7 +200,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         setState(() => _devices = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('Error fetching devices: $e');
+      debugPrint('鉁?devices: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -191,7 +215,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           .controlDevice(device['id'], 'toggle', newStatus);
       if (result.success) _fetchDevices();
     } catch (e) {
-      debugPrint('Error toggling device: $e');
+      debugPrint('鉁?toggleDevice: $e');
     }
   }
 
@@ -242,7 +266,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
                 const Text('请先完成预订支付并办理入住后，\n即可使用客房服务功能。', style: TextStyle(fontSize: 14, color: AppColors.textSecondary), textAlign: TextAlign.center),
                 const SizedBox(height: 32),
                 FilledButton.icon(
-                  onPressed: () => context.push('/online-checkin'),
+                  onPressed: () => context.push('/online-checkin/0'),
                   icon: const Icon(Icons.login_rounded),
                   label: const Text('在线办理入住'),
                   style: FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
@@ -921,7 +945,7 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
         }
       } catch (e) {
         failCount++;
-        debugPrint('Error creating delivery order: $e');
+        debugPrint('鉁?createDelivery: $e');
       }
     }
 
@@ -1467,7 +1491,7 @@ class _MoreServicesTab extends StatelessWidget {
                   const Text('请先办理入住后再使用此服务', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: () => context.push('/online-checkin'),
+                    onPressed: () => context.push('/online-checkin/0'),
                     child: const Text('立即办理'),
                   ),
                 ],

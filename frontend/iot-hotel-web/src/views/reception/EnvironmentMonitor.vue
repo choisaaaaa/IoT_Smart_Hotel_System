@@ -404,12 +404,10 @@ async function fetchData() {
     if (data && data.list && data.list.length > 0) {
       environmentList.value = data.list
       Object.assign(summary, data.summary)
-      console.log('✅ 环境数据加载成功（来自API）')
     } else {
       throw new Error('Empty or invalid response')
     }
   } catch (err: any) {
-    console.warn('⚠️ API获取失败，使用模拟数据:', err.message || err)
     useMockData()
   } finally {
     loading.value = false
@@ -421,7 +419,6 @@ function useMockData() {
   const mockData = generateMockEnvironmentData()
   environmentList.value = mockData
   Object.assign(summary, calculateMockSummary(mockData))
-  console.log('📊 已加载模拟环境数据（共 ' + mockData.length + ' 个房间）')
 }
 
 function getTemperatureColor(temp: number): string {

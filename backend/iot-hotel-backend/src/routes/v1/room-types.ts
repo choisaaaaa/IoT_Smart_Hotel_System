@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { RoomTypeController } from '../../controllers/room-type.controller';
 import { authenticate, authorize } from '../../middleware/auth';
+import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-// 所有房型操作都需要认证，且管理员/员工/系统管理员可查看，仅管理员/系统管理员可修改
-router.get('/', authenticate as any, authorize(['admin', 'staff', 'system']), RoomTypeController.getRoomTypes);
-router.get('/:id', authenticate as any, authorize(['admin', 'staff', 'system']), RoomTypeController.getRoomTypeById);
-router.post('/', authenticate as any, authorize(['admin', 'system']), RoomTypeController.createRoomType);
-router.put('/:id', authenticate as any, authorize(['admin', 'system']), RoomTypeController.updateRoomType);
-router.delete('/:id', authenticate as any, authorize(['admin', 'system']), RoomTypeController.deleteRoomType);
+router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.getRoomTypes);
+router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.getRoomTypeById);
+router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.createRoomType);
+router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.updateRoomType);
+router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.deleteRoomType);
 
 export default router;

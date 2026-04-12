@@ -26,7 +26,7 @@ export const getPriceCalendar = async (req: AuthRequest, res: Response) => {
     const [rows] = await pool.query<RowDataPacket[]>(sql, params);
     res.json(successResponse(rows, '获取价格日历成功'));
   } catch (error) {
-    logger.error('获取价格日历失败:', error);
+    logger.error('获取价格日历失败:', error.message);
     res.status(500).json(errorResponse('获取价格日历失败'));
   }
 };
@@ -54,7 +54,7 @@ export const setPriceCalendar = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '设置价格日历成功'));
   } catch (error) {
-    logger.error('设置价格日历失败:', error);
+    logger.error('设置价格日历失败:', error.message);
     res.status(500).json(errorResponse('设置价格日历失败'));
   }
 };

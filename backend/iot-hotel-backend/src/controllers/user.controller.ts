@@ -2,12 +2,11 @@ import { Router, Request, Response } from 'express';
 import { AuthRequest } from '../types';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../types';
 import { hashPassword, comparePassword } from '../utils/password';
-import { normalizeRole } from '../utils/role';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, CANONICAL_ROLES } from '../utils/role';
 import db from '../config/database';
 
 const router = Router();
 
-// 获取用户列表 (管理员权限)
 export async function list(req: AuthRequest, res: Response) {
   try {
     const { page = 1, limit = 10, role, keyword, hotel_id } = req.query;
@@ -17,7 +16,6 @@ export async function list(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('未授权', 401));
     }
 
-    // 获取分页参数并确保为正整数
     const p = Math.max(1, parseInt(page as string) || 1);
     const l = Math.max(1, parseInt(limit as string) || 10);
     const offset = (p - 1) * l;
@@ -32,18 +30,14 @@ export async function list(req: AuthRequest, res: Response) {
     const conditions: string[] = [];
     const params: any[] = [];
 
-    // 权限隔离：非系统管理员只能查看自己酒店的员工，且不能查看普通用户 (user 角色)
     const userRole = normalizeRole(currentUser.role);
-    if (userRole === 'admin' || userRole === 'staff' || userRole === 'manager') {
+    if (isHotelAdmin(userRole) || isStaff(userRole)) {
       conditions.push('u.hotel_id = ?');
       params.push(currentUser.hotel_id);
-      // 门店管理人员不能看到普通用户
-      conditions.push("u.role NOT IN ('user')");
-      // 不能看到 system 用户
+      conditions.push("u.role NOT IN ('customer', 'user')");
       conditions.push('u.role != ?');
       params.push('system');
-    } else if (userRole === 'system') {
-      // System 可以看到所有用户，也可以按门店过滤
+    } else if (isSystemAdmin(userRole)) {
       if (hotel_id && hotel_id !== 'undefined') {
         conditions.push('u.hotel_id = ?');
         params.push(hotel_id);
@@ -69,7 +63,6 @@ export async function list(req: AuthRequest, res: Response) {
 
     sql += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
 
-    // 使用 db.query 而非 db.execute 以更好地支持 LIMIT/OFFSET 的参数替换
     const [users]: any = await db.query(sql, [...params, l, offset]);
     const [countResult]: any = await db.query(countSql, params);
 
@@ -85,7 +78,6 @@ export async function list(req: AuthRequest, res: Response) {
   }
 }
 
-// 获取用户详情
 export async function detail(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
@@ -111,7 +103,6 @@ export async function detail(req: AuthRequest, res: Response) {
   }
 }
 
-// 创建用户
 export async function create(req: AuthRequest, res: Response) {
   try {
     const { username, password, email, phone, role, hotel_id } = req.body;
@@ -125,26 +116,22 @@ export async function create(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('用户名和密码不能为空', 400));
     }
 
-    // 权限检查
     let finalHotelId = hotel_id;
-    let finalRole = role || 'user';
+    let finalRole = role || CANONICAL_ROLES.CUSTOMER;
 
-    if (currentUser.role === 'admin') {
-      // Admin 只能创建自己门店的 admin 或 staff
+    if (isHotelAdmin(currentUser.role)) {
       finalHotelId = currentUser.hotel_id;
-      if (!['admin', 'staff', 'user'].includes(finalRole)) {
-        return sendError(res, errorResponse('Admin 只能创建门店管理员、员工或普通用户', 403));
+      if (![CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.CUSTOMER].includes(finalRole)) {
+        return sendError(res, errorResponse('酒店管理员只能创建门店管理员、员工或顾客', 403));
       }
-    } else if (currentUser.role === 'system') {
-      // System 可以创建任何角色，必须指定 hotel_id (除非是创建 system)
-      if (finalRole !== 'system' && !finalHotelId) {
+    } else if (isSystemAdmin(currentUser.role)) {
+      if (finalRole !== CANONICAL_ROLES.SYSTEM_ADMIN && !finalHotelId) {
         return sendError(res, errorResponse('创建非系统管理员用户必须指定酒店 ID', 400));
       }
     } else {
       return sendError(res, errorResponse('权限不足', 403));
     }
 
-    // 检查用户名是否已存在
     const [existingUsers]: any = await db.execute(
       'SELECT * FROM users WHERE username = ?',
       [username]
@@ -170,7 +157,6 @@ export async function create(req: AuthRequest, res: Response) {
   }
 }
 
-// 更新用户信息
 export async function update(req: AuthRequest, res: Response) {
   try {
     const { id: userId } = req.params;
@@ -181,7 +167,6 @@ export async function update(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('未授权', 401));
     }
 
-    // 检查被修改的用户是否存在
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
       [userId]
@@ -193,28 +178,23 @@ export async function update(req: AuthRequest, res: Response) {
 
     const targetUser = users[0];
 
-    // 权限检查
     let finalRole = role || targetUser.role;
     let finalHotelId = hotel_id || targetUser.hotel_id;
 
-    if (currentUser.role === 'admin') {
-      // Admin 只能修改自己门店的用户
+    if (isHotelAdmin(currentUser.role)) {
       if (targetUser.hotel_id !== currentUser.hotel_id) {
         return sendError(res, errorResponse('无权修改其他门店的用户', 403));
       }
-      // Admin 不能将用户修改为 system 角色
-      if (finalRole === 'system') {
+      if (finalRole === CANONICAL_ROLES.SYSTEM_ADMIN) {
         return sendError(res, errorResponse('无权授予系统管理员角色', 403));
       }
-      // Admin 不能修改 hotel_id
       finalHotelId = currentUser.hotel_id;
-    } else if (currentUser.role === 'system') {
+    } else if (isSystemAdmin(currentUser.role)) {
       // System 可以修改任何信息
     } else {
       return sendError(res, errorResponse('权限不足', 403));
     }
 
-    // 更新用户基本信息
     let updateFields = ['email = ?', 'phone = ?', 'role = ?', 'hotel_id = ?', 'avatar = ?'];
     const params = [
       email || targetUser.email,
@@ -241,12 +221,10 @@ export async function update(req: AuthRequest, res: Response) {
   }
 }
 
-// 删除用户
 export async function remove(req: AuthRequest, res: Response) {
   try {
     const { id: userId } = req.params;
 
-    // 检查用户是否存在
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
       [userId]
@@ -256,7 +234,6 @@ export async function remove(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
 
-    // 不允许删除 admin 用户
     if (users[0].username === 'admin') {
       return sendError(res, errorResponse('不能删除管理员账户', 403));
     }
@@ -270,7 +247,6 @@ export async function remove(req: AuthRequest, res: Response) {
   }
 }
 
-// 修改用户密码
 export async function updatePassword(req: AuthRequest, res: Response) {
   try {
     const userId = req.params.id;
@@ -289,8 +265,7 @@ export async function updatePassword(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('用户不存在', 404));
     }
 
-    // 如果是管理员修改其他用户密码，不需要验证旧密码
-    if (req.user?.role !== 'admin' && oldPassword) {
+    if (!isHotelAdmin(req.user?.role) && !isSystemAdmin(req.user?.role) && oldPassword) {
       const isPasswordValid = await comparePassword(oldPassword, users[0].password);
       if (!isPasswordValid) {
         return sendError(res, errorResponse('原密码错误', 400));
@@ -310,7 +285,6 @@ export async function updatePassword(req: AuthRequest, res: Response) {
   }
 }
 
-// 用户自助更新个人资料
 export async function updateProfile(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
@@ -320,7 +294,6 @@ export async function updateProfile(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('未授权', 401));
     }
 
-    // 构建更新字段
     const updateFields: string[] = [];
     const params: any[] = [];
 
@@ -340,12 +313,10 @@ export async function updateProfile(req: AuthRequest, res: Response) {
     }
 
     if (phone) {
-      // 模拟验证码校验：简单校验验证码是否存在且为6位数字
       if (!code || !/^\d{6}$/.test(code)) {
         return sendError(res, errorResponse('验证码错误或已过期 (模拟环境：请输入任意6位数字)', 400));
       }
 
-      // 检查手机号是否已被其他用户使用
       const [existing]: any = await db.execute(
         'SELECT id FROM users WHERE phone = ? AND id != ?',
         [phone, userId]
@@ -366,7 +337,6 @@ export async function updateProfile(req: AuthRequest, res: Response) {
 
     await db.execute(sql, params);
 
-    // 获取更新后的用户信息
     const [users]: any = await db.execute('SELECT id, username, email, phone, avatar, role, hotel_id FROM users WHERE id = ?', [userId]);
 
     sendSuccess(res, { user: users[0] }, '个人资料更新成功');
@@ -376,7 +346,6 @@ export async function updateProfile(req: AuthRequest, res: Response) {
   }
 }
 
-// 模拟发送短信验证码
 export async function sendVerificationCode(req: Request, res: Response) {
   try {
     const { phone } = req.body;
@@ -384,10 +353,8 @@ export async function sendVerificationCode(req: Request, res: Response) {
       return sendError(res, errorResponse('请输入正确的手机号', 400));
     }
 
-    // 模拟发送成功
     console.log(`[Mock SMS] Sending verification code to ${phone}...`);
     
-    // 这里的逻辑可以根据需要扩展，目前仅返回成功
     sendSuccess(res, { message: '验证码已发送 (模拟)' });
   } catch (error) {
     console.error('发送验证码失败:', error);

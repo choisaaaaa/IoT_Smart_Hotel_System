@@ -23,6 +23,7 @@
         <a-radio-group v-model:value="statusFilter" button-style="solid" size="small">
           <a-radio-button value="">全部</a-radio-button>
           <a-radio-button value="pending">待处理</a-radio-button>
+          <a-radio-button value="assigned">已分配</a-radio-button>
           <a-radio-button value="processing">处理中</a-radio-button>
           <a-radio-button value="completed">已完成</a-radio-button>
         </a-radio-group>
@@ -50,7 +51,8 @@
             <template v-if="column.key === 'action'">
               <a-space>
                 <a-button type="link" size="small" v-if="record.status === 'pending'" @click="startProcess(record)">开始处理</a-button>
-                <a-button type="link" size="small" v-if="record.status === 'processing'" @click="completeOrder(record)">完成</a-button>
+                <a-button type="link" size="small" v-if="record.status === 'assigned'" @click="startWork(record)">开始维修</a-button>
+                <a-button type="link" size="small" v-if="record.status === 'assigned' || record.status === 'processing'" @click="completeOrder(record)">完成</a-button>
               </a-space>
             </template>
           </template>
@@ -123,10 +125,12 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ClockCircleOutlined, ToolOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
+import { useAppStore } from '@/stores/app'
 import { maintenanceApi } from '@/api/maintenance'
 import { roomApi } from '@/api/room'
 
 const hotelStore = useHotelStore()
+const appStore = useAppStore()
 const activeTab = ref('maintenance')
 const statusFilter = ref('')
 const modalVisible = ref(false)
@@ -168,10 +172,10 @@ function priorityText(p: string): string {
   return ({ low: '低', medium: '中', high: '高', urgent: '紧急' } as Record<string, string>)[p] || p
 }
 function orderBadge(s: string): string {
-  return ({ pending: 'warning', processing: 'processing', completed: 'success' } as Record<string, string>)[s] || 'default'
+  return ({ pending: 'warning', assigned: 'processing', processing: 'processing', completed: 'success' } as Record<string, string>)[s] || 'default'
 }
 function orderStatusText(s: string): string {
-  return ({ pending: '待处理', processing: '处理中', completed: '已完成' } as Record<string, string>)[s] || s
+  return ({ pending: '待处理', assigned: '已分配', processing: '处理中', completed: '已完成' } as Record<string, string>)[s] || s
 }
 
 const maintenanceColumns = [
@@ -233,8 +237,19 @@ async function createOrder() {
 
 async function startProcess(order: any) {
   try {
-    await maintenanceApi.assign(order.id, 1)
-    message.info(`工单 ${order.ticket_no} 已开始处理`)
+    const username = appStore.userInfo?.username || '前台'
+    await maintenanceApi.assign(order.id, username)
+    message.info(`工单 ${order.ticket_no} 已分配给 ${username}`)
+    await fetchOrders()
+  } catch (error) {
+    message.error('操作失败')
+  }
+}
+
+async function startWork(order: any) {
+  try {
+    await maintenanceApi.updateStatus(order.id, 'processing')
+    message.info(`工单 ${order.ticket_no} 已开始维修`)
     await fetchOrders()
   } catch (error) {
     message.error('操作失败')
@@ -246,6 +261,7 @@ async function completeOrder(order: any) {
     await maintenanceApi.complete(order.id)
     message.success(`${order.ticket_no} 已完成`)
     await fetchOrders()
+    await hotelStore.fetchRooms({ pageSize: 300 })
   } catch (error) {
     message.error('操作失败')
   }

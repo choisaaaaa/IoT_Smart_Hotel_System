@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
@@ -43,7 +43,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         }
       }
     } catch (e) {
-      debugPrint('Error loading managed hotels: $e');
+      debugPrint('鉁?managedHotels: $e');
     }
 
     try {
@@ -52,18 +52,18 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
       }
     } catch (e) {
-      debugPrint('Error loading applications: $e');
+      debugPrint('鉁?applications: $e');
     }
 
     try {
-      final hotelResponse = await dio.get('${ApiConstants.hotels}search');
+      final hotelResponse = await dio.get('${ApiConstants.hotels}/search');
       if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
         final list = hotelResponse.data['data']?['hotels'] ?? hotelResponse.data['data'] ?? [];
         debugPrint('Loaded ${list.length} hotels for selection');
         setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
       }
     } catch (e) {
-      debugPrint('Error loading hotels list: $e');
+      debugPrint('鉁?hotelList: $e');
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -357,7 +357,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('提交异常：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('提交失败，请重试')));
     }
   }
 

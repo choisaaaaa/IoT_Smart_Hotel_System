@@ -27,10 +27,13 @@ const logger = winston.createLogger({
 if (process.env.NODE_ENV !== 'production') {
   logger.add(
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
+      format: winston.format.printf(({ timestamp, level, message, ...meta }) => {
+        const ts = timestamp || '';
+        const metaStr = Object.keys(meta).length > 1
+          ? ` ${JSON.stringify(Object.fromEntries(Object.entries(meta).filter(([k]) => k !== 'service')))}`
+          : '';
+        return `${ts} [${level}] ${message}${metaStr}`;
+      })
     })
   );
 }

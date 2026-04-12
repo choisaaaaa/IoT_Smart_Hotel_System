@@ -4,6 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { getWebSocketService } from '../services/websocket.service';
+import { isSystemAdmin, isCustomer, normalizeRole } from '../utils/role';
 
 export const initiateCall = async (req: AuthRequest, res: Response) => {
   try {
@@ -38,7 +39,7 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
           calleeExists = true;
           calleeInfo = room[0];
           // 隔离：只能拨打本店房间
-          if (currentUser.role !== 'system' && calleeInfo.hotel_id !== currentUser.hotel_id) {
+          if (!isSystemAdmin(currentUser.role) && calleeInfo.hotel_id !== currentUser.hotel_id) {
             res.status(403).json(errorResponse('权限不足：无法拨打其他酒店的房间'));
             return;
           }
@@ -51,14 +52,12 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
           calleeExists = true;
           calleeInfo = employee[0];
 
-          // 隔离：不能拨打角色为 user 的用户
-          if (calleeInfo.role === 'user') {
+          if (isCustomer(calleeInfo.role)) {
             res.status(403).json(errorResponse('权限不足：无法直接拨打普通用户'));
             return;
           }
 
-          // 隔离：只能拨打本店员工 (除非是系统管理员)
-          if (currentUser.role !== 'system' && calleeInfo.hotel_id !== currentUser.hotel_id) {
+          if (!isSystemAdmin(currentUser.role) && calleeInfo.hotel_id !== currentUser.hotel_id) {
             res.status(403).json(errorResponse('权限不足：无法拨打其他酒店的员工'));
             return;
           }
@@ -101,7 +100,7 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
       started_at: new Date().toISOString()
     }, '通话请求已发送'));
   } catch (error) {
-    logger.error('发起语音通话失败:', error);
+    logger.error('发起语音通话失败:', error.message);
     res.status(500).json(errorResponse('发起语音通话失败'));
   }
 };
@@ -139,8 +138,7 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
         if (room.length > 0) {
           calleeExists = true;
           calleeInfo = room[0];
-          // 隔离：只能拨打本店房间
-          if (currentUser.role !== 'system' && calleeInfo.hotel_id !== currentUser.hotel_id) {
+          if (!isSystemAdmin(currentUser.role) && calleeInfo.hotel_id !== currentUser.hotel_id) {
             res.status(403).json(errorResponse('权限不足：无法拨打其他酒店的房间'));
             return;
           }
@@ -153,14 +151,12 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
           calleeExists = true;
           calleeInfo = employee[0];
 
-          // 隔离：不能拨打角色为 user 的用户
-          if (calleeInfo.role === 'user') {
+          if (isCustomer(calleeInfo.role)) {
             res.status(403).json(errorResponse('权限不足：无法直接拨打普通用户'));
             return;
           }
 
-          // 隔离：只能拨打本店员工
-          if (currentUser.role !== 'system' && calleeInfo.hotel_id !== currentUser.hotel_id) {
+          if (!isSystemAdmin(currentUser.role) && calleeInfo.hotel_id !== currentUser.hotel_id) {
             res.status(403).json(errorResponse('权限不足：无法拨打其他酒店的员工'));
             return;
           }
@@ -225,7 +221,7 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       started_at: new Date().toISOString()
     }, '通话已发起'));
   } catch (error) {
-    logger.error('发起语音通话失败:', error);
+    logger.error('发起语音通话失败:', error.message);
     res.status(500).json(errorResponse('发起语音通话失败'));
   }
 };
@@ -289,7 +285,7 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
       answered_at: new Date().toISOString()
     }, '通话已接听'));
   } catch (error) {
-    logger.error('接听语音通话失败:', error);
+    logger.error('接听语音通话失败:', error.message);
     res.status(500).json(errorResponse('接听语音通话失败'));
   }
 };
@@ -333,7 +329,7 @@ export const rejectCall = async (req: AuthRequest, res: Response) => {
       ended_at: new Date().toISOString()
     }, '通话已拒接'));
   } catch (error) {
-    logger.error('拒接语音通话失败:', error);
+    logger.error('拒接语音通话失败:', error.message);
     res.status(500).json(errorResponse('拒接语音通话失败'));
   }
 };
@@ -383,7 +379,7 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
       duration_sec: durationSec
     }, '通话已挂断'));
   } catch (error) {
-    logger.error('挂断语音通话失败:', error);
+    logger.error('挂断语音通话失败:', error.message);
     res.status(500).json(errorResponse('挂断语音通话失败'));
   }
 };
@@ -400,7 +396,7 @@ export const getCallStatus = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(call[0], '查询通话状态成功'));
   } catch (error) {
-    logger.error('查询通话状态失败:', error);
+    logger.error('查询通话状态失败:', error.message);
     res.status(500).json(errorResponse('查询通话状态失败'));
   }
 };
@@ -414,7 +410,7 @@ export const getActiveCalls = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse({ items: rows }, '获取活跃通话列表成功'));
   } catch (error) {
-    logger.error('获取活跃通话列表失败:', error);
+    logger.error('获取活跃通话列表失败:', error.message);
     res.status(500).json(errorResponse('获取活跃通话列表失败'));
   }
 };
@@ -457,7 +453,7 @@ export const getCallHistory = async (req: AuthRequest, res: Response) => {
       items: rows
     }, '获取通话记录成功'));
   } catch (error) {
-    logger.error('获取通话记录失败:', error);
+    logger.error('获取通话记录失败:', error.message);
     res.status(500).json(errorResponse('获取通话记录失败'));
   }
 };
@@ -510,7 +506,7 @@ export const getCallStats = async (req: AuthRequest, res: Response) => {
       answer_rate: totalCalls > 0 ? parseFloat((answeredCalls / totalCalls).toFixed(2)) : 0
     }, '获取通话统计成功'));
   } catch (error) {
-    logger.error('获取通话统计失败:', error);
+    logger.error('获取通话统计失败:', error.message);
     res.status(500).json(errorResponse('获取通话统计失败'));
   }
 };

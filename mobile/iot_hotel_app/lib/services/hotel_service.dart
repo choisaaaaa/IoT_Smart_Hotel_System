@@ -82,7 +82,7 @@ class HotelService {
 
   Future<ApiResult<Map<String, dynamic>>> getStatistics() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.hotel}statistics');
+      final response = await _dioClient.get('${ApiConstants.hotel}/statistics');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -107,7 +107,7 @@ class HotelService {
 
   Future<ApiResult<Map<String, dynamic>>> getDashboardStats() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.hotel}statistics');
+      final response = await _dioClient.get('${ApiConstants.hotel}/statistics');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final raw = response.data['data'] as Map<String, dynamic>;
         final Map<String, dynamic> stats = {};
@@ -187,7 +187,7 @@ class HotelService {
     required String month,
   }) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.hotel}statistics', queryParameters: {
+      final response = await _dioClient.get('${ApiConstants.hotel}/statistics', queryParameters: {
         'year': year,
         'month': month,
       });

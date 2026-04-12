@@ -151,8 +151,6 @@ async function fetchEnergyData() {
       Object.assign(energySummary, data.summary)
     }
   } catch (err) {
-    console.error('Failed to fetch energy data:', err)
-    message.error('获取能耗数据失败')
   } finally {
     loading.value = false
   }

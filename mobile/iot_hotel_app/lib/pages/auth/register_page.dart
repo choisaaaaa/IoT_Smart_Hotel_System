@@ -57,7 +57,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('注册异常：$e'), behavior: SnackBarBehavior.floating),
+          const SnackBar(content: Text('注册失败，请重试'), behavior: SnackBarBehavior.floating),
         );
       }
     } finally {

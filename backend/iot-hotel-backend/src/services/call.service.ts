@@ -81,7 +81,7 @@ export class CallService {
         created_at: new Date().toISOString()
       };
     } catch (error) {
-      logger.error('发起语音通话失败:', error);
+      logger.error('发起语音通话失败:', error.message);
       throw error;
     }
   }
@@ -146,7 +146,7 @@ export class CallService {
         created_at: new Date().toISOString()
       };
     } catch (error) {
-      logger.error('前台发起语音通话失败:', error);
+      logger.error('前台发起语音通话失败:', error.message);
       throw error;
     }
   }
@@ -175,7 +175,7 @@ export class CallService {
         answered_at: new Date().toISOString()
       };
     } catch (error) {
-      logger.error('接听语音通话失败:', error);
+      logger.error('接听语音通话失败:', error.message);
       throw error;
     }
   }
@@ -204,7 +204,7 @@ export class CallService {
         ended_at: new Date().toISOString()
       };
     } catch (error) {
-      logger.error('拒接语音通话失败:', error);
+      logger.error('拒接语音通话失败:', error.message);
       throw error;
     }
   }
@@ -239,7 +239,7 @@ export class CallService {
         duration_sec: durationSec
       };
     } catch (error) {
-      logger.error('挂断语音通话失败:', error);
+      logger.error('挂断语音通话失败:', error.message);
       throw error;
     }
   }
@@ -249,7 +249,7 @@ export class CallService {
       const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
       return (call[0] as Call) || null;
     } catch (error) {
-      logger.error('查询通话状态失败:', error);
+      logger.error('查询通话状态失败:', error.message);
       throw error;
     }
   }
@@ -262,7 +262,7 @@ export class CallService {
       );
       return rows as Call[];
     } catch (error) {
-      logger.error('获取活跃通话列表失败:', error);
+      logger.error('获取活跃通话列表失败:', error.message);
       throw error;
     }
   }
@@ -306,7 +306,7 @@ export class CallService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取通话记录失败:', error);
+      logger.error('获取通话记录失败:', error.message);
       throw error;
     }
   }
@@ -359,7 +359,7 @@ export class CallService {
         answer_rate: totalCalls > 0 ? parseFloat((answeredCalls / totalCalls).toFixed(2)) : 0
       };
     } catch (error) {
-      logger.error('获取通话统计失败:', error);
+      logger.error('获取通话统计失败:', error.message);
       throw error;
     }
   }

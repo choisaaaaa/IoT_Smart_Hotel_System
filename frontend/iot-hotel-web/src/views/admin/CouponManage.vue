@@ -154,12 +154,14 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { PlusOutlined, QrcodeOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
+import { CANONICAL_ROLES } from '@/api/auth'
+import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
 
-const userStore = useUserStore()
-const isSystemAdmin = computed(() => userStore.role === 'system')
-const isAdmin = computed(() => userStore.role === 'admin')
-const isStaff = computed(() => userStore.role === 'staff')
+const userStore = useAppStore()
+const isSystemAdmin = computed(() => userStore.role === CANONICAL_ROLES.SYSTEM_ADMIN)
+const isAdmin = computed(() => userStore.role === CANONICAL_ROLES.HOTEL_ADMIN)
+const isStaff = computed(() => userStore.role === CANONICAL_ROLES.STAFF)
 
 const columns = [
   { title: '券名', dataIndex: 'coupon_name', key: 'coupon_name' },

@@ -148,6 +148,7 @@ import request from '@/api/request'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
+import { CANONICAL_ROLES } from '@/api/auth'
 
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
@@ -207,9 +208,9 @@ const callableTargets = computed(() => {
   users.value.forEach(user => {
     console.log('[VoiceCalls] 检查用户:', user.username, '角色:', user.role)
     // 隔离：只能看到本店员工 (除非是系统管理员)，且不能看到角色为 user 的用户
-    const isSameHotel = appStore.userInfo?.role === 'system' || user.hotel_id === appStore.userInfo?.hotel_id
+    const isSameHotel = appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || user.hotel_id === appStore.userInfo?.hotel_id
     const isNotSelf = user.username !== appStore.userInfo?.username
-    const isNotUserRole = user.role !== 'user'
+    const isNotUserRole = user.role !== CANONICAL_ROLES.CUSTOMER
 
     if (isNotSelf && isSameHotel && isNotUserRole) {
       const isOnline = onlineStatus.value.web.some((w: any) => w.id === user.username)
@@ -217,7 +218,7 @@ const callableTargets = computed(() => {
         id: user.id,
         clientId: user.username,
         name: user.username,
-        desc: user.role === 'admin' ? '管理员' : '前台',
+        desc: user.role === CANONICAL_ROLES.HOTEL_ADMIN ? '管理员' : '前台',
         type: 'front_desk',
         status: 'available',
         isOnline

@@ -82,9 +82,45 @@
           </a-breadcrumb>
         </div>
         <div class="header-right">
-          <a-badge :count="pendingOrders" :offset="[-2, 4]">
-            <BellOutlined class="header-icon" />
-          </a-badge>
+          <a-popover v-model:open="notificationVisible" trigger="click" placement="bottomRight" :overlayStyle="{ width: '360px' }">
+            <template #content>
+              <div class="notification-panel">
+                <div class="notification-header">
+                  <span class="notification-title">消息通知</span>
+                  <a-button type="link" size="small" @click="clearAllNotifications">全部已读</a-button>
+                </div>
+                <a-divider style="margin: 8px 0;" />
+                <div v-if="notificationItems.length === 0" class="notification-empty">
+                  <CheckCircleOutlined style="font-size: 32px; color: #d9d9d9;" />
+                  <p>暂无新消息</p>
+                </div>
+                <div v-else class="notification-list">
+                  <div
+                    v-for="item in notificationItems"
+                    :key="item.id"
+                    class="notification-item"
+                    @click="handleNotificationClick(item)"
+                  >
+                    <div class="notification-item-icon">
+                      <ToolOutlined v-if="item.type === 'maintenance'" style="color: #faad14;" />
+                      <SendOutlined v-if="item.type === 'delivery'" style="color: #1890ff;" />
+                      <AlertOutlined v-if="item.type === 'environment'" style="color: #ff4d4f;" />
+                    </div>
+                    <div class="notification-item-content">
+                      <div class="notification-item-title">{{ item.title }}</div>
+                      <div class="notification-item-desc">{{ item.desc }}</div>
+                    </div>
+                    <div class="notification-item-badge" v-if="!item.read">
+                      <a-badge dot />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <a-badge :count="unreadCount" :offset="[-2, 4]">
+              <BellOutlined class="header-icon" :style="{ color: unreadCount > 0 ? '#ff4d4f' : undefined }" />
+            </a-badge>
+          </a-popover>
           <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
           <a-dropdown>
             <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
@@ -123,13 +159,15 @@ import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
   PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined
+  BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined,
+  CheckCircleOutlined, AlertOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
+import { environmentApi } from '@/api/environment'
 
 const route = useRoute()
 const router = useRouter()
@@ -141,7 +179,20 @@ appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
-const pendingOrders = ref(0)
+const notificationVisible = ref(false)
+
+interface NotificationItem {
+  id: string
+  type: 'maintenance' | 'delivery' | 'environment'
+  title: string
+  desc: string
+  route: string
+  read: boolean
+}
+
+const notificationItems = ref<NotificationItem[]>([])
+
+const unreadCount = computed(() => notificationItems.value.filter(n => !n.read).length)
 
 const currentTitle = computed(() => (route.meta.title as string) || '')
 
@@ -164,36 +215,85 @@ async function handleLogout() {
   router.push('/guest/booking')
 }
 
-async function loadPending() {
-  const cacheRaw = sessionStorage.getItem('reception_pending_cache')
-  if (cacheRaw) {
-    try {
-      const cache = JSON.parse(cacheRaw)
-      if (Date.now() - Number(cache.ts || 0) < 5000) {
-        pendingOrders.value = Number(cache.count || 0)
-        return
-      }
-    } catch (error) {}
-  }
+async function loadNotifications() {
   try {
-    const [maintenanceRes, deliveryRes] = await Promise.all([
-      maintenanceApi.getList({ status: 'pending', pageSize: 1 }),
-      deliveryApi.getList({ status: 'pending', pageSize: 1 })
+    const [maintenanceRes, deliveryRes, envRes] = await Promise.allSettled([
+      maintenanceApi.getList({ status: 'pending', pageSize: 5 }),
+      deliveryApi.getList({ status: 'pending', pageSize: 5 }),
+      environmentApi.getEventLogs({ severity: 'warning', limit: 5 })
     ])
-    const maintenanceTotal = Number((maintenanceRes as any).data?.total || (maintenanceRes as any).data?.data?.total || 0)
-    const deliveryTotal = Number((deliveryRes as any).data?.total || (deliveryRes as any).data?.data?.total || 0)
-    pendingOrders.value = maintenanceTotal + deliveryTotal
-    sessionStorage.setItem('reception_pending_cache', JSON.stringify({
-      count: pendingOrders.value,
-      ts: Date.now()
-    }))
+
+    const items: NotificationItem[] = []
+
+    if (maintenanceRes.status === 'fulfilled') {
+      const res = maintenanceRes.value as any
+      const list = res.data?.list || res.data?.data?.list || []
+      const total = Number(res.data?.total || res.data?.data?.total || 0)
+      if (total > 0) {
+        items.push({
+          id: 'maintenance-pending',
+          type: 'maintenance',
+          title: `未处理维修工单 (${total})`,
+          desc: list[0]?.fault_description?.substring(0, 30) || `共${total}条待处理工单`,
+          route: '/reception/workorders',
+          read: false
+        })
+      }
+    }
+
+    if (deliveryRes.status === 'fulfilled') {
+      const res = deliveryRes.value as any
+      const list = res.data?.list || res.data?.data?.list || []
+      const total = Number(res.data?.total || res.data?.data?.total || 0)
+      if (total > 0) {
+        items.push({
+          id: 'delivery-pending',
+          type: 'delivery',
+          title: `待处理送物订单 (${total})`,
+          desc: list[0]?.item_name || `共${total}条待处理送物`,
+          route: '/reception/delivery',
+          read: false
+        })
+      }
+    }
+
+    if (envRes.status === 'fulfilled') {
+      try {
+        const res = envRes.value as any
+        const logs = res.data?.logs || res.data?.data?.logs || []
+        const unresolved = logs.filter((l: any) => !l.resolved)
+        if (unresolved.length > 0) {
+          items.push({
+            id: 'environment-warning',
+            type: 'environment',
+            title: `环境异常告警 (${unresolved.length})`,
+            desc: unresolved[0]?.title || `${unresolved.length}条环境异常`,
+            route: '/reception/environment',
+            read: false
+          })
+        }
+      } catch (_) {}
+    }
+
+    notificationItems.value = items
   } catch (error) {
-    pendingOrders.value = 0
+    notificationItems.value = []
   }
 }
 
+function handleNotificationClick(item: NotificationItem) {
+  item.read = true
+  notificationVisible.value = false
+  router.push(item.route)
+}
+
+function clearAllNotifications() {
+  notificationItems.value.forEach(n => n.read = true)
+}
+
 onMounted(() => {
-  loadPending()
+  loadNotifications()
+  setInterval(loadNotifications, 30000)
 })
 </script>
 
@@ -243,4 +343,21 @@ onMounted(() => {
   margin-left: 220px;
   transition: margin-left .2s;
 }
+.notification-panel { margin: -12px -16px; }
+.notification-header { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+.notification-title { font-weight: 600; font-size: 15px; }
+.notification-empty { text-align: center; padding: 24px 0; color: #999; }
+.notification-empty p { margin-top: 8px; }
+.notification-list { max-height: 320px; overflow-y: auto; }
+.notification-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; cursor: pointer; border-radius: 6px;
+  transition: background .2s;
+}
+.notification-item:hover { background: #f5f5f5; }
+.notification-item-icon { font-size: 20px; flex-shrink: 0; }
+.notification-item-content { flex: 1; min-width: 0; }
+.notification-item-title { font-size: 14px; font-weight: 500; }
+.notification-item-desc { font-size: 12px; color: #999; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notification-item-badge { flex-shrink: 0; }
 </style>

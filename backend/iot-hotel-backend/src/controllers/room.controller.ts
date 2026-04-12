@@ -3,21 +3,23 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { RoomService } from '../services/room.service';
 import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
-import { isSystemRole } from '../utils/role';
+import { isSystemAdmin, isStaff, isHotelAdmin, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     // 统一获取 hotelId 的逻辑：优先使用 req.user 中的，如果是系统管理员则可从 query 覆盖
     let hotelId = req.user?.hotel_id;
     
-    if (isSystemRole(req.user?.role)) {
+    if (isSystemAdmin(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
+      } else if (!hotelId) {
+        hotelId = 1;
       }
     }
 
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权，无法获取门店 ID'));
     }
 
@@ -39,7 +41,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(data, '获取房间列表成功'));
   } catch (error: any) {
-    logger.error('获取房间列表失败:', error);
+    logger.error('获取房间列表失败:', error.message);
     res.status(500).json(errorResponse(error.message || '获取房间列表失败'));
   }
 };
@@ -47,13 +49,15 @@ export const get = async (req: AuthRequest, res: Response) => {
 export const getById = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (isSystemRole(req.user?.role)) {
+    if (isSystemAdmin(req.user?.role)) {
       const queryHotelId = req.query.hotel_id || req.body.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
+      } else if (!hotelId) {
+        hotelId = 1;
       }
     }
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权'));
     }
 
@@ -67,7 +71,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(room, '获取房间详情成功'));
   } catch (error: any) {
-    logger.error('获取房间详情失败:', error);
+    logger.error('获取房间详情失败:', error.message);
     res.status(500).json(errorResponse(error.message || '获取房间详情失败'));
   }
 };
@@ -75,17 +79,17 @@ export const getById = async (req: AuthRequest, res: Response) => {
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (isSystemRole(req.user?.role)) {
-      hotelId = req.body.hotel_id;
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.body.hotel_id || hotelId || 1;
     }
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权，必须提供酒店 ID'));
     }
 
     const id = await RoomService.createRoom({ ...req.body, hotel_id: hotelId });
     res.json(successResponse({ id }, '创建房间成功'));
   } catch (error: any) {
-    logger.error('创建房间失败:', error);
+    logger.error('创建房间失败:', error.message);
     res.status(error.status || 500).json(errorResponse(error.message || '创建房间失败'));
   }
 };
@@ -93,10 +97,10 @@ export const create = async (req: AuthRequest, res: Response) => {
 export const update = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (isSystemRole(req.user?.role)) {
-      hotelId = req.body.hotel_id || req.query.hotel_id;
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.body.hotel_id || req.query.hotel_id || hotelId || 1;
     }
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权'));
     }
 
@@ -110,7 +114,7 @@ export const update = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(null, '更新房间成功'));
   } catch (error: any) {
-    logger.error('更新房间失败:', error);
+    logger.error('更新房间失败:', error.message);
     res.status(500).json(errorResponse(error.message || '更新房间失败'));
   }
 };
@@ -118,10 +122,10 @@ export const update = async (req: AuthRequest, res: Response) => {
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (isSystemRole(req.user?.role)) {
-      hotelId = req.query.hotel_id || req.body.hotel_id;
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.query.hotel_id || req.body.hotel_id || hotelId || 1;
     }
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权'));
     }
 
@@ -135,7 +139,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(null, '删除房间成功'));
   } catch (error: any) {
-    logger.error('删除房间失败:', error);
+    logger.error('删除房间失败:', error.message);
     res.status(500).json(errorResponse(error.message || '删除房间失败'));
   }
 };
@@ -143,9 +147,9 @@ export const remove = async (req: AuthRequest, res: Response) => {
 export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
-    if (isSystemRole(req.user?.role)) {
-      hotelId = req.body.hotel_id || req.query.hotel_id;
-    } else if (req.user?.role === 'staff' || req.user?.role === 'manager') {
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.body.hotel_id || req.query.hotel_id || hotelId || 1;
+    } else if (isStaff(req.user?.role) || isHotelAdmin(req.user?.role)) {
       // staff 和 manager 从 user_hotels 表获取 hotel_id
       const [hotelRows]: any = await (await import('../config/database')).default.execute(
         'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
@@ -160,7 +164,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         hotelId = parseInt(bodyHotelId as string);
       }
     }
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权'));
     }
 
@@ -184,7 +188,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(null, '更新房间状态成功'));
   } catch (error: any) {
-    logger.error('更新房间状态失败:', error);
+    logger.error('更新房间状态失败:', error.message);
     res.status(500).json(errorResponse(error.message || '更新房间状态失败'));
   }
 };
@@ -219,7 +223,7 @@ export const getGuestRoom = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(bookings[0], '获取房间信息成功'));
   } catch (error: any) {
-    logger.error('获取顾客房间信息失败:', error);
+    logger.error('获取顾客房间信息失败:', error.message);
     res.status(500).json(errorResponse(error.message || '获取房间信息失败'));
   }
 };
@@ -254,15 +258,16 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
 
     // 查询房间设备
     const [devices]: any = await pool.execute(
-      `SELECT d.id, d.device_name, d.device_type, d.status, d.room_id, d.created_at
+      `SELECT d.id, d.device_id, d.device_name, d.device_type, d.device_status, d.firmware_version, d.last_seen
        FROM devices d
-       WHERE d.room_id = ? AND d.status = 'active'`,
+       INNER JOIN rooms r ON r.room_id = d.id
+       WHERE r.id = ?`,
       [roomId]
     );
 
     res.json(successResponse(devices, '获取房间设备成功'));
   } catch (error: any) {
-    logger.error('获取房间设备失败:', error);
+    logger.error('获取房间设备失败:', error.message);
     res.status(500).json(errorResponse(error.message || '获取房间设备失败'));
   }
 };

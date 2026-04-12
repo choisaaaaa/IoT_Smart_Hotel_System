@@ -24,13 +24,7 @@ class DioClient {
     dio.interceptors.addAll([
       AuthInterceptor(),
       _ResponseNormalizer(),
-      LogInterceptor(
-        requestHeader: true,
-        requestBody: true,
-        responseHeader: true,
-        responseBody: true,
-        logPrint: (o) => debugPrint(o.toString()),
-      ),
+      _CompactLogInterceptor(),
     ]);
   }
 
@@ -91,5 +85,40 @@ class _ResponseNormalizer extends Interceptor {
       };
     }
     handler.next(response);
+  }
+}
+
+class _CompactLogInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final path = options.uri.path;
+    // 屏蔽环境监测API的请求日志
+    if (!path.contains('/environment')) {
+      debugPrint('→ ${options.method} ${path}');
+    }
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final code = response.statusCode ?? 0;
+    final path = response.requestOptions.uri.path;
+    // 屏蔽环境监测API的响应日志
+    if (!path.contains('/environment')) {
+      debugPrint('← $code ${path.split('/').last}');
+    }
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    final code = err.response?.statusCode ?? 0;
+    final path = err.requestOptions.uri.path;
+    final msg = err.response?.data?['message'] ?? err.message ?? '';
+    // 屏蔽环境监测API的错误日志
+    if (!path.contains('/environment')) {
+      debugPrint('✗ $code ${path.split('/').last} - $msg');
+    }
+    handler.next(err);
   }
 }

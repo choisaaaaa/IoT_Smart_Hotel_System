@@ -65,15 +65,18 @@ class MaintenanceService {
     try {
       final String endpoint;
       final Map<String, dynamic> data = {};
-      if (remark != null) data['remark'] = remark;
 
-      if (status == 'in_progress') {
-        endpoint = '${ApiConstants.maintenance}$workOrderId/assign';
-        data['assigned_to'] = remark ?? 'current_user';
+      if (status == 'assigned') {
+        endpoint = '${ApiConstants.maintenance}/$workOrderId/assign';
+        data['repairer'] = remark ?? '前台';
+      } else if (status == 'processing') {
+        endpoint = '${ApiConstants.maintenance}/$workOrderId/status';
+        data['status'] = 'processing';
       } else if (status == 'completed') {
-        endpoint = '${ApiConstants.maintenance}$workOrderId/complete';
+        endpoint = '${ApiConstants.maintenance}/$workOrderId/complete';
       } else {
-        endpoint = '${ApiConstants.maintenance}$workOrderId/assign';
+        endpoint = '${ApiConstants.maintenance}/$workOrderId/status';
+        data['status'] = status;
       }
 
       final response = await _dioClient.put(endpoint, data: data);
@@ -93,7 +96,7 @@ class MaintenanceService {
 
   Future<ApiResult<Map<String, dynamic>>> getWorkOrderById(int workOrderId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.maintenance}$workOrderId');
+      final response = await _dioClient.get('${ApiConstants.maintenance}/$workOrderId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -106,7 +109,7 @@ class MaintenanceService {
 
   Future<ApiResult<void>> deleteWorkOrder(int workOrderId) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.maintenance}$workOrderId');
+      final response = await _dioClient.delete('${ApiConstants.maintenance}/$workOrderId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);

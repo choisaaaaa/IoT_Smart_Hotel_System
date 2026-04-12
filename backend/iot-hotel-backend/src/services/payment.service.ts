@@ -86,7 +86,7 @@ export class PaymentService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取支付列表失败:', error);
+      logger.error('获取支付列表失败:', error.message);
       throw new Error('获取支付列表失败');
     }
   }
@@ -107,7 +107,7 @@ export class PaymentService {
       const [rows] = await pool.query<RowDataPacket[]>(query, params);
       return (rows[0] as Payment) || null;
     } catch (error) {
-      logger.error('获取支付详情失败:', error);
+      logger.error('获取支付详情失败:', error.message);
       throw new Error('获取支付详情失败');
     }
   }
@@ -135,7 +135,7 @@ export class PaymentService {
         payment_no: paymentNo
       };
     } catch (error) {
-      logger.error('创建支付订单失败:', error);
+      logger.error('创建支付订单失败:', error.message);
       throw new Error('创建支付订单失败');
     }
   }
@@ -166,11 +166,11 @@ export class PaymentService {
 
       // 3. 根据 order_type 更新关联表的状态
       if (payment.order_type === 'booking') {
-        await connection.query('UPDATE bookings SET status = ? WHERE id = ? AND hotel_id = ?', ['confirmed', payment.order_id, hotelId]);
+        await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
 
         const [bookingRows] = await connection.query<RowDataPacket[]>(
-          'SELECT room_id FROM bookings WHERE id = ? AND hotel_id = ?',
-          [payment.order_id, hotelId]
+          'SELECT room_id FROM bookings WHERE id = ?',
+          [payment.order_id]
         );
         if (bookingRows.length > 0) {
           const roomId = (bookingRows[0] as any).room_id;
@@ -179,16 +179,16 @@ export class PaymentService {
           }
         }
       } else if (payment.order_type === 'delivery') {
-        await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ? AND hotel_id = ?', ['paid', payment.order_id, hotelId]);
+        await connection.query('UPDATE delivery_orders SET status = ? WHERE id = ?', ['paid', payment.order_id]);
       } else if (payment.order_type === 'maintenance') {
-        await connection.query('UPDATE maintenance_tickets SET status = ? WHERE id = ? AND hotel_id = ?', ['paid', payment.order_id, hotelId]);
+        await connection.query('UPDATE maintenance_tickets SET status = ? WHERE id = ?', ['paid', payment.order_id]);
       }
 
       await connection.commit();
       return true;
     } catch (error) {
       await connection.rollback();
-      logger.error('支付失败:', error);
+      logger.error('支付失败:', error.message);
       throw new Error('支付失败');
     } finally {
       connection.release();

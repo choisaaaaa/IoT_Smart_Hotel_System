@@ -85,7 +85,7 @@ export class BookingService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取预订列表失败:', error);
+      logger.error('获取预订列表失败:', error.message);
       throw new Error('获取预订列表失败');
     }
   }
@@ -98,7 +98,7 @@ export class BookingService {
       );
       return (rows[0] as Booking) || null;
     } catch (error) {
-      logger.error('获取预订详情失败:', error);
+      logger.error('获取预订详情失败:', error.message);
       throw new Error('获取预订详情失败');
     }
   }
@@ -143,7 +143,7 @@ export class BookingService {
         total_price: totalPrice
       };
     } catch (error) {
-      logger.error('创建预订失败:', error);
+      logger.error('创建预订失败:', error.message);
       throw new Error('创建预订失败');
     }
   }
@@ -156,7 +156,7 @@ export class BookingService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('确认预订失败:', error);
+      logger.error('确认预订失败:', error.message);
       throw new Error('确认预订失败');
     }
   }
@@ -169,7 +169,7 @@ export class BookingService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('办理入住失败:', error);
+      logger.error('办理入住失败:', error.message);
       throw new Error('办理入住失败');
     }
   }
@@ -182,7 +182,7 @@ export class BookingService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('办理退房失败:', error);
+      logger.error('办理退房失败:', error.message);
       throw new Error('办理退房失败');
     }
   }
@@ -195,7 +195,7 @@ export class BookingService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('取消预订失败:', error);
+      logger.error('取消预订失败:', error.message);
       throw new Error('取消预订失败');
     }
   }

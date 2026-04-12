@@ -42,7 +42,7 @@ class RoomService {
 
   Future<ApiResult<Map<String, dynamic>>> getRoomById(int roomId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.rooms}$roomId');
+      final response = await _dioClient.get('${ApiConstants.rooms}/$roomId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -68,7 +68,7 @@ class RoomService {
 
   Future<ApiResult<void>> updateRoom(int roomId, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.rooms}$roomId', data: data);
+      final response = await _dioClient.put('${ApiConstants.rooms}/$roomId', data: data);
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
@@ -82,7 +82,7 @@ class RoomService {
   Future<ApiResult<void>> updateRoomStatus(int roomId, String status) async {
     try {
       final response = await _dioClient.patch(
-        '${ApiConstants.rooms}$roomId/status',
+        '${ApiConstants.rooms}/$roomId/status',
         data: {'status': status},
       );
 
@@ -97,7 +97,7 @@ class RoomService {
 
   Future<ApiResult<void>> deleteRoom(int roomId) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.rooms}$roomId');
+      final response = await _dioClient.delete('${ApiConstants.rooms}/$roomId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);

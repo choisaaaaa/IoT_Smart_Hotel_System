@@ -53,7 +53,7 @@ class MessageService {
 
   Future<ApiResult<void>> markAsRead(int messageId) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.messages}$messageId/read');
+      final response = await _dioClient.put('${ApiConstants.messages}/$messageId/read');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
@@ -66,7 +66,7 @@ class MessageService {
 
   Future<ApiResult<void>> markAllAsRead() async {
     try {
-      final response = await _dioClient.put('${ApiConstants.messages}read-all');
+      final response = await _dioClient.put('${ApiConstants.messages}/read-all');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
@@ -79,7 +79,7 @@ class MessageService {
 
   Future<ApiResult<void>> deleteMessage(int messageId) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.messages}$messageId');
+      final response = await _dioClient.delete('${ApiConstants.messages}/$messageId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);

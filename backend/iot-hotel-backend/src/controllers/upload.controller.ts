@@ -23,7 +23,7 @@ export class UploadController {
         size: file.size
       }, '图片上传成功'));
     } catch (error: any) {
-      logger.error('图片上传失败:', error);
+      logger.error('图片上传失败:', error.message);
       res.status(500).json(errorResponse('图片上传失败'));
     }
   }

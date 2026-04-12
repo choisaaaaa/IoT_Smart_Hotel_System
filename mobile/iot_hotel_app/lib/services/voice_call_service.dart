@@ -281,31 +281,12 @@ class VoiceCallService {
     await _initPeerConnection(callerId, callerType, callId);
 
     if (_peerConnection != null) {
-      if (_pendingOffer != null && _pendingOffer!['call_id'] == callId) {
+      if (_pendingOffer != null) {
         debugPrint('[VoiceCallService] 处理缓存的Offer');
         await _processOffer(_pendingOffer!);
         _pendingOffer = null;
       } else {
-        try {
-          final offer = await _peerConnection!.createOffer({
-            'offerToReceiveAudio': true,
-            'offerToReceiveVideo': false,
-          });
-          await _peerConnection!.setLocalDescription(offer);
-
-          _socket?.emit('webrtc_offer', {
-            'target_type': callerType,
-            'target_id': callerId,
-            'offer': {
-              'type': offer.type,
-              'sdp': offer.sdp,
-            },
-            'call_id': callId,
-          });
-          debugPrint('[VoiceCallService] 被叫方已发送Offer, call_id: $callId');
-        } catch (e) {
-          debugPrint('[VoiceCallService] 被叫方创建Offer失败: $e');
-        }
+        debugPrint('[VoiceCallService] 等待主叫方发送Offer...');
       }
 
       _processPendingIceCandidates();

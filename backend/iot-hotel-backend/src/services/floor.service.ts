@@ -34,7 +34,7 @@ export class FloorService {
       const [rows] = await pool.query<Floor[]>('SELECT * FROM floors ORDER BY floor_number ASC');
       return rows;
     } catch (error) {
-      logger.error('获取楼层列表失败:', error);
+      logger.error('获取楼层列表失败:', error.message);
       throw new Error('获取楼层列表失败');
     }
   }
@@ -44,7 +44,7 @@ export class FloorService {
       const [rows] = await pool.query<Floor[]>('SELECT * FROM floors WHERE id = ?', [id]);
       return rows[0] || null;
     } catch (error) {
-      logger.error('获取楼层详情失败:', error);
+      logger.error('获取楼层详情失败:', error.message);
       throw new Error('获取楼层详情失败');
     }
   }
@@ -68,7 +68,7 @@ export class FloorService {
         (customError as any).status = 500;
         throw customError;
       }
-      logger.error('创建楼层失败:', error);
+      logger.error('创建楼层失败:', error.message);
       throw error;
     }
   }
@@ -92,7 +92,7 @@ export class FloorService {
         (customError as any).status = 409;
         throw customError;
       }
-      logger.error('更新楼层失败:', error);
+      logger.error('更新楼层失败:', error.message);
       throw error;
     }
   }
@@ -113,7 +113,7 @@ export class FloorService {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM floors WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error: any) {
-      logger.error('删除楼层失败:', error);
+      logger.error('删除楼层失败:', error.message);
       throw error;
     }
   }

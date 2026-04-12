@@ -430,7 +430,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('预订异常：$e')));
+            .showSnackBar(const SnackBar(content: Text('预订失败，请重试')));
       }
     }
   }

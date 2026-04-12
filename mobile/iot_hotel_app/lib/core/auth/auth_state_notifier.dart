@@ -8,14 +8,60 @@ enum AppMode {
   system,
 }
 
+class AppRoles {
+  static const String systemAdmin = 'system_admin';
+  static const String hotelAdmin = 'hotel_admin';
+  static const String staff = 'staff';
+  static const String customer = 'customer';
+
+  static String normalize(String? role) {
+    if (role == null) return customer;
+    final r = role.trim().toLowerCase();
+    switch (r) {
+      case 'system':
+      case 'systemadmin':
+      case 'sys_admin':
+      case 'super_admin':
+      case 'platform_admin':
+        return systemAdmin;
+      case 'admin':
+      case 'manager':
+      case 'hotelmanager':
+      case 'hotel_admin':
+        return hotelAdmin;
+      case 'staff':
+      case 'receptionist':
+      case 'reception':
+      case 'front_desk':
+      case 'frontdesk':
+        return staff;
+      case 'user':
+      case 'customer':
+      case 'guest':
+        return customer;
+      default:
+        return r;
+    }
+  }
+
+  static String displayName(String role) {
+    switch (role) {
+      case systemAdmin: return '系统管理员';
+      case hotelAdmin: return '酒店管理员';
+      case staff: return '前台员工';
+      case customer: return '顾客';
+      default: return role;
+    }
+  }
+}
+
 int roleToLevel(String? role) {
-  switch (role) {
-    case 'admin':
-    case 'system': return 4;
-    case 'manager': return 3;
-    case 'staff':
-    case 'receptionist': return 2;
-    case 'user': return 1;
+  final normalized = AppRoles.normalize(role);
+  switch (normalized) {
+    case AppRoles.systemAdmin: return 4;
+    case AppRoles.hotelAdmin: return 3;
+    case AppRoles.staff: return 2;
+    case AppRoles.customer: return 1;
     default: return 0;
   }
 }
@@ -92,14 +138,13 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     String? phone,
     String? uid,
   }) {
+    final normalizedRole = AppRoles.normalize(role);
     AppMode initialMode;
-    switch (role) {
-      case 'admin':
-      case 'system': initialMode = AppMode.system; break;
-      case 'manager': initialMode = AppMode.manager; break;
-      case 'staff':
-      case 'receptionist': initialMode = AppMode.reception; break;
-      case 'user': initialMode = AppMode.customer; break;
+    switch (normalizedRole) {
+      case AppRoles.systemAdmin: initialMode = AppMode.system; break;
+      case AppRoles.hotelAdmin: initialMode = AppMode.manager; break;
+      case AppRoles.staff: initialMode = AppMode.reception; break;
+      case AppRoles.customer: initialMode = AppMode.customer; break;
       default: initialMode = AppMode.guest;
     }
     state = AuthState(
@@ -108,7 +153,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       token: token,
       userId: userId,
       username: username,
-      role: role,
+      role: normalizedRole,
       phone: phone,
       uid: uid,
       currentMode: initialMode,

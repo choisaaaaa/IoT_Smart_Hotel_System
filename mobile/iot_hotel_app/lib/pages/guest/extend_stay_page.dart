@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -43,7 +43,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading booking: $e');
+      debugPrint('鉁?booking: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -118,7 +118,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('续住异常：$e')),
+          const SnackBar(content: Text('续住失败，请重试')),
         );
       }
     } finally {

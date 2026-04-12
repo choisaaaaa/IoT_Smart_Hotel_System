@@ -43,7 +43,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取报修工单列表成功'));
   } catch (error) {
-    logger.error('获取报修工单列表失败:', error);
+    logger.error('获取报修工单列表失败:', error.message);
     res.status(500).json(errorResponse('获取报修工单列表失败'));
   }
 };
@@ -64,7 +64,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(rows[0], '获取报修工单详情成功'));
   } catch (error) {
-    logger.error('获取报修工单详情失败:', error);
+    logger.error('获取报修工单详情失败:', error.message);
     res.status(500).json(errorResponse('获取报修工单详情失败'));
   }
 };
@@ -79,10 +79,14 @@ export const create = async (req: AuthRequest, res: Response) => {
       'INSERT INTO maintenance_tickets (ticket_no, room_id, booking_id, guest_id, fault_type, fault_description, photos, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [ticketNo, room_id, booking_id || null, guest_id || null, fault_type, fault_description, JSON.stringify(photos || []), priority, 'pending']
     );
+
+    if (room_id) {
+      await pool.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['maintenance', room_id]);
+    }
     
     res.json(successResponse({ id: result.insertId, ticket_no: ticketNo }, '创建报修工单成功'));
   } catch (error) {
-    logger.error('创建报修工单失败:', error);
+    logger.error('创建报修工单失败:', error.message);
     res.status(500).json(errorResponse('创建报修工单失败'));
   }
 };
@@ -104,8 +108,35 @@ export const assign = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(null, '分配维修人员成功'));
   } catch (error) {
-    logger.error('分配维修人员失败:', error);
+    logger.error('分配维修人员失败:', error.message);
     res.status(500).json(errorResponse('分配维修人员失败'));
+  }
+};
+
+export const updateStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['pending', 'assigned', 'processing', 'completed'].includes(status)) {
+      res.status(400).json(errorResponse('无效的工单状态'));
+      return;
+    }
+
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE maintenance_tickets SET status = ? WHERE id = ?',
+      [status, id]
+    );
+
+    if (result.affectedRows === 0) {
+      res.status(404).json(errorResponse('报修工单不存在'));
+      return;
+    }
+
+    res.json(successResponse(null, '更新工单状态成功'));
+  } catch (error) {
+    logger.error('更新工单状态失败:', error.message);
+    res.status(500).json(errorResponse('更新工单状态失败'));
   }
 };
 
@@ -113,6 +144,18 @@ export const complete = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { repair_description, repair_cost } = req.body;
+
+    const [ticketRows] = await pool.query<RowDataPacket[]>(
+      'SELECT room_id, status FROM maintenance_tickets WHERE id = ?',
+      [id]
+    );
+
+    if (ticketRows.length === 0) {
+      res.status(404).json(errorResponse('报修工单不存在'));
+      return;
+    }
+
+    const roomId = (ticketRows[0] as any).room_id;
     
     const [result] = await pool.query<ResultSetHeader>(
       'UPDATE maintenance_tickets SET status = ?, repair_description = ?, repair_cost = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -123,10 +166,20 @@ export const complete = async (req: AuthRequest, res: Response) => {
       res.status(404).json(errorResponse('报修工单不存在'));
       return;
     }
+
+    if (roomId) {
+      const [pendingTickets] = await pool.query<RowDataPacket[]>(
+        'SELECT COUNT(*) as cnt FROM maintenance_tickets WHERE room_id = ? AND status IN (?, ?, ?)',
+        [roomId, 'pending', 'assigned', 'processing']
+      );
+      if ((pendingTickets[0] as any).cnt === 0) {
+        await pool.query('UPDATE rooms SET room_status = ? WHERE id = ? AND room_status = ?', ['available', roomId, 'maintenance']);
+      }
+    }
     
     res.json(successResponse(null, '完成报修工单成功'));
   } catch (error) {
-    logger.error('完成报修工单失败:', error);
+    logger.error('完成报修工单失败:', error.message);
     res.status(500).json(errorResponse('完成报修工单失败'));
   }
 };
@@ -165,7 +218,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '删除报修工单成功'));
   } catch (error) {
-    logger.error('删除报修工单失败:', error);
+    logger.error('删除报修工单失败:', error.message);
     res.status(500).json(errorResponse('删除报修工单失败'));
   }
 };

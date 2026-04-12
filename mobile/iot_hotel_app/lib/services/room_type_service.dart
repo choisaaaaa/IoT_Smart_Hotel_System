@@ -51,7 +51,7 @@ class RoomTypeService {
 
   Future<ApiResult<Map<String, dynamic>>> getRoomTypeById(int id) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.roomTypes}$id');
+      final response = await _dioClient.get('${ApiConstants.roomTypes}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -75,7 +75,7 @@ class RoomTypeService {
 
   Future<ApiResult<void>> updateRoomType(int id, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.roomTypes}$id', data: data);
+      final response = await _dioClient.put('${ApiConstants.roomTypes}/$id', data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) return ApiResult.success(null);
       return ApiResult.failure(response.data['message'] ?? '更新房型失败');
     } catch (e) {
@@ -85,7 +85,7 @@ class RoomTypeService {
 
   Future<ApiResult<void>> deleteRoomType(int id) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.roomTypes}$id');
+      final response = await _dioClient.delete('${ApiConstants.roomTypes}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) return ApiResult.success(null);
       return ApiResult.failure(response.data['message'] ?? '删除房型失败');
     } catch (e) {

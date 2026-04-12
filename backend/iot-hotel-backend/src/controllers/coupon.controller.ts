@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
+import { isSystemAdmin, isStaff, normalizeRole } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -20,7 +21,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     if (hotel_id) {
       whereClause += ' AND c.hotel_id = ?';
       params.push(hotel_id);
-    } else if (user.role !== 'system') {
+    } else if (!isSystemAdmin(user.role)) {
       whereClause += ' AND (c.hotel_id = ? OR c.hotel_id = 0)';
       params.push(user.hotel_id || 0);
     }
@@ -41,7 +42,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取优惠券列表成功'));
   } catch (error) {
-    logger.error('获取优惠券列表失败:', error);
+    logger.error('获取优惠券列表失败:', error.message);
     res.status(500).json(errorResponse('获取优惠券列表失败'));
   }
 };
@@ -53,7 +54,7 @@ export const getHotels = async (req: AuthRequest, res: Response) => {
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
-    if (user.role !== 'system' && user.hotel_id) {
+    if (!isSystemAdmin(user.role) && user.hotel_id) {
       whereClause += ' AND id = ?';
       params.push(user.hotel_id);
     }
@@ -65,7 +66,7 @@ export const getHotels = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(rows, '获取酒店列表成功'));
   } catch (error) {
-    logger.error('获取酒店列表失败:', error);
+    logger.error('获取酒店列表失败:', error.message);
     res.status(500).json(errorResponse('获取酒店列表失败'));
   }
 };
@@ -83,7 +84,7 @@ export const getById = async (req: Request, res: Response) => {
 
     res.json(successResponse(rows[0], '获取优惠券详情成功'));
   } catch (error) {
-    logger.error('获取优惠券详情失败:', error);
+    logger.error('获取优惠券详情失败:', error.message);
     res.status(500).json(errorResponse('获取优惠券详情失败'));
   }
 };
@@ -92,7 +93,6 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json(errorResponse('未认证'));
 
-    // 查找会员ID
     let phone = req.query.phone as string;
     if (!phone) {
       const user = req.user as any;
@@ -120,12 +120,11 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(rows, '获取优惠券成功'));
   } catch (error) {
-    logger.error('获取会员优惠券失败:', error);
+    logger.error('获取会员优惠券失败:', error.message);
     res.status(500).json(errorResponse('获取优惠券失败'));
   }
 };
 
-// 领取优惠券 (用户自主领取)
 export const receive = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -139,7 +138,6 @@ export const receive = async (req: AuthRequest, res: Response) => {
     if (members.length === 0) return res.status(404).json(errorResponse('未找到会员记录'));
     const memberId = members[0].id;
 
-    // 检查券是否存在及库存
     const [couponRows] = await pool.query<RowDataPacket[]>('SELECT * FROM coupons WHERE id = ? AND valid_to >= CURDATE()', [id]);
     if (couponRows.length === 0) return res.status(404).json(errorResponse('优惠券不存在或已过期'));
     const coupon = couponRows[0];
@@ -148,7 +146,6 @@ export const receive = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('优惠券已被领完'));
     }
 
-    // 检查是否已领过
     const [existing] = await pool.query<RowDataPacket[]>('SELECT id FROM member_coupons WHERE member_id = ? AND coupon_id = ?', [memberId, id]);
     if (existing.length > 0 && !coupon.is_multiple_use) {
       return res.status(400).json(errorResponse('您已经领过这张券了'));
@@ -159,12 +156,11 @@ export const receive = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '领取成功'));
   } catch (error) {
-    logger.error('领取优惠券失败:', error);
+    logger.error('领取优惠券失败:', error.message);
     res.status(500).json(errorResponse('领取失败'));
   }
 };
 
-// 发放优惠券给特定用户
 export const issueToUser = async (req: AuthRequest, res: Response) => {
   try {
     const { coupon_id, phone } = req.body;
@@ -172,14 +168,12 @@ export const issueToUser = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('缺少参数'));
     }
 
-    // 查找会员
     const [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE phone = ?', [phone]);
     if (members.length === 0) {
       return res.status(404).json(errorResponse('未找到会员记录，请先注册'));
     }
     const memberId = members[0].id;
 
-    // 查找优惠券并检查库存
     const [couponRows] = await pool.query<RowDataPacket[]>('SELECT * FROM coupons WHERE id = ?', [coupon_id]);
     if (couponRows.length === 0) {
       return res.status(404).json(errorResponse('优惠券不存在'));
@@ -190,20 +184,18 @@ export const issueToUser = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('优惠券已领完'));
     }
 
-    // 发放
     await pool.query(
       'INSERT INTO member_coupons (member_id, coupon_id, status) VALUES (?, ?, "unused")',
       [memberId, coupon.id]
     );
 
-    // 更新领取数
     if (coupon.total_count > 0) {
       await pool.query('UPDATE coupons SET received_count = received_count + 1 WHERE id = ?', [coupon.id]);
     }
 
     res.json(successResponse(null, '优惠券发放成功'));
   } catch (error) {
-    logger.error('发放优惠券失败:', error);
+    logger.error('发放优惠券失败:', error.message);
     res.status(500).json(errorResponse('发放优惠券失败'));
   }
 };
@@ -219,7 +211,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     const user = req.user as any;
     let finalHotelId = hotel_id || 0;
 
-    if (user.role === 'system') {
+    if (isSystemAdmin(user.role)) {
       finalHotelId = hotel_id ?? 0;
     } else {
       finalHotelId = user.hotel_id || 0;
@@ -235,12 +227,11 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse({ id: result.insertId }, '创建优惠券成功'));
   } catch (error) {
-    logger.error('创建优惠券失败:', error);
+    logger.error('创建优惠券失败:', error.message);
     res.status(500).json(errorResponse('创建优惠券失败'));
   }
 };
 
-// 导入优惠券 (通过券码)
 export const importCoupon = async (req: AuthRequest, res: Response) => {
   try {
     const { coupon_code } = req.body;
@@ -254,11 +245,9 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('您的账户信息中没有手机号，无法导入优惠券'));
     }
 
-    // 查找会员记录
     let [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE phone = ?', [phone]);
     let memberId: number;
 
-    // 如果没有会员记录，为当前用户创建一个 (以防万一)
     if (members.length === 0) {
       const [insertResult] = await pool.query<ResultSetHeader>(
         'INSERT INTO members (phone, name) VALUES (?, ?)',
@@ -269,7 +258,6 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
       memberId = members[0].id;
     }
 
-    // 查找优惠券定义 (忽略大小写)
     const [couponRows] = await pool.query<RowDataPacket[]>(
       'SELECT * FROM coupons WHERE LOWER(coupon_code) = LOWER(?) AND (valid_to >= CURDATE() OR valid_to IS NULL)',
       [coupon_code.trim()]
@@ -281,7 +269,6 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
 
     const coupon = couponRows[0];
 
-    // 检查是否为单次导入且已被该用户领取过
     const [existing] = await pool.query<RowDataPacket[]>(
       'SELECT id FROM member_coupons WHERE member_id = ? AND coupon_id = ?',
       [memberId, coupon.id]
@@ -291,25 +278,22 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('您已经导入过该优惠券了'));
     }
 
-    // 检查发行总量 (仅针对有总量限制的)
     if (coupon.total_count > 0 && coupon.received_count >= coupon.total_count) {
       return res.status(400).json(errorResponse('该优惠券已被领完'));
     }
 
-    // 插入用户优惠券记录
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO member_coupons (member_id, coupon_id, status) VALUES (?, ?, "unused")',
       [memberId, coupon.id]
     );
 
-    // 更新领取数 (仅限非无限次券)
     if (coupon.total_count > 0) {
       await pool.query('UPDATE coupons SET received_count = received_count + 1 WHERE id = ?', [coupon.id]);
     }
 
     res.json(successResponse({ id: result.insertId }, '优惠券导入成功'));
   } catch (error) {
-    logger.error('导入优惠券失败:', error);
+    logger.error('导入优惠券失败:', error.message);
     res.status(500).json(errorResponse('导入优惠券失败'));
   }
 };
@@ -326,7 +310,7 @@ export const update = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    if (user.role !== 'system') {
+    if (!isSystemAdmin(user.role)) {
       const coupon = existingRows[0] as any;
       if (coupon.hotel_id !== (user.hotel_id || 0) && coupon.hotel_id !== 0) {
         return res.status(403).json(errorResponse('无权操作其他门店的优惠券'));
@@ -345,7 +329,7 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新优惠券成功'));
   } catch (error) {
-    logger.error('更新优惠券失败:', error);
+    logger.error('更新优惠券失败:', error.message);
     res.status(500).json(errorResponse('更新优惠券失败'));
   }
 };
@@ -361,7 +345,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    if (user.role !== 'system') {
+    if (!isSystemAdmin(user.role)) {
       const coupon = existingRows[0] as any;
       if (coupon.hotel_id !== (user.hotel_id || 0) && coupon.hotel_id !== 0) {
         return res.status(403).json(errorResponse('无权操作其他门店的优惠券'));
@@ -377,7 +361,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '删除优惠券成功'));
   } catch (error) {
-    logger.error('删除优惠券失败:', error);
+    logger.error('删除优惠券失败:', error.message);
     res.status(500).json(errorResponse('删除优惠券失败'));
   }
 };
@@ -401,7 +385,7 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('该优惠券已使用或已过期'));
     }
 
-    if (user.role === 'staff' && mc.hotel_id !== user.hotel_id && mc.hotel_id !== 0) {
+    if (isStaff(user.role) && mc.hotel_id !== user.hotel_id && mc.hotel_id !== 0) {
       return res.status(403).json(errorResponse('您只能核销本酒店的优惠券'));
     }
 
@@ -409,8 +393,7 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '核销成功'));
   } catch (error) {
-    logger.error('核销优惠券失败:', error);
+    logger.error('核销优惠券失败:', error.message);
     res.status(500).json(errorResponse('核销失败'));
   }
 };
-

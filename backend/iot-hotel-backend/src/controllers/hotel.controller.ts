@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { HotelService } from '../services/hotel.service';
 import pool, { ResultSetHeader, RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemRole, normalizeRole } from '../utils/role';
+import { isSystemAdmin, normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -11,7 +11,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     const userRole = normalizeRole(req.user?.role);
 
     // 如果是集团超管 (Hotel ID 为 0 或 角色为 system)
-    if (userRole === 'system' || hotelId === 0) {
+    if (isSystemAdmin(userRole) || hotelId === 0) {
       // 集团超管返回一个虚拟的集团信息，或者根据 query 指定酒店
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
@@ -44,7 +44,7 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(hotel, '获取酒店信息成功'));
   } catch (error) {
-    logger.error('获取酒店信息失败:', error);
+    logger.error('获取酒店信息失败:', error.message);
     res.status(500).json(errorResponse('获取酒店信息失败'));
   }
 };
@@ -54,13 +54,13 @@ export const get = async (req: AuthRequest, res: Response) => {
  */
 export const getAll = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isSystemRole(req.user?.role)) {
+    if (!isSystemAdmin(req.user?.role)) {
       return res.status(403).json(errorResponse('无权访问所有酒店列表'));
     }
     const hotels = await HotelService.getAllHotels();
     res.json(successResponse(hotels, '获取所有酒店成功'));
   } catch (error) {
-    logger.error('获取所有酒店失败:', error);
+    logger.error('获取所有酒店失败:', error.message);
     res.status(500).json(errorResponse('获取所有酒店失败'));
   }
 };
@@ -70,13 +70,13 @@ export const getAll = async (req: AuthRequest, res: Response) => {
  */
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isSystemRole(req.user?.role)) {
+    if (!isSystemAdmin(req.user?.role)) {
       return res.status(403).json(errorResponse('无权创建酒店'));
     }
     const id = await HotelService.createHotel(req.body);
     res.status(201).json(successResponse({ id }, '酒店创建成功'));
   } catch (error: any) {
-    logger.error('创建酒店失败:', error);
+    logger.error('创建酒店失败:', error.message);
     res.status(500).json(errorResponse(error.message || '创建酒店失败'));
   }
 };
@@ -86,11 +86,13 @@ export const update = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
 
     // 如果是 system 角色，允许指定修改哪个酒店
-    if (isSystemRole(req.user?.role) && req.params.id) {
+    if (isSystemAdmin(req.user?.role) && req.params.id) {
       hotelId = parseInt(req.params.id);
+    } else if (isSystemAdmin(req.user?.role) && !hotelId) {
+      hotelId = 1;
     }
 
-    if (!hotelId) {
+    if (hotelId === undefined || hotelId === null) {
       return res.status(401).json(errorResponse('未授权，缺少酒店信息'));
     }
 
@@ -103,7 +105,7 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新酒店信息成功'));
   } catch (error) {
-    logger.error('更新酒店信息失败:', error);
+    logger.error('更新酒店信息失败:', error.message);
     res.status(500).json(errorResponse('更新酒店信息失败'));
   }
 };
@@ -113,7 +115,7 @@ export const update = async (req: AuthRequest, res: Response) => {
  */
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isSystemRole(req.user?.role)) {
+    if (!isSystemAdmin(req.user?.role)) {
       return res.status(403).json(errorResponse('无权删除酒店'));
     }
     const id = parseInt(req.params.id);
@@ -125,7 +127,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '酒店删除成功'));
   } catch (error) {
-    logger.error('删除酒店失败:', error);
+    logger.error('删除酒店失败:', error.message);
     res.status(500).json(errorResponse('删除酒店失败'));
   }
 };
@@ -139,7 +141,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
     const userRole = normalizeRole(req.user?.role);
 
     // 如果是集团超管 (Hotel ID 为 0 或 角色为 system)
-    if (userRole === 'system' || hotelId === 0) {
+    if (isSystemAdmin(userRole) || hotelId === 0) {
       // 统计所有酒店的数据
       // 1. 房间状态统计 (所有酒店)
       const [roomStats] = await pool.query<RowDataPacket[]>(
@@ -302,7 +304,7 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
       pending_maintenance: pendingMaintenance
     }, '获取统计数据成功'));
   } catch (error) {
-    logger.error('获取统计数据失败:', error);
+    logger.error('获取统计数据失败:', error.message);
     // 降级返回部分数据，而不是 500
     res.json(successResponse({
       total_revenue: 0,

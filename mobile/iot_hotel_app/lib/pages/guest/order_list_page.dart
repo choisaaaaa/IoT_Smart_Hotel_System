@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -54,7 +54,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
         debugPrint('Fetch orders failed: ${result.message}');
       }
     } catch (e) {
-      debugPrint('Error fetching orders: $e');
+      debugPrint('鉁?orders: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -218,7 +218,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('支付异常：$e')),
+          const SnackBar(content: Text('支付失败，请重试')),
         );
       }
     }
@@ -260,7 +260,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('取消异常：$e')),
+            const SnackBar(content: Text('取消失败，请重试')),
           );
         }
       }
@@ -271,7 +271,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
     if (dateStr == null) return '';
     try {
       final date = DateTime.parse(dateStr);
-      return '${date.month}.${date.day}';
+      return '${date.month}.${date.day} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return dateStr;
     }
@@ -456,7 +456,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
               ],
               if (orderData?['status'] == 'confirmed') ...[
                 FilledButton(
-                  onPressed: () => context.push('/online-checkin', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  onPressed: () {
+                    final bid = orderData?['id'] ?? orderId;
+                    context.push('/online-checkin/$bid', extra: {'bookingId': bid});
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -498,7 +501,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
               ],
               if (orderData?['status'] == 'checked_in') ...[
                 FilledButton(
-                  onPressed: () => context.push('/room-service', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  onPressed: () {
+                    final bid = orderData?['id'] ?? orderId;
+                    context.push('/room-service', extra: {'bookingId': bid});
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -508,7 +514,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
-                  onPressed: () => context.push('/extend-stay', extra: {'bookingId': orderData?['id'] ?? orderId}),
+                  onPressed: () {
+                    final bid = orderData?['id'] ?? orderId;
+                    context.push('/extend-stay/$bid', extra: {'bookingId': bid});
+                  },
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.divider),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -519,11 +528,14 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with SingleTicker
               ],
               if (orderData?['status'] == 'checked_out')
                 FilledButton(
-                  onPressed: () => context.push('/review-submit', extra: {
-                    'bookingId': orderData?['id'] ?? orderId,
-                    'hotelId': orderData?['hotel_id'],
-                    'hotelName': orderData?['hotel_name'] ?? hotelName,
-                  }),
+                  onPressed: () {
+                    final bid = orderData?['id'] ?? orderId;
+                    context.push('/review-submit/$bid', extra: {
+                      'bookingId': bid,
+                      'hotelId': orderData?['hotel_id'],
+                      'hotelName': orderData?['hotel_name'] ?? hotelName,
+                    });
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

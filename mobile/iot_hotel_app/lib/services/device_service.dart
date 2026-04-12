@@ -51,7 +51,7 @@ class DeviceService {
         } catch (_) {}
 
         try {
-          final roomResponse = await _dioClient.get('${ApiConstants.rooms}$roomId');
+          final roomResponse = await _dioClient.get('${ApiConstants.rooms}/$roomId');
           if (roomResponse.statusCode == 200 && _isSuccess(roomResponse.data)) {
             final roomData = roomResponse.data['data'];
             final devices = roomData['devices'];
@@ -69,7 +69,7 @@ class DeviceService {
   Future<ApiResult<void>> controlDevice(int deviceId, String command, dynamic value) async {
     try {
       final response = await _dioClient.post(
-        '${ApiConstants.devices}$deviceId/command',
+        '${ApiConstants.devices}/$deviceId/command',
         data: {
           'command_type': command,
           'command_value': value,
@@ -106,7 +106,7 @@ class DeviceService {
   Future<ApiResult<Map<String, dynamic>>> aiChat(int roomId, String text, {String? audioData}) async {
     try {
       final response = await _dioClient.post(
-        '${ApiConstants.aiButler}chat',
+        '${ApiConstants.aiButler}/chat',
         data: {
           'room_id': roomId,
           'text': text,

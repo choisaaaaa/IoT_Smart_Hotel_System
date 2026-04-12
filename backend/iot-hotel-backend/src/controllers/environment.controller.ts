@@ -170,7 +170,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get environment data error:', error);
+      logger.debug('Get environment data error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -245,7 +245,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get environment history error:', error);
+      logger.debug('Get environment history error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -347,7 +347,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get fire alarms error:', error);
+      logger.debug('Get fire alarms error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -357,7 +357,7 @@ class EnvironmentController {
       const alarmId = parseInt(req.params.id);
       const { handler, notes } = req.body;
 
-      logger.info(`Alarm ${alarmId} acknowledged by ${handler}: ${notes}`);
+      logger.debug(`Alarm ${alarmId} acknowledged by ${handler}: ${notes}`);
 
       res.json({
         success: true,
@@ -370,7 +370,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Acknowledge alarm error:', error);
+      logger.debug('Acknowledge alarm error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -380,7 +380,7 @@ class EnvironmentController {
       const alarmId = parseInt(req.params.id);
       const { resolution, handler } = req.body;
 
-      logger.info(`Alarm ${alarmId} resolved by ${handler}: ${resolution}`);
+      logger.debug(`Alarm ${alarmId} resolved by ${handler}: ${resolution}`);
 
       res.json({
         success: true,
@@ -393,7 +393,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Resolve alarm error:', error);
+      logger.debug('Resolve alarm error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -475,7 +475,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get room devices error:', error);
+      logger.debug('Get room devices error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -485,10 +485,10 @@ class EnvironmentController {
       const deviceId = req.params.id;
       const { action, value } = req.body;
 
-      logger.info(`Control device ${deviceId}: action=${action}, value=${value}`);
+      logger.debug(`Control device ${deviceId}: action=${action}, value=${value}`);
 
       setTimeout(() => {
-        logger.info(`Device ${deviceId} command executed successfully`);
+        logger.debug(`Device ${deviceId} command executed successfully`);
       }, 1000);
 
       res.json({
@@ -503,7 +503,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Control device error:', error);
+      logger.debug('Control device error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -556,7 +556,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get energy consumption error:', error);
+      logger.debug('Get energy consumption error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -712,7 +712,7 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.error('Get event logs error:', error);
+      logger.debug('Get event logs error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -764,7 +764,7 @@ class EnvironmentController {
         data: dashboardStats
       });
     } catch (error) {
-      logger.error('Get dashboard stats error:', error);
+      logger.debug('Get dashboard stats error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }

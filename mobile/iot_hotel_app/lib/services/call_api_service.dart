@@ -15,7 +15,7 @@ class CallApiService {
   }) async {
     try {
       final response = await _dioClient.post(
-        '${ApiConstants.calls}outbound',
+        '${ApiConstants.calls}/outbound',
         data: {
           'caller_id': callerId,
           'caller_type': callerType,
@@ -36,7 +36,7 @@ class CallApiService {
 
   Future<ApiResult<Map<String, dynamic>>> answer(String callId) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.calls}$callId/answer');
+      final response = await _dioClient.post('${ApiConstants.calls}/$callId/answer');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -49,7 +49,7 @@ class CallApiService {
 
   Future<ApiResult<Map<String, dynamic>>> reject(String callId) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.calls}$callId/reject');
+      final response = await _dioClient.post('${ApiConstants.calls}/$callId/reject');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -62,7 +62,7 @@ class CallApiService {
 
   Future<ApiResult<Map<String, dynamic>>> hangup(String callId) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.calls}$callId/hangup');
+      final response = await _dioClient.post('${ApiConstants.calls}/$callId/hangup');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -75,7 +75,7 @@ class CallApiService {
 
   Future<ApiResult<Map<String, dynamic>>> getStatus(String callId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.calls}$callId/status');
+      final response = await _dioClient.get('${ApiConstants.calls}/$callId/status');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
@@ -88,7 +88,7 @@ class CallApiService {
 
   Future<ApiResult<List<dynamic>>> getActive() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.calls}active');
+      final response = await _dioClient.get('${ApiConstants.calls}/active');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
@@ -120,7 +120,7 @@ class CallApiService {
       if (endTime != null) queryParams['end_time'] = endTime;
 
       final response = await _dioClient.get(
-        '${ApiConstants.calls}history',
+        '${ApiConstants.calls}/history',
         queryParameters: queryParams,
       );
 
@@ -145,7 +145,7 @@ class CallApiService {
       if (endTime != null) queryParams['end_time'] = endTime;
 
       final response = await _dioClient.get(
-        '${ApiConstants.calls}stats',
+        '${ApiConstants.calls}/stats',
         queryParameters: queryParams,
       );
 

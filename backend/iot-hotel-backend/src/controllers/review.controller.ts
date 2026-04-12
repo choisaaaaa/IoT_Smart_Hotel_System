@@ -41,7 +41,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取评价列表成功'));
   } catch (error) {
-    logger.error('获取评价列表失败:', error);
+    logger.error('获取评价列表失败:', error.message);
     res.status(500).json(errorResponse('获取评价列表失败'));
   }
 };
@@ -62,7 +62,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(rows[0], '获取评价详情成功'));
   } catch (error) {
-    logger.error('获取评价详情失败:', error);
+    logger.error('获取评价详情失败:', error.message);
     res.status(500).json(errorResponse('获取评价详情失败'));
   }
 };
@@ -78,7 +78,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse({ id: result.insertId }, '创建评价成功'));
   } catch (error) {
-    logger.error('创建评价失败:', error);
+    logger.error('创建评价失败:', error.message);
     res.status(500).json(errorResponse('创建评价失败'));
   }
 };

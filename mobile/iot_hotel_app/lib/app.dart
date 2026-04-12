@@ -40,7 +40,7 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
           token: token,
           userId: userMap['id']?.toString() ?? '',
           username: userMap['username'] as String? ?? '',
-          role: userMap['role'] as String? ?? 'user',
+          role: userMap['role'] as String? ?? AppRoles.customer,
           phone: userMap['phone'] as String?,
           uid: userMap['uid'] as String?,
         );
@@ -58,7 +58,7 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
               token: token,
               userId: user['id']?.toString() ?? '',
               username: user['username'] as String? ?? '',
-              role: user['role'] as String? ?? 'user',
+              role: user['role'] as String? ?? AppRoles.customer,
               phone: user['phone'] as String?,
               uid: user['uid'] as String?,
             );

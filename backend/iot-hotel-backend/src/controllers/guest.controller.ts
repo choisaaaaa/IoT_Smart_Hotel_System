@@ -45,7 +45,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取住客列表成功'));
   } catch (error) {
-    logger.error('获取住客列表失败:', error);
+    logger.error('获取住客列表失败:', error.message);
     res.status(500).json(errorResponse('获取住客列表失败'));
   }
 };
@@ -69,7 +69,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(rows[0], '获取住客详情成功'));
   } catch (error) {
-    logger.error('获取住客详情失败:', error);
+    logger.error('获取住客详情失败:', error.message);
     res.status(500).json(errorResponse('获取住客详情失败'));
   }
 };
@@ -97,7 +97,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse({ id: result.insertId }, '创建住客记录成功'));
   } catch (error) {
-    logger.error('创建住客记录失败:', error);
+    logger.error('创建住客记录失败:', error.message);
     res.status(500).json(errorResponse('创建住客记录失败'));
   }
 };
@@ -151,7 +151,7 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新住客信息成功'));
   } catch (error) {
-    logger.error('更新住客信息失败:', error);
+    logger.error('更新住客信息失败:', error.message);
     res.status(500).json(errorResponse('更新住客信息失败'));
   }
 };
@@ -169,7 +169,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '删除住客记录成功'));
   } catch (error) {
-    logger.error('删除住客记录失败:', error);
+    logger.error('删除住客记录失败:', error.message);
     res.status(500).json(errorResponse('删除住客记录失败'));
   }
 };
@@ -185,7 +185,7 @@ export const getByBookingId = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse({ items: rows }, '获取预订住客列表成功'));
   } catch (error) {
-    logger.error('获取预订住客列表失败:', error);
+    logger.error('获取预订住客列表失败:', error.message);
     res.status(500).json(errorResponse('获取预订住客列表失败'));
   }
 };

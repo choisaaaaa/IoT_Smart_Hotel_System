@@ -65,7 +65,7 @@ class FloorService {
 
   Future<ApiResult<void>> updateFloor(int id, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.floors}$id', data: data);
+      final response = await _dioClient.put('${ApiConstants.floors}/$id', data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) return ApiResult.success(null);
       return ApiResult.failure(response.data['message'] ?? '更新楼层失败');
     } catch (e) {
@@ -75,7 +75,7 @@ class FloorService {
 
   Future<ApiResult<void>> deleteFloor(int id) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.floors}$id');
+      final response = await _dioClient.delete('${ApiConstants.floors}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) return ApiResult.success(null);
       return ApiResult.failure(response.data['message'] ?? '删除楼层失败');
     } catch (e) {

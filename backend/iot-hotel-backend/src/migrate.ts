@@ -76,13 +76,61 @@ export async function migrate() {
     const roomAdditions = [
       { name: 'hotel_id', type: 'INT NULL' },
       { name: 'room_id', type: 'INT NULL' },
-      { name: 'image_url', type: 'VARCHAR(255) NULL' }
+      { name: 'image_url', type: 'VARCHAR(255) NULL' },
+      { name: 'locked_by_booking', type: 'INT DEFAULT NULL' },
+      { name: 'locked_at', type: 'DATETIME DEFAULT NULL' }
     ];
 
     for (const col of roomAdditions) {
       if (!roomColNames.includes(col.name.toLowerCase())) {
         logger.info(`Adding column ${col.name} to rooms table...`);
         await pool.query(`ALTER TABLE rooms ADD COLUMN ${col.name} ${col.type}`);
+      }
+    }
+
+    // --- 对齐 bookings 表结构（支付链路重构新增字段）---
+    const [bookingColumns] = await pool.query<any[]>(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'bookings'
+    `);
+    const bookingColNames = bookingColumns.map(c => c.COLUMN_NAME.toLowerCase());
+
+    const bookingAdditions = [
+      { name: 'lock_version', type: 'INT DEFAULT 0' },
+      { name: 'locked_at', type: 'DATETIME DEFAULT NULL' },
+      { name: 'locked_by', type: 'INT DEFAULT NULL' },
+      { name: 'payment_deadline', type: 'DATETIME DEFAULT NULL' },
+      { name: 'auto_checkout_at', type: 'DATETIME DEFAULT NULL' },
+      { name: 'room_number', type: 'VARCHAR(20) DEFAULT NULL' }
+    ];
+
+    for (const col of bookingAdditions) {
+      if (!bookingColNames.includes(col.name.toLowerCase())) {
+        logger.info(`Adding column ${col.name} to bookings table...`);
+        await pool.query(`ALTER TABLE bookings ADD COLUMN ${col.name} ${col.type}`);
+      }
+    }
+
+    // --- 对齐 payments 表结构 ---
+    const [paymentColumns] = await pool.query<any[]>(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'payments'
+    `);
+    const paymentColNames = paymentColumns.map(c => c.COLUMN_NAME.toLowerCase());
+
+    const paymentAdditions = [
+      { name: 'expired_at', type: 'DATETIME DEFAULT NULL' },
+      { name: 'user_id', type: 'INT DEFAULT NULL' }
+    ];
+
+    for (const col of paymentAdditions) {
+      if (!paymentColNames.includes(col.name.toLowerCase())) {
+        logger.info(`Adding column ${col.name} to payments table...`);
+        await pool.query(`ALTER TABLE payments ADD COLUMN ${col.name} ${col.type}`);
       }
     }
 
@@ -127,7 +175,7 @@ export async function migrate() {
     
     logger.info('Debug accounts check completed.');
   } catch (error) {
-    logger.error('Database migration failed:', error);
+    logger.error('Database migration failed:', error.message);
   }
 }
 

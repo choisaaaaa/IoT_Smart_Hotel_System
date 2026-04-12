@@ -54,8 +54,7 @@ export function errorResponse(message = '服务器错误', code = SERVER_ERROR_C
   return {
     code,
     message,
-    details,
-    stack: process.env.NODE_ENV === 'development' ? new Error().stack : undefined
+    details
   };
 }
 

@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     email VARCHAR(100),
-    role VARCHAR(20) DEFAULT 'user',
+    role VARCHAR(20) DEFAULT 'customer',
     permissions JSON,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -302,7 +302,7 @@ VALUES
 
 -- 插入默认用户
 INSERT INTO users (username, password, email, role, permissions) 
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@example.com', 'admin', '["read","write","delete"]');
+VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@example.com', 'system_admin', '["read","write","delete"]');
 
 -- 插入默认设备
 INSERT INTO devices (device_id, device_type, device_name, device_key, device_status, firmware_version) 

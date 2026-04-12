@@ -33,7 +33,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       totalPages: Math.ceil(total / Number(pageSize))
     }, '获取送物订单列表成功'));
   } catch (error) {
-    logger.error('获取送物订单列表失败:', error);
+    logger.error('获取送物订单列表失败:', error.message);
     res.status(500).json(errorResponse('获取送物订单列表失败'));
   }
 };
@@ -54,7 +54,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse(rows[0], '获取送物订单详情成功'));
   } catch (error) {
-    logger.error('获取送物订单详情失败:', error);
+    logger.error('获取送物订单详情失败:', error.message);
     res.status(500).json(errorResponse('获取送物订单详情失败'));
   }
 };
@@ -77,7 +77,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     
     res.json(successResponse({ id: result.insertId, order_no: orderNo }, '创建送物订单成功'));
   } catch (error) {
-    logger.error('创建送物订单失败:', error);
+    logger.error('创建送物订单失败:', error.message);
     res.status(500).json(errorResponse('创建送物订单失败'));
   }
 };
@@ -98,7 +98,7 @@ export const complete = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '完成送物订单成功'));
   } catch (error) {
-    logger.error('完成送物订单失败:', error);
+    logger.error('完成送物订单失败:', error.message);
     res.status(500).json(errorResponse('完成送物订单失败'));
   }
 };
@@ -158,7 +158,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 
     res.json(successResponse(null, '更新送物订单状态成功'));
   } catch (error) {
-    logger.error('更新送物订单状态失败:', error);
+    logger.error('更新送物订单状态失败:', error.message);
     res.status(500).json(errorResponse('更新送物订单状态失败'));
   }
 };

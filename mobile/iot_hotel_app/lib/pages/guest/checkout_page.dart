@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -49,7 +49,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         setState(() => _booking = result.data);
       }
     } catch (e) {
-      debugPrint('Error loading booking: $e');
+      debugPrint('鉁?booking: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -106,7 +106,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('退房异常：$e')),
+          const SnackBar(content: Text('退房失败，请重试')),
         );
       }
     } finally {
@@ -740,7 +740,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               height: 48,
               child: OutlinedButton(
                 onPressed: () {
-                  context.push('/review-submit', extra: {
+                  context.push('/review-submit/${widget.bookingId}', extra: {
                     'bookingId': widget.bookingId,
                     'hotelId': _booking?['hotel_id'],
                     'hotelName': _booking?['hotel_name'],

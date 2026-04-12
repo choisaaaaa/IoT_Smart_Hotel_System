@@ -76,7 +76,7 @@ export class MaintenanceTicketService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取报修工单列表失败:', error);
+      logger.error('获取报修工单列表失败:', error.message);
       throw new Error('获取报修工单列表失败');
     }
   }
@@ -89,7 +89,7 @@ export class MaintenanceTicketService {
       );
       return (rows[0] as MaintenanceTicket) || null;
     } catch (error) {
-      logger.error('获取报修工单详情失败:', error);
+      logger.error('获取报修工单详情失败:', error.message);
       throw new Error('获取报修工单详情失败');
     }
   }
@@ -117,7 +117,7 @@ export class MaintenanceTicketService {
         ticket_no: ticketNo
       };
     } catch (error) {
-      logger.error('创建报修工单失败:', error);
+      logger.error('创建报修工单失败:', error.message);
       throw new Error('创建报修工单失败');
     }
   }
@@ -130,7 +130,7 @@ export class MaintenanceTicketService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('分配维修人员失败:', error);
+      logger.error('分配维修人员失败:', error.message);
       throw new Error('分配维修人员失败');
     }
   }
@@ -143,7 +143,7 @@ export class MaintenanceTicketService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('完成报修工单失败:', error);
+      logger.error('完成报修工单失败:', error.message);
       throw new Error('完成报修工单失败');
     }
   }

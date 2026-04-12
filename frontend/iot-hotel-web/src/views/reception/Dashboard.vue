@@ -32,7 +32,7 @@
                 <a-list-item-meta :title="item.title" :description="item.desc">
                   <template #avatar><a-badge :status="item.status" /></template>
                 </a-list-item-meta>
-                <a-button type="link" size="small">处理</a-button>
+                <a-button type="link" size="small" @click="handlePendingItem(item)">处理</a-button>
               </a-list-item>
             </template>
           </a-list>
@@ -70,6 +70,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   UserAddOutlined, UserDeleteOutlined,
   CalendarOutlined, FileTextOutlined
@@ -79,6 +80,7 @@ import { useHotelStore } from '@/stores/hotel'
 import axios from '@/api/request'
 import { bookingApi } from '@/api/booking'
 
+const router = useRouter()
 const hotelStore = useHotelStore()
 const loading = ref(false)
 
@@ -173,6 +175,14 @@ async function fetchDashboardData() {
 }
 
 onMounted(fetchDashboardData)
+
+function handlePendingItem(item: any) {
+  if (item.type === 'maintenance') {
+    router.push('/reception/workorders')
+  } else if (item.type === 'delivery') {
+    router.push('/reception/delivery')
+  }
+}
 </script>
 
 <style scoped>

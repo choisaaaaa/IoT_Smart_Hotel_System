@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -72,7 +72,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
         setState(() => _messages = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('Error loading messages: $e');
+      debugPrint('鉁?messages: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

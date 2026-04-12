@@ -67,7 +67,7 @@ class PriceCalendarService {
   }) async {
     try {
       final response = await _dioClient.put(
-        '${ApiConstants.priceCalendar}$priceId',
+        '${ApiConstants.priceCalendar}/$priceId',
         data: {
           'base_price': basePrice,
           'discount_rate': discountRate ?? 1.0,
@@ -85,7 +85,7 @@ class PriceCalendarService {
 
   Future<ApiResult<void>> deletePriceForDate(int priceId) async {
     try {
-      final response = await _dioClient.delete('${ApiConstants.priceCalendar}$priceId');
+      final response = await _dioClient.delete('${ApiConstants.priceCalendar}/$priceId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
@@ -98,7 +98,7 @@ class PriceCalendarService {
 
   Future<ApiResult<Map<String, dynamic>>> getMemberDiscounts() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.priceCalendar}member-discounts');
+      final response = await _dioClient.get('${ApiConstants.priceCalendar}/member-discounts');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);

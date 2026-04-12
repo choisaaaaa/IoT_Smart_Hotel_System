@@ -153,8 +153,6 @@ async function fetchLogs() {
       Object.assign(logSummary, data.summary)
     }
   } catch (err) {
-    console.error('Failed to fetch event logs:', err)
-    message.error('获取事件日志失败')
   } finally {
     loading.value = false
   }

@@ -59,7 +59,7 @@ export class DeliveryOrderService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取送物订单列表失败:', error);
+      logger.error('获取送物订单列表失败:', error.message);
       throw new Error('获取送物订单列表失败');
     }
   }
@@ -72,7 +72,7 @@ export class DeliveryOrderService {
       );
       return (rows[0] as DeliveryOrder) || null;
     } catch (error) {
-      logger.error('获取送物订单详情失败:', error);
+      logger.error('获取送物订单详情失败:', error.message);
       throw new Error('获取送物订单详情失败');
     }
   }
@@ -99,7 +99,7 @@ export class DeliveryOrderService {
         order_no: orderNo
       };
     } catch (error) {
-      logger.error('创建送物订单失败:', error);
+      logger.error('创建送物订单失败:', error.message);
       throw new Error('创建送物订单失败');
     }
   }
@@ -112,7 +112,7 @@ export class DeliveryOrderService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('完成送物订单失败:', error);
+      logger.error('完成送物订单失败:', error.message);
       throw new Error('完成送物订单失败');
     }
   }

@@ -76,7 +76,7 @@ CREATE TABLE users (
     uid VARCHAR(50) DEFAULT NULL,
     email VARCHAR(100) DEFAULT NULL,
     avatar VARCHAR(255) DEFAULT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'user',
+    role VARCHAR(20) NOT NULL DEFAULT 'customer',
     hotel_id INT DEFAULT 0 COMMENT '0表示系统管理员，>0表示所属酒店ID',
     permissions JSON DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -384,7 +384,7 @@ INSERT INTO hotels (id, hotel_name, hotel_star, description) VALUES (1, '智联�
 
 -- 默认系统管理员 (密码: admin123)
 INSERT INTO users (username, password, role, hotel_id) 
-VALUES ('sys_admin', '$2a$10$p0M96fI3D0eI8V1v.H6o7u/8h6Q6q5n0V8i1W5a4C0g7Y6e5f4a3b', 'system', 0);
+VALUES ('sys_admin', '$2a$10$p0M96fI3D0eI8V1v.H6o7u/8h6Q6q5n0V8i1W5a4C0g7Y6e5f4a3b', 'system_admin', 0);
 
 -- 系统全局配置
 INSERT INTO system_settings (config_key, config_value, description) 

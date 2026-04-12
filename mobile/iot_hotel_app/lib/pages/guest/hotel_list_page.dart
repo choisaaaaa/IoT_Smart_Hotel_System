@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -44,10 +44,10 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
         );
       }
     } catch (e) {
-      debugPrint('Error fetching hotels: $e');
+      debugPrint('✗ hotels: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('网络错误：$e')),
+          const SnackBar(content: Text('网络异常，请重试')),
         );
       }
     } finally {
@@ -68,7 +68,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
         setState(() => _assets = result.data);
       }
     } catch (e) {
-      debugPrint('Error fetching assets: $e');
+      debugPrint('鉁?assets: $e');
     }
   }
 

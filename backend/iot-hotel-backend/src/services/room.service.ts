@@ -102,7 +102,7 @@ export class RoomService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取房间列表失败:', error);
+      logger.error('获取房间列表失败:', error.message);
       throw new Error('获取房间列表失败');
     }
   }
@@ -130,7 +130,7 @@ export class RoomService {
         rooms: grouped[Number(floor)]
       }));
     } catch (error) {
-      logger.error('按楼层获取房间失败:', error);
+      logger.error('按楼层获取房间失败:', error.message);
       throw new Error('按楼层获取房间失败');
     }
   }
@@ -149,7 +149,7 @@ export class RoomService {
       const [rows] = await pool.query<RowDataPacket[]>(getByIdSql, [id, hotelId]);
       return (rows[0] as Room) || null;
     } catch (error) {
-      logger.error('获取房间详情失败:', error);
+      logger.error('获取房间详情失败:', error.message);
       throw new Error('获取房间详情失败');
     }
   }
@@ -176,7 +176,7 @@ export class RoomService {
         (customError as any).status = 500;
         throw customError;
       }
-      logger.error('创建房间失败:', error);
+      logger.error('创建房间失败:', error.message);
       throw error;
     }
   }
@@ -206,7 +206,7 @@ export class RoomService {
       
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('更新房间失败:', error);
+      logger.error('更新房间失败:', error.message);
       throw new Error('更新房间失败');
     }
   }
@@ -227,7 +227,7 @@ export class RoomService {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('更新房间状态失败:', error);
+      logger.error('更新房间状态失败:', error.message);
       throw new Error('更新房间状态失败');
     }
   }
@@ -237,7 +237,7 @@ export class RoomService {
       const [result] = await pool.query<ResultSetHeader>('DELETE FROM rooms WHERE id = ? AND hotel_id = ?', [id, hotelId]);
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('删除房间失败:', error);
+      logger.error('删除房间失败:', error.message);
       throw new Error('删除房间失败');
     }
   }

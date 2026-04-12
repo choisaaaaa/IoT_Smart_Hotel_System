@@ -59,7 +59,7 @@ export class MemberService {
         totalPages: Math.ceil(total / Number(pageSize))
       };
     } catch (error) {
-      logger.error('获取会员列表失败:', error);
+      logger.error('获取会员列表失败:', error.message);
       throw new Error('获取会员列表失败');
     }
   }
@@ -69,7 +69,7 @@ export class MemberService {
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE id = ?', [id]);
       return (rows[0] as Member) || null;
     } catch (error) {
-      logger.error('获取会员详情失败:', error);
+      logger.error('获取会员详情失败:', error.message);
       throw new Error('获取会员详情失败');
     }
   }
@@ -79,7 +79,7 @@ export class MemberService {
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
       return (rows[0] as Member) || null;
     } catch (error) {
-      logger.error('获取会员信息失败:', error);
+      logger.error('获取会员信息失败:', error.message);
       throw new Error('获取会员信息失败');
     }
   }
@@ -108,7 +108,7 @@ export class MemberService {
       
       return { id: result.insertId };
     } catch (error) {
-      logger.error('注册会员失败:', error);
+      logger.error('注册会员失败:', error.message);
       throw new Error('注册会员失败');
     }
   }
@@ -124,7 +124,7 @@ export class MemberService {
       
       return result.affectedRows > 0;
     } catch (error) {
-      logger.error('更新会员信息失败:', error);
+      logger.error('更新会员信息失败:', error.message);
       throw new Error('更新会员信息失败');
     }
   }
@@ -152,7 +152,7 @@ export class MemberService {
         balance: member.balance
       };
     } catch (error) {
-      logger.error('会员登录失败:', error);
+      logger.error('会员登录失败:', error.message);
       throw new Error('登录失败');
     }
   }
