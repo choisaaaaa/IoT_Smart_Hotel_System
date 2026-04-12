@@ -420,6 +420,26 @@
               </a-form>
             </div>
 
+            <!-- Room Selection Card -->
+            <div class="ctrip-card" style="margin-top: 20px;">
+              <div class="card-header-ctrip">
+                <span class="title">选择具体房间</span>
+              </div>
+              <div class="room-selector-ctrip">
+                <div class="selector-row">
+                  <span class="label">房间号:</span>
+                  <a-radio-group v-model:value="selectedRoomId" @change="(e: any) => handleRoomChange(e.target.value)">
+                    <a-radio-button v-for="room in availableRoomsInType" :key="room.id" :value="room.id">
+                      {{ room.room_number }}号房 ({{ room.floor }}层)
+                    </a-radio-button>
+                  </a-radio-group>
+                </div>
+                <div class="selector-tips">
+                  <InfoCircleOutlined /> 温馨提示：您可以自由选择心仪的房间号进行预订
+                </div>
+              </div>
+            </div>
+
             <!-- Payment Method Card -->
             <div class="ctrip-card" style="margin-top: 20px;">
               <div class="card-header-ctrip">
@@ -1027,10 +1047,32 @@ const selectPlan = async (type: any, plan: any) => {
     await fetchAvailableCoupons()
   }
 
+  // 获取房型下的所有可用房间
+  try {
+    const res = await request.get('/rooms', {
+      params: {
+        room_status: 'available',
+        pageSize: 100
+      }
+    })
+    const allAvailableRooms = res.data.list || []
+    // 过滤出当前房型的房间
+    availableRoomsInType.value = allAvailableRooms.filter((r: any) => 
+      r.room_name === type.name || r.room_type === type.code
+    )
+    
+    // 默认选择第一个可用房间
+    if (availableRoomsInType.value.length > 0) {
+      selectedRoomId.value = availableRoomsInType.value[0].id
+    }
+  } catch (error) {
+    console.error('获取可用房间列表失败:', error)
+  }
+
   selectedRoom.value = {
     ...type,
-    id: type.room_id || type.id,
-    room_id: type.room_id,
+    id: selectedRoomId.value || type.room_id || type.id,
+    room_id: selectedRoomId.value || type.room_id,
     room_type_id: type.room_type_id,
     hotel_id: type.hotel_id,
     price: plan.price,
@@ -1048,6 +1090,18 @@ const selectPlan = async (type: any, plan: any) => {
   currentStep.value = 3
   updateCalculatedPrice()
   fetchFrequentGuests()
+}
+
+const availableRoomsInType = ref<any[]>([])
+const selectedRoomId = ref<number | null>(null)
+
+const handleRoomChange = (val: number) => {
+  selectedRoomId.value = val
+  if (selectedRoom.value) {
+    selectedRoom.value.id = val
+    selectedRoom.value.room_id = val
+    updateCalculatedPrice()
+  }
 }
 
 const fetchFrequentGuests = async () => {

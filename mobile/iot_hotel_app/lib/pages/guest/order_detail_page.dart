@@ -1,10 +1,11 @@
-﻿﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../services/payment_service.dart';
+import '../../models/booking.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final int orderId;
@@ -16,8 +17,9 @@ class OrderDetailPage extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
-  Map<String, dynamic>? _order;
+  Booking? _order;
   bool _isLoading = true;
+  bool _isCancelling = false;
 
   @override
   void initState() {
@@ -35,30 +37,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         });
       }
     } catch (e) {
-      debugPrint('鉁?orderDetail: $e');
+      debugPrint('orderDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
     try {
-      final date = DateTime.parse(dateStr);
-      return '${date.year}年${date.month}月${date.day}日 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      return DateFormat('yyyy年MM月dd日 HH:mm').format(date);
     } catch (e) {
-      return dateStr;
-    }
-  }
-
-  int _calculateNights(String? checkIn, String? checkOut) {
-    if (checkIn == null || checkOut == null) return 1;
-    try {
-      final inDate = DateTime.parse(checkIn);
-      final outDate = DateTime.parse(checkOut);
-      return outDate.difference(inDate).inDays;
-    } catch (e) {
-      return 1;
+      return '-';
     }
   }
 
@@ -86,6 +76,30 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     }
   }
 
+  IconData _getStatusIcon(String? status) {
+    switch (status) {
+      case 'pending': return Icons.access_time_rounded;
+      case 'confirmed': return Icons.check_circle_outline_rounded;
+      case 'pre_checked_in': return Icons.pending_actions_rounded;
+      case 'checked_in': return Icons.hotel_rounded;
+      case 'checked_out': return Icons.task_alt_rounded;
+      case 'cancelled': return Icons.cancel_outlined;
+      default: return Icons.help_outline_rounded;
+    }
+  }
+
+  String _getStatusDesc(String? status) {
+    switch (status) {
+      case 'pending': return '请尽快完成支付，超时订单将自动取消';
+      case 'confirmed': return '支付成功，可在线办理预入住';
+      case 'pre_checked_in': return '预入住申请已提交，等待前台确认';
+      case 'checked_in': return '已入住，祝您旅途愉快';
+      case 'checked_out': return '已退房，期待您的再次光临';
+      case 'cancelled': return '订单已取消';
+      default: return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,58 +117,107 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             }
           },
         ),
-        title: Text('订单详情', style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('订单详情', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         centerTitle: true,
+        actions: [
+          if (_order != null && _order!.status != 'cancelled')
+            IconButton(
+              icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+              onPressed: () => _showMoreActions(),
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _order == null
-              ? const Center(child: Text('订单不存在'))
-              : SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildStatusCard(),
-                      const SizedBox(height: 12),
-                      _buildHotelInfoCard(),
-                      const SizedBox(height: 12),
-                      _buildGuestInfoCard(),
-                      const SizedBox(height: 12),
-                      _buildPriceDetailCard(),
-                      const SizedBox(height: 12),
-                      if (_order!['status'] == 'confirmed' || _order!['status'] == 'pending' || _order!['status'] == 'pre_checked_in' || _order!['status'] == 'checked_in' || _order!['status'] == 'checked_out')
-                        _buildActionButtons(),
-                      const SizedBox(height: 32),
-                    ],
+              ? _buildErrorView()
+              : RefreshIndicator(
+                  onRefresh: _fetchOrderDetail,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildStatusCard(),
+                        const SizedBox(height: 12),
+                        _buildHotelInfoCard(),
+                        const SizedBox(height: 12),
+                        _buildGuestInfoCard(),
+                        const SizedBox(height: 12),
+                        _buildPriceDetailCard(),
+                        const SizedBox(height: 12),
+                        _buildTimelineCard(),
+                        const SizedBox(height: 12),
+                        if (_order!.canPay || _order!.canCheckin || _order!.canCancel || _order!.canExtend || _order!.canEnterRoom || _order!.canReview)
+                          _buildActionButtons(),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
                   ),
                 ),
     );
   }
 
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: AppColors.textHint),
+          const SizedBox(height: 16),
+          const Text('订单不存在或加载失败', style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _fetchOrderDetail,
+            child: const Text('重新加载'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusCard() {
+    final statusColor = _getStatusColor(_order!.status);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _getStatusColor(_order!['status']).withValues(alpha: 0.1),
+        gradient: LinearGradient(
+          colors: [statusColor.withValues(alpha: 0.15), statusColor.withValues(alpha: 0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            decoration: BoxDecoration(
-              color: _getStatusColor(_order!['status']),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _getStatusText(_order!['status']),
-              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(_getStatusIcon(_order!.status), color: statusColor, size: 28),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _getStatusText(_order!.status),
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
-            '订单号：${_order!['id'] ?? widget.orderId}',
-            style: GoogleFonts.notoSansSc(fontSize: 13, color: AppColors.textSecondary),
+            _getStatusDesc(_order!.status),
+            style: TextStyle(fontSize: 13, color: statusColor.withValues(alpha: 0.8)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '订单号：${_order!.displayBookingNumber}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -168,17 +231,42 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _order!['hotel_name'] ?? '智联酒店',
-            style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.hotel_rounded, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _order!.hotelName ?? '智联酒店',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_order!.displayRoomType} · ${_order!.roomNumber ?? '${_order!.roomId}号房'}',
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _buildInfoRow('房型', _order!['room_type'] ?? '标准间'),
-          _buildInfoRow('房间号', '${_order!['room_id'] ?? '-'}号房'),
-          _buildInfoRow('入住时间', _formatDate(_order!['check_in_date'])),
-          _buildInfoRow('离店时间', _formatDate(_order!['check_out_date'])),
-          _buildInfoRow('入住天数', '${_calculateNights(_order!['check_in_date'], _order!['check_out_date'])}晚'),
-          _buildInfoRow('房间数量', '${_order!['guest_count'] ?? 1}间'),
+          const Divider(height: 24),
+          _buildInfoRow('房型', _order!.displayRoomType),
+          _buildInfoRow('房间号', _order!.roomNumber ?? '${_order!.roomId}号房'),
+          _buildInfoRow('入住时间', _formatDate(_order!.checkInDate)),
+          _buildInfoRow('离店时间', _formatDate(_order!.checkOutDate)),
+          _buildInfoRow('入住天数', '${_order!.nights}晚'),
+          _buildInfoRow('房间数量', '${_order!.guestCount}间'),
         ],
       ),
     );
@@ -192,21 +280,33 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('入住信息', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('入住信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          _buildInfoRow('入住人', _order!['guest_name'] ?? '-'),
-          _buildInfoRow('联系电话', _order!['guest_phone'] ?? '-'),
-          _buildInfoRow('证件号码', _maskIdNumber(_order!['guest_id_number'])),
-          if (_order!['special_requests'] != null && _order!['special_requests'].toString().isNotEmpty)
-            _buildInfoRow('特殊要求', _order!['special_requests']),
+          _buildInfoRow('入住人', _order!.guestName ?? '-'),
+          _buildInfoRow('联系电话', _order!.guestPhone ?? '-'),
+          _buildInfoRow('证件号码', _maskIdNumber(_order!.guestIdNumber)),
+          if (_order!.specialRequests != null && _order!.specialRequests.toString().isNotEmpty)
+            _buildInfoRow('特殊要求', _order!.specialRequests!),
+          if (_order!.paymentMethod != null && _order!.paymentMethod!.isNotEmpty)
+            _buildInfoRow('支付方式', _paymentMethodText(_order!.paymentMethod!)),
         ],
       ),
     );
   }
 
+  String _paymentMethodText(String method) {
+    switch (method) {
+      case 'alipay': return '支付宝';
+      case 'wechat': return '微信支付';
+      case 'balance': return '余额支付';
+      case 'points': return '积分支付';
+      default: return method;
+    }
+  }
+
   Widget _buildPriceDetailCard() {
-    final totalPrice = double.tryParse(_order!['total_price']?.toString() ?? '0') ?? 0.0;
-    final nights = _calculateNights(_order!['check_in_date'], _order!['check_out_date']);
+    final totalPrice = _order!.totalPrice;
+    final nights = _order!.nights;
     final pricePerNight = nights > 0 ? (totalPrice / nights).toStringAsFixed(2) : '0.00';
 
     return Container(
@@ -216,11 +316,119 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('费用明细', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('费用明细', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           _buildPriceRow('房费（¥$pricePerNight × $nights晚）', totalPrice.toStringAsFixed(2)),
+          if (_order!.usedPoints != null && _order!.usedPoints! > 0)
+            _buildPriceRow('积分抵扣（${_order!.usedPoints}积分）', '-¥${(_order!.usedPoints! / 100).toStringAsFixed(2)}', color: Colors.orange),
+          if (_order!.couponId != null)
+            _buildPriceRow('优惠券抵扣', '-¥0.00', color: Colors.redAccent),
           const Divider(height: 1),
-          _buildTotalRow('总计', totalPrice.toStringAsFixed(2)),
+          _buildTotalRow('实付金额', totalPrice.toStringAsFixed(2)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineCard() {
+    return Container(
+      color: Colors.white,
+      margin: const EdgeInsets.only(top: 1),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('订单进度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          _buildTimelineItem(
+            Icons.receipt_long_outlined,
+            '创建订单',
+            _order!.createdAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(_order!.createdAt!) : '-',
+            true,
+          ),
+          _buildTimelineItem(
+            Icons.payment_rounded,
+            '完成支付',
+            _order!.status != 'pending' ? '已支付' : '待支付',
+            _order!.status != 'pending',
+          ),
+          if (_order!.status == 'pre_checked_in' || _order!.status == 'checked_in' || _order!.status == 'checked_out')
+            _buildTimelineItem(
+              Icons.fact_check_outlined,
+              '预入住申请',
+              '已提交',
+              true,
+            ),
+          if (_order!.status == 'checked_in' || _order!.status == 'checked_out')
+            _buildTimelineItem(
+              Icons.hotel_rounded,
+              '正式入住',
+              '已入住',
+              true,
+            ),
+          if (_order!.status == 'checked_out')
+            _buildTimelineItem(
+              Icons.task_alt_rounded,
+              '已退房',
+              '已完成',
+              true,
+            ),
+          if (_order!.status == 'cancelled')
+            _buildTimelineItem(
+              Icons.cancel_outlined,
+              '已取消',
+              '订单已取消',
+              true,
+              isLast: true,
+              iconColor: AppColors.error,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem(IconData icon, String title, String subtitle, bool completed, {bool isLast = false, Color? iconColor}) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 32,
+            child: Column(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completed ? (iconColor ?? AppColors.primary).withValues(alpha: 0.1) : AppColors.divider.withValues(alpha: 0.3),
+                  ),
+                  child: Icon(icon, size: 14, color: completed ? (iconColor ?? AppColors.primary) : AppColors.textHint),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: completed ? AppColors.primary.withValues(alpha: 0.3) : AppColors.divider,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: completed ? AppColors.textPrimary : AppColors.textHint)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -232,21 +440,21 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 14, color: AppColors.textSecondary))),
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary))),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
         ],
       ),
     );
   }
 
-  Widget _buildPriceRow(String label, String value) {
+  Widget _buildPriceRow(String label, String value, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-          Text('¥$value', style: const TextStyle(fontSize: 14)),
+          Text('¥$value', style: TextStyle(fontSize: 14, color: color)),
         ],
       ),
     );
@@ -258,8 +466,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-          Text('¥$value', style: GoogleFonts.notoSansSc(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
+          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('¥$value', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
         ],
       ),
     );
@@ -272,7 +480,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          if (_order!['status'] == 'pending') ...[
+          if (_order!.canPay) ...[
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -282,57 +490,30 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: _handleCancel,
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                child: const Text('取消订单'),
-              ),
-            ),
           ],
-          if (_order!['status'] == 'confirmed') ...[
+          if (_order!.status == 'confirmed') ...[
             SizedBox(
               width: double.infinity,
               height: 48,
               child: FilledButton(
-                onPressed: _handleCheckIn,
-                child: const Text('预入住', style: TextStyle(fontSize: 16)),
+                onPressed: () => context.push('/online-checkin/${_order!.id}', extra: {'bookingId': _order!.id}),
+                child: const Text('在线办理入住', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: _handleCancel,
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                child: const Text('取消订单'),
-              ),
-            ),
           ],
-          if (_order!['status'] == 'pre_checked_in') ...[
+          if (_order!.status == 'pre_checked_in') ...[
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: OutlinedButton(
+              child: FilledButton(
                 onPressed: null,
-                child: const Text('待确认', style: TextStyle(fontSize: 16)),
+                child: const Text('等待前台确认', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: _handleCancel,
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                child: const Text('取消订单'),
-              ),
-            ),
           ],
-          if (_order!['status'] == 'checked_in') ...[
+          if (_order!.canEnterRoom) ...[
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -342,48 +523,119 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: () => context.push('/extend-stay/${widget.orderId}', extra: {'bookingId': widget.orderId}),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-                child: const Text('在线续住'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: () => context.push('/checkout/${widget.orderId}', extra: {'bookingId': widget.orderId}),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                child: const Text('自助退房'),
-              ),
-            ),
           ],
-          if (_order!['status'] == 'checked_out')
+          Row(
+            children: [
+              if (_order!.canExtend)
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => context.push('/extend-stay/${widget.orderId}', extra: {'bookingId': widget.orderId}),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                      child: const Text('在线续住'),
+                    ),
+                  ),
+                ),
+              if (_order!.canExtend && _order!.status == 'checked_in')
+                const SizedBox(width: 12),
+              if (_order!.status == 'checked_in')
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => context.push('/checkout/${widget.orderId}', extra: {'bookingId': widget.orderId}),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                      child: const Text('自助退房'),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_order!.canReview) ...[
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
                 onPressed: () => context.push('/review-submit/${widget.orderId}', extra: {
                   'bookingId': widget.orderId,
-                  'hotelId': _order?['hotel_id'],
-                  'hotelName': _order?['hotel_name'],
+                  'hotelId': _order?.hotelId,
+                  'hotelName': _order?.hotelName,
                 }),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
                 child: const Text('去评价'),
               ),
             ),
+          ],
+          if (_order!.canCancel) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _isCancelling ? null : _handleCancel,
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: _isCancelling
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.error))
+                    : const Text('取消订单'),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _showMoreActions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+            ),
+            if (_order!.canCancel)
+              ListTile(
+                leading: const Icon(Icons.cancel_outlined, color: AppColors.error),
+                title: const Text('取消订单', style: TextStyle(color: AppColors.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleCancel();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.headset_mic_outlined),
+              title: const Text('联系客服'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/ai-butler');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('复制订单号'),
+              onTap: () {
+                Navigator.pop(ctx);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 
   String _maskIdNumber(dynamic idNumber) {
     final str = idNumber?.toString() ?? '';
-    if (str.length <= 10) return str.isEmpty ? '-' : str;
+    if (str.isEmpty) return '-';
+    if (str.length <= 10) return str;
     return '${str.substring(0, 6)}********${str.substring(14)}';
   }
 
@@ -392,47 +644,25 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确认支付'),
-        content: Text('订单金额：¥${_order!['total_price']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('订单金额：¥${_order!.totalPrice}'),
+            const SizedBox(height: 8),
+            const Text('请选择支付方式：'),
+            const SizedBox(height: 8),
+            _buildPaymentOption('alipay', Icons.payment_outlined, '支付宝', Colors.blueAccent),
+            _buildPaymentOption('wechat', Icons.account_balance_wallet_outlined, '微信支付', Colors.green),
+            _buildPaymentOption('balance', Icons.account_balance_outlined, '余额支付', Colors.blue),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              try {
-                // 1. 创建支付记录
-                final createResult = await ref.read(paymentServiceProvider).createPayment({
-                  'order_type': 'booking',
-                  'order_id': widget.orderId,
-                  'amount': _order!['total_price'],
-                  'payment_method': 'alipay',
-                });
-                
-                if (!createResult.success) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createResult.message ?? '创建支付失败')));
-                  return;
-                }
-
-                // 2. 执行支付（模拟第三方支付回调后的确认）
-                final paymentIdRaw = createResult.data!['id'];
-                // 确保 paymentId 是 int 类型
-                final paymentId = paymentIdRaw is int ? paymentIdRaw : int.tryParse(paymentIdRaw.toString()) ?? 0;
-                if (paymentId == 0) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单ID无效')));
-                  return;
-                }
-                final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
-                
-                if (payResult.success && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付成功'), backgroundColor: AppColors.success));
-                  _fetchOrderDetail();
-                } else if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(payResult.message ?? '支付确认失败')));
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付失败，请重试')));
-                }
-              }
+              _performPayment('alipay');
             },
             child: const Text('确认支付'),
           ),
@@ -441,8 +671,52 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     );
   }
 
-  void _handleCheckIn() {
-    context.go('/room-service', extra: {'bookingId': widget.orderId});
+  Widget _buildPaymentOption(String method, IconData icon, String label, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performPayment(String method) async {
+    try {
+      final createResult = await ref.read(paymentServiceProvider).createPayment({
+        'order_type': 'booking',
+        'order_id': widget.orderId,
+        'amount': _order!.totalPrice,
+        'payment_method': method,
+      });
+
+      if (!createResult.success) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createResult.message ?? '创建支付失败')));
+        return;
+      }
+
+      final paymentIdRaw = createResult.data!['id'];
+      final paymentId = paymentIdRaw is int ? paymentIdRaw : int.tryParse(paymentIdRaw.toString()) ?? 0;
+      if (paymentId == 0) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付订单ID无效')));
+        return;
+      }
+      final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
+
+      if (payResult.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付成功'), backgroundColor: AppColors.success));
+        _fetchOrderDetail();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(payResult.message ?? '支付确认失败')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付失败，请重试')));
+      }
+    }
   }
 
   Future<void> _handleCancel() async {
@@ -462,9 +736,29 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       ),
     );
 
-    if (confirm == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('订单已取消')));
-      _fetchOrderDetail();
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    try {
+      final result = await ref.read(bookingServiceProvider).cancelBooking(widget.orderId);
+      if (result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('订单已取消'), backgroundColor: AppColors.success),
+        );
+        _fetchOrderDetail();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '取消失败')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('取消失败，请重试')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
     }
   }
 }

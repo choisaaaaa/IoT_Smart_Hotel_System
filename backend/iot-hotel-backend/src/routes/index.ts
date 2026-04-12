@@ -24,6 +24,7 @@ import aiButlerRouter from './v1/ai-butler';
 import priceCalendarRouter from './v1/price-calendar';
 import ratePlanRouter from './v1/rate-plans';
 import systemConfigRouter from './v1/system-config';
+import environmentRouter from './v1/environment';
 
 const router = Router();
 
@@ -57,5 +58,6 @@ router.use('/ai-butler', aiButlerRouter);
 router.use('/price-calendar', priceCalendarRouter);
 router.use('/rate-plans', ratePlanRouter);
 router.use('/system-config', systemConfigRouter);
+router.use('/environment', environmentRouter);
 
 export default router;

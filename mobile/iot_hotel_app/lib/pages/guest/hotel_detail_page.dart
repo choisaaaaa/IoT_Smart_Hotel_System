@@ -1,18 +1,17 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
+import '../../services/favorite_service.dart';
 import '../../services/review_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
 import '../../services/auth_service.dart';
-import '../../core/auth/auth_state_notifier.dart';
 import '../../core/logic/member_logic.dart';
+import '../../models/hotel.dart';
+import '../../models/room_type.dart';
 
 class HotelDetailPage extends ConsumerStatefulWidget {
   final int? hotelId;
@@ -29,8 +28,8 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   bool _hasMoreReviews = true;
   int _reviewPage = 1;
   
-  Map<String, dynamic>? _hotelInfo;
-  List<dynamic> _rooms = [];
+  Hotel? _hotelInfo;
+  List<RoomType> _rooms = [];
   bool _isLoadingHotel = true;
   bool _isLoadingRooms = true;
   bool _isFavorited = false;
@@ -54,42 +53,18 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   void _loadFavoriteStatus() async {
-    final favorites = await _getFavoritesList();
     final hotelId = widget.hotelId ?? 1;
-    if (mounted) setState(() => _isFavorited = favorites.any((f) => f['id'] == hotelId));
-  }
-
-  String get _favKey {
-    final userId = ref.read(authStateProvider).userId ?? 'guest';
-    return '${AppConstants.favoriteHotelsKey}_$userId';
-  }
-
-  Future<List<Map<String, dynamic>>> _getFavoritesList() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_favKey) ?? '[]';
-    final List<dynamic> decoded = jsonDecode(raw);
-    return decoded.cast<Map<String, dynamic>>().toList();
+    final isFav = await ref.read(favoriteServiceProvider).isFavorite(hotelId);
+    if (mounted) setState(() => _isFavorited = isFav);
   }
 
   void _toggleFavorite() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_favKey) ?? '[]';
-    final List<dynamic> decoded = jsonDecode(raw);
-    final favorites = decoded.cast<Map<String, dynamic>>().toList();
     final hotelId = widget.hotelId ?? 1;
-
     if (_isFavorited) {
-      favorites.removeWhere((f) => f['id'] == hotelId);
+      await ref.read(favoriteServiceProvider).removeFavorite(hotelId);
     } else {
-      favorites.add({
-        'id': hotelId,
-        'name': _hotelInfo?['name'] ?? '智联酒店',
-        'image': (_hotelInfo?['image'] is String) ? _hotelInfo!['image'] as String : '',
-        'star': _hotelInfo?['star'] ?? 5,
-        'location': _hotelInfo?['location'] ?? '',
-      });
+      await ref.read(favoriteServiceProvider).addFavorite(hotelId);
     }
-    await prefs.setString(_favKey, jsonEncode(favorites));
     setState(() => _isFavorited = !_isFavorited);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -103,43 +78,10 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     try {
       final result = await ref.read(hotelServiceProvider).getHotelById(widget.hotelId ?? 1);
       if (result.success && mounted) {
-        final raw = result.data;
-        if (raw != null) {
-          var hotelData = raw;
-          if (raw.containsKey('hotel') && raw['hotel'] is Map) {
-            hotelData = Map<String, dynamic>.from(raw['hotel'] as Map);
-          }
-          final normalized = <String, dynamic>{};
-          hotelData.forEach((key, value) {
-            normalized[key] = value;
-          });
-          if (!normalized.containsKey('name') && normalized.containsKey('hotel_name')) {
-            normalized['name'] = normalized['hotel_name'];
-          }
-          if (!normalized.containsKey('location') && normalized.containsKey('hotel_address')) {
-            normalized['location'] = normalized['hotel_address'];
-          }
-          if (!normalized.containsKey('star') && normalized.containsKey('hotel_star')) {
-            normalized['star'] = normalized['hotel_star'];
-          }
-          if (!normalized.containsKey('image') && normalized.containsKey('logo')) {
-            normalized['image'] = normalized['logo'];
-          }
-          if (normalized.containsKey('facilities') && normalized['facilities'] is String) {
-            try {
-              normalized['facilities'] = jsonDecode(normalized['facilities'] as String);
-            } catch (_) {}
-          }
-          if (normalized.containsKey('images') && normalized['images'] is String) {
-            try {
-              normalized['images'] = jsonDecode(normalized['images'] as String);
-            } catch (_) {}
-          }
-          setState(() => _hotelInfo = normalized);
-        }
+        setState(() => _hotelInfo = result.data);
       }
     } catch (e) {
-      debugPrint('鉁?hotelDetail: $e');
+      debugPrint('hotelDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoadingHotel = false);
     }
@@ -162,13 +104,13 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       
       if (result.success && mounted) {
         final rooms = result.data ?? [];
-        debugPrint('🏨 [HotelDetail] Loaded rooms: ${rooms.length} types. First room ID: ${rooms.isNotEmpty ? (rooms[0]['room_id'] ?? rooms[0]['id']) : 'none'}');
+        debugPrint('🏨 [HotelDetail] Loaded rooms: ${rooms.length} types. First room ID: ${rooms.isNotEmpty ? rooms[0].id : 'none'}');
         setState(() => _rooms = rooms);
       } else if (mounted) {
         debugPrint('[HotelDetail] 房型查询失败: ${result.message}');
       }
     } catch (e) {
-      debugPrint('鉁?rooms: $e');
+      debugPrint('rooms: $e');
     } finally {
       if (mounted) setState(() => _isLoadingRooms = false);
     }
@@ -245,12 +187,9 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Widget _buildSliverAppBar(BuildContext context) {
-    final rawImage = _hotelInfo?['image'];
-    String imageUrl = 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80';
-    if (rawImage is String && rawImage.isNotEmpty) {
-      imageUrl = rawImage;
-    } else if (rawImage is List && rawImage.isNotEmpty) {
-      imageUrl = rawImage.first.toString();
+    String imageUrl = _hotelInfo?.displayImage ?? '';
+    if (imageUrl.isEmpty) {
+      imageUrl = 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80';
     }
     return SliverAppBar(
       expandedHeight: 240,
@@ -289,9 +228,9 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_hotelInfo?['name'] ?? '智联酒店', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(_hotelInfo?.hotelName ?? '智联酒店', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('${_safeString(_hotelInfo?['star'])}星级 | 智慧酒店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text('${_hotelInfo?.effectiveStar ?? 5}星级 | 智慧酒店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -301,19 +240,10 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
               _buildTag('智慧客控', Colors.blue.withValues(alpha: 0.1), Colors.blue),
               _buildTag('免费停车', AppColors.background, AppColors.textSecondary),
               // 如果有设施列表，安全地处理
-              if (_hotelInfo?['facilities'] != null)
+              if (_hotelInfo?.facilities != null)
                 ...(() {
-                  final facilities = _hotelInfo!['facilities'];
-                  if (facilities is List) {
-                    return facilities.take(2).map((f) => _buildTag(f.toString(), AppColors.background, AppColors.textSecondary)).toList();
-                  } else if (facilities is String) {
-                    // 如果后端返回的是逗号分隔的字符串，尝试拆分
-                    if (facilities.contains(',')) {
-                      return facilities.split(',').take(2).map((f) => _buildTag(f.trim(), AppColors.background, AppColors.textSecondary)).toList();
-                    }
-                    return [_buildTag(facilities, AppColors.background, AppColors.textSecondary)];
-                  }
-                  return <Widget>[];
+                  final facilities = _hotelInfo!.facilities!;
+                  return facilities.take(2).map((f) => _buildTag(f, AppColors.background, AppColors.textSecondary)).toList();
                 })(),
             ],
           ),
@@ -341,7 +271,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(_safeString(_hotelInfo?['location'], defaultVal: '酒店地址加载中...'), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text(_hotelInfo?.displayAddress ?? '酒店地址加载中...', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
@@ -413,27 +343,19 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     _fetchRooms();
   }
 
-  Widget _buildRoomItem(BuildContext context, dynamic room) {
-    final rawImg = room['images'];
+  Widget _buildRoomItem(BuildContext context, RoomType room) {
     String imageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
-    if (rawImg is String && rawImg.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawImg);
-        if (decoded is List && decoded.isNotEmpty) imageUrl = decoded.first.toString();
-      } catch (_) {
-        imageUrl = rawImg;
-      }
-    } else if (rawImg is List && rawImg.isNotEmpty) {
-      imageUrl = rawImg.first.toString();
+    if (room.images != null && room.images!.isNotEmpty) {
+      imageUrl = room.images!.first;
     }
-    final originalPrice = double.tryParse((room['room_price'] ?? 0).toString()) ?? 0.0;
+    final originalPrice = room.basePrice;
     
     // 获取会员折扣
-    final totalSpent = double.tryParse(ref.read(memberServiceProvider).assets?['total_spent']?.toString() ?? '0') ?? 0;
+    final totalSpent = ref.read(memberServiceProvider).cachedMember?.totalSpent ?? 0;
     final level = MemberLevel.fromExperience(totalSpent.floor());
     final discountedPrice = originalPrice * level.discount;
 
-    final roomName = room['room_name'] ?? room['name'] ?? room['room_number']?.toString() ?? '标准间';
+    final roomName = room.name;
 
     return Container(
       color: Colors.white,
@@ -464,15 +386,15 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                   children: [
                     const Icon(Icons.aspect_ratio, size: 12, color: AppColors.textHint),
                     const SizedBox(width: 4),
-                    Text('${room['area'] ?? 20}m²', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text('${room.area ?? 20}m²', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                     const SizedBox(width: 12),
                     const Icon(Icons.king_bed_outlined, size: 12, color: AppColors.textHint),
                     const SizedBox(width: 4),
-                    Text(room['bed_type'] ?? room['bedType'] ?? '大床', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(room.bedType ?? '大床', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                     const SizedBox(width: 12),
                     const Icon(Icons.person_outline, size: 12, color: AppColors.textHint),
                     const SizedBox(width: 4),
-                    Text('${room['max_guests'] ?? 2}人', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text('${room.maxGuests}人', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -480,11 +402,11 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                   children: [
                     const Icon(Icons.coffee_outlined, size: 12, color: AppColors.success),
                     const SizedBox(width: 4),
-                    Text(_parseBool(room['has_breakfast']) ? '含早餐' : '不含早', style: const TextStyle(color: AppColors.success, fontSize: 11)),
+                    Text(_parseBool(room.facilities?.any((f) => f.contains('早餐') || f.contains('breakfast')) ?? false) ? '含早餐' : '不含早', style: const TextStyle(color: AppColors.success, fontSize: 11)),
                     const SizedBox(width: 12),
                     const Icon(Icons.wifi, size: 12, color: AppColors.success),
                     const SizedBox(width: 4),
-                    Text(_parseBool(room['has_wifi']) ? '免费无线网络' : '无网络', style: const TextStyle(color: AppColors.success, fontSize: 11)),
+                    Text(_parseBool(room.facilities?.any((f) => f.contains('WiFi') || f.contains('wifi') || f.contains('网络')) ?? false) ? '免费无线网络' : '无网络', style: const TextStyle(color: AppColors.success, fontSize: 11)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -527,11 +449,12 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                               }
                               if (!context.mounted) return;
                               context.push('/booking-flow', extra: {
-                                  'hotelName': _hotelInfo?['name'] ?? '智联酒店',
+                                  'hotelName': _hotelInfo?.hotelName ?? '智联酒店',
                                   'hotelId': widget.hotelId ?? 1,
                                   'roomType': roomName,
                                   'price': discountedPrice,
-                                  'roomId': room['room_id'] ?? room['id'] ?? 0,
+                                  'roomId': room.id,
+                                  'roomTypeId': room.id,
                                   'checkInDate': _checkInDate,
                                   'checkOutDate': _checkOutDate,
                                 });
@@ -545,7 +468,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text('仅剩${room['available_count'] ?? 1}间', style: const TextStyle(color: AppColors.textHint, fontSize: 10)),
+                        Text('仅剩${room.availableCount ?? 1}间', style: const TextStyle(color: AppColors.textHint, fontSize: 10)),
                       ],
                     ),
                   ],
@@ -669,14 +592,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
       child: Text(label, style: TextStyle(color: text, fontSize: 10)),
     );
-  }
-
-  String _safeString(dynamic value, {String defaultVal = '5'}) {
-    if (value == null) return defaultVal;
-    if (value is String) return value;
-    if (value is List && value.isNotEmpty) return value.first.toString();
-    if (value is num) return value.toString();
-    return defaultVal;
   }
 
   bool _parseBool(dynamic value) {

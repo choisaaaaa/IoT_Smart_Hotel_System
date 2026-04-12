@@ -84,13 +84,8 @@ export class RoomTypeService {
       const sqlMessage = dbError?.sqlMessage || '';
 
       if (dbError?.code === 'ER_DUP_ENTRY') {
-        if (sqlMessage.includes('room_types.name')) {
-          serviceError.message = '房型名称已存在，请更换名称后重试';
-          serviceError.statusCode = 409;
-          throw serviceError;
-        }
-        if (sqlMessage.includes('room_types.code')) {
-          serviceError.message = '房型编码已存在，请更换编码后重试';
+        if (sqlMessage.includes('uk_hotel_code')) {
+          serviceError.message = '该酒店下已存在相同编码的房型，请更换编码后重试';
           serviceError.statusCode = 409;
           throw serviceError;
         }
@@ -133,18 +128,12 @@ export class RoomTypeService {
       const sqlMessage = dbError?.sqlMessage || '';
 
       if (dbError?.code === 'ER_DUP_ENTRY') {
-        if (sqlMessage.includes('room_types.name')) {
-          serviceError.message = '房型名称已存在，请更换名称后重试';
-          serviceError.statusCode = 409;
-          throw serviceError;
-        }
-        if (sqlMessage.includes('room_types.code')) {
-          serviceError.message = '房型编码已存在，请更换编码后重试';
+        if (sqlMessage.includes('uk_hotel_code')) {
+          serviceError.message = '该酒店下已存在相同编码的房型，请更换编码后重试';
           serviceError.statusCode = 409;
           throw serviceError;
         }
       }
-
       serviceError.message = '更新房型失败，请检查输入后重试';
       serviceError.statusCode = 500;
       throw serviceError;

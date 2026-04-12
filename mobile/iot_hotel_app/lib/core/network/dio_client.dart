@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'api_interceptor.dart';
@@ -10,15 +11,20 @@ class DioClient {
 
   late final Dio dio;
 
+  static String _utf8Decoder(List<int> responseBytes, RequestOptions options, ResponseBody? responseBody) {
+    return utf8.decode(responseBytes, allowMalformed: true);
+  }
+
   void init() {
     dio = Dio(BaseOptions(
       baseUrl: ApiConstants.baseUrl,
       connectTimeout: const Duration(milliseconds: ApiConstants.connectTimeout),
       receiveTimeout: const Duration(milliseconds: ApiConstants.receiveTimeout),
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept': 'application/json; charset=utf-8',
       },
+      responseDecoder: _utf8Decoder,
     ));
 
     dio.interceptors.addAll([
@@ -94,7 +100,7 @@ class _CompactLogInterceptor extends Interceptor {
     final path = options.uri.path;
     // 屏蔽环境监测API的请求日志
     if (!path.contains('/environment')) {
-      debugPrint('→ ${options.method} ${path}');
+      debugPrint('→ ${options.method} $path');
     }
     handler.next(options);
   }

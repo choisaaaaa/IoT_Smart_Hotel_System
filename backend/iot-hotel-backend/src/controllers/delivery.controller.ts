@@ -8,20 +8,30 @@ export const get = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, pageSize = 10, status } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
+    const hotelId = req.user?.hotel_id;
     
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
+    // 按酒店过滤：通过 room_id 关联 rooms 表
+    if (hotelId) {
+      whereClause += ' AND r.hotel_id = ?';
+      params.push(hotelId);
+    }
+    
     if (status) {
-      whereClause += ' AND status = ?';
+      whereClause += ' AND d.status = ?';
       params.push(status);
     }
     
-    const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM delivery_orders ${whereClause}`, params);
+    const [totalRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id ${whereClause}`, 
+      params
+    );
     const total = (totalRows[0] as any).total;
     
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT d.*, r.room_number FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id ${whereClause} ORDER BY d.id DESC LIMIT ? OFFSET ?`,
+      `SELECT d.*, r.room_number, r.hotel_id FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id ${whereClause} ORDER BY d.id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
     );
     

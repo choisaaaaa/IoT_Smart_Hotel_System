@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
+import '../models/booking.dart';
 
 class BookingService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<Map<String, dynamic>>> getBookings({
+  Future<ApiResult<List<Booking>>> getBookings({
     int page = 1,
     int pageSize = 10,
     String? status,
@@ -25,9 +26,23 @@ class BookingService {
           'check_in_date': checkInDate,
         }..removeWhere((key, value) => value == null),
       );
-      
+
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        final data = response.data['data'];
+        List<dynamic> rawList;
+        if (data is Map && data.containsKey('list')) {
+          rawList = List<dynamic>.from(data['list'] ?? []);
+        } else if (data is List) {
+          rawList = List<dynamic>.from(data);
+        } else if (data is Map && data.containsKey('bookings')) {
+          rawList = List<dynamic>.from(data['bookings'] ?? []);
+        } else {
+          rawList = [];
+        }
+        final bookings = rawList
+            .map((b) => Booking.fromJson(b as Map<String, dynamic>))
+            .toList();
+        return ApiResult.success(bookings);
       }
       return ApiResult.failure(response.data['message'] ?? '获取订单失败');
     } catch (e) {
@@ -35,11 +50,12 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> getBookingById(int id) async {
+  Future<ApiResult<Booking>> getBookingById(int id) async {
     try {
       final response = await _dioClient.get('${ApiConstants.bookings}/$id');
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Booking.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '获取详情失败');
     } catch (e) {
@@ -47,11 +63,12 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> createBooking(Map<String, dynamic> data) async {
+  Future<ApiResult<Booking>> createBooking(Map<String, dynamic> data) async {
     try {
       final response = await _dioClient.post(ApiConstants.bookings, data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Booking.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '创建订单失败');
     } catch (e) {
@@ -59,14 +76,15 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> lookupBooking(String keyword) async {
+  Future<ApiResult<Booking>> lookupBooking(String keyword) async {
     try {
       final response = await _dioClient.get(
         '${ApiConstants.bookings}/lookup',
         queryParameters: {'keyword': keyword},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Booking.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '查询订单失败');
     } catch (e) {
@@ -89,7 +107,8 @@ class BookingService {
                 b['booking_no']?.toString() == keyword ||
                 b['guest_phone']?.toString() == keyword ||
                 b['guest_name']?.toString() == keyword) {
-              return ApiResult.success(Map<String, dynamic>.from(b));
+              return ApiResult.success(
+                  Booking.fromJson(Map<String, dynamic>.from(b)));
             }
           }
         }
@@ -146,11 +165,15 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> checkinOnline(int bookingId, Map<String, dynamic> data) async {
+  Future<ApiResult<Booking>> checkinOnline(
+      int bookingId, Map<String, dynamic> data) async {
     try {
-      final response = await _dioClient.post('${ApiConstants.bookings}/$bookingId/checkin-online', data: data);
+      final response = await _dioClient.post(
+          '${ApiConstants.bookings}/$bookingId/checkin-online',
+          data: data);
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Booking.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '在线入住办理失败');
     } catch (e) {
@@ -185,11 +208,19 @@ class BookingService {
 
   Future<ApiResult<Map<String, dynamic>>> extendStay(int bookingId, {
     required DateTime newCheckOutDate,
+    int? couponId,
+    int? usedPoints,
+    String? paymentMethod,
   }) async {
     try {
       final response = await _dioClient.put(
         '${ApiConstants.bookings}/$bookingId/extend',
-        data: {'check_out_date': newCheckOutDate.toIso8601String().split('T')[0]},
+        data: {
+          'new_check_out_date': newCheckOutDate.toIso8601String().split('T')[0],
+          if (couponId != null) 'coupon_id': couponId,
+          if (usedPoints != null && usedPoints > 0) 'used_points': usedPoints,
+          if (paymentMethod != null) 'payment_method': paymentMethod,
+        },
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>? ?? {});
@@ -200,7 +231,29 @@ class BookingService {
     }
   }
 
-  /// 拒绝预入住申请
+  Future<ApiResult<Map<String, dynamic>>> calculateExtendPrice(int bookingId, {
+    required DateTime newCheckOutDate,
+    int? couponId,
+    int? usedPoints,
+  }) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.bookings}/$bookingId/extend-price',
+        data: {
+          'new_check_out_date': newCheckOutDate.toIso8601String().split('T')[0],
+          if (couponId != null) 'coupon_id': couponId,
+          if (usedPoints != null && usedPoints > 0) 'used_points': usedPoints,
+        },
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '计算续住价格失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<void>> rejectPreCheckin(int bookingId) async {
     try {
       final response = await _dioClient.put(
@@ -215,7 +268,6 @@ class BookingService {
     }
   }
 
-  /// 计算预订价格
   Future<ApiResult<Map<String, dynamic>>> calculatePrice({
     required int roomId,
     required DateTime checkInDate,
@@ -238,7 +290,7 @@ class BookingService {
           if (ratePlanId != null) 'rate_plan_id': ratePlanId,
         },
       );
-      
+
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
@@ -248,7 +300,7 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>?>> getMyCurrentStay() async {
+  Future<ApiResult<Booking?>> getMyCurrentStay() async {
     List<dynamic> extractList(dynamic data) {
       if (data is Map && data.containsKey('list')) {
         return List<dynamic>.from(data['list'] ?? []);
@@ -267,7 +319,8 @@ class BookingService {
         final list = extractList(response.data['data']);
         final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
         if (checkedIn.isNotEmpty) {
-          return ApiResult.success(Map<String, dynamic>.from(checkedIn.first));
+          return ApiResult.success(
+              Booking.fromJson(Map<String, dynamic>.from(checkedIn.first)));
         }
       }
     } catch (e) {
@@ -283,7 +336,8 @@ class BookingService {
         final list = extractList(response.data['data']);
         final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
         if (checkedIn.isNotEmpty) {
-          return ApiResult.success(Map<String, dynamic>.from(checkedIn.first));
+          return ApiResult.success(
+              Booking.fromJson(Map<String, dynamic>.from(checkedIn.first)));
         }
       }
     } catch (e) {
@@ -305,9 +359,11 @@ class BookingService {
             if (lookupData != null && lookupData['status'] == 'checked_in') {
               final fullResponse = await _dioClient.get('${ApiConstants.bookings}/${lookupData['id']}');
               if (fullResponse.statusCode == 200 && fullResponse.data['code'] == 200) {
-                return ApiResult.success(Map<String, dynamic>.from(fullResponse.data['data']));
+                return ApiResult.success(
+                    Booking.fromJson(Map<String, dynamic>.from(fullResponse.data['data'])));
               }
-              return ApiResult.success(Map<String, dynamic>.from(lookupData));
+              return ApiResult.success(
+                  Booking.fromJson(Map<String, dynamic>.from(lookupData)));
             }
           }
         }
@@ -322,16 +378,16 @@ class BookingService {
 
 final bookingServiceProvider = Provider<BookingService>((ref) => BookingService());
 
-final userBookingsProvider = FutureProvider.autoDispose((ref) async {
+final userBookingsProvider = FutureProvider.autoDispose<List<Booking>>((ref) async {
   final service = ref.read(bookingServiceProvider);
   final result = await service.getBookings();
   if (result.success) {
-    return result.data?['list'] as List<dynamic>? ?? [];
+    return result.data ?? [];
   }
-  return <dynamic>[];
+  return <Booking>[];
 });
 
-final receptionBookingsProvider = FutureProvider.autoDispose.family<List<dynamic>, Map<String, dynamic>>((ref, params) async {
+final receptionBookingsProvider = FutureProvider.autoDispose.family<List<Booking>, Map<String, dynamic>>((ref, params) async {
   final service = ref.read(bookingServiceProvider);
   final result = await service.getBookings(
     page: params['page'] ?? 1,
@@ -340,7 +396,7 @@ final receptionBookingsProvider = FutureProvider.autoDispose.family<List<dynamic
     guestName: params['guestName'],
   );
   if (result.success) {
-    return result.data?['list'] as List<dynamic>? ?? [];
+    return result.data ?? [];
   }
-  return <dynamic>[];
+  return <Booking>[];
 });

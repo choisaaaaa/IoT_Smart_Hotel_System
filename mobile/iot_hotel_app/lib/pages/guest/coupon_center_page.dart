@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
-import '../../services/coupon_service.dart';
+import '../../core/network/dio_client.dart';
 import '../../services/member_service.dart';
+import '../../models/coupon.dart';
 
 class CouponCenterPage extends ConsumerStatefulWidget {
   const CouponCenterPage({super.key});
@@ -17,7 +16,7 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  List<dynamic> _myCoupons = [];
+  List<Coupon> _myCoupons = [];
   String _currentFilter = 'all';
 
   final List<Map<String, String>> _tabs = [
@@ -46,24 +45,54 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
     super.dispose();
   }
 
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    setState(() => _currentFilter = _tabs[_tabController.index]['key']!);
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(memberServiceProvider).getMyCoupons();
+      if (mounted) {
+        setState(() {
+          _myCoupons = result.data ?? [];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleRedeem() async {
     final code = _redeemController.text.trim();
-    if (code.isEmpty) return;
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入兑换码')));
+      return;
+    }
 
     setState(() => _isRedeeming = true);
     try {
-      final result = await ref.read(couponServiceProvider).redeemCouponByCode(code);
-      if (result.success && mounted) {
+      final dioClient = DioClient();
+      final response = await dioClient.post('/coupons/redeem', data: {'code': code});
+      if (mounted) {
+        if (response.statusCode == 200 && response.data['code'] == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('兑换成功！'), backgroundColor: AppColors.success),
+          );
+          _redeemController.clear();
+          _loadData();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response.data['message'] ?? '兑换失败')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('兑换成功！'), backgroundColor: AppColors.success),
-        );
-        _redeemController.clear();
-        _loadData();
-        // 刷新会员资产以更新优惠券数量
-        ref.invalidate(myAssetsProvider);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message ?? '兑换失败'), backgroundColor: AppColors.error),
+          const SnackBar(content: Text('兑换失败，请重试')),
         );
       }
     } finally {
@@ -71,112 +100,17 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
     }
   }
 
-  void _onTabChanged() {
-    if (_tabController.indexIsChanging) return;
-    final filter = _tabs[_tabController.index]['key']!;
-    if (filter != _currentFilter) {
-      _currentFilter = filter;
-      setState(() {});
-    }
-  }
-
-  Future<void> _loadData() async {
-    if (!_isLoading && _myCoupons.isNotEmpty) {
-      // 已经加载过且有数据，不再强制全页 loading
-    } else {
-      setState(() => _isLoading = true);
-    }
-    
-    try {
-      debugPrint('🎫 [Coupons] Loading data...');
-      await _loadMyCoupons();
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadMyCoupons() async {
-    final result = await ref.read(memberServiceProvider).getMyCoupons();
-    if (result.success && mounted) {
-      setState(() => _myCoupons = result.data ?? []);
-    }
-  }
-
-  List<dynamic> get _filteredCoupons {
-    if (_currentFilter == 'all') return _myCoupons;
-    return _myCoupons.where((c) {
-      final status = c['status']?.toString() ?? '';
-      switch (_currentFilter) {
-        case 'unused':
-          return status == 'unused' || status == 'active';
-        case 'used':
-          return status == 'used';
-        case 'expired':
-          return status == 'expired';
-        default:
-          return true;
-      }
-    }).toList();
-  }
-
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      return DateFormat('yyyy.MM.dd').format(DateTime.parse(dateStr));
-    } catch (e) {
-      return dateStr;
-    }
-  }
-
-  Color _getCouponColor(String? type) {
-    switch (type) {
-      case 'discount':
-        return AppColors.primary;
-      case 'cash':
-        return AppColors.secondary;
-      case 'gift':
-        return AppColors.success;
+  List<Coupon> get _filteredCoupons {
+    switch (_currentFilter) {
+      case 'unused':
+        return _myCoupons.where((c) => c.status == 'active' && !c.isExpired).toList();
+      case 'used':
+        return _myCoupons.where((c) => c.status == 'used').toList();
+      case 'expired':
+        return _myCoupons.where((c) => c.isExpired || c.status == 'expired').toList();
       default:
-        return AppColors.primary;
+        return _myCoupons;
     }
-  }
-
-  String _getCouponValue(Map<String, dynamic> coupon) {
-    final type = coupon['type']?.toString();
-    if (type == 'discount') {
-      final discount = coupon['discount'] ?? coupon['value'];
-      return '$discount折';
-    }
-    final value = coupon['value'] ?? coupon['amount'] ?? 0;
-    return '¥$value';
-  }
-
-  String _getCouponTypeLabel(String? type) {
-    switch (type) {
-      case 'discount':
-        return '折扣券';
-      case 'cash':
-        return '现金券';
-      case 'gift':
-        return '礼品券';
-      default:
-        return '优惠券';
-    }
-  }
-
-  bool _isCouponExpired(Map<String, dynamic> coupon) {
-    final endDate = coupon['end_date'] ?? coupon['expire_date'];
-    if (endDate == null) return false;
-    try {
-      return DateTime.parse(endDate.toString()).isBefore(DateTime.now());
-    } catch (e) {
-      return false;
-    }
-  }
-
-  bool _isCouponUsed(Map<String, dynamic> coupon) {
-    final status = coupon['status']?.toString() ?? '';
-    return status == 'used';
   }
 
   @override
@@ -186,276 +120,186 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Text('优惠券中心',
-            style: GoogleFonts.notoSansSc(
-                fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('优惠券', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: GoogleFonts.notoSansSc(fontSize: 14),
-          tabs: _tabs.map((tab) => Tab(text: tab['label'])).toList(),
+          tabs: _tabs.map((t) => Tab(text: t['label'])).toList(),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(child: _buildRedeemSection()),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Text('我的优惠券',
-                          style: GoogleFonts.notoSansSc(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  _filteredCoupons.isEmpty
-                      ? SliverFillRemaining(
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.confirmation_num_outlined,
-                                    size: 64, color: AppColors.textHint),
-                                const SizedBox(height: 16),
-                                Text('暂无优惠券',
-                                    style: GoogleFonts.notoSansSc(
-                                        fontSize: 16, color: AppColors.textSecondary)),
-                              ],
-                            ),
-                          ),
-                        )
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) =>
-                                _buildCouponCard(_filteredCoupons[index]),
-                            childCount: _filteredCoupons.length,
-                          ),
-                        ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
+      body: Column(
+        children: [
+          _buildRedeemBar(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _buildCouponList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRedeemBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _redeemController,
+              decoration: InputDecoration(
+                hintText: '输入兑换码',
+                hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+                prefixIcon: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary, size: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.divider)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.divider)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton(
+            onPressed: _isRedeeming ? null : _handleRedeem,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: _isRedeeming
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('兑换'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCouponList() {
+    final coupons = _filteredCoupons;
+
+    if (coupons.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.confirmation_number_outlined, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            const Text('暂无优惠券', style: TextStyle(color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: coupons.length,
+        itemBuilder: (context, index) => _buildCouponCard(coupons[index]),
+      ),
+    );
+  }
+
+  Widget _buildCouponCard(Coupon coupon) {
+    final isAvailable = coupon.isAvailable;
+    final isUsed = coupon.status == 'used';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAvailable ? AppColors.primary.withValues(alpha: 0.2) : AppColors.divider.withValues(alpha: 0.3),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Container(
+              width: 100,
+              decoration: BoxDecoration(
+                gradient: isAvailable
+                    ? const LinearGradient(colors: [AppColors.secondary, AppColors.primary])
+                    : LinearGradient(colors: [AppColors.textHint, AppColors.textHint.withValues(alpha: 0.7)]),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(coupon.displayValue, style: TextStyle(
+                    color: isAvailable ? Colors.white : Colors.white70,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  )),
+                  const SizedBox(height: 4),
+                  Text(coupon.displayCondition, style: TextStyle(
+                    color: isAvailable ? Colors.white70 : Colors.white54,
+                    fontSize: 10,
+                  )),
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildRedeemSection() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('兑换优惠券',
-              style: GoogleFonts.notoSansSc(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TextField(
-                    controller: _redeemController,
-                    decoration: const InputDecoration(
-                      hintText: '请输入兑换码',
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed: _isRedeeming ? null : _handleRedeem,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                  ),
-                  child: _isRedeeming
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('兑换', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCouponCard(Map<String, dynamic> coupon) {
-    final isUsed = _isCouponUsed(coupon);
-    final isExpired = _isCouponExpired(coupon);
-    final isDisabled = isUsed || isExpired;
-    final color = _getCouponColor(coupon['type']?.toString());
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: isDisabled ? Colors.grey.shade100 : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDisabled ? AppColors.divider : color.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 100,
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
-                    color: isDisabled
-                        ? AppColors.textHint.withValues(alpha: 0.1)
-                        : color.withValues(alpha: 0.1),
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        _getCouponValue(coupon),
-                        style: GoogleFonts.notoSansSc(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: isDisabled ? AppColors.textHint : color,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(coupon.name, style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: isAvailable ? AppColors.textPrimary : AppColors.textHint,
+                    )),
+                    const SizedBox(height: 6),
+                    Text('有效期至 ${coupon.displayExpiry}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    if (isUsed)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.textHint.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
                         ),
+                        child: const Text('已使用', style: TextStyle(color: AppColors.textHint, fontSize: 10)),
+                      )
+                    else if (coupon.isExpired)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('已过期', style: TextStyle(color: AppColors.error, fontSize: 10)),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('可使用', style: TextStyle(color: AppColors.primary, fontSize: 10)),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getCouponTypeLabel(coupon['type']?.toString()),
-                        style: GoogleFonts.notoSansSc(
-                          fontSize: 11,
-                          color: isDisabled ? AppColors.textHint : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          coupon['name'] ?? coupon['title'] ?? '优惠券',
-                          style: GoogleFonts.notoSansSc(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: isDisabled ? AppColors.textHint : AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        if (coupon['min_amount'] != null &&
-                            double.tryParse(coupon['min_amount'].toString()) != null &&
-                            double.parse(coupon['min_amount'].toString()) > 0)
-                          Text(
-                            '满${coupon['min_amount']}可用',
-                            style: GoogleFonts.notoSansSc(
-                              fontSize: 12,
-                              color: isDisabled ? AppColors.textHint : AppColors.textSecondary,
-                            ),
-                          ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${_formatDate(coupon['start_date']?.toString())} - ${_formatDate(coupon['end_date']?.toString())}',
-                          style: GoogleFonts.notoSansSc(
-                            fontSize: 11,
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (!isDisabled)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: SizedBox(
-                      height: 32,
-                      child: FilledButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('请在预订时使用优惠券')),
-                          );
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: color,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: Text('去使用',
-                            style: GoogleFonts.notoSansSc(fontSize: 12, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (isUsed)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Transform.rotate(
-                angle: -0.3,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.textHint),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text('已使用',
-                      style: GoogleFonts.notoSansSc(
-                          fontSize: 10, color: AppColors.textHint)),
+                  ],
                 ),
               ),
             ),
-          if (isExpired && !isUsed)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Transform.rotate(
-                angle: -0.3,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.textHint),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text('已过期',
-                      style: GoogleFonts.notoSansSc(
-                          fontSize: 10, color: AppColors.textHint)),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

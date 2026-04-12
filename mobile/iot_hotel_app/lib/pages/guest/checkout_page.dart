@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
+import '../../models/booking.dart';
 
 class CheckoutPage extends ConsumerStatefulWidget {
   final int bookingId;
@@ -16,7 +17,7 @@ class CheckoutPage extends ConsumerStatefulWidget {
 }
 
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
-  Map<String, dynamic>? _booking;
+  Booking? _booking;
   bool _isLoading = true;
   bool _isCheckingOut = false;
   int _currentStep = 0;
@@ -55,28 +56,21 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '-';
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
     try {
-      return DateFormat('yyyy年MM月dd日').format(DateTime.parse(dateStr));
+      return DateFormat('yyyy年MM月dd日').format(date);
     } catch (e) {
-      return dateStr;
+      return '-';
     }
   }
 
   int _calculateNights() {
-    final checkIn = _booking?['check_in_date'];
-    final checkOut = _booking?['check_out_date'];
-    if (checkIn == null || checkOut == null) return 1;
-    try {
-      return DateTime.parse(checkOut).difference(DateTime.parse(checkIn)).inDays;
-    } catch (e) {
-      return 1;
-    }
+    return _booking?.nights ?? 1;
   }
 
   double _getTotalPrice() {
-    return double.tryParse(_booking?['total_price']?.toString() ?? '0') ?? 0.0;
+    return _booking?.totalPrice ?? 0.0;
   }
 
   Future<void> _performCheckout() async {
@@ -275,14 +269,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _booking?['hotel_name'] ?? '智联酒店',
+                      _booking?.hotelName ?? '智联酒店',
                       style: GoogleFonts.notoSansSc(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      '${_booking?['room_type'] ?? '标准间'} · ${_booking?['room_id'] ?? '-'}号房',
+                      '${_booking?.displayRoomType} · ${_booking?.roomNumber ?? '${_booking?.roomId}号房'}',
                       style: GoogleFonts.notoSansSc(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -302,7 +296,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   children: [
                     Text('入住日期',
                         style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textHint)),
-                    Text(_formatDate(_booking?['check_in_date']),
+                    Text(_formatDate(_booking?.checkInDate),
                         style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
@@ -313,7 +307,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   children: [
                     Text('退房日期',
                         style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textHint)),
-                    Text(_formatDate(_booking?['check_out_date']),
+                    Text(_formatDate(_booking?.checkOutDate),
                         style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
@@ -563,8 +557,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildConfirmRow('房间', '${_booking?['room_type'] ?? '标准间'} ${_booking?['room_id'] ?? '-'}号'),
-          _buildConfirmRow('退房日期', _formatDate(_booking?['check_out_date'])),
+          _buildConfirmRow('房间', '${_booking?.displayRoomType} ${_booking?.roomNumber ?? '${_booking?.roomId}号房'}'),
+          _buildConfirmRow('退房日期', _formatDate(_booking?.checkOutDate)),
           _buildConfirmRow('应付金额', '¥${totalPrice.toStringAsFixed(2)}'),
           if (_invoiceTitleController.text.trim().isNotEmpty)
             _buildConfirmRow('发票抬头', _invoiceTitleController.text.trim()),
@@ -742,8 +736,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 onPressed: () {
                   context.push('/review-submit/${widget.bookingId}', extra: {
                     'bookingId': widget.bookingId,
-                    'hotelId': _booking?['hotel_id'],
-                    'hotelName': _booking?['hotel_name'],
+                    'hotelId': _booking?.hotelId,
+                    'hotelName': _booking?.hotelName,
                   });
                 },
                 style: OutlinedButton.styleFrom(

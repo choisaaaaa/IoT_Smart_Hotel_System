@@ -2,14 +2,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
+import '../../services/favorite_service.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -238,11 +236,11 @@ class ProfilePage extends ConsumerWidget {
       error: (err, stack) => const SizedBox.shrink(),
       data: (apiResult) {
         if (!apiResult.success) return const SizedBox.shrink();
-        final assets = apiResult.data ?? {};
-        final double totalSpent = double.tryParse(assets['total_spent']?.toString() ?? '0') ?? 0;
-        final int currentExp = (assets['experience'] as num?)?.toInt() ?? totalSpent.floor();
+        final member = apiResult.data;
+        if (member == null) return const SizedBox.shrink();
+        final int currentExp = member.experience.floor();
         
-        final level = MemberLevel.fromKey(assets['member_level']?.toString() ?? 'standard');
+        final level = MemberLevel.fromKey(member.memberLevel);
         final nextExp = level.nextLevelExperience();
         final progress = (currentExp / nextExp).clamp(0.0, 1.0);
 
@@ -342,10 +340,10 @@ class ProfilePage extends ConsumerWidget {
         loading: () => const SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
         error: (err, stack) => const SizedBox.shrink(),
         data: (apiResult) {
-          final assets = apiResult.data ?? {};
-          final points = assets['points'] ?? '0';
-          final coupons = assets['coupons_count'] ?? '0';
-          final balance = assets['balance'] ?? '0.00';
+          final member = apiResult.data;
+          final points = member?.points ?? 0;
+          final coupons = member?.couponCount ?? 0;
+          final balance = member?.balance ?? 0.0;
           
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -410,10 +408,10 @@ class ProfilePage extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildOrderItem(Icons.account_balance_wallet_outlined, '待支付'),
-              _buildOrderItem(Icons.hotel_outlined, '待入住'),
-              _buildOrderItem(Icons.rate_review_outlined, '待评价'),
-              _buildOrderItem(Icons.receipt_long_outlined, '待开票'),
+              _buildOrderItem(Icons.account_balance_wallet_outlined, '待支付', onTap: () => context.push('/orders?tab=1')),
+              _buildOrderItem(Icons.hotel_outlined, '待入住', onTap: () => context.push('/orders?tab=2')),
+              _buildOrderItem(Icons.rate_review_outlined, '待评价', onTap: () => context.push('/orders?tab=4')),
+              _buildOrderItem(Icons.receipt_long_outlined, '待开票', onTap: () => context.push('/orders?tab=3')),
             ],
           ),
         ],
@@ -421,9 +419,9 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildOrderItem(IconData icon, String label) {
+  Widget _buildOrderItem(IconData icon, String label, {VoidCallback? onTap}) {
     return InkResponse(
-      onTap: () {},
+      onTap: onTap,
       radius: 35,
       child: Column(
         children: [
@@ -475,7 +473,7 @@ class ProfilePage extends ConsumerWidget {
                 children: [
                   Icon(Icons.history_rounded, size: 18, color: AppColors.textSecondary),
                   SizedBox(width: 4),
-                  Text('我看过的 19 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Text('浏览历史 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -487,12 +485,8 @@ class ProfilePage extends ConsumerWidget {
 
   Future<int> _getFavoritesCount(WidgetRef ref) async {
     try {
-      final userId = ref.read(authStateProvider).userId ?? '';
-      if (userId.isEmpty) return 0;
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('${AppConstants.favoriteHotelsKey}_$userId') ?? '[]';
-      final List<dynamic> decoded = jsonDecode(raw);
-      return decoded.length;
+      final result = await ref.read(favoriteServiceProvider).getFavorites();
+      return result.data?.length ?? 0;
     } catch (e) {
       return 0;
     }
@@ -523,7 +517,7 @@ class ProfilePage extends ConsumerWidget {
               _buildToolItem(Icons.person_outline_rounded, '账号管理', onTap: () => context.push('/personal-info')),
               _buildToolItem(Icons.people_outline_rounded, '常旅客', onTap: () => context.push('/frequent-guests')),
               _buildToolItem(Icons.receipt_long_outlined, '我的订单', onTap: () => context.push('/orders')),
-              _buildToolItem(Icons.headset_mic_outlined, '在线客服'),
+              _buildToolItem(Icons.headset_mic_outlined, '在线客服', onTap: () => context.push('/ai-butler')),
               _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
               _buildToolItem(Icons.card_travel_outlined, '自助退房', onTap: () => context.push('/orders')),
               _buildToolItem(Icons.update_outlined, '在线续住', onTap: () => context.push('/orders')),

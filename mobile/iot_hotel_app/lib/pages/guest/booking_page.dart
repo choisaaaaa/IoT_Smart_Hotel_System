@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/booking_service.dart';
 import '../../services/room_type_service.dart';
+import '../../models/booking.dart';
 
 class BookingPage extends ConsumerStatefulWidget {
   const BookingPage({super.key});
@@ -394,8 +395,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       if (!mounted) return;
 
       if (result.success) {
-        final bookingData = result.data ?? {};
-        final bookingId = bookingData['id'] ?? bookingData['booking_id'];
+        final booking = result.data;
+        final bookingId = booking?.id;
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -404,7 +405,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('预订编号：${bookingData['booking_no'] ?? bookingId ?? '-'}'),
+                Text('预订编号：${booking?.displayBookingNumber ?? bookingId ?? '-'}'),
                 const SizedBox(height: 8),
                 Text('${_nameController.text} · ${_phoneController.text}'),
                 const SizedBox(height: 4),
@@ -573,7 +574,7 @@ class _MyBookings extends ConsumerStatefulWidget {
 }
 
 class _MyBookingsState extends ConsumerState<_MyBookings> {
-  List<dynamic> _bookings = [];
+  List<Booking> _bookings = [];
   bool _isLoading = true;
 
   @override
@@ -587,13 +588,7 @@ class _MyBookingsState extends ConsumerState<_MyBookings> {
       final result =
           await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
       if (result.success && mounted) {
-        final data = result.data;
-        List<dynamic> list = [];
-        if (data != null && data.containsKey('list')) {
-          list = List<dynamic>.from(data['list'] ?? []);
-        } else if (data != null && data.containsKey('items')) {
-          list = List<dynamic>.from(data['items'] ?? []);
-        }
+        final list = result.data ?? [];
         setState(() {
           _bookings = list;
           _isLoading = false;
@@ -656,17 +651,17 @@ class _MyBookingsState extends ConsumerState<_MyBookings> {
         padding: const EdgeInsets.all(16),
         itemBuilder: (context, i) {
           final b = _bookings[i];
-          final status = b['status']?.toString() ?? '';
-          final roomNumber = b['room_number'] ?? '-';
-          final roomType = b['room_type'] ?? b['room_name'] ?? '';
-          final checkIn = b['check_in_date'] ?? b['check_in'] ?? '';
-          final checkOut = b['check_out_date'] ?? b['check_out'] ?? '';
-          final guestName = b['guest_name'] ?? '';
+          final status = b.status;
+          final roomNumber = b.roomNumber ?? '-';
+          final roomType = b.displayRoomType;
+          final checkIn = b.checkInDate.toIso8601String().split('T')[0];
+          final checkOut = b.checkOutDate.toIso8601String().split('T')[0];
+          final guestName = b.guestName ?? '';
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => context.push('/orders/${b['id']}'),
+              onTap: () => context.push('/orders/${b.id}'),
               child: ListTile(
                 isThreeLine: true,
                 leading: const Icon(Icons.bed, size: 32, color: AppColors.primary),

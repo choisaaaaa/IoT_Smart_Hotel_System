@@ -4,18 +4,44 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
+import '../models/member.dart';
+import '../models/coupon.dart';
 
 class MemberService {
   final DioClient _dioClient = DioClient();
-  Map<String, dynamic>? _assets;
-  Map<String, dynamic>? get assets => _assets;
+  Member? _cachedMember;
+  Member? get cachedMember => _cachedMember;
 
-  Future<ApiResult<Map<String, dynamic>>> getMyAssets() async {
+  Future<ApiResult<List<dynamic>>> getMemberList({String? search}) async {
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.members,
+        queryParameters: {if (search != null) 'search': search},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        List<dynamic> rawList;
+        if (data is List) {
+          rawList = List<dynamic>.from(data);
+        } else if (data is Map && data.containsKey('list')) {
+          rawList = List<dynamic>.from(data['list'] ?? []);
+        } else {
+          rawList = [];
+        }
+        return ApiResult.success(rawList);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取会员列表失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Member>> getMyAssets() async {
     try {
       final response = await _dioClient.get('${ApiConstants.members}/me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        _assets = response.data['data'] as Map<String, dynamic>;
-        return ApiResult.success(_assets!);
+        _cachedMember = Member.fromJson(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(_cachedMember!);
       }
       return ApiResult.failure(response.data['message'] ?? '获取资产失败');
     } catch (e) {
@@ -23,14 +49,16 @@ class MemberService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> recharge(double amount) async {
+  Future<ApiResult<Member>> recharge(double amount) async {
     try {
       final response = await _dioClient.post(
         '${ApiConstants.members}/recharge',
         data: {'amount': amount},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        final member = Member.fromJson(response.data['data'] as Map<String, dynamic>);
+        _cachedMember = member;
+        return ApiResult.success(member);
       }
       return ApiResult.failure(response.data['message'] ?? '充值失败');
     } catch (e) {
@@ -38,11 +66,23 @@ class MemberService {
     }
   }
 
-  Future<ApiResult<List<dynamic>>> getMyCoupons() async {
+  Future<ApiResult<List<Coupon>>> getMyCoupons() async {
     try {
       final response = await _dioClient.get('${ApiConstants.coupons}/me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(List<dynamic>.from(response.data['data']));
+        final data = response.data['data'];
+        List<dynamic> rawList;
+        if (data is List) {
+          rawList = List<dynamic>.from(data);
+        } else if (data is Map && data.containsKey('list')) {
+          rawList = List<dynamic>.from(data['list'] ?? []);
+        } else {
+          rawList = [];
+        }
+        final coupons = rawList
+            .map((c) => Coupon.fromJson(c as Map<String, dynamic>))
+            .toList();
+        return ApiResult.success(coupons);
       }
       return ApiResult.failure(response.data['message'] ?? '获取优惠券失败');
     } catch (e) {
@@ -59,7 +99,6 @@ class MemberService {
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'] as Map<String, dynamic>?;
         if (data != null) {
-          // 同步更新本地状态，确保即使不调用 getMyAssets 也能维持本地一致性
           await prefs.setString('last_checkin_date', today);
           return CheckinResult(
             alreadyCheckedIn: data['already_checked_in'] ?? false,
@@ -68,20 +107,17 @@ class MemberService {
           );
         }
       } else if (response.data['code'] == 400 || response.data['message']?.toString().contains('今日已签到') == true) {
-        // 后端明确返回已签到
         await prefs.setString('last_checkin_date', today);
         return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
       }
     } catch (e) {
       debugPrint('Backend checkin failed: $e');
-      // 如果后端失败，回退到本地检查
       final lastCheckin = prefs.getString('last_checkin_date') ?? '';
       if (lastCheckin == today) {
         return CheckinResult(alreadyCheckedIn: true, experience: 0, couponName: null);
       }
     }
 
-    // 本地 fallback (仅当后端彻底不可用时)
     final expGain = 10 + (DateTime.now().weekday == 7 ? 20 : 0);
     await prefs.setString('last_checkin_date', today);
     return CheckinResult(alreadyCheckedIn: false, experience: expGain, couponName: null);
@@ -103,7 +139,7 @@ class CheckinResult {
 
 final memberServiceProvider = Provider<MemberService>((ref) => MemberService());
 
-final myAssetsProvider = FutureProvider<ApiResult<Map<String, dynamic>>>((ref) async {
+final myAssetsProvider = FutureProvider<ApiResult<Member>>((ref) async {
   final service = ref.watch(memberServiceProvider);
   return service.getMyAssets();
 });

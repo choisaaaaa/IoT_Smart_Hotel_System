@@ -1,12 +1,17 @@
-﻿﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/logic/member_logic.dart';
 import '../../services/auth_service.dart';
 import '../../services/booking_service.dart';
 import '../../services/member_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/room_service.dart';
+import '../../models/coupon.dart';
+import '../../models/member.dart';
+import '../../models/room.dart';
 
 class BookingFlowPage extends ConsumerStatefulWidget {
   final String hotelName;
@@ -16,6 +21,7 @@ class BookingFlowPage extends ConsumerStatefulWidget {
   final int hotelId;
   final DateTime checkInDate;
   final DateTime checkOutDate;
+  final int? roomTypeId;
 
   const BookingFlowPage({
     super.key,
@@ -26,6 +32,7 @@ class BookingFlowPage extends ConsumerStatefulWidget {
     required this.hotelId,
     required this.checkInDate,
     required this.checkOutDate,
+    this.roomTypeId,
   });
 
   @override
@@ -39,44 +46,131 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   final _specialRequestController = TextEditingController();
   bool _isLoading = false;
   final int _roomCount = 1;
-  List<dynamic> _coupons = [];
-  dynamic _selectedCoupon;
-  // ignore: unused_field
-  bool _isLoadingCoupons = false;
-  String _paymentMethod = 'balance'; // balance, wechat, alipay
+  List<Coupon> _coupons = [];
+  Coupon? _selectedCoupon;
+  List<Room> _availableRooms = [];
+  Room? _selectedRoom;
+  bool _isLoadingRooms = false;
+  String _paymentMethod = 'balance';
   Map<String, dynamic>? _priceDetails;
+  bool _usePoints = false;
+  int _pointsToUse = 0;
+  Member? _member;
 
   @override
   void initState() {
     super.initState();
-    debugPrint('📝 [BookingFlow] Initialized with roomId: ${widget.roomId}, hotelName: ${widget.hotelName}');
     _loadUserInfo();
     _loadMemberInfo();
     _loadCoupons();
+    _loadAvailableRooms();
     _calculatePrice();
     _phoneController.addListener(_onPhoneChanged);
   }
 
   void _onPhoneChanged() {
-    // 只有当输入了完整的手机号（11位）时才重新计算价格，避免频繁调用
-    if (_phoneController.text.trim().length == 11) {
+    if (_phoneController.text.trim().length >= 11) {
       _calculatePrice();
     }
   }
 
+  Future<void> _loadAvailableRooms() async {
+    setState(() => _isLoadingRooms = true);
+    try {
+      final result = await ref.read(roomServiceProvider).getRooms(
+            status: 'available',
+            pageSize: 100,
+          );
+      if (result.success && mounted) {
+        final rawRooms = result.data ?? [];
+        final rooms = rawRooms.map((r) {
+          if (r is Room) return r;
+          return Room.fromJson(Map<String, dynamic>.from(r as Map));
+        }).toList();
+        final filtered = rooms.where((r) {
+          if (widget.roomTypeId != null && r.roomTypeId == widget.roomTypeId) {
+            return true;
+          }
+          final typeName = r.roomName ?? r.roomType;
+          return typeName == widget.roomType ||
+              typeName.contains(widget.roomType);
+        }).toList();
+        setState(() {
+          _availableRooms = filtered;
+          if (filtered.isNotEmpty) {
+            final initial = filtered.where((r) => r.id == widget.roomId).toList();
+            _selectedRoom = initial.isNotEmpty ? initial.first : filtered.first;
+          }
+        });
+        _calculatePrice();
+      }
+    } catch (e) {
+      debugPrint('loadAvailableRooms: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingRooms = false);
+    }
+  }
+
+  void _showRoomSelector() {
+    if (_availableRooms.isEmpty && !_isLoadingRooms) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('暂无更多可选房间')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('选择具体房间', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            if (_isLoadingRooms)
+              const Center(child: CircularProgressIndicator())
+            else
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: _availableRooms.map((room) {
+                  final isSelected = _selectedRoom?.id == room.id;
+                  return ChoiceChip(
+                    label: Text('${room.roomNumber}号房'),
+                    selected: isSelected,
+                    onSelected: (val) {
+                      if (val) {
+                        setState(() => _selectedRoom = room);
+                        _calculatePrice();
+                        Navigator.pop(ctx);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _calculatePrice() async {
-    final phone = _phoneController.text.trim().isNotEmpty 
-        ? _phoneController.text.trim() 
+    final phone = _phoneController.text.trim().isNotEmpty
+        ? _phoneController.text.trim()
         : (await ref.read(authServiceProvider).getCurrentUser())?.phone;
 
+    final targetRoomId = _selectedRoom?.id ?? widget.roomId;
+
     final result = await ref.read(bookingServiceProvider).calculatePrice(
-      roomId: widget.roomId,
-      checkInDate: widget.checkInDate,
-      checkOutDate: widget.checkOutDate,
-      guestPhone: phone,
-      couponId: _selectedCoupon?['id'],
-      usedPoints: _usePoints ? _pointsToUse : 0,
-    );
+          roomId: targetRoomId,
+          checkInDate: widget.checkInDate,
+          checkOutDate: widget.checkOutDate,
+          guestPhone: phone,
+          couponId: _selectedCoupon?.id,
+          usedPoints: _usePoints ? _pointsToUse : 0,
+        );
 
     if (result.success && mounted) {
       setState(() {
@@ -86,8 +180,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         }
       });
     } else if (mounted) {
-      debugPrint('❌ [BookingFlow] Price calculation failed: ${result.message}');
-      // 如果后端报错房间不存在，说明可能是 roomId 传递错误
       if (result.message?.contains('房间不存在') == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('获取房间信息失败，请尝试重新选择房间'), backgroundColor: AppColors.error),
@@ -96,40 +188,35 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     }
   }
 
-  bool _usePoints = false;
-  int _pointsToUse = 0;
-  Map<String, dynamic>? _memberInfo;
-
   Future<void> _loadMemberInfo() async {
     final result = await ref.read(memberServiceProvider).getMyAssets();
     if (result.success && mounted) {
-      setState(() => _memberInfo = result.data);
+      setState(() => _member = result.data);
     }
   }
 
   Future<void> _loadCoupons() async {
-    setState(() => _isLoadingCoupons = true);
     try {
       final result = await ref.read(memberServiceProvider).getMyCoupons();
       if (result.success && mounted) {
         setState(() => _coupons = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('鉁?coupons: $e');
+      debugPrint('coupons: $e');
     } finally {
-      if (mounted) setState(() => _isLoadingCoupons = false);
+      if (mounted) setState(() {});
     }
   }
 
   void _showCouponSelector() async {
-    final selected = await showModalBottomSheet<dynamic>(
+    final selected = await showModalBottomSheet<Coupon?>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => _CouponBottomSheet(coupons: _coupons, selectedCoupon: _selectedCoupon),
     );
 
-    if (mounted) {
+    if (mounted && selected != _selectedCoupon) {
       setState(() => _selectedCoupon = selected);
       _calculatePrice();
     }
@@ -160,7 +247,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       return;
     }
 
-    if (widget.roomId == 0) {
+    final targetRoomId = _selectedRoom?.id ?? widget.roomId;
+
+    if (targetRoomId == 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间信息异常，请返回重新选择房型'), backgroundColor: AppColors.error));
       return;
     }
@@ -168,10 +257,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. 创建预订 (状态为待支付)
       final result = await ref.read(bookingServiceProvider).createBooking({
         'hotel_id': widget.hotelId,
-        'room_id': widget.roomId,
+        'room_id': targetRoomId,
         'guest_name': _nameController.text.trim(),
         'guest_phone': _phoneController.text.trim(),
         'guest_id_number': _idNumberController.text.trim(),
@@ -180,16 +268,16 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         'guest_count': _roomCount,
         'payment_method': _paymentMethod,
         'special_requests': _specialRequestController.text.trim(),
-        'coupon_id': _selectedCoupon?['id'],
+        'coupon_id': _selectedCoupon?.id,
         'used_points': _usePoints ? _pointsToUse : 0,
       });
 
       if (!mounted) return;
 
       if (result.success) {
-        final orderIdRaw = result.data!['id'];
-        // 确保 orderId 是 int 类型
-        final orderId = orderIdRaw is int ? orderIdRaw : int.tryParse(orderIdRaw.toString()) ?? 0;
+        final booking = result.data!;
+        final orderId = booking.id;
+
         if (orderId == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('订单ID无效')));
@@ -197,11 +285,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           setState(() => _isLoading = false);
           return;
         }
-        
-        final totalPrice = _priceDetails?['total_price'] ?? result.data!['total_price'] ?? result.data!['total_amount'] ?? widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
 
-        // 2. 创建支付记录
-        debugPrint('💳 [BookingFlow] Creating payment for orderId: $orderId, amount: $totalPrice');
+        final totalPrice = _priceDetails?['total_price'] ?? booking.totalPrice;
+
         final createPayResult = await ref.read(paymentServiceProvider).createPayment({
           'order_type': 'booking',
           'order_id': orderId,
@@ -209,22 +295,17 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           'payment_method': _paymentMethod,
         });
 
-        debugPrint('💳 [BookingFlow] Create payment result: success=${createPayResult.success}, data=${createPayResult.data}');
-
         if (!createPayResult.success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createPayResult.message ?? '创建支付订单失败')));
-            // 取消自动跳转到订单页，让用户留在当前页处理
           }
           setState(() => _isLoading = false);
           return;
         }
 
-        // 3. 模拟支付确认流程
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在确认支付状态...')));
         await Future.delayed(const Duration(seconds: 1));
 
-        // 4. 确认支付
         final paymentIdRaw = createPayResult.data?['id'];
         if (paymentIdRaw == null) {
           if (mounted) {
@@ -233,7 +314,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           setState(() => _isLoading = false);
           return;
         }
-        // 确保 paymentId 是 int 类型
         final paymentId = paymentIdRaw is int ? paymentIdRaw : int.tryParse(paymentIdRaw.toString()) ?? 0;
         if (paymentId == 0) {
           if (mounted) {
@@ -243,14 +323,11 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
           return;
         }
         final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
-        
+
         if (payResult.success && mounted) {
-          final bookingId = result.data!['id'] as int? ?? orderId;
-          final bookingNo = result.data!['booking_number']?.toString() ?? result.data!['booking_no']?.toString() ?? 'BK${orderId.toString().padLeft(6, '0')}';
-          _showSuccessDialog(bookingId, bookingNo);
+          _showSuccessDialog(booking.id, booking.displayBookingNumber);
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(payResult.message ?? '支付确认失败，请稍后在订单中重试')));
-          // 取消自动跳转，保持在当前预订流程页
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '预订失败')));
@@ -308,6 +385,10 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
 
   @override
   Widget build(BuildContext context) {
+    final memberLevel = _member != null
+        ? MemberLevel.fromExperience(_member!.totalSpent.floor())
+        : MemberLevel.standard;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -320,6 +401,21 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         child: Column(
           children: [
             _buildOrderSummaryCard(),
+            _buildSectionCard('选择房间', [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('具体房间号', style: TextStyle(fontSize: 14)),
+                subtitle: _selectedRoom != null
+                    ? Text('${_selectedRoom!.roomNumber}号房 · ${_selectedRoom!.floor}层', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))
+                    : const Text('正在获取可用房间...', style: TextStyle(color: AppColors.textHint)),
+                trailing: _isLoadingRooms
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
+                onTap: _showRoomSelector,
+              ),
+              const Text('温馨提示：您可以自由选择心仪的房间号进行预订', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
+            ]),
+            const SizedBox(height: 12),
             _buildSectionCard('入住人信息', [
               _InfoInputRow(label: '姓名', controller: _nameController, hint: '请填写真实姓名'),
               _InfoInputRow(label: '手机号', controller: _phoneController, hint: '接收确认短信', keyboardType: TextInputType.phone),
@@ -355,7 +451,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
             _buildSectionCard('支付方式', [
               RadioGroup<String>(
                 groupValue: _paymentMethod,
-                onChanged: (v) => setState(() => _paymentMethod = v!),
+                onChanged: (v) { if (v != null) setState(() => _paymentMethod = v); },
                 child: Column(
                   children: [
                     _buildPaymentOption('balance', Icons.account_balance_wallet_outlined, '余额支付 (推荐)', Colors.blue),
@@ -374,11 +470,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _selectedCoupon != null 
-                        ? (_selectedCoupon!['coupon_type'] == 'discount' 
-                            ? '${_selectedCoupon!['discount_value']}折' 
-                            : '-¥${_selectedCoupon!['discount_value']}')
-                        : (_coupons.isNotEmpty ? '${_coupons.length}张可用' : '无可用'),
+                      _selectedCoupon != null
+                          ? _selectedCoupon!.displayValue
+                          : (_coupons.isNotEmpty ? '${_coupons.where((c) => c.isAvailable).length}张可用' : '无可用'),
                       style: TextStyle(
                         color: _selectedCoupon != null ? AppColors.secondary : AppColors.textSecondary,
                         fontSize: 13,
@@ -392,20 +486,60 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
               const Divider(height: 1),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('积分抵扣', style: TextStyle(fontSize: 14)),
-                subtitle: Text('可用 ${_memberInfo?['points'] ?? 0} 积分', style: const TextStyle(fontSize: 12)),
+                title: Row(
+                  children: [
+                    const Text('积分抵扣', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: memberLevel.color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${memberLevel.label} ${(_member?.points ?? 0) ~/ 100}元可抵',
+                        style: TextStyle(color: memberLevel.color, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Text('可用 ${_member?.points ?? 0} 积分 (100积分=1元)', style: const TextStyle(fontSize: 12)),
                 value: _usePoints,
                 activeThumbColor: AppColors.primary,
                 onChanged: (val) {
                   setState(() {
                     _usePoints = val;
                     if (val) {
-                      _pointsToUse = _memberInfo?['points'] ?? 0;
+                      _pointsToUse = _member?.points ?? 0;
                     }
                   });
                   _calculatePrice();
                 },
               ),
+              if (memberLevel.discount < 1.0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: memberLevel.color.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: memberLevel.color.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.card_membership, color: memberLevel.color, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${memberLevel.label}专享 ${(memberLevel.discount * 10).toStringAsFixed(1)}折优惠',
+                            style: TextStyle(color: memberLevel.color, fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ]),
             const SizedBox(height: 100),
           ],
@@ -462,7 +596,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
                   border: Border.all(color: AppColors.divider),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text('1晚', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                child: Text('${widget.checkOutDate.difference(widget.checkInDate).inDays}晚', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ),
               _buildDateItem('离店', widget.checkOutDate, isEnd: true),
             ],
@@ -490,7 +624,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     int pointsUsed = _priceDetails?['used_points'] ?? 0;
     double pointsDiscount = _priceDetails?['points_discount']?.toDouble() ?? 0.0;
     double couponDiscount = _priceDetails?['coupon_discount']?.toDouble() ?? 0.0;
-    
+
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
@@ -609,7 +743,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       ),
     );
   }
-
 }
 
 class _InfoInputRow extends StatelessWidget {
@@ -652,13 +785,15 @@ class _InfoInputRow extends StatelessWidget {
 }
 
 class _CouponBottomSheet extends StatelessWidget {
-  final List<dynamic> coupons;
-  final dynamic selectedCoupon;
+  final List<Coupon> coupons;
+  final Coupon? selectedCoupon;
 
   const _CouponBottomSheet({required this.coupons, this.selectedCoupon});
 
   @override
   Widget build(BuildContext context) {
+    final availableCoupons = coupons.where((c) => c.isAvailable).toList();
+
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
@@ -683,7 +818,7 @@ class _CouponBottomSheet extends StatelessWidget {
                 children: [
                   const Text('选择优惠券', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(context, null),
                     child: const Text('不使用优惠券'),
                   ),
                 ],
@@ -691,7 +826,7 @@ class _CouponBottomSheet extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: coupons.isEmpty
+              child: availableCoupons.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -705,12 +840,9 @@ class _CouponBottomSheet extends StatelessWidget {
                   : ListView.builder(
                       controller: scrollController,
                       padding: const EdgeInsets.all(16),
-                      itemCount: coupons.length + 1,
+                      itemCount: availableCoupons.length,
                       itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return _buildCouponItem(context, null);
-                        }
-                        return _buildCouponItem(context, coupons[index - 1]);
+                        return _buildCouponItem(context, availableCoupons[index]);
                       },
                     ),
             ),
@@ -720,9 +852,8 @@ class _CouponBottomSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildCouponItem(BuildContext context, dynamic coupon) {
-    final isSelected = coupon != null && selectedCoupon != null && coupon['id'] == selectedCoupon['id'];
-    final isNoneSelected = coupon == null && selectedCoupon == null;
+  Widget _buildCouponItem(BuildContext context, Coupon coupon) {
+    final isSelected = selectedCoupon?.id == coupon.id;
 
     return GestureDetector(
       onTap: () => Navigator.pop(context, coupon),
@@ -730,58 +861,46 @@ class _CouponBottomSheet extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: (isSelected || isNoneSelected) ? AppColors.primary.withValues(alpha: 0.05) : Colors.white,
+          color: isSelected ? AppColors.primary.withValues(alpha: 0.05) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: (isSelected || isNoneSelected) ? AppColors.primary : AppColors.divider,
-            width: (isSelected || isNoneSelected) ? 2 : 1,
+            color: isSelected ? AppColors.primary : AppColors.divider,
+            width: isSelected ? 2 : 1,
           ),
         ),
-        child: coupon == null
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
+          children: [
+            Container(
+              width: 80,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.secondary, AppColors.primary]),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
                 children: [
-                  if (isNoneSelected)
-                    const Icon(Icons.check_circle, color: AppColors.primary, size: 20)
-                  else
-                    Icon(Icons.circle_outlined, color: AppColors.textHint.withValues(alpha: 0.5), size: 20),
-                  const SizedBox(width: 8),
-                  const Text('不使用优惠券', style: TextStyle(fontSize: 15)),
-                ],
-              )
-            : Row(
-                children: [
-                  Container(
-                    width: 80,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [AppColors.secondary, AppColors.primary]),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      children: [
-                        Text('¥${coupon['discount_amount'] ?? '0'}', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(coupon['min_spend'] != null ? '满${coupon['min_spend']}可用' : '无门槛', style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(coupon['name'] ?? '优惠券', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 4),
-                        Text('有效期至 ${coupon['expire_date'] ?? '长期有效'}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (isSelected)
-                    const Icon(Icons.check_circle, color: AppColors.primary, size: 24)
-                  else
-                    Icon(Icons.circle_outlined, color: AppColors.textHint.withValues(alpha: 0.3), size: 24),
+                  Text(coupon.displayValue, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(coupon.displayCondition, style: const TextStyle(color: Colors.white70, fontSize: 10)),
                 ],
               ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(coupon.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 4),
+                  Text('有效期至 ${coupon.displayExpiry}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: AppColors.primary, size: 24)
+            else
+              Icon(Icons.circle_outlined, color: AppColors.textHint.withValues(alpha: 0.3), size: 24),
+          ],
+        ),
       ),
     );
   }

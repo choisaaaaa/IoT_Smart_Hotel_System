@@ -13,12 +13,15 @@ import '../pages/admin/price_calendar_page.dart';
 import '../pages/admin/coupon_manage_page.dart';
 import '../pages/admin/user_manage_page.dart';
 import '../pages/reception/dashboard_page.dart';
+import '../pages/reception/checkin_out_page.dart';
+import '../pages/reception/bookings_page.dart';
 import '../pages/reception/device_management_page.dart';
 import '../pages/reception/work_orders_page.dart';
 import '../pages/reception/delivery_orders_page.dart';
 import '../pages/reception/room_availability_page.dart';
 import '../pages/reception/voice_calls_page.dart';
 import '../pages/reception/bills_page.dart';
+import '../pages/reception/price_settings_page.dart';
 import '../pages/system/dashboard_page.dart';
 import '../pages/system/system_settings_page.dart';
 import '../pages/guest/main_shell_page.dart';
@@ -39,6 +42,7 @@ import '../pages/guest/personal_info_page.dart';
 import '../pages/guest/wallet_page.dart';
 import '../pages/guest/member_page.dart';
 import '../pages/guest/room_service_page.dart';
+import '../pages/guest/ai_butler_page.dart';
 import '../core/auth/auth_state_notifier.dart';
 import '../core/network/api_interceptor.dart';
 
@@ -165,18 +169,23 @@ final routerProvider = Provider<GoRouter>((ref) {
           return BookingFlowPage(
             hotelName: extra['hotelName'] ?? '智联旗舰店',
             roomType: extra['roomType'] ?? '标准间',
-            price: extra['price'] ?? 0.0,
-            roomId: extra['roomId'] ?? 0,
-            hotelId: extra['hotelId'] ?? 1,
+            price: (extra['price'] as num?)?.toDouble() ?? 0.0,
+            roomId: (extra['roomId'] as num?)?.toInt() ?? 0,
+            hotelId: (extra['hotelId'] as num?)?.toInt() ?? 1,
             checkInDate: extra['checkInDate'] ?? DateTime.now(),
             checkOutDate: extra['checkOutDate'] ?? DateTime.now().add(const Duration(days: 1)),
+            roomTypeId: (extra['roomTypeId'] as num?)?.toInt(),
           );
         },
       ),
       GoRoute(
         path: '/orders',
         name: 'orders',
-        builder: (context, state) => const OrderListPage(),
+        builder: (context, state) {
+          final tabStr = state.uri.queryParameters['tab'];
+          final tab = tabStr != null ? int.tryParse(tabStr) : null;
+          return OrderListPage(initialTab: tab);
+        },
       ),
       GoRoute(
         path: '/order-detail/:id',
@@ -270,7 +279,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'room-service',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          return RoomServicePage(bookingId: extra?['bookingId'] as int?);
+          return RoomServicePage(bookingId: extra?['bookingId'] as int?, initialTab: extra?['initialTab'] as int?);
+        },
+      ),
+      GoRoute(
+        path: '/ai-butler',
+        name: 'ai-butler',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return AiButlerPage(bookingId: extra?['bookingId'] as int?);
         },
       ),
       // Admin routes
@@ -281,12 +298,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin/coupons', builder: (context, state) => const CouponManagePage()),
       GoRoute(path: '/admin/users', builder: (context, state) => const UserManagePage()),
       // Reception routes
+      GoRoute(path: '/reception/checkin-out', builder: (context, state) => const CheckInOutPage()),
+      GoRoute(path: '/reception/bookings', builder: (context, state) => const BookingsPage()),
       GoRoute(path: '/reception/devices', builder: (context, state) => const DeviceManagementPage()),
       GoRoute(path: '/reception/work-orders', builder: (context, state) => const WorkOrdersPage()),
       GoRoute(path: '/reception/delivery', builder: (context, state) => const DeliveryOrdersPage()),
       GoRoute(path: '/reception/room-availability', builder: (context, state) => const RoomAvailabilityPage()),
       GoRoute(path: '/reception/voice-calls', builder: (context, state) => const VoiceCallsPage()),
       GoRoute(path: '/reception/bills', builder: (context, state) => const BillsPage()),
+      GoRoute(path: '/reception/price-settings', builder: (context, state) => const PriceSettingsPage()),
       GoRoute(path: '/reception/environment', builder: (context, state) => const EnvironmentMonitorPage()),
       GoRoute(path: '/reception/price-calendar', builder: (context, state) => const PriceCalendarPage()),
       GoRoute(path: '/reception/coupons', builder: (context, state) => const CouponManagePage()),

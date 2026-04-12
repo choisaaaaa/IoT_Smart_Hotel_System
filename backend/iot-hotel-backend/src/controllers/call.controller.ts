@@ -145,6 +145,26 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
         }
         break;
       case 'front_desk':
+        // 呼叫前台：查找当前酒店的前台/管理员用户
+        const [frontDeskUsers] = await pool.query<RowDataPacket[]>(
+          'SELECT id, hotel_id, role, username FROM users WHERE hotel_id = ? AND role IN (?, ?, ?) ORDER BY id LIMIT 1',
+          [currentUser.hotel_id || 1, 'admin', 'receptionist', 'staff']
+        );
+        if (frontDeskUsers.length > 0) {
+          calleeExists = true;
+          calleeInfo = frontDeskUsers[0];
+        } else {
+          // 如果没有找到特定酒店的前台，查找任意前台用户
+          const [anyFrontDesk] = await pool.query<RowDataPacket[]>(
+            'SELECT id, hotel_id, role, username FROM users WHERE role IN (?, ?, ?) ORDER BY id LIMIT 1',
+            ['admin', 'receptionist', 'staff']
+          );
+          if (anyFrontDesk.length > 0) {
+            calleeExists = true;
+            calleeInfo = anyFrontDesk[0];
+          }
+        }
+        break;
       case 'app':
         const [employee] = await pool.query<RowDataPacket[]>('SELECT id, hotel_id, role FROM users WHERE id = ? OR username = ?', [callee_id, callee_id]);
         if (employee.length > 0) {

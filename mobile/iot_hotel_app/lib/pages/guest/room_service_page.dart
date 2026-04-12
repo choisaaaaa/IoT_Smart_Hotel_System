@@ -1,4 +1,4 @@
-﻿﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,10 +10,12 @@ import '../../services/device_service.dart';
 import '../../services/delivery_service.dart';
 import '../../services/voice_call_service.dart';
 import '../../services/booking_service.dart';
+import '../../models/booking.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
   final int? bookingId;
-  const RoomServicePage({super.key, this.bookingId});
+  final int? initialTab;
+  const RoomServicePage({super.key, this.bookingId, this.initialTab});
 
   @override
   ConsumerState<RoomServicePage> createState() => _RoomServicePageState();
@@ -24,7 +26,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   late TabController _tabController;
   bool _isLoading = true;
   bool _isCheckedIn = false;
-  Map<String, dynamic>? _currentStay;
+  Booking? _currentStay;
   List<dynamic> _devices = [];
   final MqttService _mqttService = MqttService();
   String? _lastUserId;
@@ -32,7 +34,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTab ?? 0);
     WidgetsBinding.instance.addObserver(this);
     _lastUserId = ref.read(authStateProvider).userId;
     _checkCheckinStatus();
@@ -99,12 +101,11 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         pageSize: 10,
       );
       if (bookingsResult.success && mounted) {
-        final bookings = bookingsResult.data?['list'] as List<dynamic>? ?? [];
+        final bookings = bookingsResult.data ?? [];
         if (bookings.isNotEmpty) {
-          // 有已确认的预订，自动跳转到在线办理入住
           final booking = bookings.first;
-          final bookingId = booking['id'] as int?;
-          if (bookingId != null && mounted) {
+          final bookingId = booking.id;
+          if (bookingId > 0 && mounted) {
             // 显示提示后跳转
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -127,7 +128,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         pageSize: 10,
       );
       if (preCheckinResult.success && mounted) {
-        final preCheckinBookings = preCheckinResult.data?['list'] as List<dynamic>? ?? [];
+        final preCheckinBookings = preCheckinResult.data ?? [];
         if (preCheckinBookings.isNotEmpty) {
           final booking = preCheckinBookings.first;
           setState(() {
@@ -146,7 +147,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
                 children: [
                   const Icon(Icons.pending_actions, size: 64, color: AppColors.warning),
                   const SizedBox(height: 16),
-                  Text('您的预订 ${booking['booking_number'] ?? booking['id']} 已提交预入住申请'),
+                  Text('您的预订 ${booking.displayBookingNumber} 已提交预入住申请'),
                   const SizedBox(height: 8),
                   const Text('请等待前台核实信息后完成入住', style: TextStyle(color: AppColors.textSecondary)),
                 ],
@@ -283,7 +284,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
       );
     }
 
-    final roomNumber = _currentStay?['room_number'] ?? _currentStay?['room_id']?.toString() ?? '-';
+    final roomNumber = _currentStay?.roomNumber ?? _currentStay?.roomId.toString() ?? '-';
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -310,10 +311,10 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _AiButlerTab(roomId: _currentStay?['room_id']),
+          _AiButlerTab(roomId: _currentStay?.roomId, bookingId: _currentStay?.id),
           _buildDeviceControlTab(),
-          _DeliveryTab(roomId: _currentStay?['room_id'], roomNumber: _currentStay?['room_number']?.toString(), currentStay: _currentStay),
-          _ContactFrontDeskTab(roomId: _currentStay?['room_id']),
+          _DeliveryTab(roomId: _currentStay?.roomId, roomNumber: _currentStay?.roomNumber, currentStay: _currentStay),
+          _ContactFrontDeskTab(roomId: _currentStay?.roomId),
           _MoreServicesTab(isCheckedIn: _currentStay != null),
         ],
       ),
@@ -453,315 +454,86 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   }
 }
 
-class _AiButlerTab extends ConsumerStatefulWidget {
+class _AiButlerTab extends StatelessWidget {
   final int? roomId;
-  const _AiButlerTab({this.roomId});
-  @override
-  ConsumerState<_AiButlerTab> createState() => _AiButlerTabState();
-}
-
-class _AiButlerTabState extends ConsumerState<_AiButlerTab> {
-  final List<_ChatMessage> _messages = [];
-  final _inputController = TextEditingController();
-  final _scrollController = ScrollController();
-  bool _isTyping = false;
-
-  final List<Map<String, String>> _quickChips = [
-    {'icon': '💡', 'label': '开灯', 'text': '打开灯光'},
-    {'icon': '🏠', 'label': '房间状态', 'text': '查询房间状态'},
-    {'icon': '🧹', 'label': '保洁', 'text': '需要保洁服务'},
-    {'icon': '📶', 'label': 'WiFi', 'text': '查询WiFi密码'},
-    {'icon': '👨‍💼', 'label': '转人工', 'text': '转接人工'},
-  ];
-
-  List<String> _suggestions = [];
-
-  final Map<String, List<String>> _suggestionMap = {
-    '灯光': ['调暗一点', '关闭灯光', '打开所有灯'],
-    '空调': ['调到26度', '开启制冷模式', '关闭空调'],
-    '保洁': ['现在就来', '1小时后', '只整理床铺'],
-    'WiFi': ['连接不上怎么办', '密码是什么', '网速太慢'],
-    '默认': ['还需要什么帮助？', '查询酒店设施', '叫醒服务'],
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _messages.add(_ChatMessage(
-      isUser: false,
-      text: '您好！我是AI智能管家，有什么可以帮您的吗？',
-      time: DateTime.now(),
-    ));
-  }
-
-  @override
-  void dispose() {
-    _inputController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty || _isTyping) return;
-    
-    final roomId = widget.roomId;
-    if (roomId == null) return;
-
-    setState(() {
-      _messages.add(_ChatMessage(isUser: true, text: text, time: DateTime.now()));
-      _isTyping = true;
-    });
-    _inputController.clear();
-    _scrollToBottom();
-
-    try {
-      final result = await ref.read(deviceServiceProvider).aiChat(roomId, text);
-      if (result.success && mounted) {
-        setState(() {
-          _messages.add(_ChatMessage(
-            isUser: false, 
-            text: result.data!['response'] ?? '收到，正在为您处理。', 
-            time: DateTime.now()
-          ));
-          _updateSuggestions(text);
-        });
-      } else if (mounted) {
-        setState(() {
-          _messages.add(_ChatMessage(
-            isUser: false, 
-            text: '抱歉，我现在遇到了一点问题，请稍后再试。', 
-            time: DateTime.now()
-          ));
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _messages.add(_ChatMessage(
-            isUser: false, 
-            text: '网络连接异常，请检查您的网络。', 
-            time: DateTime.now()
-          ));
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isTyping = false);
-        _scrollToBottom();
-      }
-    }
-  }
-
-  void _updateSuggestions(String lastUserMessage) {
-    String matchedKey = '默认';
-    for (final key in _suggestionMap.keys) {
-      if (lastUserMessage.contains(key)) {
-        matchedKey = key;
-        break;
-      }
-    }
-    setState(() {
-      _suggestions = _suggestionMap[matchedKey]!;
-    });
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
+  final int? bookingId;
+  const _AiButlerTab({this.roomId, this.bookingId});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: _messages.length,
-            itemBuilder: (context, i) => _buildMessageBubble(_messages[i]),
-          ),
-        ),
-        if (_suggestions.isNotEmpty && !_isTyping)
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _suggestions.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ActionChip(
-                    label: Text(_suggestions[index], style: const TextStyle(fontSize: 12)),
-                    backgroundColor: Colors.white,
-                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    onPressed: () => _sendMessage(_suggestions[index]),
-                  ),
-                );
-              },
-            ),
-          ),
-        Container(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_messages.length <= 1)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: _quickChips.map((chip) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: InkWell(
-                        onTap: () => _sendMessage(chip['text']!),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(chip['icon']!, style: const TextStyle(fontSize: 14)),
-                              const SizedBox(width: 4),
-                              Text(chip['label']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )).toList(),
-                  ),
-                ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        controller: _inputController,
-                        decoration: const InputDecoration(
-                          hintText: '输入您的问题...',
-                          border: InputBorder.none,
-                          hintStyle: TextStyle(fontSize: 14),
-                        ),
-                        onSubmitted: _sendMessage,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  IconButton.filled(
-                    onPressed: _isTyping ? null : () => _sendMessage(_inputController.text),
-                    icon: const Icon(Icons.send_rounded),
-                    style: IconButton.styleFrom(backgroundColor: AppColors.primary),
-                  ),
-                ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, Color(0xFF30CFD0)]),
+                borderRadius: BorderRadius.circular(24),
               ),
-            ],
-          ),
+              child: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 40),
+            ),
+            const SizedBox(height: 24),
+            const Text('AI智能管家', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('语音交互 · 智能建议 · 设备控制', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            const SizedBox(height: 32),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildFeatureChip(context, '💡', '灯光控制'),
+                _buildFeatureChip(context, '🌡️', '空调调节'),
+                _buildFeatureChip(context, '🧹', '保洁服务'),
+                _buildFeatureChip(context, '🍽️', '客房送餐'),
+                _buildFeatureChip(context, '📶', 'WiFi查询'),
+                _buildFeatureChip(context, '🔑', '自助退房'),
+              ],
+            ),
+            const SizedBox(height: 32),
+            FilledButton(
+              onPressed: () => context.push('/ai-butler', extra: {'bookingId': bookingId}),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              ),
+              child: const Text('开始对话', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildMessageBubble(_ChatMessage msg) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  Widget _buildFeatureChip(BuildContext context, String icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
       child: Row(
-        mainAxisAlignment:
-            msg.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (!msg.isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: const Icon(Icons.smart_toy_rounded,
-                  size: 18, color: AppColors.primary),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: msg.isUser
-                    ? AppColors.primary
-                    : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft:
-                      Radius.circular(msg.isUser ? 16 : 4),
-                  bottomRight:
-                      Radius.circular(msg.isUser ? 4 : 16),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                msg.text,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: msg.isUser ? Colors.white : AppColors.textPrimary,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ),
-          if (msg.isUser) ...[
-            const SizedBox(width: 8),
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.divider,
-              child: Icon(Icons.person, size: 18, color: AppColors.textSecondary),
-            ),
-          ],
+          Text(icon, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.primary)),
         ],
       ),
     );
   }
 }
 
-class _ChatMessage {
-  final bool isUser;
-  final String text;
-  final DateTime time;
-  _ChatMessage({required this.isUser, required this.text, required this.time});
-}
-
 class _DeliveryTab extends ConsumerStatefulWidget {
   final dynamic roomId;
   final String? roomNumber;
-  final Map<String, dynamic>? currentStay;
+  final Booking? currentStay;
   const _DeliveryTab({this.roomId, this.roomNumber, this.currentStay});
   @override
   ConsumerState<_DeliveryTab> createState() => _DeliveryTabState();
@@ -930,8 +702,8 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
       try {
         final orderData = <String, dynamic>{
           'room_id': widget.roomId,
-          'booking_id': widget.currentStay?['id'],
-          'guest_id': widget.currentStay?['user_id'],
+          'booking_id': widget.currentStay?.id,
+          'guest_id': widget.currentStay?.userId,
           'item_category': item['category'],
           'item_name': item['name'],
           'quantity': item['quantity'],

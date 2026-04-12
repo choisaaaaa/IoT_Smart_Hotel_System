@@ -1,11 +1,9 @@
-﻿import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/auth/auth_state_notifier.dart';
+import '../../services/favorite_service.dart';
+import '../../models/hotel.dart';
 
 class FavoritesPage extends ConsumerStatefulWidget {
   const FavoritesPage({super.key});
@@ -15,13 +13,8 @@ class FavoritesPage extends ConsumerStatefulWidget {
 }
 
 class _FavoritesPageState extends ConsumerState<FavoritesPage> {
-  List<Map<String, dynamic>> _favorites = [];
+  List<Hotel> _favorites = [];
   bool _isLoading = true;
-
-  String get _favKey {
-    final userId = ref.read(authStateProvider).userId ?? 'guest';
-    return '${AppConstants.favoriteHotelsKey}_$userId';
-  }
 
   @override
   void initState() {
@@ -32,31 +25,42 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
   Future<void> _loadFavorites() async {
     setState(() => _isLoading = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_favKey) ?? '[]';
-      final List<dynamic> decoded = jsonDecode(raw);
-      setState(() => _favorites = decoded.cast<Map<String, dynamic>>().toList());
+      final result = await ref.read(favoriteServiceProvider).getFavorites();
+      if (mounted) {
+        setState(() => _favorites = result.data ?? []);
+      }
     } catch (e) {
-      debugPrint('鉁?favorites: $e');
+      debugPrint('favorites: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _removeFavorite(int index) async {
     final removed = _favorites[index];
     setState(() => _favorites.removeAt(index));
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_favKey, jsonEncode(_favorites));
+
+    final result = await ref.read(favoriteServiceProvider).removeFavorite(removed.id);
+
+    if (!result.success && mounted) {
+      setState(() => _favorites.insert(index, removed));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('取消收藏失败，请重试')),
+      );
+      return;
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已取消收藏'),
+          content: Text('已取消收藏 ${removed.hotelName}'),
           action: SnackBarAction(
             label: '撤销',
             onPressed: () async {
-              setState(() => _favorites.insert(index, removed));
-              await prefs.setString(_favKey, jsonEncode(_favorites));
+              final addResult = await ref.read(favoriteServiceProvider).addFavorite(removed.id);
+              if (addResult.success) {
+                setState(() => _favorites.insert(index, removed));
+              }
             },
           ),
         ),
@@ -81,7 +85,7 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
             }
           },
         ),
-        title: const Text('我收藏的', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('我的收藏', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: _isLoading
@@ -89,13 +93,17 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
           : _favorites.isEmpty
               ? Center(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.favorite_border, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
+                      Icon(Icons.bookmark_outline, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
                       const SizedBox(height: 16),
-                      const Text('暂无收藏', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      const Text('浏览酒店时点击爱心即可收藏', style: TextStyle(color: AppColors.textHint, fontSize: 13)),
+                      const Text('暂无收藏的酒店', style: TextStyle(color: AppColors.textSecondary)),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () => context.go('/hotel-list'),
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                        child: const Text('去发现酒店'),
+                      ),
                     ],
                   ),
                 )
@@ -104,81 +112,95 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _favorites.length,
-                    itemBuilder: (context, index) {
-                      final fav = _favorites[index];
-                      final imageUrl = fav['image'] is String && (fav['image'] as String).isNotEmpty
-                          ? fav['image']
-                          : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
-                      return Dismissible(
-                        key: ValueKey(fav['id']),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) => _removeFavorite(index),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          color: AppColors.error,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        child: GestureDetector(
-                          onTap: () => context.push('/hotel-detail', extra: {'hotelId': fav['id']}),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
-                                  child: Image.network(
-                                    imageUrl,
-                                    width: 100,
-                                    height: 80,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Container(
-                                      width: 100,
-                                      height: 80,
-                                      color: AppColors.divider,
-                                      child: const Icon(Icons.hotel, color: AppColors.textHint),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        fav['name'] ?? '智联酒店',
-                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${fav['star'] ?? 5}星级',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                      ),
-                                      if (fav['location'] != null && fav['location'].toString().isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          fav['location'].toString(),
-                                          style: const TextStyle(fontSize: 11, color: AppColors.textHint),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.favorite, color: Colors.red, size: 20),
-                                const SizedBox(width: 12),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                    itemBuilder: (context, index) => _buildFavoriteCard(_favorites[index], index),
                   ),
                 ),
+    );
+  }
+
+  Widget _buildFavoriteCard(Hotel hotel, int index) {
+    return Dismissible(
+      key: ValueKey(hotel.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: AppColors.error,
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      onDismissed: (_) => _removeFavorite(index),
+      child: GestureDetector(
+        onTap: () => context.push('/hotel-detail', extra: {'hotelId': hotel.id}),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            children: [
+              Container(
+                width: 120,
+                height: 100,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: NetworkImage(
+                      hotel.displayImage.isNotEmpty
+                          ? hotel.displayImage
+                          : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80',
+                    ),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(hotel.hotelName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          ...List.generate(hotel.effectiveStar, (_) => const Icon(Icons.star, color: AppColors.gold, size: 14)),
+                          const SizedBox(width: 4),
+                          Text(hotel.effectiveRating.toStringAsFixed(1), style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(hotel.displayAddress, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (hotel.price != null)
+                            Row(
+                              children: [
+                                const Text('¥', style: TextStyle(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text(hotel.price!.toStringAsFixed(0), style: const TextStyle(color: AppColors.secondary, fontSize: 18, fontWeight: FontWeight.bold)),
+                                const Text('起', style: TextStyle(color: AppColors.secondary, fontSize: 10)),
+                              ],
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          IconButton(
+                            icon: const Icon(Icons.favorite, color: AppColors.error, size: 20),
+                            onPressed: () => _removeFavorite(index),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

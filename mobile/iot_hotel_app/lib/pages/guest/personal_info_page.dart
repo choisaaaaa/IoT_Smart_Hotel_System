@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
@@ -43,7 +43,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         }
       }
     } catch (e) {
-      debugPrint('鉁?managedHotels: $e');
+      debugPrint('managedHotels: $e');
     }
 
     try {
@@ -52,18 +52,17 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
       }
     } catch (e) {
-      debugPrint('鉁?applications: $e');
+      debugPrint('applications: $e');
     }
 
     try {
       final hotelResponse = await dio.get('${ApiConstants.hotels}/search');
       if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
         final list = hotelResponse.data['data']?['hotels'] ?? hotelResponse.data['data'] ?? [];
-        debugPrint('Loaded ${list.length} hotels for selection');
         setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
       }
     } catch (e) {
-      debugPrint('鉁?hotelList: $e');
+      debugPrint('hotelList: $e');
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -74,10 +73,12 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('个人信息'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        title: const Text('个人信息', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -88,11 +89,14 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
                 children: [
                   _buildProfileCard(authState),
                   const SizedBox(height: 16),
+                  _buildEditableInfoCard(),
+                  const SizedBox(height: 16),
                   _buildRoleCard(authState),
                   const SizedBox(height: 16),
                   _buildHotelBindingSection(authState),
                   const SizedBox(height: 16),
                   _buildApplicationsSection(),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -103,18 +107,108 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _showAvatarPicker,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      child: Text(
+                        (_user?.username ?? '?')[0].toUpperCase(),
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primary, width: 1),
+                        ),
+                        child: const Icon(Icons.camera_alt, size: 12, color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _user?.username ?? '未登录',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'UID: ${_user?.uid ?? '-'}',
+                      style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7)),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _roleLabel(_user?.role),
+                        style: const TextStyle(fontSize: 11, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditableInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('基本信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('基本信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              TextButton.icon(
+                onPressed: _showEditProfileDialog,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('编辑'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           _buildInfoRow('用户名', _user?.username ?? '-'),
           _buildInfoRow('UID', _user?.uid ?? '-'),
-          _buildInfoRow('手机号', _user?.phone ?? '-'),
-          _buildInfoRow('邮箱', _user?.email ?? '-'),
+          _buildInfoRow('手机号', _user?.phone ?? '-', onTap: _showEditPhoneDialog),
+          _buildInfoRow('邮箱', _user?.email ?? '-', onTap: _showEditEmailDialog),
           _buildInfoRow('角色', _roleLabel(_user?.role)),
           _buildInfoRow('注册时间', _user?.createdAt?.toString().substring(0, 10) ?? '-'),
         ],
@@ -122,15 +216,27 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-        ],
+  Widget _buildInfoRow(String label, String value, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            Row(
+              children: [
+                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, size: 16, color: AppColors.textHint),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -235,6 +341,221 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
               label: const Text('申请绑定酒店员工 (升级为前台端)'),
               style: OutlinedButton.styleFrom(foregroundColor: AppColors.secondary, side: const BorderSide(color: AppColors.secondary)),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAvatarPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+            ),
+            const Text('更换头像', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('拍照'),
+              onTap: () {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('拍照功能开发中')));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('从相册选择'),
+              onTap: () {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('相册选择功能开发中')));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    final nameCtrl = TextEditingController(text: _user?.username ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('编辑个人信息'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                labelText: '用户名',
+                prefixIcon: const Icon(Icons.person_outline, size: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final dio = DioClient();
+                final response = await dio.put(ApiConstants.authMe, data: {
+                  'username': nameCtrl.text.trim(),
+                });
+                if (response.statusCode == 200 && response.data['code'] == 200 && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('更新成功'), backgroundColor: AppColors.success),
+                  );
+                  _loadData();
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(response.data['message'] ?? '更新失败')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('更新失败，请重试')),
+                  );
+                }
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditPhoneDialog() {
+    final phoneCtrl = TextEditingController(text: _user?.phone ?? '');
+    final codeCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修改手机号'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: '新手机号',
+                prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: codeCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: '验证码',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('验证码已发送')));
+                  },
+                  child: const Text('获取'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('手机号修改功能开发中')));
+            },
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditEmailDialog() {
+    final emailCtrl = TextEditingController(text: _user?.email ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修改邮箱'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: TextField(
+          controller: emailCtrl,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            labelText: '邮箱地址',
+            prefixIcon: const Icon(Icons.email_outlined, size: 20),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final dio = DioClient();
+                final response = await dio.put(ApiConstants.authMe, data: {
+                  'email': emailCtrl.text.trim(),
+                });
+                if (response.statusCode == 200 && response.data['code'] == 200 && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('邮箱更新成功'), backgroundColor: AppColors.success),
+                  );
+                  _loadData();
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(response.data['message'] ?? '更新失败')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('更新失败，请重试')),
+                  );
+                }
+              }
+            },
+            child: const Text('保存'),
           ),
         ],
       ),

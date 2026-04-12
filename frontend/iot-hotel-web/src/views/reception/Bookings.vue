@@ -33,14 +33,14 @@
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" size="small" @click="viewDetail(record)">详情</a-button>
-            <a-dropdown v-if="record.status === 'pending' || record.status === 'confirmed' || record.status === 'pre_checked_in' || record.status === 'checked_in'">
+            <a-dropdown v-if="['pending', 'confirmed', 'pre_checked_in', 'checked_in'].includes(record.status)">
               <a-button type="link" size="small">操作 <DownOutlined /></a-button>
               <template #overlay>
                 <a-menu>
                   <a-menu-item v-if="record.status === 'pending'" @click="handleConfirm(record.id)">确认预订</a-menu-item>
-                  <a-menu-item v-if="record.status === 'pre_checked_in'" @click="handleCheckin(record.id)">确认入住</a-menu-item>
+                  <a-menu-item v-if="record.status === 'confirmed' || record.status === 'pre_checked_in'" @click="handleCheckin(record.id)">办理入住</a-menu-item>
                   <a-menu-item v-if="record.status === 'checked_in'" @click="handleCheckout(record.id)">办理退房</a-menu-item>
-                  <a-menu-item danger v-if="record.status !== 'checked_in' && record.status !== 'pre_checked_in'" @click="handleCancel(record.id)">取消预订</a-menu-item>
+                  <a-menu-item danger v-if="record.status === 'pending' || record.status === 'confirmed'" @click="handleCancel(record.id)">取消预订</a-menu-item>
                 </a-menu>
               </template>
             </a-dropdown>
@@ -195,11 +195,11 @@ async function handleConfirm(id: number) {
 
 async function handleCheckin(id: number) {
   try {
-    await bookingApi.updateBookingStatus(id, 'checked_in')
+    await bookingApi.checkin(id)
     message.success('入住办理成功')
     fetchBookings()
-  } catch (error) {
-    message.error('入住办理失败')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '入住办理失败')
   }
 }
 

@@ -74,6 +74,12 @@ interface EventLog {
 }
 
 class EnvironmentController {
+  constructor() {
+    this.getEnvironmentData = this.getEnvironmentData.bind(this);
+    this.getEnvironmentHistory = this.getEnvironmentHistory.bind(this);
+    this.getDashboardStats = this.getDashboardStats.bind(this);
+  }
+
   private generateMockData(): EnvironmentData[] {
     const now = new Date();
     const rooms = [

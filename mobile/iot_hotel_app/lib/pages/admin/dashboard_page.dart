@@ -1,15 +1,17 @@
-﻿﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../services/auth_service.dart';
-import '../../services/hotel_service.dart';
-import '../../services/room_service.dart';
-import '../../core/network/dio_client.dart';
-import '../../core/constants/api_constants.dart';
-import '../../core/auth/auth_state_notifier.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/hotel_service.dart';
+import '../../../services/room_service.dart';
+import '../../../services/payment_service.dart';
+import '../../../services/device_service.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/auth/auth_state_notifier.dart';
 import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
@@ -19,6 +21,7 @@ import 'floor_manage_page.dart';
 import 'price_calendar_page.dart';
 import 'coupon_manage_page.dart';
 import 'user_manage_page.dart';
+import 'room_type_manage_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});
@@ -29,42 +32,66 @@ class AdminDashboardPage extends ConsumerStatefulWidget {
 
 class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   int _selectedIndex = 0;
+  bool _showMoreMenu = false;
 
-  final List<NavigationItem> _navItems = const [
-    NavigationItem(icon: Icons.dashboard_rounded, label: '总览'),
-    NavigationItem(icon: Icons.devices_rounded, label: '设备'),
-    NavigationItem(icon: Icons.door_back_door_rounded, label: '房间'),
-    NavigationItem(icon: Icons.hotel_rounded, label: '酒店'),
-    NavigationItem(icon: Icons.assessment_rounded, label: '报表'),
-    NavigationItem(icon: Icons.fact_check_rounded, label: '审核'),
-    NavigationItem(icon: Icons.thermostat_rounded, label: '环境'),
-    NavigationItem(icon: Icons.layers_rounded, label: '楼层'),
-    NavigationItem(icon: Icons.price_check_rounded, label: '价格'),
-    NavigationItem(icon: Icons.local_offer_rounded, label: '优惠券'),
-    NavigationItem(icon: Icons.people_rounded, label: '用户'),
+  final List<_NavItem> _mainNavItems = const [
+    _NavItem(icon: Icons.dashboard_rounded, label: '总览'),
+    _NavItem(icon: Icons.devices_rounded, label: '设备'),
+    _NavItem(icon: Icons.door_back_door_rounded, label: '房间'),
   ];
 
-  late final List<Widget> _pages;
+  final List<_MoreItem> _moreItems = const [
+    _MoreItem(icon: Icons.hotel_rounded, label: '酒店信息', pageKey: 'hotel'),
+    _MoreItem(icon: Icons.assessment_rounded, label: '报表', pageKey: 'reports'),
+    _MoreItem(icon: Icons.fact_check_rounded, label: '审核', pageKey: 'review'),
+    _MoreItem(icon: Icons.thermostat_rounded, label: '环境', pageKey: 'environment'),
+    _MoreItem(icon: Icons.layers_rounded, label: '楼层', pageKey: 'floor'),
+    _MoreItem(icon: Icons.price_check_rounded, label: '价格', pageKey: 'price'),
+    _MoreItem(icon: Icons.local_offer_rounded, label: '优惠券', pageKey: 'coupon'),
+    _MoreItem(icon: Icons.people_rounded, label: '用户', pageKey: 'user'),
+    _MoreItem(icon: Icons.hotel_rounded, label: '房型', pageKey: 'room_type'),
+  ];
+
+  late final List<Widget> _mainPages;
 
   @override
   void initState() {
     super.initState();
-    _pages = [
+    _mainPages = [
       const _DashboardContent(),
       const DeviceMonitorPage(),
       const RoomManagePage(),
-      const HotelEditPage(),
-      const ReportsPage(),
-      const _AdminReviewTab(),
-      const EnvironmentMonitorPage(),
-      const FloorManagePage(),
-      const PriceCalendarPage(),
-      const CouponManagePage(),
-      const UserManagePage(),
     ];
   }
 
-  void _onNavTap(int index) { setState(() => _selectedIndex = index); }
+  void _onNavTap(int index) {
+    if (index == 3) {
+      setState(() => _showMoreMenu = !_showMoreMenu);
+    } else {
+      setState(() {
+        _selectedIndex = index;
+        _showMoreMenu = false;
+      });
+    }
+  }
+
+  void _navigateToMorePage(String pageKey) {
+    setState(() => _showMoreMenu = false);
+    Widget page;
+    switch (pageKey) {
+      case 'hotel': page = const HotelEditPage(); break;
+      case 'reports': page = const ReportsPage(); break;
+      case 'review': page = const _AdminReviewTab(); break;
+      case 'environment': page = const EnvironmentMonitorPage(); break;
+      case 'floor': page = const FloorManagePage(); break;
+      case 'price': page = const PriceCalendarPage(); break;
+      case 'coupon': page = const CouponManagePage(); break;
+      case 'user': page = const UserManagePage(); break;
+      case 'room_type': page = const RoomTypeManagePage(); break;
+      default: return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +103,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
           IconButton(icon: const Icon(Icons.notifications_rounded), onPressed: () {}),
           PopupMenuButton<String>(
             icon: const CircleAvatar(radius: 16, backgroundColor: AppColors.primary, child: Icon(Icons.person, size: 18, color: Colors.white)),
-            onSelected: (value) async { 
+            onSelected: (value) async {
               if (value == 'logout') {
                 await ref.read(authServiceProvider).logout();
                 if (!context.mounted) return;
@@ -94,16 +121,32 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _pages[_selectedIndex],
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _selectedIndex < _mainPages.length ? _mainPages[_selectedIndex] : const _DashboardContent(),
+          ),
+          if (_showMoreMenu)
+            GestureDetector(
+              onTap: () => setState(() => _showMoreMenu = false),
+              child: Container(color: Colors.black.withValues(alpha: 0.3)),
+            ),
+          if (_showMoreMenu)
+            Positioned(
+              bottom: 80,
+              left: 16,
+              right: 16,
+              child: _buildMoreMenu(),
+            ),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
         ),
         child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
+          currentIndex: _selectedIndex > 2 ? 3 : _selectedIndex,
           onTap: _onNavTap,
           type: BottomNavigationBarType.fixed,
           selectedItemColor: AppColors.primary,
@@ -111,7 +154,43 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
           showUnselectedLabels: true,
           selectedLabelStyle: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold),
           unselectedLabelStyle: GoogleFonts.notoSansSc(fontSize: 12),
-          items: _navItems.map((item) => BottomNavigationBarItem(icon: Icon(item.icon), label: item.label, activeIcon: Icon(item.icon, color: AppColors.primary))).toList(),
+          items: [
+            ..._mainNavItems.map((item) => BottomNavigationBarItem(icon: Icon(item.icon), label: item.label)),
+            const BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '更多'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreMenu() {
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.2,
+          children: _moreItems.map((item) => GestureDetector(
+            onTap: () => _navigateToMorePage(item.pageKey),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(item.icon, size: 24, color: AppColors.primary),
+                ),
+                const SizedBox(height: 6),
+                Text(item.label, style: GoogleFonts.notoSansSc(fontSize: 12), textAlign: TextAlign.center),
+              ],
+            ),
+          )).toList(),
         ),
       ),
     );
@@ -177,10 +256,17 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   }
 }
 
-class NavigationItem {
+class _NavItem {
   final IconData icon;
   final String label;
-  const NavigationItem({required this.icon, required this.label});
+  const _NavItem({required this.icon, required this.label});
+}
+
+class _MoreItem {
+  final IconData icon;
+  final String label;
+  final String pageKey;
+  const _MoreItem({required this.icon, required this.label, required this.pageKey});
 }
 
 class _DashboardContent extends ConsumerStatefulWidget {
@@ -193,6 +279,9 @@ class _DashboardContent extends ConsumerStatefulWidget {
 class _DashboardContentState extends ConsumerState<_DashboardContent> {
   Map<String, dynamic>? _stats;
   Map<String, dynamic>? _roomDistribution;
+  Map<String, dynamic> _revenueStats = {};
+  Map<String, dynamic> _deviceStats = {};
+  List<dynamic> _todayActivities = [];
   bool _isLoading = true;
 
   @override
@@ -206,23 +295,79 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     try {
       final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
       final distResult = await ref.read(roomServiceProvider).getRoomStatusDistribution();
+      final revenueResult = await ref.read(paymentServiceProvider).getRevenueStats();
+      final deviceResult = await ref.read(deviceServiceProvider).getAllDevices();
+
+      List<dynamic> activities = [];
+      try {
+        final dio = DioClient();
+        final res = await dio.get('${ApiConstants.hotel}/statistics');
+        if (res.statusCode == 200 && res.data['code'] == 200) {
+          final data = res.data['data'];
+          final recentBookings = data?['recent_bookings'] as List<dynamic>? ?? [];
+          for (final b in recentBookings.take(5)) {
+            activities.add({
+              'title': '${b['guest_name'] ?? '客人'} 预订 ${b['room_number'] ?? '房间'}',
+              'time': _formatTime(b['created_at']),
+              'icon': Icons.add_business_rounded,
+              'color': AppColors.info,
+            });
+          }
+        }
+      } catch (_) {}
 
       if (mounted) {
         setState(() {
           _stats = statsResult.success ? statsResult.data : null;
           _roomDistribution = distResult.success ? distResult.data : null;
+          _revenueStats = revenueResult.success ? (revenueResult.data ?? {}) : {};
+          _todayActivities = activities;
         });
+
+        if (deviceResult.success) {
+          final devices = deviceResult.data ?? [];
+          int online = 0, offline = 0, warning = 0;
+          for (final d in devices) {
+            final status = d['status'] ?? d['device_status'] ?? 'offline';
+            if (status == 'online') {
+              online++;
+            } else if (status == 'warning') {
+              warning++;
+            } else {
+              offline++;
+            }
+          }
+          setState(() {
+            _deviceStats = {'online': online, 'offline': offline, 'warning': warning, 'total': devices.length};
+          });
+        }
       }
     } catch (e) {
-      debugPrint('鉁?dashboard: $e');
+      debugPrint('dashboard: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  String _formatTime(dynamic time) {
+    if (time == null) return '';
+    try {
+      final dt = DateTime.parse(time.toString());
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
+      if (diff.inHours < 24) return '${diff.inHours}小时前';
+      return '${diff.inDays}天前';
+    } catch (_) {
+      return '';
+    }
+  }
+
   void _navigateToTab(int tabIndex) {
     final parent = context.findAncestorStateOfType<_AdminDashboardPageState>();
-    parent?.setState(() => parent._selectedIndex = tabIndex);
+    parent?.setState(() {
+      parent._selectedIndex = tabIndex;
+      parent._showMoreMenu = false;
+    });
   }
 
   @override
@@ -237,6 +382,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     final occupancyRate = '${(rateDouble * 100).toStringAsFixed(0)}%';
     final onlineDevices = _stats?['online_devices']?.toString() ?? '0';
     final todayBookings = _stats?['today_bookings']?.toString() ?? '0';
+    final todayRevenue = double.tryParse(_revenueStats['today_revenue']?.toString() ?? '0') ?? 0;
+    final monthRevenue = double.tryParse(_revenueStats['month_revenue']?.toString() ?? '0') ?? 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -257,12 +404,18 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
               children: [
                 _buildStatCard(context, '总房间数', totalRooms, Icons.door_back_door, Colors.blue, onTap: () => _navigateToTab(2)),
                 _buildStatCard(context, '入住率', occupancyRate, Icons.trending_up, Colors.green, onTap: () => _navigateToTab(2)),
+                _buildStatCard(context, '今日收入', '¥${todayRevenue.toStringAsFixed(0)}', Icons.payments, AppColors.primary),
+                _buildStatCard(context, '本月收入', '¥${monthRevenue.toStringAsFixed(0)}', Icons.account_balance_wallet, AppColors.primaryDark),
                 _buildStatCard(context, '在线设备', onlineDevices, Icons.devices, Colors.indigo, onTap: () => _navigateToTab(1)),
-                _buildStatCard(context, '今日预订', todayBookings, Icons.calendar_today, Colors.orange, onTap: () => _navigateToTab(4)),
+                _buildStatCard(context, '今日预订', todayBookings, Icons.calendar_today, Colors.orange),
               ],
             ),
             const SizedBox(height: 24),
+            _buildRevenueTrendSection(),
+            const SizedBox(height: 24),
             _buildChartSection(context),
+            const SizedBox(height: 24),
+            _buildDevicePieSection(),
             const SizedBox(height: 24),
             _buildActivitySection(context),
             const SizedBox(height: 20),
@@ -307,10 +460,76 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     );
   }
 
+  Widget _buildRevenueTrendSection() {
+    final trend = _revenueStats['revenue_trend'] as List<dynamic>? ?? [];
+    final spots = <FlSpot>[];
+    if (trend.isNotEmpty) {
+      for (int i = 0; i < trend.length; i++) {
+        spots.add(FlSpot(i.toDouble(), (trend[i] as num?)?.toDouble() ?? 0));
+      }
+    } else {
+      for (int i = 0; i < 7; i++) {
+        spots.add(FlSpot(i.toDouble(), (1000 + i * 800 + (i % 3) * 500).toDouble()));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('营收趋势', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+              Row(children: [
+                Text('今日 ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text('¥${(double.tryParse(_revenueStats['today_revenue']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              ]),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(show: true, drawVerticalLine: false),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
+                    final labels = trend.isNotEmpty ? List.generate(trend.length, (i) => '${i + 1}') : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                    final idx = v.toInt();
+                    if (idx < 0 || idx >= labels.length) return const SizedBox();
+                    return Text(labels[idx], style: const TextStyle(fontSize: 10));
+                  }, reservedSize: 22)),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, _) => Text('${(v / 10000).toStringAsFixed(1)}万', style: const TextStyle(fontSize: 9)))),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    color: AppColors.primary,
+                    barWidth: 3,
+                    dotData: FlDotData(show: spots.length <= 12),
+                    belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.1)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildChartSection(BuildContext context) {
     final available = _roomDistribution?['available'] ?? 60;
     final occupied = _roomDistribution?['occupied'] ?? 30;
     final cleaning = _roomDistribution?['cleaning'] ?? 10;
+    final maintenance = _roomDistribution?['maintenance'] ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -336,19 +555,72 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                   if (available > 0) PieChartSectionData(value: available.toDouble(), color: AppColors.roomAvailable, title: '空闲', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   if (occupied > 0) PieChartSectionData(value: occupied.toDouble(), color: AppColors.roomOccupied, title: '已入', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   if (cleaning > 0) PieChartSectionData(value: cleaning.toDouble(), color: AppColors.roomCleaning, title: '清扫', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (maintenance > 0) PieChartSectionData(value: maintenance.toDouble(), color: AppColors.roomMaintenance, title: '维修', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              _buildLegend(AppColors.roomAvailable, '空闲 $available'),
+              _buildLegend(AppColors.roomOccupied, '已入住 $occupied'),
+              _buildLegend(AppColors.roomCleaning, '清扫中 $cleaning'),
+              if (maintenance > 0) _buildLegend(AppColors.roomMaintenance, '维修 $maintenance'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevicePieSection() {
+    final online = _deviceStats['online'] ?? 0;
+    final offline = _deviceStats['offline'] ?? 0;
+    final warning = _deviceStats['warning'] ?? 0;
+    final total = _deviceStats['total'] ?? 0;
+
+    if (total == 0) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('设备在线状态', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+              GestureDetector(onTap: () => _navigateToTab(1), child: Text('查看详情', style: TextStyle(color: AppColors.primary, fontSize: 12))),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: PieChart(
+              PieChartData(
+                sectionsSpace: 4,
+                centerSpaceRadius: 40,
+                sections: [
+                  if (online > 0) PieChartSectionData(value: online.toDouble(), color: AppColors.deviceOnline, title: '在线', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (warning > 0) PieChartSectionData(value: warning.toDouble(), color: AppColors.deviceWarning, title: '告警', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (offline > 0) PieChartSectionData(value: offline.toDouble(), color: AppColors.deviceOffline, title: '离线', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildLegend(AppColors.roomAvailable, '空闲'),
-              const SizedBox(width: 16),
-              _buildLegend(AppColors.roomOccupied, '已入住'),
-              const SizedBox(width: 16),
-              _buildLegend(AppColors.roomCleaning, '清扫中'),
+              _buildLegend(AppColors.deviceOnline, '在线 $online'),
+              const SizedBox(width: 12),
+              if (warning > 0) ...[_buildLegend(AppColors.deviceWarning, '告警 $warning'), const SizedBox(width: 12)],
+              _buildLegend(AppColors.deviceOffline, '离线 $offline'),
             ],
           ),
         ],
@@ -361,6 +633,15 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   }
 
   Widget _buildActivitySection(BuildContext context) {
+    final activities = _todayActivities.isNotEmpty
+        ? _todayActivities
+        : [
+            {'title': '101房 灯光已开启', 'time': '2分钟前', 'icon': Icons.lightbulb_outline, 'color': Colors.green},
+            {'title': '202房 温度异常告警', 'time': '15分钟前', 'icon': Icons.warning_amber_rounded, 'color': Colors.red},
+            {'title': '305房 客人已退房', 'time': '1小时前', 'icon': Icons.logout_rounded, 'color': Colors.blue},
+            {'title': '新预订：401房', 'time': '2小时前', 'icon': Icons.add_business_rounded, 'color': Colors.orange},
+          ];
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -370,15 +651,22 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('最近活动', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              GestureDetector(onTap: () => _navigateToTab(4), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
+              Text('今日动态', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsPage()));
+                },
+                child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          _ActivityItem(title: '101房 灯光已开启', time: '2分钟前', icon: Icons.lightbulb_outline, color: Colors.green),
-          _ActivityItem(title: '202房 温度异常告警', time: '15分钟前', icon: Icons.warning_amber_rounded, color: Colors.red),
-          _ActivityItem(title: '305房 客人已退房', time: '1小时前', icon: Icons.logout_rounded, color: Colors.blue),
-          _ActivityItem(title: '新预订：401房', time: '2小时前', icon: Icons.add_business_rounded, color: Colors.orange),
+          ...activities.map((a) => _ActivityItem(
+            title: a['title'] ?? '',
+            time: a['time'] ?? '',
+            icon: a['icon'] ?? Icons.info,
+            color: a['color'] ?? AppColors.primary,
+          )),
         ],
       ),
     );
@@ -409,7 +697,7 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
         setState(() => _applications = List<Map<String, dynamic>>.from(res.data['data'] ?? []));
       }
     } catch (e) {
-      debugPrint('鉁?applications: $e');
+      debugPrint('applications: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -466,20 +754,23 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
     final pending = _applications.where((a) => a['status'] == 'pending').toList();
     final reviewed = _applications.where((a) => a['status'] != 'pending').toList();
 
-    return RefreshIndicator(
-      onRefresh: _loadApplications,
-      child: DefaultTabController(
-        length: 2,
-        child: Column(children: [
-          const TabBar(tabs: [Tab(text: '待审核'), Tab(text: '已审核')]),
-          Expanded(child: TabBarView(children: [_buildList(pending, true), _buildList(reviewed, false)])),
-        ]),
+    return Scaffold(
+      appBar: AppBar(title: const Text('审核管理'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+      body: RefreshIndicator(
+        onRefresh: _loadApplications,
+        child: DefaultTabController(
+          length: 2,
+          child: Column(children: [
+            TabBar(tabs: [Tab(text: '待审核 (${pending.length})'), Tab(text: '已审核 (${reviewed.length})')], labelColor: AppColors.primary, unselectedLabelColor: AppColors.textSecondary, indicatorColor: AppColors.primary),
+            Expanded(child: TabBarView(children: [_buildList(pending, true), _buildList(reviewed, false)])),
+          ]),
+        ),
       ),
     );
   }
 
   Widget _buildList(List<Map<String, dynamic>> apps, bool showActions) {
-    if (apps.isEmpty) return const Center(child: Text('暂无数据'));
+    if (apps.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.fact_check_outlined, size: 64, color: Colors.grey[300]), const SizedBox(height: 16), Text('暂无数据', style: TextStyle(color: Colors.grey[500]))]));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: apps.length,

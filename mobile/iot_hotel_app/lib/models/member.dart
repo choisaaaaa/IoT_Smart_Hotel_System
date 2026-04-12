@@ -1,0 +1,86 @@
+import 'package:json_annotation/json_annotation.dart';
+
+class Member {
+  final int id;
+
+  @JsonKey(name: 'phone')
+  final String phone;
+
+  @JsonKey(name: 'name')
+  final String? name;
+
+  @JsonKey(name: 'member_level')
+  final String memberLevel;
+
+  @JsonKey(name: 'points')
+  final int points;
+
+  @JsonKey(name: 'experience')
+  final double experience;
+
+  @JsonKey(name: 'total_spent')
+  final double totalSpent;
+
+  @JsonKey(name: 'balance')
+  final double balance;
+
+  @JsonKey(name: 'total_stays')
+  final int totalStays;
+
+  @JsonKey(name: 'last_checkin_date')
+  final String? lastCheckinDate;
+
+  @JsonKey(name: 'coupon_count')
+  final int? couponCount;
+
+  @JsonKey(name: 'created_at')
+  final String? createdAt;
+
+  Member({
+    required this.id,
+    required this.phone,
+    this.name,
+    this.memberLevel = 'standard',
+    this.points = 0,
+    this.experience = 0.0,
+    this.totalSpent = 0.0,
+    this.balance = 0.0,
+    this.totalStays = 0,
+    this.lastCheckinDate,
+    this.couponCount,
+    this.createdAt,
+  });
+
+  factory Member.fromJson(Map<String, dynamic> json) {
+    final normalized = Map<String, dynamic>.from(json);
+    return Member(
+      id: normalized['id'] ?? 0,
+      phone: normalized['phone'] ?? '',
+      name: normalized['name'] ?? normalized['username'],
+      memberLevel: normalized['member_level'] ?? 'standard',
+      points: normalized['points'] ?? 0,
+      experience: (normalized['experience'] ?? normalized['total_spent'] ?? 0).toDouble(),
+      totalSpent: (normalized['total_spent'] ?? 0).toDouble(),
+      balance: (normalized['balance'] ?? 0).toDouble(),
+      totalStays: normalized['total_stays'] ?? normalized['checkin_days'] ?? 0,
+      lastCheckinDate: normalized['last_checkin_date'],
+      couponCount: normalized['coupon_count'] ?? normalized['coupons_count'],
+      createdAt: normalized['created_at'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'phone': phone,
+        'name': name,
+        'member_level': memberLevel,
+        'points': points,
+        'experience': experience,
+        'total_spent': totalSpent,
+        'balance': balance,
+        'total_stays': totalStays,
+        'last_checkin_date': lastCheckinDate,
+        'coupon_count': couponCount,
+        'created_at': createdAt,
+      };
+}

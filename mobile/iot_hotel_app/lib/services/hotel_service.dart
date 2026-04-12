@@ -2,11 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
+import '../models/hotel.dart';
+import '../models/room.dart';
+import '../models/room_type.dart';
 
 class HotelService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<List<dynamic>>> getHotels({
+  Future<ApiResult<List<Hotel>>> getHotels({
     String? city,
     String? keyword,
     double? lat,
@@ -30,7 +33,11 @@ class HotelService {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(List<dynamic>.from(response.data['data']['hotels'] ?? []));
+        final rawList = response.data['data']['hotels'] ?? [];
+        final hotels = List<Map<String, dynamic>>.from(rawList)
+            .map((h) => Hotel.fromJson(h))
+            .toList();
+        return ApiResult.success(hotels);
       }
       return ApiResult.failure(response.data['message'] ?? '获取酒店列表失败');
     } catch (e) {
@@ -38,12 +45,13 @@ class HotelService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> getHotelById(int hotelId) async {
+  Future<ApiResult<Hotel>> getHotelById(int hotelId) async {
     try {
       final response = await _dioClient.get('${ApiConstants.hotels}/$hotelId');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Hotel.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '获取酒店详情失败');
     } catch (e) {
@@ -51,7 +59,8 @@ class HotelService {
     }
   }
 
-  Future<ApiResult<List<dynamic>>> getRoomAvailability(int hotelId, String checkIn, String checkOut) async {
+  Future<ApiResult<List<RoomType>>> getRoomAvailability(
+      int hotelId, String checkIn, String checkOut) async {
     try {
       final response = await _dioClient.get(
         '${ApiConstants.hotels}/$hotelId/rooms/availability',
@@ -63,18 +72,50 @@ class HotelService {
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
+        List<dynamic> rawList;
         if (data is Map && data.containsKey('roomTypes')) {
-          return ApiResult.success(List<dynamic>.from(data['roomTypes'] ?? []));
+          rawList = List<dynamic>.from(data['roomTypes'] ?? []);
         } else if (data is Map && data.containsKey('rooms')) {
-          return ApiResult.success(List<dynamic>.from(data['rooms'] ?? []));
+          rawList = List<dynamic>.from(data['rooms'] ?? []);
         } else if (data is Map && data.containsKey('list')) {
-          return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+          rawList = List<dynamic>.from(data['list'] ?? []);
         } else if (data is List) {
-          return ApiResult.success(List<dynamic>.from(data));
+          rawList = List<dynamic>.from(data);
+        } else {
+          rawList = [];
         }
-        return ApiResult.success([]);
+        final roomTypes = rawList
+            .map((r) => RoomType.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return ApiResult.success(roomTypes);
       }
       return ApiResult.failure(response.data['message'] ?? '获取房型余量失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<List<Room>>> getHotelRooms(int hotelId) async {
+    try {
+      final response = await _dioClient.get(
+        '${ApiConstants.hotels}/$hotelId/rooms',
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        List<dynamic> rawList;
+        if (data is Map && data.containsKey('list')) {
+          rawList = List<dynamic>.from(data['list'] ?? []);
+        } else if (data is List) {
+          rawList = List<dynamic>.from(data);
+        } else {
+          rawList = [];
+        }
+        final rooms = rawList
+            .map((r) => Room.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return ApiResult.success(rooms);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取房间列表失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
@@ -169,12 +210,13 @@ class HotelService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> updateHotelInfo(Map<String, dynamic> data) async {
+  Future<ApiResult<Hotel>> updateHotelInfo(Map<String, dynamic> data) async {
     try {
       final response = await _dioClient.put(ApiConstants.hotel, data: data);
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        return ApiResult.success(
+            Hotel.fromJson(response.data['data'] as Map<String, dynamic>));
       }
       return ApiResult.failure(response.data['message'] ?? '更新酒店信息失败');
     } catch (e) {

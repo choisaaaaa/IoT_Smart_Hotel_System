@@ -28,6 +28,7 @@ class AppRoles {
       case 'manager':
       case 'hotelmanager':
       case 'hotel_admin':
+      case 'hoteladmin':
         return hotelAdmin;
       case 'staff':
       case 'receptionist':

@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { HotelService } from '../services/hotel.service';
 import pool, { ResultSetHeader, RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin, normalizeRole, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isHotelAdmin, normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -54,14 +54,22 @@ export const get = async (req: AuthRequest, res: Response) => {
  */
 export const getAll = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isSystemAdmin(req.user?.role)) {
-      return res.status(403).json(errorResponse('无权访问所有酒店列表'));
+    if (isSystemAdmin(req.user?.role)) {
+      const hotels = await HotelService.getAllHotels();
+      res.json(successResponse(hotels, '获取所有酒店成功'));
+    } else if (isHotelAdmin(req.user?.role)) {
+      const hotelId = req.user?.hotel_id;
+      if (!hotelId) {
+        return res.status(400).json(errorResponse('未关联酒店'));
+      }
+      const hotel = await HotelService.getHotelById(hotelId);
+      res.json(successResponse([hotel], '获取本店信息成功'));
+    } else {
+      return res.status(403).json(errorResponse('无权访问酒店列表'));
     }
-    const hotels = await HotelService.getAllHotels();
-    res.json(successResponse(hotels, '获取所有酒店成功'));
   } catch (error) {
-    logger.error('获取所有酒店失败:', error.message);
-    res.status(500).json(errorResponse('获取所有酒店失败'));
+    logger.error('获取酒店列表失败:', error.message);
+    res.status(500).json(errorResponse('获取酒店列表失败'));
   }
 };
 

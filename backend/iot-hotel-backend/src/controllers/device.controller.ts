@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import deviceService from '../services/device.service';
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin } from '../utils/role';
+import { isSystemAdmin, isCustomer } from '../utils/role';
 
 class DeviceController {
   /**
@@ -69,19 +69,29 @@ class DeviceController {
       const { status, audit_status, room_id, hotel_id } = req.query;
 
       let targetHotelId: number | undefined;
+      let customerRoomId: number | undefined;
 
       if (isSystemAdmin(user?.role)) {
-        // 系统角色可以查看所有或指定酒店
         targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
+      } else if (isCustomer(user?.role)) {
+        const [bookings]: any = await pool.query(
+          `SELECT room_id FROM bookings WHERE (user_id = ? OR guest_phone = ?) AND status = 'checked_in' ORDER BY id DESC LIMIT 1`,
+          [user?.id, user?.phone]
+        );
+        if (bookings.length > 0) {
+          customerRoomId = bookings[0].room_id;
+        } else {
+          res.json({ success: true, data: [] });
+          return;
+        }
       } else {
-        // 普通管理员只能查看自己酒店
         targetHotelId = user?.hotel_id;
       }
 
       const filters = {
         status: status as string,
         audit_status: audit_status as string,
-        room_id: room_id ? parseInt(room_id as string) : undefined
+        room_id: customerRoomId || (room_id ? parseInt(room_id as string) : undefined)
       };
 
       const result = await deviceService.getAllDevices(targetHotelId, filters);
@@ -100,9 +110,22 @@ class DeviceController {
    */
   async getById(req: Request, res: Response) {
     try {
-      let hotelId = (req as any).user?.hotel_id;
-      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
-      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      const user = (req as any).user;
+      let hotelId = user?.hotel_id;
+      if (isSystemAdmin(user?.role) && !hotelId) hotelId = 1;
+
+      if (isCustomer(user?.role)) {
+        const [bookings]: any = await pool.query(
+          `SELECT r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE (b.user_id = ? OR b.guest_phone = ?) AND b.status = 'checked_in' ORDER BY b.id DESC LIMIT 1`,
+          [user?.id, user?.phone]
+        );
+        if (bookings.length === 0) {
+          return res.status(403).json({ success: false, message: 'No active check-in found' });
+        }
+        hotelId = bookings[0].hotel_id;
+      } else {
+        if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
 
       const id = parseInt(req.params.id);
       const result = await deviceService.getDeviceById(id, hotelId);
@@ -145,19 +168,36 @@ class DeviceController {
    */
   async sendCommand(req: Request, res: Response) {
     try {
-      let hotelId = (req as any).user?.hotel_id;
-      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
-      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      const user = (req as any).user;
+      let hotelId = user?.hotel_id;
+      if (isSystemAdmin(user?.role) && !hotelId) hotelId = 1;
 
       const id = parseInt(req.params.id);
       const { command_type, command_value } = req.body;
-      const user = (req as any).user;
 
       if (!id || !command_type) {
         return res.status(400).json({ success: false, message: 'Invalid parameters' });
       }
 
-      // 1. 获取设备详情以确认其 device_id 并校验所属酒店
+      if (isCustomer(user?.role)) {
+        const [bookings]: any = await pool.query(
+          `SELECT b.room_id, r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE (b.user_id = ? OR b.guest_phone = ?) AND b.status = 'checked_in' ORDER BY b.id DESC LIMIT 1`,
+          [user?.id, user?.phone]
+        );
+        if (bookings.length === 0) {
+          return res.status(403).json({ success: false, message: 'No active check-in found' });
+        }
+        hotelId = bookings[0].hotel_id;
+        const customerRoomId = bookings[0].room_id;
+
+        const device = await deviceService.getDeviceById(id, hotelId);
+        if (!device || device.room_id !== customerRoomId) {
+          return res.status(403).json({ success: false, message: 'Cannot control devices outside your room' });
+        }
+      } else {
+        if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
       const device = await deviceService.getDeviceById(id, hotelId);
       if (!device) {
         return res.status(404).json({ success: false, message: 'Device not found' });
@@ -167,7 +207,6 @@ class DeviceController {
         return res.status(403).json({ success: false, message: 'Device is not approved' });
       }
 
-      // 2. 调用 MQTT 服务下发指令
       const mqttService = require('../services/mqtt.service').default;
       const commandId = await mqttService.sendDeviceCommand(
         device.device_id,

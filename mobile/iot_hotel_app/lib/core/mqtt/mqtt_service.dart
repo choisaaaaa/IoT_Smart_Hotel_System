@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -67,7 +68,7 @@ class MqttService {
   Future<void> publish(String topic, String message) async {
     if (_isConnected && _client != null) {
       final builder = MqttClientPayloadBuilder();
-      builder.addString(message);
+      builder.addUTF8String(message);
       _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
     }
   }
@@ -83,7 +84,7 @@ class MqttService {
   void _setupMessageListener() {
     _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage?>>? c) {
       final MqttPublishMessage recMess = c![0].payload as MqttPublishMessage;
-      final String pt = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+      final String pt = utf8.decode(recMess.payload.message, allowMalformed: true);
       final String topic = c[0].topic;
 
       for (final entry in _topicCallbacks.entries) {

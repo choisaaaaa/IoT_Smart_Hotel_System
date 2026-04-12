@@ -224,6 +224,11 @@ export async function update(req: AuthRequest, res: Response) {
 export async function remove(req: AuthRequest, res: Response) {
   try {
     const { id: userId } = req.params;
+    const currentUser = req.user;
+
+    if (!currentUser) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
 
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE id = ?',
@@ -236,6 +241,14 @@ export async function remove(req: AuthRequest, res: Response) {
 
     if (users[0].username === 'admin') {
       return sendError(res, errorResponse('不能删除管理员账户', 403));
+    }
+
+    if (isHotelAdmin(currentUser.role) && users[0].hotel_id !== currentUser.hotel_id) {
+      return sendError(res, errorResponse('无权删除其他门店的用户', 403));
+    }
+
+    if (!isSystemAdmin(currentUser.role) && !isHotelAdmin(currentUser.role)) {
+      return sendError(res, errorResponse('权限不足', 403));
     }
 
     await db.execute('DELETE FROM users WHERE id = ?', [userId]);

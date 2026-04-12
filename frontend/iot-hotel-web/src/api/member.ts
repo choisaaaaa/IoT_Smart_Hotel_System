@@ -24,5 +24,11 @@ export const memberApi = {
       member_info: any
       is_checked_in: boolean
       checkin_info: any
-    }>>('/members/status')
+    }>>('/members/status'),
+
+  getMyAssets: () =>
+    request.get<ApiResponse<MemberInfo>>('/members/me'),
+
+  getMyCoupons: () =>
+    request.get<ApiResponse<any[]>>('/coupons/me'),
 }

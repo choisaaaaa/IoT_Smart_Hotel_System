@@ -159,9 +159,9 @@ import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
 
 const userStore = useAppStore()
-const isSystemAdmin = computed(() => userStore.role === CANONICAL_ROLES.SYSTEM_ADMIN)
-const isAdmin = computed(() => userStore.role === CANONICAL_ROLES.HOTEL_ADMIN)
-const isStaff = computed(() => userStore.role === CANONICAL_ROLES.STAFF)
+const isSystemAdmin = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN)
+const isAdmin = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN)
+const isStaff = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.STAFF)
 
 const columns = [
   { title: '券名', dataIndex: 'coupon_name', key: 'coupon_name' },

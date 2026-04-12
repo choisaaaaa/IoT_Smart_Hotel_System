@@ -1,10 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/logic/member_logic.dart';
+import '../../core/network/api_result.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
-import '../../core/logic/member_logic.dart';
+import '../../models/hotel.dart';
+import '../../models/member.dart';
 
 class HotelListPage extends ConsumerStatefulWidget {
   const HotelListPage({super.key});
@@ -14,17 +18,23 @@ class HotelListPage extends ConsumerStatefulWidget {
 }
 
 class _HotelListPageState extends ConsumerState<HotelListPage> {
-  List<dynamic> _hotels = [];
+  List<Hotel> _hotels = [];
   bool _isLoading = true;
-  Map<String, dynamic>? _assets;
   String _selectedCity = '全部';
+  DateTime _checkInDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _checkOutDate = DateTime.now().add(const Duration(days: 2));
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _fetchHotels();
-    _fetchAssets();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchHotels() async {
@@ -33,9 +43,9 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
       final city = _selectedCity == '全部' ? null : _selectedCity;
       final keyword = _searchController.text.isNotEmpty ? _searchController.text : null;
       final result = await ref.read(hotelServiceProvider).getHotels(
-        city: city,
-        keyword: keyword,
-      );
+            city: city,
+            keyword: keyword,
+          );
       if (result.success && mounted) {
         setState(() => _hotels = result.data ?? []);
       } else if (mounted) {
@@ -44,7 +54,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
         );
       }
     } catch (e) {
-      debugPrint('✗ hotels: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('网络异常，请重试')),
@@ -55,25 +64,54 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: DateTimeRange(start: _checkInDate, end: _checkOutDate),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _checkInDate = picked.start;
+        _checkOutDate = picked.end;
+      });
+    }
   }
 
-  Future<void> _fetchAssets() async {
-    try {
-      final result = await ref.read(memberServiceProvider).getMyAssets();
-      if (result.success && mounted) {
-        setState(() => _assets = result.data);
-      }
-    } catch (e) {
-      debugPrint('鉁?assets: $e');
+  void _showCityPicker() async {
+    final cities = ['全部', '北京', '上海', '广州', '深圳', '珠海', '湛江', '杭州', '成都'];
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SizedBox(
+        height: 300,
+        child: ListView.builder(
+          itemCount: cities.length,
+          itemBuilder: (context, i) => ListTile(
+            title: Text(cities[i]),
+            selected: cities[i] == _selectedCity,
+            selectedColor: AppColors.primary,
+            onTap: () => Navigator.pop(context, cities[i]),
+          ),
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _selectedCity = result);
+      _fetchHotels();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final format = DateFormat('MM.dd');
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -102,7 +140,10 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
                 ),
               ),
               const VerticalDivider(indent: 10, endIndent: 10),
-              const Text('04.08 - 04.09', style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+              GestureDetector(
+                onTap: _selectDateRange,
+                child: Text('${format.format(_checkInDate)} - ${format.format(_checkOutDate)}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+              ),
               const VerticalDivider(indent: 10, endIndent: 10),
               Expanded(
                 child: TextField(
@@ -137,7 +178,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
           _buildQuickFilters(),
           _buildPointsInfo(),
           Expanded(
-            child: _isLoading 
+            child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _hotels.isEmpty
                     ? Center(
@@ -165,28 +206,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
         ],
       ),
     );
-  }
-
-  void _showCityPicker() async {
-    final cities = ['全部', '北京', '上海', '广州', '深圳', '珠海', '杭州', '成都'];
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SizedBox(
-        height: 300,
-        child: ListView.builder(
-          itemCount: cities.length,
-          itemBuilder: (context, i) => ListTile(
-            title: Text(cities[i]),
-            onTap: () => Navigator.pop(context, cities[i]),
-          ),
-        ),
-      ),
-    );
-
-    if (result != null && mounted) {
-      setState(() => _selectedCity = result);
-      _fetchHotels();
-    }
   }
 
   Widget _buildFilterBar() {
@@ -234,30 +253,40 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
   }
 
   Widget _buildPointsInfo() {
-    final points = _assets?['points'] ?? '0';
-    final discount = (int.tryParse(points.toString()) ?? 0) / 100;
+    return Consumer(builder: (context, ref, _) {
+      return FutureBuilder<ApiResult<Member>>(
+        future: ref.read(memberServiceProvider).getMyAssets(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || !snapshot.data!.success) return const SizedBox.shrink();
+          final member = snapshot.data!.data ?? ref.read(memberServiceProvider).cachedMember;
+          if (member == null) return const SizedBox.shrink();
+          final points = member.points;
+          final discount = points / 100;
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('我的积分 $points | 可抵 ¥${discount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-          Row(
-            children: [
-              const Text('看抵扣价', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(width: 8),
-              Switch.adaptive(value: false, onChanged: (v) {}, activeTrackColor: AppColors.primary),
-            ],
-          ),
-        ],
-      ),
-    );
+          return Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('我的积分 $points | 可抵 ¥${discount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                Row(
+                  children: [
+                    const Text('看抵扣价', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    Switch.adaptive(value: false, onChanged: (v) {}, activeTrackColor: AppColors.primary),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    });
   }
 
   Widget _buildHotelList(BuildContext context) {
@@ -268,18 +297,18 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
     );
   }
 
-  Widget _buildHotelCard(BuildContext context, dynamic hotel) {
-    final totalSpent = double.tryParse(_assets?['total_spent']?.toString() ?? '0') ?? 0;
+  Widget _buildHotelCard(BuildContext context, Hotel hotel) {
+    final member = ref.read(memberServiceProvider).cachedMember;
+    final totalSpent = member?.totalSpent ?? 0;
     final level = MemberLevel.fromExperience(totalSpent.floor());
-    
-    final originalPrice = double.tryParse((hotel['price'] ?? 299).toString()) ?? 299.0;
+
+    final originalPrice = hotel.price ?? 299.0;
     final discountedPrice = originalPrice * level.discount;
 
-    final hotelName = hotel['name'] as String? ?? '智联酒店';
-    final shortName = hotelName.split('酒店').first;
+    final shortName = hotel.hotelName.split('酒店').first;
 
     return GestureDetector(
-      onTap: () => context.push('/hotel-detail', extra: {'hotelId': hotel['id']}),
+      onTap: () => context.push('/hotel-detail', extra: {'hotelId': hotel.id}),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -293,7 +322,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
             Stack(
               children: [
                 Image.network(
-                  hotel['image'] ?? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+                  hotel.displayImage.isNotEmpty ? hotel.displayImage : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -318,17 +347,17 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(hotelName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(hotel.hotelName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Text('4.8', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(hotel.effectiveRating.toStringAsFixed(1), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(width: 4),
-                      Text('很棒 ${_hotels.length > 1 ? "连续281条" : "新开业"}好评', style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+                      Text('很棒 ${hotel.reviewCount ?? 0}条好评', style: const TextStyle(color: AppColors.primary, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(hotel['location'] ?? '酒店地址加载中...', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  Text(hotel.displayAddress, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -343,7 +372,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(hotel['availableRooms'] != null ? '低价房仅剩${hotel['availableRooms']}间' : '火热预订中', style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                      Text(hotel.availableRooms != null ? '低价房仅剩${hotel.availableRooms}间' : '火热预订中', style: const TextStyle(color: AppColors.error, fontSize: 12)),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [

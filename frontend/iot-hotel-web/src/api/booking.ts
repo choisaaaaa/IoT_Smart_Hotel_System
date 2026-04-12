@@ -41,5 +41,32 @@ export const bookingApi = {
     request.get<ApiResponse<{ total_price: number; discount_rate: number }>>('/bookings/calculate-price', { params }),
 
   updateBookingStatus: (id: number, status: string, hotelId?: number) =>
-    request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) })
+    request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) }),
+
+  checkin: (id: number, data?: { guest_name?: string; guest_phone?: string; guest_id_number?: string }) =>
+    request.put<ApiResponse<null>>(`/bookings/${id}/checkin`, data || {}),
+
+  calculateExtendPrice: (id: number, data: { new_check_out_date: string; coupon_id?: number; used_points?: number }) =>
+    request.post<ApiResponse<{
+      base_price: number
+      discount_rate: number
+      member_discount: number
+      coupon_discount: number
+      points_discount: number
+      used_points: number
+      total_price: number
+      extend_nights: number
+    }>>(`/bookings/${id}/extend-price`, data),
+
+  extendStay: (id: number, data: { new_check_out_date: string; coupon_id?: number; used_points?: number; payment_method?: string }) =>
+    request.put<ApiResponse<{
+      booking_id: number
+      new_check_out_date: string
+      extend_nights: number
+      additional_price: number
+      new_total_price: number
+      need_payment: boolean
+      payment_id: number | null
+      coupon_used: boolean
+    }>>(`/bookings/${id}/extend`, data),
 }

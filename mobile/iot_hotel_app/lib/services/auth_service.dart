@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -8,7 +8,7 @@ import '../core/constants/api_constants.dart';
 import '../core/constants/app_constants.dart';
 import '../core/auth/auth_state_notifier.dart';
 import '../core/storage/local_storage.dart';
-import '../../models/user.dart';
+import '../models/user.dart';
 
 class AuthService {
   final DioClient _dioClient = DioClient();
@@ -110,7 +110,7 @@ class AuthService {
         final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
         return User.fromJson(userMap);
       } catch (e) {
-        debugPrint('鉁?decodeUser: $e');
+        debugPrint('✗ decodeUser: $e');
       }
     }
     return null;

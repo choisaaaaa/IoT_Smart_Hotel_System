@@ -87,6 +87,13 @@
                 进入房间
               </a-button>
               <a-button
+                v-if="order.status === 'checked_in'"
+                @click="openExtendModal(order)"
+                style="margin-left: 8px;"
+              >
+                续住
+              </a-button>
+              <a-button
                 v-if="order.status === 'confirmed'"
                 type="primary"
                 @click="handleCheckIn(order)"
@@ -116,6 +123,100 @@
         <a-empty description="暂无订单记录" />
       </div>
     </div>
+
+    <a-modal
+      v-model:open="extendModalVisible"
+      title="在线续住"
+      :confirm-loading="extendSubmitting"
+      @ok="handleExtendStay"
+      ok-text="确认续住"
+      cancel-text="取消"
+      width="520px"
+    >
+      <div v-if="extendOrder" class="extend-modal-content">
+        <a-descriptions :column="2" size="small" bordered>
+          <a-descriptions-item label="酒店">{{ extendOrder.hotel_name || '智联酒店' }}</a-descriptions-item>
+          <a-descriptions-item label="房间">{{ extendOrder.room_type }} - {{ extendOrder.room_number || extendOrder.room_name }}</a-descriptions-item>
+          <a-descriptions-item label="入住日期">{{ formatDate(extendOrder.check_in_date || extendOrder.check_in) }}</a-descriptions-item>
+          <a-descriptions-item label="当前退房">{{ formatDate(extendOrder.check_out_date || extendOrder.check_out) }}</a-descriptions-item>
+        </a-descriptions>
+
+        <div class="extend-section">
+          <div class="section-title">续住天数</div>
+          <div class="nights-selector">
+            <a-button @click="changeExtendNights(-1)" :disabled="extendNights <= 1">
+              <template #icon><MinusOutlined /></template>
+            </a-button>
+            <span class="nights-value">{{ extendNights }}晚</span>
+            <a-button @click="changeExtendNights(1)" :disabled="extendNights >= 30">
+              <template #icon><PlusOutlined /></template>
+            </a-button>
+          </div>
+          <div v-if="newCheckOutDate" class="new-checkout-info">
+            新退房日期：{{ newCheckOutDate }}
+          </div>
+        </div>
+
+        <div class="extend-section">
+          <div class="section-title">优惠与抵扣</div>
+          <a-form layout="vertical" size="small">
+            <a-form-item label="优惠券">
+              <a-select
+                v-model:value="selectedCouponId"
+                placeholder="不使用优惠券"
+                allow-clear
+                style="width: 100%"
+                @change="recalculatePrice"
+              >
+                <a-select-option v-for="c in coupons" :key="c.id" :value="c.id">
+                  {{ c.coupon_name || c.name }} - {{ c.coupon_type === 'discount' ? `${c.discount_value}折` : `¥${c.discount_value}` }}
+                  {{ (c.min_amount || c.min_spend) > 0 ? `(满${c.min_amount || c.min_spend}可用)` : '(无门槛)' }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="积分抵扣">
+              <a-switch v-model:checked="usePoints" @change="recalculatePrice" />
+              <span v-if="usePoints" style="margin-left: 8px; color: #999; font-size: 12px;">
+                可用 {{ memberInfo?.points || 0 }} 积分
+              </span>
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <div class="extend-section">
+          <div class="section-title">支付方式</div>
+          <a-radio-group v-model:value="paymentMethod">
+            <a-radio value="balance">余额支付</a-radio>
+            <a-radio value="wechat">微信支付</a-radio>
+            <a-radio value="alipay">支付宝</a-radio>
+          </a-radio-group>
+        </div>
+
+        <div v-if="priceDetails" class="price-summary">
+          <div class="price-row">
+            <span>续住房费（{{ extendNights }}晚）</span>
+            <span>¥{{ priceDetails.base_price?.toFixed(2) }}</span>
+          </div>
+          <div v-if="priceDetails.discount_rate < 1" class="price-row discount">
+            <span>会员折扣（{{ (priceDetails.discount_rate * 10).toFixed(1) }}折）</span>
+            <span>-¥{{ priceDetails.member_discount?.toFixed(2) }}</span>
+          </div>
+          <div v-if="priceDetails.coupon_discount > 0" class="price-row discount">
+            <span>优惠券抵扣</span>
+            <span>-¥{{ priceDetails.coupon_discount?.toFixed(2) }}</span>
+          </div>
+          <div v-if="priceDetails.points_discount > 0" class="price-row discount">
+            <span>积分抵扣（{{ priceDetails.used_points }}积分）</span>
+            <span>-¥{{ priceDetails.points_discount?.toFixed(2) }}</span>
+          </div>
+          <a-divider style="margin: 8px 0" />
+          <div class="price-row total">
+            <span>续住费用合计</span>
+            <span class="total-amount">¥{{ priceDetails.total_price?.toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -123,8 +224,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
+import { MinusOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import request from '@/api/request'
+import { bookingApi } from '@/api/booking'
+import { memberApi } from '@/api/member'
+import { paymentApi } from '@/api/payment'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
@@ -135,7 +240,24 @@ const searching = ref(false)
 const searchKeyword = ref('')
 const orders = ref<any[]>([])
 
+const extendModalVisible = ref(false)
+const extendSubmitting = ref(false)
+const extendOrder = ref<any>(null)
+const extendNights = ref(1)
+const selectedCouponId = ref<number | undefined>(undefined)
+const usePoints = ref(false)
+const paymentMethod = ref('balance')
+const priceDetails = ref<any>(null)
+const memberInfo = ref<any>(null)
+const coupons = ref<any[]>([])
+
 const isLoggedIn = computed(() => !!appStore.userInfo)
+
+const newCheckOutDate = computed(() => {
+  if (!extendOrder.value) return ''
+  const currentCheckOut = dayjs(extendOrder.value.check_out_date || extendOrder.value.check_out)
+  return currentCheckOut.add(extendNights.value, 'day').format('YYYY-MM-DD')
+})
 
 // 获取状态颜色
 const getStatusColor = (status: string) => {
@@ -243,6 +365,87 @@ const handleCancel = (bookingId: number) => {
       }
     }
   })
+}
+
+const openExtendModal = async (order: any) => {
+  extendOrder.value = order
+  extendNights.value = 1
+  selectedCouponId.value = undefined
+  usePoints.value = false
+  paymentMethod.value = 'balance'
+  priceDetails.value = null
+  extendModalVisible.value = true
+
+  try {
+    const [memberRes, couponRes] = await Promise.all([
+      memberApi.getMyAssets().catch(() => null),
+      memberApi.getMyCoupons().catch(() => null),
+    ])
+    if (memberRes?.data) memberInfo.value = memberRes.data
+    if (couponRes?.data) {
+      const data = couponRes.data
+      coupons.value = Array.isArray(data) ? data : (data.list || [])
+    }
+  } catch (e) {
+    console.error('加载会员信息失败:', e)
+  }
+
+  recalculatePrice()
+}
+
+const changeExtendNights = (delta: number) => {
+  extendNights.value = Math.max(1, Math.min(30, extendNights.value + delta))
+  recalculatePrice()
+}
+
+const recalculatePrice = async () => {
+  if (!extendOrder.value || !newCheckOutDate.value) return
+
+  try {
+    const res = await bookingApi.calculateExtendPrice(extendOrder.value.id, {
+      new_check_out_date: newCheckOutDate.value,
+      coupon_id: selectedCouponId.value,
+      used_points: usePoints.value ? (memberInfo.value?.points || 0) : 0,
+    })
+    if (res.data) {
+      priceDetails.value = res.data
+    }
+  } catch (e) {
+    console.error('计算续住价格失败:', e)
+  }
+}
+
+const handleExtendStay = async () => {
+  if (!extendOrder.value || !newCheckOutDate.value) return
+
+  try {
+    extendSubmitting.value = true
+    const res = await bookingApi.extendStay(extendOrder.value.id, {
+      new_check_out_date: newCheckOutDate.value,
+      coupon_id: selectedCouponId.value,
+      used_points: usePoints.value ? (memberInfo.value?.points || 0) : 0,
+      payment_method: paymentMethod.value,
+    })
+
+    if (res.data?.need_payment && res.data?.payment_id) {
+      try {
+        await paymentApi.payPayment(res.data.payment_id)
+        message.success('续住成功，支付已完成！')
+      } catch (payErr) {
+        message.warning('续住已提交，但支付未完成，请稍后完成支付')
+      }
+    } else {
+      message.success('续住成功！')
+    }
+
+    extendModalVisible.value = false
+    fetchOrders()
+  } catch (e: any) {
+    const errMsg = e?.response?.data?.message || '续住失败，请重试'
+    message.error(errMsg)
+  } finally {
+    extendSubmitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -406,5 +609,77 @@ onMounted(() => {
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+.extend-modal-content {
+  padding: 8px 0;
+}
+
+.extend-section {
+  margin-top: 20px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.nights-selector {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: center;
+}
+
+.nights-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1890ff;
+  min-width: 60px;
+  text-align: center;
+}
+
+.new-checkout-info {
+  margin-top: 8px;
+  text-align: center;
+  color: #1890ff;
+  font-size: 13px;
+  background: #e6f7ff;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.price-summary {
+  margin-top: 20px;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.price-row.discount {
+  color: #ff4d4f;
+  font-size: 13px;
+}
+
+.price-row.total {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.total-amount {
+  color: #ff4d4f;
+  font-size: 20px;
+  font-weight: 700;
 }
 </style>

@@ -199,23 +199,43 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 export const getGuestRoom = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+    const userPhone = req.user?.phone;
     if (!userId) {
       return res.status(401).json(errorResponse('未授权'));
     }
 
     const pool = (await import('../config/database')).default;
     
-    // 查询用户当前有效的入住记录
-    const [bookings]: any = await pool.execute(
-      `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.floor
-       FROM bookings b
-       JOIN rooms r ON b.room_id = r.id
-       WHERE b.user_id = ? AND b.status IN ('checked_in', 'confirmed')
-       AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
-       ORDER BY b.check_in_date DESC
-       LIMIT 1`,
-      [userId]
-    );
+    // 查询用户当前有效的入住记录（优先通过user_id，其次通过guest_phone）
+    let bookings: any[] = [];
+    
+    if (userId) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
+         FROM bookings b
+         JOIN rooms r ON b.room_id = r.id
+         WHERE b.user_id = ? AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         ORDER BY b.check_in_date DESC
+         LIMIT 1`,
+        [userId]
+      );
+      bookings = rows;
+    }
+
+    if (bookings.length === 0 && userPhone) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
+         FROM bookings b
+         JOIN rooms r ON b.room_id = r.id
+         WHERE b.guest_phone = ? AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         ORDER BY b.check_in_date DESC
+         LIMIT 1`,
+        [userPhone]
+      );
+      bookings = rows;
+    }
 
     if (bookings.length === 0) {
       return res.status(404).json(errorResponse('当前没有入住记录'));
@@ -234,6 +254,7 @@ export const getGuestRoom = async (req: AuthRequest, res: Response) => {
 export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+    const userPhone = req.user?.phone;
     const roomId = req.params.id;
     
     if (!userId) {
@@ -242,15 +263,32 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
 
     const pool = (await import('../config/database')).default;
     
-    // 验证该房间是否属于当前用户的有效入住
-    const [bookings]: any = await pool.execute(
-      `SELECT b.id FROM bookings b
-       WHERE b.user_id = ? AND b.room_id = ? 
-       AND b.status IN ('checked_in', 'confirmed')
-       AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
-       LIMIT 1`,
-      [userId, roomId]
-    );
+    // 验证该房间是否属于当前用户的有效入住（优先通过user_id，其次通过guest_phone）
+    let bookings: any[] = [];
+    
+    if (userId) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id FROM bookings b
+         WHERE b.user_id = ? AND b.room_id = ? 
+         AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         LIMIT 1`,
+        [userId, roomId]
+      );
+      bookings = rows;
+    }
+
+    if (bookings.length === 0 && userPhone) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id FROM bookings b
+         WHERE b.guest_phone = ? AND b.room_id = ? 
+         AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         LIMIT 1`,
+        [userPhone, roomId]
+      );
+      bookings = rows;
+    }
 
     if (bookings.length === 0) {
       return res.status(403).json(errorResponse('无权访问该房间的设备'));
