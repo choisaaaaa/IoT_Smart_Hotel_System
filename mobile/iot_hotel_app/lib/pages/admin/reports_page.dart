@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../services/hotel_service.dart';
-import '../../../services/room_type_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../services/hotel_service.dart';
+import '../../services/room_type_service.dart';
 
 class ReportsPage extends ConsumerStatefulWidget {
   const ReportsPage({super.key});

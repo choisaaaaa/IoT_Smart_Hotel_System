@@ -89,8 +89,8 @@
               </a-row>
               <a-card size="small" class="selected-room-card">
                 <div class="selected-room-header">
-                  <span>已选空房</span>
-                  <a-tag v-if="selectedRoom" color="success">{{ selectedRoom.room_number }}</a-tag>
+                  <span>{{ fillingBookingId ? '预订房间' : '已选空房' }}</span>
+                  <a-tag v-if="selectedRoom" :color="fillingBookingId ? 'blue' : 'success'">{{ selectedRoom.room_number }}</a-tag>
                   <a-tag v-else color="warning">未选择</a-tag>
                 </div>
                 <div v-if="selectedRoom" class="selected-room-text">
@@ -574,13 +574,16 @@ const searchedRooms = computed(() => {
   )
 })
 const selectedRoom = computed(() => {
-  // 优先从 availableRooms 找
-  const fromList = availableRooms.value.find(room => room.id === checkinForm.room_id);
-  if (fromList) return fromList;
-  
-  // 如果没找到，但 checkinForm 有房号（通常是今日预定回填），构造一个虚拟的显示对象
-  if (checkinForm.room_id) {
-    const booking = todayBookings.value.find(b => b.room_id === checkinForm.room_id);
+  if (!checkinForm.room_id) return null;
+
+  const fromAvailable = availableRooms.value.find(room => room.id === checkinForm.room_id);
+  if (fromAvailable) return fromAvailable;
+
+  const fromAllRooms = hotelStore.rooms.find(room => room.id === checkinForm.room_id);
+  if (fromAllRooms) return fromAllRooms;
+
+  if (fillingBookingId.value) {
+    const booking = todayBookings.value.find(b => b.id === fillingBookingId.value);
     if (booking) {
       return {
         id: booking.room_id,
@@ -590,6 +593,7 @@ const selectedRoom = computed(() => {
       };
     }
   }
+
   return null;
 })
 const phoneRegistered = computed(() => isPhoneRegistered(checkinForm.phone))
@@ -761,8 +765,6 @@ async function fetchTodayBookings(force = false) {
   if (todayBookingLoading.value && !force) return
   todayBookingLoading.value = true
   try {
-    // 查询今日需要前台处理的订单：待确认(pending)和预入住待确认(pre_checked_in)
-    // 已确认(confirmed)的订单顾客可自行办理入住，不显示在此列表
     const res: any = await bookingApi.getBookingList({
       pageSize: 200,
       check_in_date: 'today'
@@ -771,7 +773,7 @@ async function fetchTodayBookings(force = false) {
     console.log('[今日预定清单] 原始数据:', allList.length, '条')
 
     const list = allList.filter((item: any) =>
-      ['pending', 'pre_checked_in'].includes(item.status)
+      ['pending', 'confirmed', 'pre_checked_in'].includes(item.status)
     )
     console.log('[今日预定清单] 过滤后:', list.length, '条, 状态分布:',
       allList.reduce((acc: any, item: any) => {
@@ -832,40 +834,36 @@ const lastCreatedBookingId = ref<number | null>(null)
 const fillingBookingId = ref<number | null>(null)
 
 async function handleCheckIn() {
-  // 防重复提交检查
   if (submitting.value) {
     message.warning('正在办理入住中，请勿重复点击')
     return
   }
   
-  if (!checkinForm.guest_name || !checkinForm.phone || !checkinForm.room_id) {
-    message.warning('请填写必填项'); return
+  if (!checkinForm.guest_name || !checkinForm.phone) {
+    message.warning('请填写客人姓名和联系电话'); return
   }
   if (!hotelStore.hotelInfo?.id) {
     message.warning('未获取到门店信息，请刷新页面重试'); return
   }
-  
+
   submitting.value = true
   try {
-    // 先查找顾客是否有待确认或已确认的预订
     let existingBookingId: number | null = fillingBookingId.value
     
     if (!existingBookingId) {
       try {
         const lookupRes: any = await bookingApi.lookupBooking(checkinForm.phone)
-        if (lookupRes.data && (lookupRes.data.status === 'pre_checked_in' || lookupRes.data.status === 'confirmed')) {
+        if (lookupRes.data && ['pending', 'confirmed', 'pre_checked_in'].includes(lookupRes.data.status)) {
           existingBookingId = lookupRes.data.id
           console.log('找到顾客匹配的预订:', existingBookingId, '状态:', lookupRes.data.status)
         }
       } catch (e) {
-        // 查找失败不影响后续流程
         console.log('查找预订失败:', e)
       }
     }
 
     let res: any
     if (existingBookingId) {
-      // 如果找到匹配的预订，使用 checkin 接口办理入住（会更新房间状态和guests表）
       res = await bookingApi.checkin(existingBookingId, {
         guest_name: checkinForm.guest_name,
         guest_phone: checkinForm.phone,
@@ -873,7 +871,11 @@ async function handleCheckIn() {
       })
       message.success(`入住成功！${checkinForm.guest_name} 的预订已确认入住`)
     } else {
-      // 如果没有找到，创建新预订并直接办理入住
+      if (!checkinForm.room_id) {
+        message.warning('请选择一间空房'); 
+        submitting.value = false
+        return
+      }
       const payload: any = {
         ...checkinForm,
         hotel_id: hotelStore.hotelInfo.id,

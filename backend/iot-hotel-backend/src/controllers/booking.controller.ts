@@ -408,12 +408,22 @@ export const create = async (req: AuthRequest, res: Response) => {
     const roomNumber = room.room_number;
     const bookingStatus = status || 'pending';
 
-    // 悲观锁：校验房间是否可预订
-    // 即使是 checked_in，也需要确保房间未被他人占用
+    if (guest_phone) {
+      const [existingBookings] = await connection.query<RowDataPacket[]>(
+        `SELECT id, booking_number, status FROM bookings 
+         WHERE guest_phone = ? AND room_id = ? AND status IN ('pending', 'confirmed', 'pre_checked_in', 'checked_in')
+         LIMIT 1`,
+        [guest_phone, room_id]
+      );
+      if (existingBookings.length > 0) {
+        const existing = existingBookings[0] as any;
+        await connection.rollback();
+        return res.status(409).json(errorResponse(`该顾客在此房间已有未完成的预订（编号: ${existing.booking_number}，状态: ${existing.status}），请直接办理入住`));
+      }
+    }
+
     if (room.room_status !== 'available' && room.room_status !== 'cleaning') {
       if (room.locked_by_booking) {
-        // 如果房间被锁定，且锁定的不是当前正在处理的订单（如果有的话）
-        // 在 create 接口中，通常还没有 bookingId，所以只要 locked_by_booking 有值就报错
         await connection.rollback();
         return res.status(409).json(errorResponse(`房间 ${roomNumber} 已被占用，请选择其他房间`));
       }
@@ -761,8 +771,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 检查状态：支持 confirmed 和 pre_checked_in 转为 checked_in
-    if (!['confirmed', 'pre_checked_in'].includes(booking.status)) {
+    if (!['pending', 'confirmed', 'pre_checked_in'].includes(booking.status)) {
       await connection.rollback();
       res.status(400).json(errorResponse('当前预订状态不允许办理入住'));
       return;
@@ -817,7 +826,15 @@ export const checkin = async (req: AuthRequest, res: Response) => {
 
     // 同步更新房间状态为“在住”
     if (roomId) {
-      await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['occupied', roomId]);
+      await connection.query('UPDATE rooms SET room_status = ?, locked_by_booking = ?, locked_at = NOW() WHERE id = ?', ['occupied', id, roomId]);
+    }
+
+    if (booking.status === 'pending') {
+      await connection.query(
+        `UPDATE payments SET status = 'paid', paid_at = CURRENT_TIMESTAMP 
+         WHERE order_type = 'booking' AND order_id = ? AND status = 'pending'`,
+        [id]
+      );
     }
 
     await connection.commit();
