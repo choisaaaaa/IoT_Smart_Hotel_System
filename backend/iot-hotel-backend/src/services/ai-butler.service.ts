@@ -25,7 +25,10 @@ interface AIResponse {
 
 interface GuestSession {
   roomId: string;
-  guestId: string;
+  roomDbId: number;
+  hotelId: number;
+  guestId: number;
+  bookingId: number;
   guestName: string;
   checkInDate: string;
   checkOutDate: string;
@@ -162,7 +165,7 @@ export class AIButlerService {
   async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
     try {
       const [guests] = await pool.query<RowDataPacket[]>(
-        `SELECT g.*, r.room_number, b.check_in_date, b.check_out_date
+        `SELECT g.*, r.room_number, r.hotel_id, b.check_in_date, b.check_out_date
          FROM guests g
          JOIN rooms r ON g.room_id = r.id
          LEFT JOIN bookings b ON g.booking_id = b.id
@@ -181,7 +184,10 @@ export class AIButlerService {
       const guest = guests[0];
       const session: GuestSession = {
         roomId: guest.room_number,
-        guestId: guest.booking_id,
+        roomDbId: guest.room_id,
+        hotelId: guest.hotel_id,
+        guestId: guest.id,
+        bookingId: guest.booking_id,
         guestName: guest.guest_name || '尊敬的客人',
         checkInDate: guest.check_in_date,
         checkOutDate: guest.check_out_date,
@@ -248,6 +254,7 @@ export class AIButlerService {
 
 回复要求：
 - 语气亲切礼貌，称呼客人名字
+- 事实一致性：仅回复基于工具结果或已知系统信息的真实内容，严禁编造未提供的时间、排队情况等。
 - 回复简洁明了，不超过80字
 - 主动确认操作结果
 - 如果需要调用工具，先通过function calling执行`;
@@ -316,7 +323,7 @@ export class AIButlerService {
         case 'request_service':
           return await this.requestService(args, session);
         case 'get_hotel_info':
-          return await this.getHotelInfo(args.info_type);
+          return await this.getHotelInfo(args.info_type, session);
         case 'transfer_to_human':
           return '[TRANSFER:front_desk]';
         default:
@@ -334,11 +341,11 @@ export class AIButlerService {
   private async controlDevice(args: any, session: GuestSession): Promise<string> {
     const { device_type, action, value } = args;
 
-    // 查询房间设备 (device_id 格式: room_101_light_01 等)
+    // 查询房间设备
     const [devices] = await pool.query<RowDataPacket[]>(
       `SELECT d.* FROM devices d
-       WHERE d.device_id LIKE ? AND d.device_status = 'online'`,
-      [`room_${session.roomId}_%`]
+       WHERE d.room_id = ? AND d.device_status = 'online'`,
+      [session.roomDbId]
     );
 
     if (devices.length === 0) {
@@ -435,15 +442,15 @@ export class AIButlerService {
         `SELECT r.*, rt.name as type_name, rt.base_price
          FROM rooms r
          LEFT JOIN room_types rt ON r.room_type_id = rt.id
-         WHERE r.room_number = ?`,
-        [session.roomId]
+         WHERE r.id = ?`,
+        [session.roomDbId]
       );
 
       const [devices] = await pool.query<RowDataPacket[]>(
         `SELECT d.device_type, d.device_name, d.device_status
          FROM devices d
-         WHERE d.device_id LIKE ?`,
-        [`room_${session.roomId}_%`]
+         WHERE d.room_id = ?`,
+        [session.roomDbId]
       );
 
       if (rooms.length === 0) {
@@ -491,23 +498,17 @@ export class AIButlerService {
         // 创建维修/保洁工单
         const ticketNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
         await pool.query(
-          `INSERT INTO maintenance_tickets (hotel_id, ticket_no, room_id, fault_type, fault_description, priority, status, created_at)
-           SELECT h.id, ?, r.id, ?, ?, ?, 'pending', NOW()
-           FROM rooms r
-           JOIN hotels h ON r.hotel_id = h.id
-           WHERE r.room_number = ?`,
-          [ticketNo, service.type, description, urgency, session.roomId]
+          `INSERT INTO maintenance_tickets (ticket_no, booking_id, guest_id, room_id, fault_type, fault_description, priority, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
+          [ticketNo, session.bookingId, session.guestId, session.roomDbId, service.type, description, urgency]
         );
       } else {
         // 创建配送单
         const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
         await pool.query(
-          `INSERT INTO delivery_orders (hotel_id, order_no, room_id, item_name, quantity, note, status, created_at)
-           SELECT h.id, ?, r.id, ?, 1, ?, 'pending', NOW()
-           FROM rooms r
-           JOIN hotels h ON r.hotel_id = h.id
-           WHERE r.room_number = ?`,
-          [orderNo, service.type, description, session.roomId]
+          `INSERT INTO delivery_orders (order_no, booking_id, guest_id, room_id, item_name, quantity, note, status, created_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, 'pending', NOW())`,
+          [orderNo, session.bookingId, session.guestId, session.roomDbId, service.type, description]
         );
       }
 
@@ -521,7 +522,7 @@ export class AIButlerService {
         other: '其他服务'
       }[service_type];
 
-      return `已为您安排${serviceName}${urgencyText}，工作人员会尽快到达您的房间。预计等待时间：${urgency === 'emergency' ? '5分钟' : urgency === 'urgent' ? '15分钟' : '30分钟'}。`;
+      return `已为您安排${serviceName}${urgencyText}，工作人员会尽快到达您的房间并为您处理。`;
     } catch (error) {
       logger.error('创建服务请求失败:', error.message);
       return '创建服务请求失败，请直接拨打前台电话或转接人工服务。';
@@ -531,9 +532,25 @@ export class AIButlerService {
   /**
    * 获取酒店信息
    */
-  private async getHotelInfo(infoType: string): Promise<string> {
-    const infoTemplates: Record<string, string> = {
-      restaurant: `🍽️ 餐厅信息：
+  private async getHotelInfo(infoType: string, session: GuestSession): Promise<string> {
+    try {
+      // 从数据库获取特定酒店的信息
+      const [hotels] = await pool.query<RowDataPacket[]>(
+        'SELECT * FROM hotels WHERE id = ?',
+        [session.hotelId]
+      );
+
+      if (hotels.length === 0) {
+        return '抱歉，暂时无法查询到该门店的信息。';
+      }
+
+      const hotel = hotels[0];
+      const hotelName = hotel.hotel_name;
+
+      // 基础信息模板（如果数据库中没有详细字段，暂时使用酒店名称增强体验）
+      // 在实际生产中，这些信息应存储在 hotel_configs 表中，由门店经理修改
+      const infoTemplates: Record<string, string> = {
+        restaurant: `🍽️ ${hotelName}餐厅信息：
 • 早餐：07:00 - 10:00（1楼西餐厅）
 • 午餐：11:30 - 14:00
 • 晚餐：17:30 - 21:00
@@ -541,7 +558,7 @@ export class AIButlerService {
 
 需要我帮您安排送餐吗？`,
 
-      gym: `💪 健身中心：
+        gym: `💪 ${hotelName}健身中心：
 • 开放时间：06:00 - 23:00
 • 位置：3楼
 • 设施：跑步机、器械区、瑜伽室
@@ -549,49 +566,48 @@ export class AIButlerService {
 
 还需要了解其他设施吗？`,
 
-      wifi: `📶 WiFi信息：
-• 网络名称：Hotel_Guest
+        wifi: `📶 ${hotelName}WiFi信息：
+• 网络名称：Hotel_${hotelName}
 • 密码：guest888
 • 每个房间独立带宽100Mbps
 
 连接遇到问题可以告诉我，我帮您报修。`,
 
-      nearby: `🏪 周边推荐（步行5分钟内）：
-• 便利店：楼下全家便利店
-• 地铁站：500米（人民广场站）
-• 商场：对面万达广场
-• 医院：右侧市第一人民医院
+        nearby: `🏪 ${hotelName}周边推荐：
+• 地址：${hotel.location || hotel.hotel_address || '酒店周边'}
+• 推荐：步行5分钟内有便利店和地铁站
 
 需要更详细的信息吗？`,
 
-      checkout: `📋 退房须知：
+        checkout: `📋 ${hotelName}退房须知：
 • 标准退房时间：12:00前
-• 延迟退房：14:00前（需前台确认，可能产生费用）
+• 延迟退房：14:00前（需前台确认）
 • 快速退房：可将房卡投入大堂退房箱
-• 发票：可选择电子发票或邮寄
 
-需要我帮您安排延迟退房吗？`,
+需要我帮您申请延迟退房吗？`,
 
-      breakfast: `🥐 早餐信息：
+        breakfast: `🥐 ${hotelName}早餐信息：
 • 时间：07:00 - 10:00
 • 地点：1楼西餐厅
 • 形式：自助早餐
-• 包含：中西式菜品、饮品、水果
 
 需要我提醒您明早用餐吗？`,
 
-      all: `🏨 酒店全览：
+        all: `🏨 ${hotelName}欢迎您：
 
-🍽️ 餐厅：早餐7-10点，午餐11:30-14点，晚餐17:30-21点
-💪 健身房：6-23点，3楼，凭房卡免费
-📶 WiFi：Hotel_Guest / 密码guest888
-🛏️ 退房：12:00前，可申请延迟到14:00
-🚗 停车：地下停车场B1-B2，住客免费
+🍽️ 餐厅：早餐7-10点
+💪 健身房：6-23点，3楼
+📶 WiFi：Hotel_${hotelName} / 密码guest888
+🛏️ 退房：12:00前
 
 想了解哪项详情？`
-    };
+      };
 
-    return infoTemplates[infoType] || infoTemplates['all'];
+      return infoTemplates[infoType] || infoTemplates['all'];
+    } catch (error) {
+      logger.error('查询酒店信息失败:', error.message);
+      return '查询酒店信息失败，请稍后重试。';
+    }
   }
 
   /**
@@ -918,7 +934,7 @@ export class AIButlerService {
         }
 
         const finalMessages = [
-          { role: 'system', content: '你是智慧酒店的AI管家"小智"。根据工具执行结果，用亲切的语气向客人汇报结果。' },
+          { role: 'system', content: '你是智慧酒店的AI管家"小智"。根据工具执行结果，用亲切的语气向客人汇报结果。严禁编造工具结果中未包含的信息（如具体的等待时间、具体的排队人数等）。' },
           { role: 'user', content: userText },
           { role: 'assistant', content: llmResult.content || '', tool_calls: llmResult.tool_calls },
           ...toolResults.map(tr => ({
