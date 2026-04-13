@@ -96,6 +96,12 @@ async function startServer() {
           logger.info('数据库列 guests.id_type 添加成功');
         } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
 
+        // 为 calls 增加 hotel_id
+        try {
+          await pool.query('ALTER TABLE calls ADD COLUMN hotel_id INT DEFAULT NULL AFTER callee_id');
+          logger.info('数据库列 calls.hotel_id 添加成功');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+
         // 修改 frequent_guests 的 id_type 枚举
         try {
           await pool.query('ALTER TABLE frequent_guests MODIFY COLUMN id_type VARCHAR(50) DEFAULT "idcard"');

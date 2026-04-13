@@ -83,12 +83,27 @@ export const create = async (req: AuthRequest, res: Response) => {
       res.status(400).json(errorResponse('缺少必要参数（room_id, item_name, quantity）'));
       return;
     }
+
+    // 关键修复：客房服务只对前台已确认入住用户开放
+    const [checkinRows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, status, hotel_id FROM bookings 
+       WHERE room_id = ? AND status = 'checked_in'
+       LIMIT 1`,
+      [room_id]
+    );
+
+    if (checkinRows.length === 0) {
+      res.status(403).json(errorResponse('该房间当前未办理入住，无法请求客房服务'));
+      return;
+    }
+
+    const currentBooking = checkinRows[0] as any;
     
     const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO delivery_orders (order_no, room_id, booking_id, guest_id, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [orderNo, room_id, booking_id || null, guest_id || null, item_name, quantity, note || '', 'pending']
+      [orderNo, room_id, booking_id || currentBooking.id, guest_id || null, item_name, quantity, note || '', 'pending']
     );
     
     res.json(successResponse({ id: result.insertId, order_no: orderNo }, '创建送物订单成功'));

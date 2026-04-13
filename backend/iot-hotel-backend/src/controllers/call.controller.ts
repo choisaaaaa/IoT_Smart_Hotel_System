@@ -84,9 +84,9 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
     }
 
     const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [callId, caller_type, caller_id, callee_type, callee_id, 'calling', new Date()]
+      `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, hotel_id, status, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [callId, caller_type, caller_id, callee_type, callee_id, currentUser.hotel_id, 'calling', new Date()]
     );
 
     res.json(successResponse({
@@ -100,8 +100,8 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
       started_at: new Date().toISOString()
     }, '通话请求已发送'));
   } catch (error) {
-    logger.error('发起语音通话失败:', error.message);
-    res.status(500).json(errorResponse('发起语音通话失败'));
+    logger.error(`发起语音通话失败: ${error.message}`, { stack: error.stack });
+    res.status(500).json(errorResponse(`发起语音通话失败: ${error.message}`));
   }
 };
 
@@ -203,9 +203,9 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
     }
 
     const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [callId, caller_type, caller_id, callee_type, callee_id, 'outgoing', new Date()]
+      `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, hotel_id, status, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [callId, caller_type, caller_id, callee_type, callee_id, currentUser.hotel_id, 'outgoing', new Date()]
     );
 
     // 发送 WebSocket 事件通知被叫方
@@ -259,12 +259,10 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
         const hotelRoom = `front_desk_hotel_${hotelId}`;
         logger.info(`[CallController] 发送 incoming_call 到酒店前台房间: ${hotelRoom}`);
         io.to(hotelRoom).emit('incoming_call', callData);
-        // 同时发送给全局前台（可选，方便系统管理，但在此处我们优先保证隔离）
-        io.to('front_desk').emit('incoming_call', callData);
       } else {
-        // 回退到全局广播
-        logger.warn(`[CallController] 呼叫方无酒店ID，回退到全局前台广播`);
-        io.to('front_desk').emit('incoming_call', callData);
+        // 出于安全考虑，如果完全没有酒店ID，只发送给特定 callee
+        const targetRoom = `${callee_type}_${callee_id}`;
+        io.to(targetRoom).emit('incoming_call', callData);
       }
     } else {
         // 只发送到定向房间
@@ -285,8 +283,8 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       started_at: new Date().toISOString()
     }, '通话已发起'));
   } catch (error) {
-    logger.error('发起语音通话失败:', error.message);
-    res.status(500).json(errorResponse('发起语音通话失败'));
+    logger.error(`发起外呼失败: ${error.message}`, { stack: error.stack });
+    res.status(500).json(errorResponse(`发起外呼失败: ${error.message}`));
   }
 };
 
@@ -326,19 +324,22 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
         answered_at: new Date().toISOString()
       };
 
-      // 通知主叫方
+      // 1. 通知主叫方
       const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
       logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom}, call_id: ${call_id}`);
       io.to(callerRoom).emit('call_answered', answeredData);
 
-      // 通知被叫方
+      // 2. 通知被叫方
       const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
       logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom}, call_id: ${call_id}`);
       io.to(calleeRoom).emit('call_answered', answeredData);
 
-      // 额外：广播到所有客户端确保收到
-      io.emit('call_answered', answeredData);
-      logger.info(`[HTTP API] 广播 call_answered 到所有客户端`);
+      // 3. 通知该门店的所有前台（同步状态）
+      if (callData.hotel_id) {
+        const hotelRoom = `front_desk_hotel_${callData.hotel_id}`;
+        logger.info(`[HTTP API] 发送 call_answered 到酒店前台房间: ${hotelRoom}`);
+        io.to(hotelRoom).emit('call_answered', answeredData);
+      }
     } else {
       logger.error(`[HTTP API] WebSocket服务不可用，无法发送call_answered事件`);
     }
@@ -349,8 +350,8 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
       answered_at: new Date().toISOString()
     }, '通话已接听'));
   } catch (error) {
-    logger.error('接听语音通话失败:', error.message);
-    res.status(500).json(errorResponse('接听语音通话失败'));
+    logger.error(`接听语音通话失败: ${error.message}`, { stack: error.stack });
+    res.status(500).json(errorResponse(`接听语音通话失败: ${error.message}`));
   }
 };
 

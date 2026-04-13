@@ -408,6 +408,33 @@ export const create = async (req: AuthRequest, res: Response) => {
     const roomNumber = room.room_number;
     const bookingStatus = status || 'pending';
 
+    // 关键修复：实现同一证件号跨店入住限制
+    if (guest_id_number) {
+      const today = dayjs().format('YYYY-MM-DD');
+      const [duplicateIdRows] = await connection.query<RowDataPacket[]>(
+        `SELECT b.id, b.booking_number, h.hotel_name, r.room_number 
+         FROM bookings b
+         LEFT JOIN hotels h ON b.hotel_id = h.id
+         LEFT JOIN rooms r ON b.room_id = r.id
+         WHERE b.guest_id_number = ? 
+         AND b.status IN ('confirmed', 'pre_checked_in', 'checked_in')
+         AND (
+           DATE(b.check_in_date) = ? 
+           OR (DATE(b.check_in_date) <= ? AND DATE(b.check_out_date) > ?)
+         )
+         LIMIT 1`,
+        [guest_id_number, today, today, today]
+      );
+
+      if (duplicateIdRows.length > 0) {
+        const dup = duplicateIdRows[0] as any;
+        await connection.rollback();
+        return res.status(409).json(errorResponse(
+          `证件号 ${guest_id_number} 今日已有活跃入住或预订（酒店: ${dup.hotel_name}, 房号: ${dup.room_number}）。同一证件不可在同一天入住多个房间。`
+        ));
+      }
+    }
+
     if (guest_phone) {
       const [existingBookings] = await connection.query<RowDataPacket[]>(
         `SELECT id, booking_number, status FROM bookings 
@@ -756,6 +783,31 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     }
     const booking = bookingRows[0] as any;
     const roomId = booking.room_id;
+
+    // 关键修复：实现同一证件号跨店入住限制
+    const finalIdNumber = guest_id_number || booking.guest_id_number;
+    if (finalIdNumber) {
+      const today = dayjs().format('YYYY-MM-DD');
+      const [duplicateIdRows] = await connection.query<RowDataPacket[]>(
+        `SELECT b.id, b.booking_number, h.hotel_name, r.room_number 
+         FROM bookings b
+         LEFT JOIN hotels h ON b.hotel_id = h.id
+         LEFT JOIN rooms r ON b.room_id = r.id
+         WHERE b.guest_id_number = ? 
+         AND b.id != ?
+         AND b.status = 'checked_in'
+         LIMIT 1`,
+        [finalIdNumber, id]
+      );
+
+      if (duplicateIdRows.length > 0) {
+        const dup = duplicateIdRows[0] as any;
+        await connection.rollback();
+        return res.status(409).json(errorResponse(
+          `证件号 ${finalIdNumber} 当前已在其他房间入住（酒店: ${dup.hotel_name}, 房号: ${dup.room_number}）。请先退房后再办理新入住。`
+        ));
+      }
+    }
 
     // 自动关联用户账号：如果未提供user_id，尝试通过手机号查找
     let resolvedUserId = user_id;

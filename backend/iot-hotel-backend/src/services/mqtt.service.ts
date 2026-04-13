@@ -39,12 +39,31 @@ class MQTTService {
   private baseReconnectDelay: number = 1000;
   private wsInstance: any = null;
   private callCache: Map<string, { caller_type: string, caller_id: any, callee_type: string, callee_id: any }> = new Map();
-  private deviceCache: Map<string, { audit_status: string, device_key: string }> = new Map();
+  private deviceCache: Map<string, { audit_status: string, device_key: string, hotel_id?: number }> = new Map();
 
   constructor() {}
 
   setWebSocket(ws: any) {
     this.wsInstance = ws;
+  }
+
+  // 内部辅助方法：获取设备元数据
+  private async getDeviceMetadata(deviceId: string) {
+    let device = this.deviceCache.get(deviceId);
+    
+    if (!device) {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        'SELECT audit_status, device_key, hotel_id FROM devices WHERE device_id = ?',
+        [deviceId]
+      );
+      device = rows[0] as any;
+      if (device) {
+        this.deviceCache.set(deviceId, device);
+        // 缓存10分钟
+        setTimeout(() => this.deviceCache.delete(deviceId), 10 * 60 * 1000);
+      }
+    }
+    return device;
   }
 
   connect(): Promise<boolean> {
@@ -171,21 +190,8 @@ class MQTTService {
     }
 
     try {
-      // 1. 获取设备信息以检查审核状态和密钥
-      let device = this.deviceCache.get(deviceId);
-      
-      if (!device) {
-        const [rows] = await pool.query<RowDataPacket[]>(
-          'SELECT audit_status, device_key FROM devices WHERE device_id = ?',
-          [deviceId]
-        );
-        device = rows[0] as { audit_status: string, device_key: string } | undefined;
-        if (device) {
-          this.deviceCache.set(deviceId, device);
-          // 缓存10分钟
-          setTimeout(() => this.deviceCache.delete(deviceId), 10 * 60 * 1000);
-        }
-      }
+      // 1. 获取设备元数据
+      const device = await this.getDeviceMetadata(deviceId);
 
       // 2. 只有处于 pending 状态的设备可以发送 status 消息进行注册
       if (!device || device.audit_status !== 'approved') {
@@ -231,17 +237,17 @@ class MQTTService {
         case 'hotel/device/data/light':
         case 'hotel/device/data/motion':
         case 'hotel/device/data/door':
-          await this.handleSensorData(data as SensorDataPayload);
+          await this.handleSensorData(data as SensorDataPayload, device.hotel_id);
           break;
         case 'hotel/device/command/result':
-          await this.handleCommandResult(data as CommandResultPayload);
+          await this.handleCommandResult(data as CommandResultPayload, device.hotel_id);
           break;
         case 'hotel/security/event':
-          await this.handleSecurityEvent(data);
+          await this.handleSecurityEvent(data, device.hotel_id);
           break;
         default:
           if (topic.startsWith('hotel/device/data/')) {
-            await this.handleSensorData(data as SensorDataPayload);
+            await this.handleSensorData(data as SensorDataPayload, device.hotel_id);
           } else {
             logger.debug(`未处理的MQTT主题: ${topic}`);
           }
@@ -334,17 +340,21 @@ class MQTTService {
 
       logger.info(`设备状态更新 (MQTT): ${data.device_id} -> ${data.status}`);
 
-      this.wsInstance?.emit('device_status_changed', {
-        device_id: data.device_id,
-        status: data.status,
-        timestamp: now.toISOString()
-      });
+      // 关键修复：设备状态更新只发送给所属酒店的前台
+      if (hotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`;
+        this.wsInstance.emit('device_status_changed', {
+          device_id: data.device_id,
+          status: data.status,
+          timestamp: now.toISOString()
+        }, hotelRoom);
+      }
     } catch (error) {
       logger.error('处理设备状态更新失败:', error.message);
     }
   }
 
-  async handleSensorData(data: SensorDataPayload) {
+  async handleSensorData(data: SensorDataPayload, hotelId?: number) {
     try {
       const sensorType = data.sensor_type || 'unknown';
       
@@ -355,18 +365,22 @@ class MQTTService {
         [data.device_id, sensorType, String(data.value)]
       );
 
-      this.wsInstance?.emit('sensor_data_update', {
-        device_id: data.device_id,
-        sensor_type: sensorType,
-        value: data.value,
-        timestamp: new Date().toISOString()
-      });
+      // 关键修复：传感器数据更新只发送给所属酒店的前台
+      if (hotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`;
+        this.wsInstance.emit('sensor_data_update', {
+          device_id: data.device_id,
+          sensor_type: sensorType,
+          value: data.value,
+          timestamp: new Date().toISOString()
+        }, hotelRoom);
+      }
     } catch (error) {
       logger.error('处理传感器数据失败:', error.message);
     }
   }
 
-  async handleCommandResult(data: CommandResultPayload) {
+  async handleCommandResult(data: CommandResultPayload, hotelId?: number) {
     try {
       if (data.command_id) {
         await pool.query<ResultSetHeader>(
@@ -380,19 +394,23 @@ class MQTTService {
 
       logger.info(`指令执行结果: 设备=${data.device_id}, 类型=${data.command_type}, 状态=${data.status}`);
 
-      this.wsInstance?.emit('command_result', {
-        device_id: data.device_id,
-        command_type: data.command_type,
-        status: data.status,
-        result: data.result,
-        timestamp: new Date().toISOString()
-      });
+      // 关键修复：指令结果只发送给所属酒店的前台
+      if (hotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`;
+        this.wsInstance.emit('command_result', {
+          device_id: data.device_id,
+          command_type: data.command_type,
+          status: data.status,
+          result: data.result,
+          timestamp: new Date().toISOString()
+        }, hotelRoom);
+      }
     } catch (error) {
       logger.error('处理指令结果失败:', error.message);
     }
   }
 
-  async handleSecurityEvent(data: any) {
+  async handleSecurityEvent(data: any, hotelId?: number) {
     try {
       await pool.query<ResultSetHeader>(
         `INSERT INTO security_events (device_id, event_type, event_data, event_level, created_at)
@@ -407,13 +425,17 @@ class MQTTService {
 
       logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}`);
 
-      this.wsInstance?.emit('security_event', {
-        device_id: data.device_id,
-        event_type: data.event_type,
-        level: data.level || 'info',
-        data: data.data,
-        timestamp: new Date().toISOString()
-      });
+      // 关键修复：安防事件只发送给所属酒店的前台
+      if (hotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`;
+        this.wsInstance.emit('security_event', {
+          device_id: data.device_id,
+          event_type: data.event_type,
+          level: data.level || 'info',
+          data: data.data,
+          timestamp: new Date().toISOString()
+        }, hotelRoom);
+      }
     } catch (error) {
       logger.error('处理安防事件失败:', error.message);
     }

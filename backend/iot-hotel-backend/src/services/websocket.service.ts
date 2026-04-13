@@ -171,25 +171,24 @@ class WebSocketService {
             info.clientName = displayName;
             info.hotelId = hotelId;
             
-            // 1. 加入基于类型的全局房间
-            socket.join(data.clientType);
-            
-            // 2. 加入基于酒店的类型房间（实现门店隔离）
+            // 1. 门店隔离：加入基于酒店的类型房间（强制隔离，不再加入全局类型房间）
             if (hotelId) {
               const hotelTypeRoom = `${data.clientType}_hotel_${hotelId}`;
               socket.join(hotelTypeRoom);
-              logger.info(`客户端 ${socket.id} 加入门店房间: ${hotelTypeRoom}`);
+              logger.info(`客户端 ${socket.id} 加入门店隔离房间: ${hotelTypeRoom}`);
+            } else {
+              // 如果没有酒店ID（如系统管理员），则加入全局房间作为兜底
+              socket.join(data.clientType);
+              logger.info(`客户端 ${socket.id} 加入全局类型房间: ${data.clientType}`);
             }
 
-            // 3. 加入个人专属房间，用于接收定向消息
+            // 2. 加入个人专属房间，用于接收定向消息
             const personalRoom = `${data.clientType}_${data.clientId}`;
             socket.join(personalRoom);
-            logger.info(`客户端 ${socket.id} 加入个人房间: ${personalRoom}`);
+            logger.info(`客户端 ${socket.id} 加入个人专属房间: ${personalRoom}`);
 
-            // 4. 兼容性：如果是前台，加入 legacy 房间名
-            if (data.clientType === 'front_desk') {
-              socket.join('front_desk');
-            }
+            // 3. 移除 legacy 的全局 'front_desk' 房间，防止跨店泄露
+            // if (data.clientType === 'front_desk') { socket.join('front_desk'); }
             
             this.broadcastOnlineStatus();
             socket.emit('registered', { 
@@ -297,6 +296,45 @@ class WebSocketService {
             socket.emit('call_error', { message: `无效的callee_type，支持的值: ${validTypes.join(', ')}` });
             return;
           }
+
+          // 关键修复：呼叫权限校验与跨店呼叫隔离
+          const callerHotelId = clientInfo?.hotelId;
+          
+          if (caller_type === 'room' || caller_type === 'app') {
+            // 1. 验证主叫方是否为已入住用户
+            const [callerCheckin] = await pool.query<RowDataPacket[]>(
+              `SELECT id, hotel_id FROM bookings 
+               WHERE (room_id = ? OR user_id = ?) AND status = 'checked_in'
+               LIMIT 1`,
+              [caller_id, clientInfo?.userId]
+            );
+
+            if (callerCheckin.length === 0) {
+              socket.emit('call_error', { message: '权限不足：客房服务仅对已入住用户开放' });
+              return;
+            }
+
+            // 2. 强制酒店隔离（如果是呼叫特定目标，非 broadcast 模式）
+            if (callee_type === 'room') {
+              const [calleeRoom] = await pool.query<RowDataPacket[]>(
+                'SELECT hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+                [callee_id, callee_id]
+              );
+              if (calleeRoom.length > 0 && calleeRoom[0].hotel_id !== callerHotelId) {
+                socket.emit('call_error', { message: '非法操作：禁止跨店呼叫其他房间' });
+                return;
+              }
+            } else if (callee_type === 'front_desk' && callee_id !== 'all' && callee_id !== 'staff') {
+              const [calleeStaff] = await pool.query<RowDataPacket[]>(
+                'SELECT hotel_id FROM users WHERE id = ? OR username = ?',
+                [callee_id, callee_id]
+              );
+              if (calleeStaff.length > 0 && calleeStaff[0].hotel_id !== callerHotelId) {
+                socket.emit('call_error', { message: '非法操作：禁止跨店呼叫前台人员' });
+                return;
+              }
+            }
+          }
           
           const callId = `CALL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
           
@@ -341,9 +379,9 @@ class WebSocketService {
           }
           
           const [result] = await pool.query<ResultSetHeader>(
-            `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, status, started_at) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [callId, caller_type, caller_id, callee_type, callee_id, 'calling', new Date()]
+            `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, hotel_id, status, started_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [callId, caller_type, caller_id, callee_type, callee_id, callerHotelId, 'calling', new Date()]
           );
           
           // 1. 获取主叫方的酒店信息（如果是房间）
@@ -393,15 +431,15 @@ class WebSocketService {
                 });
                 logger.info(`呼叫已路由到 ${onDutyStaff.length} 名在岗员工`);
               } else {
-                // 2. 如果没有人在线/在岗，则回退到广播到该门店所有前台（兜底）
+                // 2. 如果没有人在线/在岗，则广播到该门店所有前台
                 const hotelRoom = `front_desk_hotel_${callerHotelId}`;
                 this.io?.to(hotelRoom).emit('incoming_call', callData);
-                logger.info(`无在岗员工，回退广播到门店房间: ${hotelRoom}`);
+                logger.info(`无在岗员工，广播到门店房间: ${hotelRoom}`);
               }
             } else {
-              // 回退方案：如果没有酒店ID，广播到全局前台房间
-              logger.warn(`主叫方 ${socket.id} 缺少酒店ID，回退到全局前台广播`);
-              this.io?.to('front_desk').emit('incoming_call', callData);
+              // 关键修复：如果没有酒店ID，不允许呼叫前台广播
+              logger.error(`主叫方 ${socket.id} 缺少酒店ID，拒绝呼叫前台广播`);
+              socket.emit('call_error', { message: '系统错误：主叫方所属门店信息丢失，请重新登录' });
             }
           } else {
             const targetRoom = `${callee_type}_${callee_id}`;
@@ -466,9 +504,10 @@ class WebSocketService {
             logger.info(`[WebRTC] Offer通过MQTT发送给硬件房间: ${data.target_id}`);
           }
         } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
-          // 集体呼叫模式：广播给所有在线前台
+          // 集体呼叫模式：广播给当前酒店的所有在线前台
+          const senderHotelId = this.clients.get(socket.id)?.hotelId;
           this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk') {
+            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
               this.io?.to(socketId).emit('webrtc_offer', {
                 from_type: this.clients.get(socket.id)?.clientType,
                 from_id: this.clients.get(socket.id)?.clientId,
@@ -524,9 +563,10 @@ class WebSocketService {
             logger.info(`WebRTC Answer通过MQTT发送给硬件房间: ${data.target_id}`);
           }
         } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
-          // 集体呼叫模式：广播给所有在线前台
+          // 集体呼叫模式：广播给当前酒店的所有在线前台
+          const senderHotelId = this.clients.get(socket.id)?.hotelId;
           this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk') {
+            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
               this.io?.to(socketId).emit('webrtc_answer', {
                 from_type: this.clients.get(socket.id)?.clientType,
                 from_id: this.clients.get(socket.id)?.clientId,
@@ -577,9 +617,10 @@ class WebSocketService {
             });
           }
         } else if (data.target_type === 'front_desk' && data.target_id === 'all') {
-          // 集体呼叫模式：广播给所有在线前台
+          // 集体呼叫模式：广播给当前酒店的所有在线前台
+          const senderHotelId = this.clients.get(socket.id)?.hotelId;
           this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk') {
+            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
               this.io?.to(socketId).emit('webrtc_ice_candidate', {
                 from_type: this.clients.get(socket.id)?.clientType,
                 from_id: this.clients.get(socket.id)?.clientId,
@@ -938,15 +979,6 @@ class WebSocketService {
       // 发送给该酒店的前台房间
       this.io?.to(`front_desk_hotel_${hotelId}`).emit('online_status', data);
     }
-
-    // 同时保留全局广播给系统管理员（如果他们在 global front_desk 房间）
-    const globalData = {
-      web: this.getClientsByType('front_desk'),
-      rooms: this.getClientsByType('room'),
-      ai: this.getClientsByType('ai'),
-      app: this.getClientsByType('app')
-    };
-    this.io?.to('front_desk').emit('online_status', globalData);
   }
 
   /**
@@ -990,18 +1022,25 @@ class WebSocketService {
   notifyIncomingCall(callData: any) {
     if (!this.io) return;
     
+    // 确保定向通知也遵循酒店隔离（如果 callData 中有 hotel_id）
     const targetRoom = `${callData.callee_type}_${callData.callee_id}`;
     this.io.to(targetRoom).emit('incoming_call', callData);
     logger.info(`AI转接通知已发送: ${targetRoom}`);
   }
 
-  // 广播AI转接来电给所有前台（集体呼叫模式）
-  broadcastIncomingCall(callData: any) {
+  // 广播AI转接来电给特定酒店的所有前台
+  broadcastIncomingCall(callData: any, hotelId?: number) {
     if (!this.io) return;
     
-    // 广播到所有前台
-    this.io.to('front_desk').emit('incoming_call', callData);
-    logger.info(`AI转接广播已发送: 所有前台, 呼叫ID: ${callData.call_id}`);
+    const hId = hotelId || callData.hotel_id;
+    if (hId) {
+      const hotelRoom = `front_desk_hotel_${hId}`;
+      this.io.to(hotelRoom).emit('incoming_call', callData);
+      logger.info(`AI转接广播已发送: 门店 ${hId}, 呼叫ID: ${callData.call_id}`);
+    } else {
+      // 关键修复：禁止全局广播，防止跨店泄露
+      logger.error(`AI转接广播失败：缺少酒店ID，无法路由。呼叫ID: ${callData.call_id}`);
+    }
   }
 }
 
