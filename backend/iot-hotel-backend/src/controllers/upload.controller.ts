@@ -12,12 +12,11 @@ export class UploadController {
         return res.status(400).json(errorResponse('请选择要上传的图片'));
       }
 
-      // 智能生成 URL：如果有公网配置则返回完整 URL，否则返回相对路径
-      const baseUrl = config.app.publicUrl || '';
-      const fileUrl = `${baseUrl}/uploads/${file.filename}`;
+      // 数据库仅存储相对路径 (以 uploads/ 开头)，由前端根据 BaseURL 渲染
+      const relativePath = `/uploads/${file.filename}`;
       
       res.json(successResponse({
-        url: fileUrl,
+        url: relativePath,
         filename: file.filename,
         mimetype: file.mimetype,
         size: file.size

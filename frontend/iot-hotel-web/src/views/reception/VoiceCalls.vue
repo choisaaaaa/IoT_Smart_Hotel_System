@@ -24,40 +24,87 @@
               <span class="label">当前身份:</span>
               <span class="value">{{ appStore.isRegistered ? appStore.clientDisplayName : '未上线' }}</span>
             </div>
-            <a-button :type="appStore.isRegistered ? 'default' : 'primary'" size="small" @click="toggleRegister">
-              {{ appStore.isRegistered ? '注销' : '上线' }}
-            </a-button>
+            <a-tag :color="appStore.isRegistered ? 'success' : 'warning'">
+              {{ appStore.isRegistered ? '已自动上线' : '连接中' }}
+            </a-tag>
           </div>
         </a-card>
       </a-col>
     </a-row>
 
-    <!-- 当前通话 -->
-    <div v-if="appStore.currentCall" class="current-call-section">
-      <a-card size="small" class="current-call-card" :class="appStore.currentCall.status">
-        <div class="current-call-header">
-          <PhoneOutlined class="call-icon" />
-          <span class="call-title">当前通话</span>
-          <a-tag :color="appStore.currentCall.status === 'connected' ? 'success' : 'processing'">
-            {{ appStore.currentCall.status === 'connected' ? '通话中' : '连接中...' }}
-          </a-tag>
-        </div>
-        <div class="current-call-info">
-          <div class="caller-name">{{ appStore.currentCall.caller_name || appStore.currentCall.caller_id }}</div>
-          <div class="call-duration" v-if="appStore.currentCall.status === 'connected'">
-            通话时长: {{ currentCallDuration }}
+    <!-- 当前通话 (统一由 App.vue 处理，这里仅保留挂断快捷键或隐藏) -->
+    <!-- 移除了本地 redundant current-call-section -->
+
+    <!-- 呼叫网格与调度面板 -->
+    <div class="calls-main-layout">
+      <!-- 调度面板 -->
+      <a-card class="duty-management-card" title="话务调度面板" :bodyStyle="{ padding: '16px' }">
+        <template #extra>
+          <a-badge :status="appStore.userStatus?.isOnDuty ? 'success' : 'default'" :text="appStore.userStatus?.isOnDuty ? '值班中' : '休息中'" />
+        </template>
+        
+        <div class="duty-controls">
+          <div class="control-item">
+            <span class="label">接听状态:</span>
+            <a-switch 
+              :checked="appStore.userStatus?.isOnDuty" 
+              @change="handleDutySwitch"
+              checked-children="在岗" 
+              un-checked-children="离岗"
+            />
+          </div>
+          
+          <div class="control-item" v-if="appStore.userStatus?.isOnDuty">
+            <span class="label">当值岗位:</span>
+            <a-select v-model:value="currentDutyRole" @change="handleRoleChange" style="width: 130px">
+              <a-select-option value="reception">客服前台</a-select-option>
+              <a-select-option value="manager">值班经理</a-select-option>
+              <a-select-option value="security">安保中心</a-select-option>
+              <a-select-option value="cleaning">保洁调度</a-select-option>
+            </a-select>
+          </div>
+
+          <a-divider style="margin: 8px 0" />
+
+          <div class="mic-check-section">
+            <a-button 
+              block 
+              :type="micStatus === 'success' ? 'default' : 'primary'"
+              @click="checkMicPermission" 
+              :loading="micChecking"
+            >
+              <template #icon>
+                <AudioOutlined v-if="micStatus !== 'success'" />
+                <CheckCircleOutlined v-else style="color: #52c41a" />
+              </template>
+              {{ micStatus === 'success' ? '麦克风已就绪' : '检测麦克风权限' }}
+            </a-button>
+            <div v-if="micStatus === 'error'" class="mic-error-tip">
+              <WarningOutlined /> 麦克风未授权或设备不可用
+            </div>
           </div>
         </div>
-        <div class="current-call-actions">
-          <a-button danger size="small" @click="hangupCurrentCall">
-            <CloseOutlined /> 挂断
-          </a-button>
+
+        <a-divider style="margin: 16px 0" />
+        
+        <div class="online-staff-section">
+          <div class="section-header">
+            <span class="title">当前值班 ({{ onDutyStaff.length }})</span>
+            <span class="subtitle">仅在岗人员可接收公共呼叫</span>
+          </div>
+          <div class="staff-list-mini">
+            <div v-for="staff in onDutyStaff" :key="staff.id" class="staff-item-mini">
+              <a-avatar size="small" :src="staff.avatar">{{ staff.name[0] }}</a-avatar>
+              <span class="staff-name">{{ staff.name }}</span>
+              <a-tag size="small" color="blue">{{ getRoleLabel(staff.dutyRole) }}</a-tag>
+            </div>
+            <a-empty v-if="onDutyStaff.length === 0" description="暂无值班人员" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
+          </div>
         </div>
       </a-card>
-    </div>
 
-    <!-- 呼叫网格 -->
-    <a-tabs v-model:activeKey="activeTab" class="call-tabs">
+      <!-- 呼叫面板 -->
+      <a-tabs v-model:activeKey="activeTab" class="call-tabs">
       <a-tab-pane key="all" title="全部">
         <template #tab><span><AppstoreOutlined /> 全部</span></template>
         <div class="grid-scroll">
@@ -114,6 +161,7 @@
         <a-table :columns="historyColumns" :data-source="history" :pagination="{ pageSize: 10 }" row-key="call_id" size="small" />
       </a-tab-pane>
     </a-tabs>
+    </div> <!-- 关闭 calls-main-layout -->
 
     <!-- 正在呼叫弹窗 -->
     <a-modal
@@ -138,10 +186,10 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, Empty } from 'ant-design-vue'
 import {
   PhoneOutlined, CloseOutlined, HomeOutlined, UserOutlined,
-  TeamOutlined, HistoryOutlined, AppstoreOutlined
+  TeamOutlined, HistoryOutlined, AppstoreOutlined, AudioOutlined, CheckCircleOutlined, WarningOutlined
 } from '@ant-design/icons-vue'
 import { callApi } from '@/api/call'
 import request from '@/api/request'
@@ -163,6 +211,79 @@ const users = ref<any[]>([])
 const activeTab = ref('all')
 const onlineStatus = ref<{ web: any[], rooms: any[] }>({ web: [], rooms: [] })
 const fetchCallsTimer = ref<NodeJS.Timeout | null>(null)
+
+// 麦克风检测状态
+const micChecking = ref(false)
+const micStatus = ref<'idle' | 'success' | 'error'>('idle')
+
+// 值班状态管理
+const currentDutyRole = ref('reception')
+const onDutyStaff = computed(() => {
+  return onlineStatus.value.web.filter(s => s.isOnDuty)
+})
+
+const getRoleLabel = (role: string) => {
+  const roles: any = {
+    reception: '客服前台',
+    manager: '值班经理',
+    security: '安保中心',
+    cleaning: '保洁调度'
+  }
+  return roles[role] || '前台'
+}
+
+function handleDutySwitch(checked: boolean) {
+  const socket = getSocket()
+  if (socket) {
+    socket.emit('set_duty_status', { 
+      isOnDuty: checked,
+      dutyRole: currentDutyRole.value 
+    })
+    // 同步更新本地状态，增强 UI 响应速度
+    appStore.setUserStatus({
+      ...appStore.userStatus,
+      isOnDuty: checked
+    })
+  }
+}
+
+function handleRoleChange(value: string) {
+  const socket = getSocket()
+  if (socket) {
+    socket.emit('set_duty_status', { 
+      isOnDuty: appStore.userStatus?.isOnDuty,
+      dutyRole: value 
+    })
+  }
+}
+
+async function checkMicPermission() {
+  micChecking.value = true
+  micStatus.value = 'idle'
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // 成功获取流，说明权限 OK
+    micStatus.value = 'success'
+    message.success('麦克风权限已就绪，您可以正常通话')
+    
+    // 释放测试流
+    stream.getTracks().forEach(track => track.stop())
+  } catch (error: any) {
+    console.error('[MicCheck] 权限检测失败:', error)
+    micStatus.value = 'error'
+    
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      message.error('麦克风权限已被拒绝，请在浏览器地址栏左侧点击“锁”图标开启权限')
+    } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+      message.error('未检测到麦克风设备，请检查硬件连接')
+    } else {
+      message.error('麦克风检测异常: ' + error.message)
+    }
+  } finally {
+    micChecking.value = false
+  }
+}
 
 const isRegistered = computed(() => appStore.isRegistered)
 const clientDisplayName = computed(() => appStore.clientDisplayName)
@@ -269,12 +390,9 @@ async function fetchStats() {
 }
 
 function handleCardClick(target: any) {
-  if (!appStore.isRegistered) {
-    Modal.confirm({
-      title: '提示',
-      content: '您尚未上线，无法发起呼叫。是否现在上线？',
-      onOk: toggleRegister
-    })
+  const socket = getSocket()
+  if (!socket || !socket.connected) {
+    message.error('通信服务未连接，请稍后再试')
     return
   }
 
@@ -370,26 +488,8 @@ function stopCallDurationTimer() {
 }
 
 async function toggleRegister() {
-  const socket = getSocket()
-  if (!socket || !socket.connected) {
-    message.error('WebSocket 连接中...')
-    return
-  }
-
-  if (appStore.isRegistered) {
-    // 注销
-    appStore.setRegistration(false, '')
-    message.info('已下线')
-  } else {
-    // 上线
-    const id = appStore.userInfo?.username || 'FD-01'
-    socket.emit('register_client', { clientType: 'front_desk', clientId: id })
-    socket.once('registered', (data: any) => {
-      appStore.setRegistration(true, data.clientName)
-      message.success(`欢迎，${data.clientName}`)
-      socket.emit('get_online_status')
-    })
-  }
+  // 此函数已废弃，现在由 websocket.ts 自动处理登录即上线
+  message.info('系统已自动为您接通在线状态')
 }
 
 // 使用命名函数以便正确移除监听器
@@ -526,6 +626,95 @@ const historyColumns = [
 </script>
 
 <style scoped>
+/* 话务调度面板样式 */
+.calls-main-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.duty-management-card {
+  width: 320px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.duty-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.control-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.control-item .label {
+  color: #595959;
+  font-weight: 500;
+}
+
+.mic-check-section {
+  margin-top: 8px;
+}
+
+.mic-error-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #ff4d4f;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.section-header {
+  margin-bottom: 12px;
+}
+
+.section-header .title {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.section-header .subtitle {
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+.staff-list-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.staff-item-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.staff-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.call-tabs {
+  flex: 1;
+  background: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
 .voice-calls-container { padding: 0; }
 .stat-row { margin-bottom: 16px; }
 .stat-card { border-radius: 8px; }

@@ -74,6 +74,7 @@ export const useAppStore = defineStore('app', () => {
   const currentCall = ref<any>(null) // 新增：当前正在进行的通话
   const isRegistered = ref(false)
   const clientDisplayName = ref('')
+  const webrtcConfig = ref<any>({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
 
   // 通话实时状态
   const callState = ref({
@@ -125,6 +126,21 @@ export const useAppStore = defineStore('app', () => {
     clientDisplayName.value = name
   }
 
+  function setWebrtcConfig(config: any) {
+    if (config) webrtcConfig.value = config
+  }
+
+  // 智能解析图片地址：如果是相对路径则自动补全 API 地址
+  function resolveImageUrl(url: string | null | undefined) {
+    if (!url) return ''
+    if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) {
+      return url
+    }
+    // 获取当前 API 的基础路径
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+    return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`
+  }
+
   return {
     sidebarCollapsed,
     currentTier,
@@ -138,6 +154,7 @@ export const useAppStore = defineStore('app', () => {
     callState,
     isRegistered,
     clientDisplayName,
+    webrtcConfig,
     toggleSidebar,
     setCurrentTier,
     setConnected,
@@ -153,6 +170,8 @@ export const useAppStore = defineStore('app', () => {
     setCurrentCall,
     clearCurrentCall,
     setCallState,
-    setRegistration
+    setRegistration,
+    setWebrtcConfig,
+    resolveImageUrl
   }
 })

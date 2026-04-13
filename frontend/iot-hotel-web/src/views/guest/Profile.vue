@@ -26,7 +26,7 @@
             <div class="user-info-section">
               <div class="user-name-row">
                 <div class="user-avatar-wrapper" @click="handleAvatarClick">
-                  <a-avatar :size="64" :src="getImageUrl(userInfo.avatar)" class="premium-avatar">
+                  <a-avatar :size="64" :src="appStore.resolveImageUrl(userInfo.avatar)" class="premium-avatar">
                     <template #icon><UserOutlined /></template>
                   </a-avatar>
                   <div class="avatar-edit-overlay">

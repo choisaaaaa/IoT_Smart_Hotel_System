@@ -222,55 +222,6 @@
       </div>
     </a-modal>
 
-    <!-- 通话中弹窗 -->
-    <a-modal
-      v-model:open="callModal.visible"
-      :footer="null"
-      :closable="false"
-      :maskClosable="false"
-      centered
-      width="340px"
-      class="call-modal"
-    >
-      <div class="call-content-modal">
-        <div class="call-header-modal">
-          <div class="caller-avatar">
-            <CustomerServiceOutlined />
-          </div>
-          <h3>{{ callModal.callerName }}</h3>
-          <div class="call-status-tag" :class="callModal.connectionState">
-            {{ callModal.connectionStateText }}
-          </div>
-        </div>
-
-        <div class="call-body-modal">
-          <div class="duration-display">{{ callModal.duration }}</div>
-          
-          <!-- 音频波形/电平指示 -->
-          <div class="audio-visualizer">
-            <div class="visualizer-item">
-              <span class="vis-label">您的声音</span>
-              <div class="level-meter">
-                <div class="level-bar" :style="{ width: callModal.inputVolume + '%', background: callModal.localSpeaking ? '#52c41a' : '#bfbfbf' }"></div>
-              </div>
-            </div>
-            <div class="visualizer-item">
-              <span class="vis-label">前台声音</span>
-              <div class="level-meter">
-                <div class="level-bar" :style="{ width: callModal.outputVolume + '%', background: callModal.remoteSpeaking ? '#1890ff' : '#bfbfbf' }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="call-footer-modal">
-          <a-button type="primary" danger shape="round" size="large" block @click="hangupCall">
-            <template #icon><CloseOutlined /></template> 挂断
-          </a-button>
-        </div>
-      </div>
-    </a-modal>
-
     <!-- 远程音频元素 -->
     <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
   </div>
@@ -341,58 +292,6 @@ const transferModal = ref({
   callId: ''
 })
 
-// 通话中弹窗状态
-const callModal = ref({
-  visible: false,
-  callerName: '前台',
-  duration: '00:00',
-  connectionState: 'connecting',
-  connectionStateText: '连接中',
-  statusText: '正在建立连接...',
-  localSpeaking: false,
-  remoteSpeaking: false,
-  inputVolume: 0,
-  outputVolume: 0,
-  callId: '',
-  remoteId: '',
-  remoteType: ''
-})
-
-// 通话计时器
-const durationTimer = ref<NodeJS.Timeout | null>(null)
-const callStartTime = ref<number | null>(null)
-const remoteAudioRef = ref<HTMLAudioElement | null>(null)
-
-// 监听全局通话状态更新本地 UI
-watch(() => appStore.currentCall, (newCall) => {
-  if (newCall && (newCall.call_id === transferModal.value.callId || transferModal.value.visible)) {
-    // 如果是自己发起的通话接通了
-    if (newCall.status === 'connected') {
-      transferModal.value.visible = false
-      callModal.value.visible = true
-      callModal.value.callId = newCall.call_id
-      callModal.value.callerName = newCall.callee_name || '前台'
-    }
-  } else if (!newCall) {
-    // 通话结束
-    callModal.value.visible = false
-    transferModal.value.visible = false
-  }
-}, { immediate: true })
-
-// 监听全局通话实时状态
-watch(() => appStore.callState, (newState) => {
-  callModal.value.duration = newState.duration
-  callModal.value.connectionState = newState.connectionState
-  callModal.value.connectionStateText = 
-    newState.connectionState === 'connected' ? '已连接' : 
-    newState.connectionState === 'connecting' ? '连接中' : '等待中'
-  callModal.value.inputVolume = newState.inputVolume
-  callModal.value.outputVolume = newState.outputVolume
-  callModal.value.localSpeaking = newState.localSpeaking
-  callModal.value.remoteSpeaking = newState.remoteSpeaking
-}, { deep: true })
-
 const quickChips = [
   { icon: '💡', label: '开灯', text: '打开灯光' },
   { icon: '🧹', label: '保洁', text: '需要保洁服务' },
@@ -458,20 +357,11 @@ function initWebSocket() {
       if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
         transferModal.value.visible = false
         message.success('前台已接听，正在建立连接...')
-        
-        // 记录对方信息用于 UI
-        callModal.value.remoteId = data.callee_id
-        callModal.value.remoteType = data.callee_type
-        
-        // 切换到通话弹窗
-        callModal.value.visible = true
-        callModal.value.callId = data.call_id
       }
     })
     
     socket.on('call_hungup', (data: any) => {
-      if (data.call_id === callModal.value.callId || data.call_id === transferModal.value.callId) {
-        callModal.value.visible = false
+      if (data.call_id === transferModal.value.callId) {
         transferModal.value.visible = false
         message.info('通话已结束')
       }
@@ -481,11 +371,10 @@ function initWebSocket() {
 
 // 通话相关方法
 function hangupCall() {
-  if (callModal.value.callId) {
-    socket?.emit('hangup_call', { call_id: callModal.value.callId })
+  if (appStore.currentCall?.call_id) {
+    socket?.emit('hangup_call', { call_id: appStore.currentCall.call_id })
     appStore.clearCurrentCall()
   }
-  callModal.value.visible = false
 }
 
 function cancelTransfer() {

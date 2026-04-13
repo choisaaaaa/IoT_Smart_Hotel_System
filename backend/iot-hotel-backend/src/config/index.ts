@@ -31,6 +31,17 @@ export default {
     secret: process.env.JWT_SECRET || 'your_jwt_secret_key_here',
     expiresIn: process.env.JWT_EXPIRES_IN || '24h'
   },
+  webrtc: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      // 预留 TURN 服务器配置，硬件接入必须使用 TURN 服务器以应对防火墙和对称 NAT
+      {
+        urls: process.env.TURN_SERVER_URL || '',
+        username: process.env.TURN_SERVER_USERNAME || '',
+        credential: process.env.TURN_SERVER_PASSWORD || ''
+      }
+    ].filter(s => s.urls)
+  },
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     dir: process.env.LOG_DIR || './logs'

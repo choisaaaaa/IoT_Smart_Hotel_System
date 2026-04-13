@@ -9,10 +9,13 @@ interface ClientInfo {
   socketId: string;
   roomId?: string;
   role?: string;
-  hotelId?: number; // 新增：所属酒店ID
+  hotelId?: number;
+  userId?: number; // 新增：用户数据库 ID
+  isOnDuty?: boolean; // 新增：是否在岗
+  dutyRole?: string; // 新增：岗位角色 (reception, cleaning, etc.)
   clientType?: 'room' | 'front_desk' | 'ai' | 'app';
   clientId?: string;
-  clientName?: string; // 新增：客户端显示名称
+  clientName?: string;
   connectedAt: Date;
 }
 
@@ -113,7 +116,7 @@ class WebSocketService {
           if (data.clientType === 'front_desk') {
             // 前台必须从数据库验证，且角色必须是 staff (原 reception) 或管理角色
             const [rows] = await pool.query<RowDataPacket[]>(
-              'SELECT username, role, hotel_id FROM users WHERE id = ? OR username = ?',
+              'SELECT id, username, role, hotel_id FROM users WHERE id = ? OR username = ?',
               [data.clientId, data.clientId]
             );
             if (rows.length === 0) {
@@ -121,14 +124,23 @@ class WebSocketService {
               return;
             }
             
-            const userRole = rows[0].role;
-            if (userRole === 'customer') {
+            const user = rows[0];
+            if (user.role === 'customer') {
               socket.emit('error', { message: '身份验证失败：普通顾客无法以柜台身份登录' });
               return;
             }
             
-            displayName = rows[0].username;
-            hotelId = rows[0].hotel_id;
+            displayName = user.username;
+            hotelId = user.hotel_id;
+            
+            // 更新客户端信息中的用户 ID 和 默认在岗状态
+            const info = this.clients.get(socket.id);
+            if (info) {
+              info.userId = user.id;
+              info.role = user.role;
+              info.isOnDuty = true; // 默认登录即在岗
+              info.dutyRole = user.role === 'staff' ? 'reception' : user.role;
+            }
           } else if (data.clientType === 'app') {
             // App端（顾客）不需要验证数据库，直接使用clientId作为显示名
             // 格式通常为 guest_{roomId} 或用户自定义ID
@@ -191,6 +203,7 @@ class WebSocketService {
             clientType: data.clientType,
             clientId: data.clientId,
             clientName: displayName,
+            webrtcConfig: config.webrtc, // 将 WebRTC 配置下发给客户端
             timestamp: new Date().toISOString()
           });
           
@@ -201,6 +214,18 @@ class WebSocketService {
         } catch (error) {
           logger.error('注册客户端失败:', error.message);
           socket.emit('error', { message: '注册失败' });
+        }
+      });
+
+      socket.on('set_duty_status', (data: { isOnDuty: boolean, dutyRole?: string }) => {
+        const info = this.clients.get(socket.id);
+        if (info && info.clientType === 'front_desk') {
+          info.isOnDuty = data.isOnDuty;
+          if (data.dutyRole) info.dutyRole = data.dutyRole;
+          
+          logger.info(`员工 ${info.clientName} 更新在岗状态: ${data.isOnDuty ? '在岗' : '离岗'} (${info.dutyRole})`);
+          this.broadcastOnlineStatus();
+          socket.emit('duty_status_updated', { isOnDuty: info.isOnDuty, dutyRole: info.dutyRole });
         }
       });
 
@@ -353,9 +378,26 @@ class WebSocketService {
             // 获取主叫方的酒店ID
             const callerHotelId = clientInfo?.hotelId;
             if (callerHotelId) {
-              const hotelRoom = `front_desk_hotel_${callerHotelId}`;
-              logger.info(`发送 incoming_call 到酒店前台房间: ${hotelRoom}, 数据:`, callData);
-              this.io?.to(hotelRoom).emit('incoming_call', callData);
+              // --- 智能调度逻辑 ---
+              // 1. 查找该酒店所有“在岗”且“角色匹配”的员工
+              const onDutyStaff = Array.from(this.clients.values()).filter(c => 
+                c.clientType === 'front_desk' && 
+                c.hotelId === callerHotelId && 
+                c.isOnDuty === true &&
+                (callee_id === 'all' || c.dutyRole === 'reception') // 呼叫 all 则所有在岗都响，呼叫 staff 则仅前台岗位响
+              );
+
+              if (onDutyStaff.length > 0) {
+                onDutyStaff.forEach(staff => {
+                  this.io?.to(staff.socketId).emit('incoming_call', callData);
+                });
+                logger.info(`呼叫已路由到 ${onDutyStaff.length} 名在岗员工`);
+              } else {
+                // 2. 如果没有人在线/在岗，则回退到广播到该门店所有前台（兜底）
+                const hotelRoom = `front_desk_hotel_${callerHotelId}`;
+                this.io?.to(hotelRoom).emit('incoming_call', callData);
+                logger.info(`无在岗员工，回退广播到门店房间: ${hotelRoom}`);
+              }
             } else {
               // 回退方案：如果没有酒店ID，广播到全局前台房间
               logger.warn(`主叫方 ${socket.id} 缺少酒店ID，回退到全局前台广播`);
@@ -759,6 +801,11 @@ class WebSocketService {
           logger.error('挂断语音通话失败:', error.message);
           socket.emit('call_error', { message: '挂断语音通话失败' });
         }
+      });
+
+      // 信号送达确认（Ack）机制：客户端收到核心信令后回复确认，防止丢包
+      socket.on('call_signal_ack', (data: { call_id: string, signal_type: string }) => {
+        logger.info(`[Ack] 收到信号确认: ${data.signal_type} for ${data.call_id} from ${socket.id}`);
       });
 
       socket.on('get_room_status', async (roomId: string) => {

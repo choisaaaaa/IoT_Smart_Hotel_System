@@ -5,63 +5,107 @@
     <!-- 全局来电弹窗 -->
     <IncomingCallModal />
     
-    <!-- 全局通话中悬浮窗 -->
-    <div v-if="currentCallVisible && route.path !== '/guest/room'" class="global-call-window">
-      <div class="call-header">
-        <PhoneOutlined class="call-icon-mini" />
-        <span class="caller-name-mini">{{ currentCallInfo?.caller_name || currentCallInfo?.caller_id }}</span>
-        <div class="connection-status" :class="connectionState">
-          {{ connectionStateText }}
-        </div>
-      </div>
-      <div class="call-duration">{{ currentDuration }}</div>
-      
-      <!-- 通话状态 -->
-      <div class="call-status-banner" :class="connectionState">
-        <span class="status-dot"></span>
-        <span class="status-text">{{ callStatusText }}</span>
-      </div>
-      
-      <!-- 音频电平指示器 -->
-      <div class="audio-indicators">
-        <div class="audio-indicator" :class="{ speaking: localSpeaking }">
-          <div class="indicator-label">
-            <span class="indicator-icon">🎤</span>
-            <span class="indicator-text">我</span>
-            <span class="indicator-status" :class="{ active: inputVolume > 5, speaking: localSpeaking }">{{ localSpeaking ? '说话中' : (inputVolume > 5 ? '正常' : '静音') }}</span>
+    <!-- 全局通话界面 (统一全系统) -->
+    <template v-if="currentCallVisible">
+      <!-- 全屏 Modal 模式 (GuestRoom 页面或点击展开时显示) -->
+      <a-modal
+        :open="isCallModalFullscreen"
+        :footer="null"
+        :closable="false"
+        :maskClosable="false"
+        centered
+        width="360px"
+        class="unified-call-modal"
+      >
+        <div class="call-content-modal">
+          <div class="call-header-modal">
+            <div class="caller-avatar">
+              <CustomerServiceOutlined v-if="otherPartyType === 'front_desk'" />
+              <HomeOutlined v-else />
+            </div>
+            <h3>{{ remoteDisplayName }}</h3>
+            <div class="call-status-tag" :class="connectionState">
+              {{ connectionStateText }}
+            </div>
           </div>
-          <div class="level-bar-container">
-            <div class="level-bar" :style="{ height: inputVolume + '%' }"></div>
+
+          <div class="call-body-modal">
+            <div class="duration-display">{{ currentDuration }}</div>
+            
+            <div class="voice-waves-container">
+              <!-- 本地声浪 (左) -->
+              <div class="voice-wave-side local" :class="{ speaking: localSpeaking }">
+                <div class="wave-bars">
+                  <div v-for="i in 8" :key="'l'+i" class="wave-bar" 
+                    :style="{ 
+                      height: (localSpeaking ? (10 + Math.random() * (inputVolume * 0.8)) : 4) + 'px',
+                      opacity: 0.3 + (inputVolume / 100)
+                    }">
+                  </div>
+                </div>
+                <span class="wave-label">您</span>
+              </div>
+
+              <div class="wave-divider">
+                <div class="pulse-center" :class="connectionState"></div>
+              </div>
+
+              <!-- 远端声浪 (右) -->
+              <div class="voice-wave-side remote" :class="{ speaking: remoteSpeaking }">
+                <div class="wave-bars">
+                  <div v-for="i in 8" :key="'r'+i" class="wave-bar" 
+                    :style="{ 
+                      height: (remoteSpeaking ? (10 + Math.random() * (outputVolume * 0.8)) : 4) + 'px',
+                      opacity: 0.3 + (outputVolume / 100)
+                    }">
+                  </div>
+                </div>
+                <span class="wave-label">对方</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="call-footer-modal">
+            <div class="modal-action-buttons">
+              <a-button type="primary" danger shape="round" size="large" @click="handleHangup" class="hangup-btn-large">
+                <template #icon><CloseOutlined /></template> 挂断
+              </a-button>
+              <a-button shape="round" size="large" @click="minimizeCall" v-if="route.path !== '/guest/room'">
+                <template #icon><FullscreenExitOutlined /></template> 最小化
+              </a-button>
+            </div>
           </div>
         </div>
-        <div class="audio-indicator" :class="{ speaking: remoteSpeaking }">
-          <div class="indicator-label">
-            <span class="indicator-icon">🔊</span>
-            <span class="indicator-text">对方</span>
-            <span class="indicator-status" :class="{ active: outputVolume > 5, speaking: remoteSpeaking }">{{ remoteSpeaking ? '说话中' : (outputVolume > 5 ? '正常' : '静音') }}</span>
-          </div>
-          <div class="level-bar-container">
-            <div class="level-bar output" :style="{ height: outputVolume + '%' }"></div>
+      </a-modal>
+
+      <!-- 悬浮窗口模式 (其他页面显示) -->
+      <div v-if="!isCallModalFullscreen" class="global-call-window" @click="expandCall">
+        <div class="call-header">
+          <PhoneOutlined class="call-icon-mini" />
+          <span class="caller-name-mini">{{ remoteDisplayName }}</span>
+          <div class="connection-status" :class="connectionState">
+            {{ connectionStateText }}
           </div>
         </div>
+        <div class="call-duration">{{ currentDuration }}</div>
+        
+        <!-- 通话状态 -->
+        <div class="call-status-banner" :class="connectionState">
+          <span class="status-dot"></span>
+          <span class="status-text">{{ callStatusText }}</span>
+        </div>
+        
+        <!-- 简易音频电平 -->
+        <div class="mini-audio-indicators">
+          <div class="mini-level-bar" :style="{ height: (inputVolume / 2) + 'px', background: localSpeaking ? '#52c41a' : '#ddd' }"></div>
+          <div class="mini-level-bar" :style="{ height: (outputVolume / 2) + 'px', background: remoteSpeaking ? '#1890ff' : '#ddd' }"></div>
+        </div>
+        
+        <a-button danger size="small" @click.stop="handleHangup" class="hangup-btn" block>
+          <template #icon><CloseOutlined /></template> 挂断
+        </a-button>
       </div>
-      
-      <!-- 连接质量 -->
-      <div class="connection-quality" v-if="connectionState === 'connected'">
-        <div class="quality-item">
-          <span class="quality-label">连接:</span>
-          <span class="quality-value" :class="connectionState">{{ connectionStateText }}</span>
-        </div>
-        <div class="quality-item" v-if="remoteAddress">
-          <span class="quality-label">网络:</span>
-          <span class="quality-value">{{ remoteAddress }}</span>
-        </div>
-      </div>
-      
-      <a-button danger size="small" @click="handleHangup" class="hangup-btn" block>
-        <template #icon><CloseOutlined /></template> 挂断
-      </a-button>
-    </div>
+    </template>
 
     <!-- 远程音频元素 -->
     <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
@@ -69,9 +113,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, ref, reactive, watch } from 'vue'
+import { onMounted, onUnmounted, computed, ref, reactive, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PhoneOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { PhoneOutlined, CloseOutlined, FullscreenExitOutlined, CustomerServiceOutlined, HomeOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
@@ -83,9 +127,56 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 
+// 统一通话界面模式控制
+const isMinimized = ref(false)
+const isCallModalFullscreen = computed(() => {
+  // 如果在 GuestRoom 页面，强制全屏 Modal
+  if (route.path === '/guest/room') return true
+  // 其他页面，根据用户手动切换状态
+  return !isMinimized.value
+})
+
+function minimizeCall() {
+  isMinimized.value = true
+}
+
+function expandCall() {
+  isMinimized.value = false
+}
+
 // ============ 通话中悬浮窗 ============
 const currentCallInfo = computed(() => appStore.currentCall)
 const currentCallVisible = computed(() => !!appStore.currentCall)
+
+// 计算我是不是主叫 (Caller)
+const isCallerToMe = computed(() => {
+  if (!appStore.currentCall) return false
+  
+  // 1. 优先通过 appStore.currentCall 里的信息判断 (如果是自己发起的，这里会有记录)
+  const myId = appStore.userInfo?.username
+  const myRoomId = appStore.userStatus?.checkin_info?.room_id ? String(appStore.userStatus.checkin_info.room_id) : ''
+  
+  return String(appStore.currentCall.caller_id) === myId || 
+         String(appStore.currentCall.caller_id) === myRoomId
+})
+
+const otherPartyType = computed(() => {
+  if (!appStore.currentCall) return null
+  return isCallerToMe.value ? appStore.currentCall.callee_type : appStore.currentCall.caller_type
+})
+
+// 计算对方显示的名称
+const remoteDisplayName = computed(() => {
+  if (!appStore.currentCall) return '通话中'
+  
+  const id = isCallerToMe.value ? appStore.currentCall.callee_id : appStore.currentCall.caller_id
+  const name = isCallerToMe.value ? appStore.currentCall.callee_name : appStore.currentCall.caller_name
+  
+  if (id === 'all' || id === 'front_desk') return '前台'
+  return name || id || '访客'
+})
+
+// 统一通话界面模式控制
 const currentDuration = ref('00:00')
 const durationTimer = ref<NodeJS.Timeout | null>(null)
 const callStartTime = ref<number | null>(null)
@@ -108,20 +199,33 @@ const lastLocalSpeakTime = ref(0)
 const lastRemoteSpeakTime = ref(0)
 
 const connectionStateText = computed(() => {
-  const stateMap: Record<string, string> = {
-    'new': '初始化',
-    'connecting': '连接中',
-    'connected': '已连接',
-    'disconnected': '断开',
-    'failed': '失败',
-    'closed': '关闭'
+  // 整合 connectionState 和 iceConnectionState，提高状态感知的灵敏度
+  const state = connectionState.value
+  const iceState = iceConnectionState.value
+
+  // 如果 ICE 已经连通，但 connectionState 还在 connecting，认为已连通
+  if (iceState === 'connected' || iceState === 'completed' || state === 'connected') {
+    return '已连接'
   }
-  return stateMap[connectionState.value] || connectionState.value
+
+  switch (state) {
+    case 'new': return '初始化...'
+    case 'connecting': return '连接中...'
+    case 'disconnected': return '连接断开'
+    case 'failed': return '连接失败'
+    case 'closed': return '通话结束'
+    default: 
+      return iceState === 'checking' ? '连接中...' : '连接中'
+  }
 })
 
 // 通话状态文本
 const callStatusText = computed(() => {
-  if (connectionState.value === 'connected') {
+  const isConnected = connectionState.value === 'connected' || 
+                      iceConnectionState.value === 'connected' || 
+                      iceConnectionState.value === 'completed'
+
+  if (isConnected) {
     if (remoteSpeaking.value && localSpeaking.value) {
       return '双向通话中'
     } else if (remoteSpeaking.value) {
@@ -131,7 +235,7 @@ const callStatusText = computed(() => {
     } else {
       return '通话中 - 静音'
     }
-  } else if (connectionState.value === 'connecting') {
+  } else if (connectionState.value === 'connecting' || iceConnectionState.value === 'checking') {
     return '建立连接中...'
   } else if (connectionState.value === 'new') {
     return '等待接听...'
@@ -244,6 +348,7 @@ function stopVolumeDetection() {
 
 watch(() => appStore.currentCall, (newCall) => {
   if (newCall) {
+    isMinimized.value = false // 新通话开始时默认不最小化
     callStartTime.value = Date.now()
     currentDuration.value = '00:00'
     if (durationTimer.value) clearInterval(durationTimer.value)
@@ -293,16 +398,22 @@ const iceServers = {
 async function initWebRTC(callId: string, targetType: string, targetId: string) {
   console.log('[WebRTC] 初始化:', { callId, targetType, targetId })
   
+  // 强制清理旧连接，防止多实例冲突（解决 HMR 或异常导致的连接堆积）
+  cleanupWebRTC()
+  
   try {
+    // 等待 DOM 挂载（特别是 remoteAudioRef）
+    await nextTick()
+    
     // 获取本地音频流
     localStream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-    console.log('[WebRTC] 已获取本地音频流')
+    console.log('[WebRTC] 已获取本地音频流, 轨道状态:', localStream.value.getAudioTracks().map(t => ({ enabled: t.enabled, state: t.readyState })))
     
     // 启动输入音量检测（麦克风）
     initInputVolumeDetection(localStream.value)
 
-    // 创建 RTCPeerConnection
-    peerConnection.value = new RTCPeerConnection(iceServers)
+    // 创建 RTCPeerConnection，使用服务器下发的 ICE 配置 (含 TURN)
+    peerConnection.value = new RTCPeerConnection(appStore.webrtcConfig)
 
     // 添加本地流到连接
     localStream.value.getTracks().forEach(track => {
@@ -317,11 +428,11 @@ async function initWebRTC(callId: string, targetType: string, targetId: string) 
       
       if (event.streams && event.streams[0]) {
         const remoteStream = event.streams[0]
-        console.log('[WebRTC] 远程流轨道数:', remoteStream.getTracks().length)
+        console.log('[WebRTC] 远程流轨道状态:', remoteStream.getAudioTracks().map(t => ({ enabled: t.enabled, state: t.readyState })))
         
         if (remoteAudioRef.value) {
           remoteAudioRef.value.srcObject = remoteStream
-          console.log('[WebRTC] 已设置srcObject')
+          console.log('[WebRTC] 已绑定 remoteAudioRef')
           
           // 尝试播放（处理自动播放策略）
           const playPromise = remoteAudioRef.value.play()
@@ -330,13 +441,14 @@ async function initWebRTC(callId: string, targetType: string, targetId: string) 
               console.log('[WebRTC] 远程音频播放成功')
             }).catch(e => {
               console.error('[WebRTC] 自动播放失败:', e)
-              // 显示提示让用户点击
               message.info('请点击页面任意位置以启用通话音频')
             })
           }
           
           // 启动输出音量检测
           initOutputVolumeDetection(remoteStream)
+        } else {
+          console.error('[WebRTC] 错误: remoteAudioRef 为空，无法绑定远程流')
         }
       }
     }
@@ -368,6 +480,16 @@ async function initWebRTC(callId: string, targetType: string, targetId: string) 
       if (peerConnection.value) {
         iceConnectionState.value = peerConnection.value.iceConnectionState
         console.log('[WebRTC] ICE 状态变化:', iceConnectionState.value)
+
+        // 当 ICE 连接成功后，再次尝试播放远端音频 (双重保障)
+        if (iceConnectionState.value === 'connected' || iceConnectionState.value === 'completed') {
+          if (remoteAudioRef.value && remoteAudioRef.value.paused) {
+            console.log('[WebRTC] ICE 连通，尝试播放音频...')
+            remoteAudioRef.value.play().catch(e => {
+              console.warn('[WebRTC] ICE 连通后尝试播放失败 (可能由于自动播放策略):', e)
+            })
+          }
+        }
       }
     }
 
@@ -470,6 +592,11 @@ const handleConnect = () => {
 const handleRegistered = (data: any) => {
   console.log('[App] 注册成功:', data)
   appStore.setRegistration(true, data.clientName)
+  // 保存服务器下发的 WebRTC 配置（含 STUN/TURN）
+  if (data.webrtcConfig) {
+    console.log('[App] 收到服务器 WebRTC 配置:', data.webrtcConfig)
+    appStore.setWebrtcConfig(data.webrtcConfig)
+  }
 }
 
 const handleDisconnect = () => {
@@ -481,6 +608,12 @@ const handleDisconnect = () => {
 const handleIncomingCall = (data: any) => {
   console.log('[App] 收到来电:', data)
   
+  // 发送收到信号的确认，防止丢包
+  const socket = getSocket()
+  if (socket) {
+    socket.emit('call_signal_ack', { call_id: data.call_id, signal_type: 'incoming_call' })
+  }
+
   const myUsername = appStore.userInfo?.username
   if (data.caller_id === myUsername) {
     console.log('[App] 忽略自己发起的 incoming_call')
@@ -569,40 +702,56 @@ const handleCallRejected = (data: any) => {
 const handleCallAnswered = async (data: any) => {
   console.log('[App] 收到 call_answered 事件:', data)
 
-  // 如果当前有这个来电，说明是被别人接听了，清除来电弹窗
+  // 发送信号确认
+  const socket = getSocket()
+  if (socket) {
+    socket.emit('call_signal_ack', { call_id: data.call_id, signal_type: 'call_answered' })
+  }
+
+  // 更新通话状态为已接通
+  if (appStore.currentCall?.call_id === data.call_id) {
+    appStore.setCurrentCall({
+      ...appStore.currentCall,
+      status: 'connected',
+      callee_id: data.callee_id || appStore.currentCall.callee_id,
+      callee_name: data.callee_name || appStore.currentCall.callee_name,
+      caller_id: data.caller_id || appStore.currentCall.caller_id,
+      caller_name: data.caller_name || appStore.currentCall.caller_name
+    })
+  }
+
+  // 如果当前有这个来电弹窗（被叫方），清除它
   if (appStore.incomingCall?.call_id === data.call_id) {
-    console.log('[App] 该来电已被他人接听，清除弹窗')
+    console.log('[App] 该来电已被接听，清除弹窗')
     appStore.clearIncomingCall()
-    return
+    // 被叫方逻辑继续执行，不要在此处 return，否则无法初始化 WebRTC
   }
 
   if (appStore.currentCall?.call_id === data.call_id) {
-    // 更新通话状态
-    appStore.setCurrentCall({
-      ...appStore.currentCall,
-      status: 'connected'
-    })
-    
-    // 判断当前端是主叫还是被叫
-    // 主叫需要发起 offer，被叫只需要 initWebRTC 并等待 offer
+    // 更加鲁棒的身份识别：检查所有可能的 ID 匹配
     const myUsername = appStore.userInfo?.username
-    // 注意：room_id 可能来自 appStore.userStatus.checkin_info
     const myRoomId = appStore.userStatus?.checkin_info?.room_id ? String(appStore.userStatus.checkin_info.room_id) : ''
-    const isCaller = String(data.caller_id) === myUsername || String(data.caller_id) === myRoomId
+    const myRoomNum = appStore.userStatus?.checkin_info?.room_number ? String(appStore.userStatus.checkin_info.room_number) : ''
     
-    console.log(`[App] 身份识别: ${isCaller ? '主叫' : '被叫'}, 我是: ${myUsername || myRoomId || 'unknown'}, 对方是: ${isCaller ? data.callee_id : data.caller_id}, data.caller_id: ${data.caller_id}`)
+    // 主叫判定：data.caller_id 匹配我的用户名、我的房间 ID 或我的房间号
+    const isCaller = String(data.caller_id) === myUsername || 
+                     String(data.caller_id) === myRoomId || 
+                     String(data.caller_id) === myRoomNum
+    
+    console.log(`[App] 身份识别结果: ${isCaller ? '主叫 (Caller)' : '被叫 (Callee)'}`)
+    console.log(`[App] 我的标识集: {user: ${myUsername}, room_id: ${myRoomId}, room_num: ${myRoomNum}}, 对方标识: ${data.caller_id}`)
     
     const targetType = isCaller ? data.callee_type : data.caller_type
     const targetId = isCaller ? data.callee_id : data.caller_id
     
     await initWebRTC(data.call_id, targetType, targetId)
     
-    // 只有主叫方发送 offer
+    // 只有主叫方发起 Offer
     if (isCaller && peerConnection.value) {
       try {
         const offer = await peerConnection.value.createOffer()
         await peerConnection.value.setLocalDescription(offer)
-        console.log('[WebRTC] 主叫方已创建并发送 offer')
+        console.log('[WebRTC] 主叫方发起 Offer')
         
         const socket = getSocket()
         if (socket) {
@@ -614,10 +763,10 @@ const handleCallAnswered = async (data: any) => {
           })
         }
       } catch (e) {
-        console.error('[WebRTC] 创建 offer 失败:', e)
+        console.error('[WebRTC] 创建 Offer 失败:', e)
       }
     } else {
-      console.log('[WebRTC] 被叫方等待主叫方发送 offer')
+      console.log('[WebRTC] 被叫方就绪，等待 Offer...')
     }
   }
 }
@@ -652,8 +801,16 @@ function setupGlobalWebSocket() {
 }
 
 onMounted(() => {
+  appStore.initUserInfo() // 确保 userInfo 加载
   if (localStorage.getItem('auth_token')) {
     setupGlobalWebSocket()
+  }
+})
+
+onUnmounted(() => {
+  cleanupWebRTC()
+  if (durationTimer.value) {
+    clearInterval(durationTimer.value)
   }
 })
 
@@ -752,6 +909,177 @@ window.addEventListener('beforeunload', () => {
   border-color: #ff7875 !important; 
   color: #ff7875 !important;
 }
+
+  /* 统一通话 Modal 样式 */
+  .unified-call-modal .ant-modal-content {
+    border-radius: 20px;
+    overflow: hidden;
+    padding: 0;
+  }
+  
+  .call-content-modal {
+    padding: 32px 24px;
+    text-align: center;
+  }
+  
+  .call-header-modal {
+    margin-bottom: 24px;
+  }
+  
+  .caller-avatar {
+    width: 80px;
+    height: 80px;
+    background: #e6f7ff;
+    color: #1890ff;
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+  }
+  
+  .call-header-modal h3 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  
+  .call-status-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    background: #f5f5f5;
+    color: #8c8c8c;
+  }
+  
+  .call-status-tag.connected {
+    background: #f6ffed;
+    color: #52c41a;
+  }
+  
+  .call-status-tag.connecting {
+    background: #fffbe6;
+    color: #faad14;
+  }
+  
+  .duration-display {
+    font-size: 56px;
+    font-weight: 700;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin-bottom: 40px;
+    color: #1a1a1a;
+    letter-spacing: -1px;
+  }
+  
+  .voice-waves-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 30px 20px;
+    background: linear-gradient(145deg, #f0f2f5, #ffffff);
+    border-radius: 24px;
+    margin-bottom: 40px;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);
+    height: 120px;
+  }
+
+  .voice-wave-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .wave-bars {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 60px;
+  }
+
+  .wave-bar {
+    width: 4px;
+    border-radius: 2px;
+    background: #bfbfbf;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .local .wave-bar { background: #52c41a; }
+  .remote .wave-bar { background: #1890ff; }
+
+  .voice-wave-side:not(.speaking) .wave-bar {
+    background: #d9d9d9 !important;
+    height: 4px !important;
+  }
+
+  .wave-label {
+    font-size: 12px;
+    color: #8c8c8c;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .wave-divider {
+    width: 40px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .pulse-center {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #d9d9d9;
+    position: relative;
+  }
+
+  .pulse-center.connected {
+    background: #52c41a;
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4);
+    animation: pulse-green 2s infinite;
+  }
+
+  @keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(82, 196, 26, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0); }
+  }
+  
+  .call-footer-modal .modal-action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .hangup-btn-large {
+    height: 50px;
+    font-size: 18px;
+  }
+  
+  /* 悬浮窗迷你指示器 */
+  .mini-audio-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    height: 50px;
+    align-items: flex-end;
+    padding-bottom: 5px;
+    background: #f5f5f5;
+    border-radius: 8px;
+  }
+  
+  .mini-level-bar {
+    width: 8px;
+    border-radius: 4px;
+    transition: height 0.1s ease;
+    min-height: 4px;
+  }
 
 /* 通话中悬浮窗 */
 .global-call-window {
