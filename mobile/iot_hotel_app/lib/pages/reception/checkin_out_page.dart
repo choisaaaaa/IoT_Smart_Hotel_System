@@ -491,7 +491,13 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
             DropdownButtonFormField<String>(
               value: idType,
               decoration: const InputDecoration(labelText: '证件类型', border: OutlineInputBorder()),
-              items: const [DropdownMenuItem(value: 'idcard', child: Text('身份证')), DropdownMenuItem(value: 'passport', child: Text('护照'))],
+              items: const [
+                DropdownMenuItem(value: 'idcard', child: Text('身份证/永居证/居住证')),
+                DropdownMenuItem(value: 'hkm_pass', child: Text('港澳居民来往内地通行证')),
+                DropdownMenuItem(value: 'taiwan_pass', child: Text('台湾居民来往大陆通行证')),
+                DropdownMenuItem(value: 'passport', child: Text('外国护照')),
+                DropdownMenuItem(value: 'other', child: Text('其他')),
+              ],
               onChanged: (v) => idType = v ?? 'idcard',
             ),
             const SizedBox(height: 12),

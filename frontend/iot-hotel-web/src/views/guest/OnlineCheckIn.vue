@@ -53,8 +53,11 @@
           <a-col :span="12">
             <a-form-item label="证件类型">
               <a-select v-model:value="checkinForm.id_type">
-                <a-select-option value="idcard">身份证</a-select-option>
-                <a-select-option value="passport">护照</a-select-option>
+                <a-select-option value="idcard">中国居民身份证/外国人永久居留身份证/港澳台居民居住证</a-select-option>
+                <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+                <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+                <a-select-option value="passport">外国护照</a-select-option>
+                <a-select-option value="other">其他</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -153,8 +156,15 @@ const checkinForm = reactive({
 })
 
 function idTypeLabel(t: string): string {
-  return ({ idcard: '身份证', passport: '护照' } as Record<string, string>)[t] || t
-}
+    const labels: Record<string, string> = {
+      idcard: '身份证/永居证/居住证',
+      hkm_pass: '港澳居民来往内地通行证',
+      taiwan_pass: '台湾居民来往大陆通行证',
+      passport: '外国护照',
+      other: '其他'
+    }
+    return labels[t] || t
+  }
 
 async function searchBooking() {
   if (!searchKey.value.trim()) { message.warning('请输入查询内容'); return }

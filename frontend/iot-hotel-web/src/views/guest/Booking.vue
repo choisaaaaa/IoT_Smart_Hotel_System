@@ -403,8 +403,11 @@
                   <a-col :span="12">
                     <a-form-item label="证件类型" required>
                       <a-select v-model:value="bookingForm.idType" size="large">
-                        <a-select-option value="idcard">身份证</a-select-option>
-                        <a-select-option value="passport">护照</a-select-option>
+                        <a-select-option value="idcard">中国居民身份证/外国人永久居留身份证/港澳台居民居住证</a-select-option>
+                        <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+                        <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+                        <a-select-option value="passport">外国护照</a-select-option>
+                        <a-select-option value="other">其他</a-select-option>
                       </a-select>
                     </a-form-item>
                   </a-col>
@@ -704,8 +707,11 @@
         </a-form-item>
         <a-form-item label="证件类型" required>
           <a-select v-model:value="guestModalForm.id_type">
-            <a-select-option value="idcard">身份证</a-select-option>
-            <a-select-option value="passport">护照</a-select-option>
+            <a-select-option value="idcard">中国居民身份证/外国人永久居留身份证/港澳台居民居住证</a-select-option>
+            <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+            <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+            <a-select-option value="passport">外国护照</a-select-option>
+            <a-select-option value="other">其他</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="证件号码" required>
@@ -1635,7 +1641,7 @@ watch(() => appStore.userInfo, (newVal) => {
 
 /* Room Selection Styles Redesign */
 .room-selection-section {
-  max-width: 1100px;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -2012,7 +2018,7 @@ watch(() => appStore.userInfo, (newVal) => {
 .ctrip-container {
   display: flex;
   gap: 24px;
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -2256,8 +2262,12 @@ watch(() => appStore.userInfo, (newVal) => {
 .date-range-ctrip {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: center; /* 保持垂直居中 */
   margin-bottom: 24px;
+}
+
+.date-item {
+  flex: 1; /* 左右日期等宽 */
 }
 
 .date-item .lab {
@@ -2269,6 +2279,7 @@ watch(() => appStore.userInfo, (newVal) => {
 .date-item .val {
   font-size: 18px;
   font-weight: 700;
+  line-height: 1.2; /* 确保文字基线稳定 */
 }
 
 .nights-tag {
@@ -2277,6 +2288,9 @@ watch(() => appStore.userInfo, (newVal) => {
   border-radius: 12px;
   font-size: 12px;
   background: #fff;
+  margin: 0 16px; /* 增加左右间距 */
+  white-space: nowrap; /* 防止换行导致对齐问题 */
+  transform: translateY(8px); /* 向下微调以匹配大字号日期的视觉中心 */
 }
 
 .price-breakdown-ctrip {

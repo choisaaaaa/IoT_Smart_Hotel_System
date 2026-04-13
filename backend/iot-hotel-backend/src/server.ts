@@ -84,7 +84,25 @@ async function startServer() {
           await pool.query('ALTER TABLE bookings ADD COLUMN rate_plan_id INT DEFAULT NULL AFTER room_id');
         } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
 
-        logger.info('子房价系统数据库修复/升级成功');
+        // 为 bookings 增加 id_type
+        try {
+          await pool.query('ALTER TABLE bookings ADD COLUMN id_type VARCHAR(20) DEFAULT "idcard" AFTER guest_phone');
+          logger.info('数据库列 bookings.id_type 添加成功');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+
+        // 为 guests 增加 id_type
+        try {
+          await pool.query('ALTER TABLE guests ADD COLUMN id_type VARCHAR(20) DEFAULT "idcard" AFTER guest_phone');
+          logger.info('数据库列 guests.id_type 添加成功');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+
+        // 修改 frequent_guests 的 id_type 枚举
+        try {
+          await pool.query('ALTER TABLE frequent_guests MODIFY COLUMN id_type VARCHAR(50) DEFAULT "idcard"');
+          logger.info('数据库列 frequent_guests.id_type 类型修改成功');
+        } catch (e: any) { throw e; }
+
+        logger.info('子房价系统及证件类型数据库修复/升级成功');
       } catch (schemaError: any) {
         logger.error('子房价系统数据库修复失败:', schemaError.code, schemaError.message);
       }

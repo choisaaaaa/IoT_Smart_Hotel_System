@@ -303,7 +303,7 @@
                       <template #description>
                         <div class="guest-desc">
                           <span><PhoneOutlined /> {{ item.phone }}</span>
-                          <span><IdcardOutlined /> {{ item.id_type === 'idcard' ? '身份证' : '护照' }}: {{ maskId(item.id_number) }}</span>
+                          <span><IdcardOutlined /> {{ getIdTypeLabel(item.id_type) }}: {{ maskId(item.id_number) }}</span>
                         </div>
                       </template>
                     </a-list-item-meta>
@@ -458,8 +458,11 @@
         </a-form-item>
         <a-form-item label="证件类型" required>
           <a-select v-model:value="guestEditForm.id_type">
-            <a-select-option value="idcard">身份证</a-select-option>
-            <a-select-option value="passport">护照</a-select-option>
+            <a-select-option value="idcard">中国居民身份证/外国人永久居留身份证/港澳台居民居住证</a-select-option>
+            <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+            <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+            <a-select-option value="passport">外国护照</a-select-option>
+            <a-select-option value="other">其他</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="证件号码" required>
@@ -749,6 +752,18 @@ const maskId = (id: string) => {
   return `${id.substring(0, 4)} **** ${id.substring(id.length - 4)}`
 }
 
+// 获取证件类型标签
+const getIdTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    idcard: '身份证/永居证/居住证',
+    hkm_pass: '港澳居民来往内地通行证',
+    taiwan_pass: '台湾居民来往大陆通行证',
+    passport: '护照',
+    other: '其他'
+  }
+  return labels[type] || type
+}
+
 // 初始化数据
 const fetchData = async () => {
   if (!appStore.userInfo) {
@@ -925,7 +940,7 @@ onMounted(() => {
 
 .profile-page-container {
   padding: 40px 24px;
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
   min-height: calc(100vh - 120px);
 }

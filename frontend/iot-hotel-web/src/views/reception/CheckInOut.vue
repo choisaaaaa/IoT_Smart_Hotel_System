@@ -46,8 +46,10 @@
                 <a-col :span="12">
                   <a-form-item label="证件类型">
                     <a-select v-model:value="checkinForm.id_type">
-                      <a-select-option value="idcard">身份证</a-select-option>
-                      <a-select-option value="passport">护照</a-select-option>
+                      <a-select-option value="idcard">中国居民身份证/外国人永久居留身份证/港澳台居民居住证</a-select-option>
+                      <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+                      <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+                      <a-select-option value="passport">外国护照</a-select-option>
                       <a-select-option value="other">其他</a-select-option>
                     </a-select>
                   </a-form-item>
@@ -164,8 +166,10 @@
                     <a-col :span="6"><a-input v-model:value="item.phone" placeholder="手机号" /></a-col>
                     <a-col :span="5">
                       <a-select v-model:value="item.id_type" style="width: 100%;">
-                        <a-select-option value="idcard">身份证</a-select-option>
-                        <a-select-option value="passport">护照</a-select-option>
+                        <a-select-option value="idcard">身份证/永居证/居住证</a-select-option>
+                        <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+                        <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+                        <a-select-option value="passport">外国护照</a-select-option>
                         <a-select-option value="other">其他</a-select-option>
                       </a-select>
                     </a-col>
@@ -798,6 +802,8 @@ function fillByBooking(booking: any) {
   fillingBookingId.value = booking.id
   checkinForm.guest_name = booking.guest_name || ''
   checkinForm.phone = booking.guest_phone || ''
+  checkinForm.id_type = booking.id_type || 'idcard'
+  checkinForm.id_number = booking.guest_id_number || ''
   checkinForm.guest_count = Number(booking.guest_count || 1)
   if (booking.check_in_date) checkinForm.check_in_date = dayjs(booking.check_in_date)
   if (booking.check_out_date) checkinForm.check_out_date = dayjs(booking.check_out_date)

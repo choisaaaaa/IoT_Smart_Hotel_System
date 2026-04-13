@@ -506,14 +506,14 @@ export const create = async (req: AuthRequest, res: Response) => {
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO bookings (
         booking_number, hotel_id, room_id, rate_plan_id, user_id, 
-        guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, 
+        guest_name, guest_phone, id_type, guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id, used_points, 
         points_discount, total_price, deposit, status, check_in_time,
         locked_at, locked_by, payment_deadline, auto_checkout_at, room_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         bookingNumber, hotelId, room_id, rate_plan_id || null, userId, 
-        guest_name, guest_phone, guest_id_number, check_in_date, check_out_date, 
+        guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id || null, actualUsedPoints, 
         points_discount, total_price, 0, bookingStatus, checkInTime,
         new Date(), userId, bookingStatus === 'pending' ? paymentDeadline : null, autoCheckoutAt, roomNumber
@@ -524,10 +524,10 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     if (bookingStatus === 'checked_in') {
       await connection.query(
-        `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-         ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
-        [bookingId, guest_name, guest_phone, guest_id_number || null, room_id]
+        `INSERT INTO guests (booking_id, guest_name, guest_phone, id_type, guest_id_number, room_id, check_in_time)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), id_type = VALUES(id_type), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
+        [bookingId, guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number || null, room_id]
       );
       await connection.query(
         `UPDATE rooms SET room_status = 'occupied', locked_by_booking = ?, locked_at = NOW() WHERE id = ?`,
@@ -663,17 +663,17 @@ export const checkinOnline = async (req: Request, res: Response) => {
     // 在线办理入住：状态改为 pre_checked_in（预入住），等待前台核实
     await connection.query<ResultSetHeader>(
       `UPDATE bookings
-       SET guest_name = ?, guest_id_number = ?, status = ?, pre_checkin_time = CURRENT_TIMESTAMP
+       SET guest_name = ?, id_type = ?, guest_id_number = ?, status = ?, pre_checkin_time = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [real_name, id_number, 'pre_checked_in', id]
+      [real_name, id_type || 'idcard', id_number, 'pre_checked_in', id]
     );
 
     // 插入到 guests 表，状态为预入住
     await connection.query(
-      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, status, check_in_time)
-       VALUES (?, ?, ?, ?, ?, 'pre_checked_in', CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id), status = 'pre_checked_in'`,
-      [id, real_name, guest_phone, id_number, booking.room_id]
+      `INSERT INTO guests (booking_id, guest_name, guest_phone, id_type, guest_id_number, room_id, status, check_in_time)
+       VALUES (?, ?, ?, ?, ?, ?, 'pre_checked_in', CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), id_type = VALUES(id_type), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id), status = 'pre_checked_in'`,
+      [id, real_name, guest_phone, id_type || 'idcard', id_number, booking.room_id]
     );
 
     // 预入住状态不更新房间状态，等待前台核实后才更新
@@ -800,6 +800,10 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       updateFields.push('guest_id_number = ?');
       params.splice(params.length - 1, 0, guest_id_number);
     }
+    if (req.body.id_type) {
+      updateFields.push('id_type = ?');
+      params.splice(params.length - 1, 0, req.body.id_type);
+    }
     if (special_requests !== undefined) {
       updateFields.push('special_requests = ?');
       params.splice(params.length - 1, 0, special_requests);
@@ -819,9 +823,16 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     // 插入到 guests 表（先删后插，避免重复记录）
     await connection.query('DELETE FROM guests WHERE booking_id = ?', [id]);
     await connection.query(
-      `INSERT INTO guests (booking_id, guest_name, guest_phone, guest_id_number, room_id, check_in_time)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [id, guest_name || booking.guest_name, guest_phone || booking.guest_phone, guest_id_number || booking.guest_id_number, roomId]
+      `INSERT INTO guests (booking_id, guest_name, guest_phone, id_type, guest_id_number, room_id, check_in_time)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        id, 
+        guest_name || booking.guest_name, 
+        guest_phone || booking.guest_phone, 
+        booking.id_type || 'idcard',
+        guest_id_number || booking.guest_id_number, 
+        roomId
+      ]
     );
 
     // 同步更新房间状态为“在住”

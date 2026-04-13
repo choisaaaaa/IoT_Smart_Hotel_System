@@ -117,9 +117,11 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'idcard', child: Text('身份证')),
-                        DropdownMenuItem(value: 'passport', child: Text('护照')),
-                        DropdownMenuItem(value: 'hk_macao', child: Text('港澳通行证')),
+                        DropdownMenuItem(value: 'idcard', child: Text('身份证/永居证/居住证')),
+                        DropdownMenuItem(value: 'hkm_pass', child: Text('港澳居民来往内地通行证')),
+                        DropdownMenuItem(value: 'taiwan_pass', child: Text('台湾居民来往大陆通行证')),
+                        DropdownMenuItem(value: 'passport', child: Text('外国护照')),
+                        DropdownMenuItem(value: 'other', child: Text('其他')),
                       ],
                       onChanged: (v) => setDialogState(() => idType = v ?? 'idcard'),
                     ),
@@ -226,9 +228,11 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
 
   String _idTypeLabel(String? type) {
     switch (type) {
-      case 'idcard': return '身份证';
-      case 'passport': return '护照';
-      case 'hk_macao': return '港澳通行证';
+      case 'idcard': return '身份证/永居证/居住证';
+      case 'hkm_pass': return '港澳居民来往内地通行证';
+      case 'taiwan_pass': return '台湾居民来往大陆通行证';
+      case 'passport': return '外国护照';
+      case 'other': return '其他';
       default: return '证件';
     }
   }
