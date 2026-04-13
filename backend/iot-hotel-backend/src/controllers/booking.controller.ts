@@ -579,8 +579,9 @@ export const lookupForGuest = async (req: Request, res: Response) => {
               r.id as room_id, r.room_number, r.room_name
        FROM bookings b
        LEFT JOIN rooms r ON b.room_id = r.id
-       WHERE b.booking_number = ? OR b.guest_phone = ?
-       ORDER BY b.id DESC
+       WHERE (b.booking_number = ? OR b.guest_phone = ?) 
+       AND b.status IN ('confirmed', 'pending')
+       ORDER BY CASE WHEN b.status = 'confirmed' THEN 1 ELSE 2 END ASC, b.id DESC
        LIMIT 1`,
       [normalizedKeyword, normalizedKeyword]
     );

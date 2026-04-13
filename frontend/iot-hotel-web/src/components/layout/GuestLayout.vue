@@ -11,12 +11,19 @@
             type="text"
             :class="{ active: isActive('/guest/booking') || isActive('/guest/checkin-online') }"
             @click="$router.push('/guest/booking')"
-          >预订入住</a-button>
+          >探索旅程</a-button>
           <a-button
+            v-if="appStore.userStatus?.is_checked_in"
             type="text"
             :class="{ active: isActive('/guest/room') }"
             @click="$router.push('/guest/room')"
           >客房服务</a-button>
+          <a-button
+            v-else
+            type="text"
+            :class="{ active: isActive('/guest/checkin-online') }"
+            @click="$router.push('/guest/checkin-online')"
+          >预入住</a-button>
           <a-button
             type="text"
             :class="{ active: isActive('/guest/orders') }"

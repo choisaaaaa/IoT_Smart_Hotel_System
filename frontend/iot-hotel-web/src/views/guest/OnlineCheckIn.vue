@@ -127,13 +127,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import { bookingApi } from '@/api/booking'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
+const appStore = useAppStore()
 const currentStep = ref(0)
 const searchKey = ref('')
 const searching = ref(false)
@@ -147,6 +149,10 @@ onMounted(() => {
   if (bookingNo) {
     searchKey.value = bookingNo
     // 自动查询预订
+    searchBooking()
+  } else if (appStore.userInfo?.phone) {
+    // 自动查询当前登录账号的订单
+    searchKey.value = appStore.userInfo.phone
     searchBooking()
   }
 })
