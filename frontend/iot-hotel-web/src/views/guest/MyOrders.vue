@@ -383,7 +383,7 @@ const openExtendModal = async (order: any) => {
     ])
     if (memberRes?.data) memberInfo.value = memberRes.data
     if (couponRes?.data) {
-      const data = couponRes.data
+      const data = couponRes.data as any
       coupons.value = Array.isArray(data) ? data : (data.list || [])
     }
   } catch (e) {
@@ -402,7 +402,7 @@ const recalculatePrice = async () => {
   if (!extendOrder.value || !newCheckOutDate.value) return
 
   try {
-    const res = await bookingApi.calculateExtendPrice(extendOrder.value.id, {
+    const res: any = await bookingApi.calculateExtendPrice(extendOrder.value.id, {
       new_check_out_date: newCheckOutDate.value,
       coupon_id: selectedCouponId.value,
       used_points: usePoints.value ? (memberInfo.value?.points || 0) : 0,
@@ -420,7 +420,7 @@ const handleExtendStay = async () => {
 
   try {
     extendSubmitting.value = true
-    const res = await bookingApi.extendStay(extendOrder.value.id, {
+    const res: any = await bookingApi.extendStay(extendOrder.value.id, {
       new_check_out_date: newCheckOutDate.value,
       coupon_id: selectedCouponId.value,
       used_points: usePoints.value ? (memberInfo.value?.points || 0) : 0,

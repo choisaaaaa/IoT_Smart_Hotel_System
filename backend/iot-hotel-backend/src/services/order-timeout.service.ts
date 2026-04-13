@@ -6,22 +6,29 @@ const POLL_INTERVAL_MS = 30 * 1000;
 
 class OrderTimeoutService {
   private timer: NodeJS.Timeout | null = null;
+  private isPolling: boolean = false;
 
   start() {
     logger.info(`[OrderTimeout] 启动订单超时轮询服务，间隔 ${POLL_INTERVAL_MS / 1000}s，超时 ${PAYMENT_TIMEOUT_MINUTES}min`);
-    this.timer = setInterval(() => this.pollExpiredOrders(), POLL_INTERVAL_MS);
-    this.pollExpiredOrders();
+    this.run();
+  }
+
+  private async run() {
+    await this.pollExpiredOrders();
+    this.timer = setTimeout(() => this.run(), POLL_INTERVAL_MS);
   }
 
   stop() {
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
       logger.info('[OrderTimeout] 停止订单超时轮询服务');
     }
   }
 
   async pollExpiredOrders() {
+    if (this.isPolling) return;
+    this.isPolling = true;
     try {
       const [expiredBookings] = await pool.query<RowDataPacket[]>(
         `SELECT id, booking_number, room_id, locked_by FROM bookings 
@@ -39,6 +46,8 @@ class OrderTimeoutService {
       }
     } catch (error) {
       logger.error('[OrderTimeout] 轮询超时订单失败:', error.message);
+    } finally {
+      this.isPolling = false;
     }
   }
 

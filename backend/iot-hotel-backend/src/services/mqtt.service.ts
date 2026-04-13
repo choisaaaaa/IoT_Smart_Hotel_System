@@ -38,6 +38,8 @@ class MQTTService {
   private maxReconnectAttempts: number = 10;
   private baseReconnectDelay: number = 1000;
   private wsInstance: any = null;
+  private callCache: Map<string, { caller_type: string, caller_id: any, callee_type: string, callee_id: any }> = new Map();
+  private deviceCache: Map<string, { audit_status: string, device_key: string }> = new Map();
 
   constructor() {}
 
@@ -91,6 +93,12 @@ class MQTTService {
       });
 
       this.client.on('message', async (topic: string, message: Buffer) => {
+        // 通话音频流是二进制，不需要 toString 和 JSON.parse
+        if (topic.startsWith('hotel/call/audio/')) {
+          await this.handleCallAudio(topic, message);
+          return;
+        }
+
         const msgStr = message.toString();
         logger.debug(`收到MQTT消息 [${topic}]: ${msgStr}`);
         
@@ -98,8 +106,13 @@ class MQTTService {
           const data = JSON.parse(msgStr);
           await this.handleMessage(topic, data, message);
         } catch (parseError) {
-          logger.warn(`MQTT消息解析失败 [${topic}]: ${msgStr}`);
-          await this.handleMessage(topic, { raw: msgStr }, message);
+          // 通话信令通常是 JSON，如果解析失败再作为 raw 处理
+          if (topic.startsWith('hotel/call/signaling/')) {
+            await this.handleCallSignaling(topic, { raw: msgStr });
+          } else {
+            logger.warn(`MQTT消息解析失败 [${topic}]: ${msgStr.substring(0, 100)}${msgStr.length > 100 ? '...' : ''}`);
+            await this.handleMessage(topic, { raw: msgStr }, message);
+          }
         }
       });
     });
@@ -159,12 +172,20 @@ class MQTTService {
 
     try {
       // 1. 获取设备信息以检查审核状态和密钥
-      const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT audit_status, device_key FROM devices WHERE device_id = ?',
-        [deviceId]
-      );
-
-      const device = rows[0] as { audit_status: string, device_key: string } | undefined;
+      let device = this.deviceCache.get(deviceId);
+      
+      if (!device) {
+        const [rows] = await pool.query<RowDataPacket[]>(
+          'SELECT audit_status, device_key FROM devices WHERE device_id = ?',
+          [deviceId]
+        );
+        device = rows[0] as { audit_status: string, device_key: string } | undefined;
+        if (device) {
+          this.deviceCache.set(deviceId, device);
+          // 缓存10分钟
+          setTimeout(() => this.deviceCache.delete(deviceId), 10 * 60 * 1000);
+        }
+      }
 
       // 2. 只有处于 pending 状态的设备可以发送 status 消息进行注册
       if (!device || device.audit_status !== 'approved') {
@@ -248,18 +269,30 @@ class MQTTService {
 
   async handleCallAudio(topic: string, message: Buffer) {
     const callId = topic.split('/').pop();
+    if (!callId) return;
+
     // 硬件发送的是原始音频二进制流
     if (this.wsInstance) {
-      // 查找该通话的参与者并转发音频流
-      // 这里需要从数据库或内存中查找 callId 对应的接收者
-      const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT caller_type, caller_id, callee_type, callee_id FROM calls WHERE call_id = ?',
-        [callId]
-      );
+      let call = this.callCache.get(callId);
       
-      if (rows.length > 0) {
-        const call = rows[0];
-        // 假设硬件是 callee (房间)，发给 caller (前台/App)
+      if (!call) {
+        // 只有缓存不中时才查询数据库
+        const [rows] = await pool.query<RowDataPacket[]>(
+          'SELECT caller_type, caller_id, callee_type, callee_id FROM calls WHERE call_id = ?',
+          [callId]
+        );
+        
+        if (rows.length > 0) {
+          call = rows[0] as any;
+          this.callCache.set(callId, call!);
+          
+          // 设置定时清理，防止内存泄漏（30分钟后过期）
+          setTimeout(() => this.callCache.delete(callId), 30 * 60 * 1000);
+        }
+      }
+      
+      if (call) {
+        // 硬件通常是 callee (房间)，发给 caller (前台/App)
         this.wsInstance.emitToClient(call.caller_type, call.caller_id, 'audio_chunk', {
           call_id: callId,
           chunk: message

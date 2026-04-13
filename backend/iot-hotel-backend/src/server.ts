@@ -107,7 +107,7 @@ async function startServer() {
 
       try {
         await mqttService.connect();
-        await mqttService.subscribe('hotel/device/#');
+        // subscribeAllTopics 已在 connect 中自动调用，无需在此处冗余订阅 #
       } catch (mqttError) {
         logger.warn(`MQTT连接警告: ${(mqttError as Error).message}`);
       }

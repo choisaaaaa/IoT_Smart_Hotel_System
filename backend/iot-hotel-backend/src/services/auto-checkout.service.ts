@@ -5,22 +5,29 @@ const CHECK_INTERVAL_MS = 60 * 1000;
 
 class AutoCheckoutService {
   private timer: NodeJS.Timeout | null = null;
+  private isPolling: boolean = false;
 
   start() {
     logger.info(`[AutoCheckout] 启动自动退房服务，间隔 ${CHECK_INTERVAL_MS / 1000}s`);
-    this.timer = setInterval(() => this.pollAutoCheckout(), CHECK_INTERVAL_MS);
-    this.pollAutoCheckout();
+    this.run();
+  }
+
+  private async run() {
+    await this.pollAutoCheckout();
+    this.timer = setTimeout(() => this.run(), CHECK_INTERVAL_MS);
   }
 
   stop() {
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
       logger.info('[AutoCheckout] 停止自动退房服务');
     }
   }
 
   async pollAutoCheckout() {
+    if (this.isPolling) return;
+    this.isPolling = true;
     try {
       const [expiredBookings] = await pool.query<RowDataPacket[]>(
         `SELECT b.id, b.booking_number, b.room_id, b.user_id, b.guest_name, b.guest_phone,
@@ -41,6 +48,8 @@ class AutoCheckoutService {
       }
     } catch (error) {
       logger.error('[AutoCheckout] 轮询自动退房失败:', error.message);
+    } finally {
+      this.isPolling = false;
     }
   }
 
