@@ -15,7 +15,7 @@ export interface CallRecord {
 }
 
 export const callApi = {
-  outbound: (data: { caller_id: string; callee_type: 'room' | 'front_desk' | 'ai' | 'app'; callee_id: string; caller_type?: 'front_desk' | 'ai' | 'app'; type?: 'voice' }) =>
+  outbound: (data: { caller_id: string; callee_type: 'room' | 'front_desk' | 'ai' | 'app'; callee_id: string; caller_type?: 'room' | 'front_desk' | 'ai' | 'app'; type?: 'voice' }) =>
     request.post<ApiResponse<CallRecord>>('/calls/outbound', data),
 
   answer: (callId: string) =>

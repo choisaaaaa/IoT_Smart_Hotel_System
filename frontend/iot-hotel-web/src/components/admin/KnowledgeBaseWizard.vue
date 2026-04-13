@@ -173,7 +173,7 @@ const handleSave = async () => {
       title: config.title,
       content,
       keywords: config.fields.map(f => f.label).join(','),
-      is_active: true,
+      is_active: 1,
       sort_order: 100
     })
 

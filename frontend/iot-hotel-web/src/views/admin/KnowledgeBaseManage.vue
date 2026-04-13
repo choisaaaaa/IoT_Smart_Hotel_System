@@ -56,8 +56,8 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'category'">
-            <a-tag :color="CATEGORIES[record.category]?.color || '#8c8c8c'">
-              {{ CATEGORIES[record.category]?.icon }} {{ CATEGORIES[record.category]?.label || record.category }}
+            <a-tag :color="CATEGORIES[record.category as CategoryType]?.color || '#8c8c8c'">
+              {{ CATEGORIES[record.category as CategoryType]?.icon }} {{ CATEGORIES[record.category as CategoryType]?.label || record.category }}
             </a-tag>
           </template>
 
