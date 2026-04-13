@@ -122,6 +122,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminUserManagement',
         component: () => import('@/views/system/UserManagement.vue'),
         meta: { title: '用户管理', icon: 'UserOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'knowledge-base',
+        name: 'KnowledgeBaseManage',
+        component: () => import('@/views/admin/KnowledgeBaseManage.vue'),
+        meta: { title: 'AI知识库', icon: 'BookOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
       }
     ]
   },

@@ -56,6 +56,10 @@
           <template #icon><UserOutlined /></template>
           <span>用户管理</span>
         </a-menu-item>
+        <a-menu-item key="/hotel-admin/knowledge-base">
+          <template #icon><BookOutlined /></template>
+          <span>AI知识库</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
 
@@ -120,7 +124,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined,
   TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
-  EnvironmentOutlined, CalendarOutlined, TagOutlined
+  EnvironmentOutlined, CalendarOutlined, TagOutlined, BookOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, CANONICAL_ROLES } from '@/api/auth'

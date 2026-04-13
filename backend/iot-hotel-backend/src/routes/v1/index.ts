@@ -21,6 +21,7 @@ import environment from './environment';
 import roomTypes from './room-types';
 import priceCalendar from './price-calendar';
 import ratePlans from './rate-plans';
+import knowledgeBase from './knowledge-base';
 
 const router = Router();
 
@@ -45,6 +46,7 @@ router.use('/users', users);
 router.use('/upload', upload);
 router.use('/ai-butler', aiButler);
 router.use('/environment', environment);
+router.use('/knowledge-base', knowledgeBase);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({

@@ -3,6 +3,7 @@ import logger from '../utils/logger';
 import axios from 'axios';
 import crypto from 'crypto';
 import WebSocket from 'ws';
+import { KnowledgeBaseService } from './knowledge-base.service';
 
 interface AIRequest {
   roomId: string;
@@ -295,11 +296,11 @@ export class AIButlerService {
 4. **酒店信息** - 提供酒店设施信息、营业时间、周边推荐等
 5. **人工转接** - 当无法处理或客人明确要求时，转接人工前台
 
-回复要求：
-- 语气亲切礼貌，称呼客人名字
-- 事实一致性：仅回复基于工具结果或已知系统信息的真实内容，严禁编造未提供的时间、排队情况等。
+⚠️ 重要约束：
+- 严格基于知识库中的实际内容回复，禁止编造任何未在知识库中提供的信息
+- 如果知识库中没有相关信息，请明确告知"该信息暂未录入，建议联系前台咨询"
 - 回复简洁明了，不超过80字
-- 主动确认操作结果
+- 语气亲切礼貌，称呼客人名字
 - 如果需要调用工具，先通过function calling执行`;
 
       const messages = [
@@ -590,79 +591,33 @@ export class AIButlerService {
    */
   private async getHotelInfo(infoType: string, session: GuestSession): Promise<string> {
     try {
-      // 从数据库获取特定酒店的信息
-      const [hotels] = await pool.query<RowDataPacket[]>(
-        'SELECT * FROM hotels WHERE id = ?',
-        [session.hotelId]
-      );
+      const knowledgeList = await KnowledgeBaseService.getActiveByHotel(session.hotelId);
 
-      if (hotels.length === 0) {
-        return '抱歉，暂时无法查询到该门店的信息。';
+      if (knowledgeList.length === 0) {
+        return '抱歉，该门店的知识库暂未配置，建议联系前台咨询。';
       }
 
-      const hotel = hotels[0];
-      const hotelName = hotel.hotel_name;
+      if (infoType === 'all') {
+        let allInfo = `🏨 ${session.hotelName}欢迎您：\n\n`;
+        
+        for (const kb of knowledgeList) {
+          allInfo += `${kb.content}\n\n`;
+        }
 
-      // 基础信息模板（如果数据库中没有详细字段，暂时使用酒店名称增强体验）
-      // 在实际生产中，这些信息应存储在 hotel_configs 表中，由门店经理修改
-      const infoTemplates: Record<string, string> = {
-        restaurant: `🍽️ ${hotelName}餐厅信息：
-• 早餐：07:00 - 10:00（1楼西餐厅）
-• 午餐：11:30 - 14:00
-• 晚餐：17:30 - 21:00
-• 客房送餐：24小时可用
+        allInfo += `想了解哪项详情？`;
+        return allInfo;
+      }
 
-需要我帮您安排送餐吗？`,
+      const targetKnowledge = knowledgeList.find(kb => kb.category === infoType);
 
-        gym: `💪 ${hotelName}健身中心：
-• 开放时间：06:00 - 23:00
-• 位置：3楼
-• 设施：跑步机、器械区、瑜伽室
-• 凭房卡免费使用
+      if (!targetKnowledge) {
+        return `抱歉，${infoType}相关的信息暂未录入知识库，建议您直接联系前台咨询（内线0000）。`;
+      }
 
-还需要了解其他设施吗？`,
-
-        wifi: `📶 ${hotelName}WiFi信息：
-• 网络名称：Hotel_${hotelName}
-• 密码：guest888
-• 每个房间独立带宽100Mbps
-
-连接遇到问题可以告诉我，我帮您报修。`,
-
-        nearby: `🏪 ${hotelName}周边推荐：
-• 地址：${hotel.location || hotel.hotel_address || '酒店周边'}
-• 推荐：步行5分钟内有便利店和地铁站
-
-需要更详细的信息吗？`,
-
-        checkout: `📋 ${hotelName}退房须知：
-• 标准退房时间：12:00前
-• 延迟退房：14:00前（需前台确认）
-• 快速退房：可将房卡投入大堂退房箱
-
-需要我帮您申请延迟退房吗？`,
-
-        breakfast: `🥐 ${hotelName}早餐信息：
-• 时间：07:00 - 10:00
-• 地点：1楼西餐厅
-• 形式：自助早餐
-
-需要我提醒您明早用餐吗？`,
-
-        all: `🏨 ${hotelName}欢迎您：
-
-🍽️ 餐厅：早餐7-10点
-💪 健身房：6-23点，3楼
-📶 WiFi：Hotel_${hotelName} / 密码guest888
-🛏️ 退房：12:00前
-
-想了解哪项详情？`
-      };
-
-      return infoTemplates[infoType] || infoTemplates['all'];
+      return targetKnowledge.content;
     } catch (error) {
       logger.error('查询酒店信息失败:', error.message);
-      return '查询酒店信息失败，请稍后重试。';
+      return '查询酒店信息失败，请稍后重试或联系前台。';
     }
   }
 

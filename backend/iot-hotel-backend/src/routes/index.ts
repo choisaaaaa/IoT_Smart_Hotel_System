@@ -25,6 +25,7 @@ import priceCalendarRouter from './v1/price-calendar';
 import ratePlanRouter from './v1/rate-plans';
 import systemConfigRouter from './v1/system-config';
 import environmentRouter from './v1/environment';
+import knowledgeBaseRouter from './v1/knowledge-base';
 
 const router = Router();
 
@@ -59,5 +60,6 @@ router.use('/price-calendar', priceCalendarRouter);
 router.use('/rate-plans', ratePlanRouter);
 router.use('/system-config', systemConfigRouter);
 router.use('/environment', environmentRouter);
+router.use('/knowledge-base', knowledgeBaseRouter);
 
 export default router;

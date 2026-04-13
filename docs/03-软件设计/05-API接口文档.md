@@ -82,6 +82,111 @@
 - `POST /ai-butler/chat`: 发送文本/语音指令，获取 AI 响应及 Function Calling 结果。
 - `GET /ai-butler/config`: 获取 AI 管家的个性化配置。
 
+### 7. AI知识库管理 (`/knowledge-base`)
+> **权限要求**：`hotel_admin`（门店经理）、`system_admin`（系统管理员）
+>
+> **业务说明**：各门店经理通过此接口维护本店的知识库内容，AI管家回复时只能使用已启用的知识库数据，避免编造信息。
+
+#### 7.1 获取知识库列表
+- **接口**：`GET /knowledge-base`
+- **说明**：获取当前登录用户所属酒店的所有知识库条目
+- **查询参数**：
+  - `category` (可选): 按分类筛选，枚举值：restaurant/gym/wifi/nearby/checkout/breakfast/room_service/policy/other
+  - `is_active` (可选): 按启用状态筛选，0=禁用，1=启用
+- **响应示例**：
+  ```json
+  {
+    "code": 200,
+    "message": "获取知识库列表成功",
+    "data": [
+      {
+        "id": 1,
+        "hotel_id": 1,
+        "category": "restaurant",
+        "title": "餐厅信息",
+        "content": "🍽️ **餐厅营业时间**\n\n• **早餐**：07:00 - 10:00...",
+        "keywords": "餐厅,早餐,午餐,晚餐,送餐",
+        "is_active": 1,
+        "sort_order": 100,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-03-20T14:20:00Z"
+      }
+    ]
+  }
+  ```
+
+#### 7.2 获取单个知识条目
+- **接口**：`GET /knowledge-base/:id`
+- **说明**：根据ID获取指定知识条目详情
+- **路径参数**：
+  - `id`: 知识条目ID
+
+#### 7.3 创建/更新知识条目
+- **接口**：`PUT /knowledge-base/:category`
+- **说明**：创建或更新指定分类的知识条目（每个酒店每个分类只能有一条记录）
+- **路径参数**：
+  - `category`: 知识分类（restaurant/gym/wifi等）
+- **请求体**：
+  ```json
+  {
+    "title": "餐厅信息",
+    "content": "🍽️ **餐厅营业时间**\n\n• **早餐**：07:00 - 10:00（1楼西餐厅）\n• **午餐**：11:30 - 14:00\n• **晚餐**：17:30 - 21:00\n\n**特色菜品**：\n- 本帮红烧肉（招牌菜）\n- 清蒸鲈鱼（时令海鲜）",
+    "keywords": "餐厅,早餐,午餐,晚餐,美食,用餐时间",
+    "is_active": true,
+    "sort_order": 100
+  }
+  ```
+- **响应示例**：
+  ```json
+  {
+    "code": 200,
+    "message": "知识条目更新成功",
+    "data": {
+      "id": 1,
+      "hotel_id": 1,
+      "category": "restaurant",
+      "title": "餐厅信息",
+      ...
+    }
+  }
+  ```
+- **特殊响应**：
+  - 如果该分类下已有记录，则执行更新操作
+  - 如果该分类下无记录，则执行创建操作
+
+#### 7.4 切换知识条目启用状态
+- **接口**：`PATCH /knowledge-base/:id/toggle`
+- **说明**：切换指定知识条目的启用/禁用状态
+- **路径参数**：
+  - `id`: 知识条目ID
+- **响应示例**：
+  ```json
+  {
+    "code": 200,
+    "message": "状态更新成功",
+    "data": { "is_active": false }
+  }
+  ```
+
+#### 7.5 删除知识条目
+- **接口**：`DELETE /knowledge-base/:id`
+- **说明**：删除指定的知识条目（仅系统管理员可删除）
+- **路径参数**：
+  - `id`: 知识条目ID
+- **权限**：仅 `system_admin` 可调用
+
+#### 7.6 批量初始化知识库（可选）
+- **接口**：`POST /knowledge-base/init`
+- **说明**：为当前酒店批量创建默认知识库模板（仅当知识库为空时可调用）
+- **响应示例**：
+  ```json
+  {
+    "code": 200,
+    "message": "知识库初始化成功，已创建8个默认条目",
+    "data": { "count": 8 }
+  }
+  ```
+
 ---
 
 ## 📡 实时推送 (WebSocket)
