@@ -2,13 +2,33 @@
   <div class="ai-butler-page" @click="handlePageClick">
     <!-- 顶部状态栏 -->
     <div class="status-bar">
+      <div class="hotel-info">
+        <span class="hotel-name">{{ currentHotelName }}</span>
+      </div>
       <div class="room-info">
         <HomeOutlined />
-        <span>房间 {{ roomId }}</span>
+        <a-select
+          v-if="roomList.length > 1"
+          v-model:value="roomId"
+          class="room-selector"
+          @change="handleRoomChange"
+          size="small"
+          :bordered="false"
+          :dropdown-style="{ minWidth: '100px' }"
+        >
+          <a-select-option v-for="room in roomList" :key="room" :value="room">
+            房间 {{ room }}
+          </a-select-option>
+        </a-select>
+        <span v-else>房间 {{ roomId }}</span>
       </div>
       <div class="connection-status" :class="{ online: isConnected }">
         <WifiOutlined />
         <span>{{ isConnected ? '已连接' : '连接中...' }}</span>
+      </div>
+      <div class="front-desk-status" :class="{ online: frontDeskCount > 0 }">
+        <CustomerServiceOutlined />
+        <span>前台{{ frontDeskCount > 0 ? `在线(${frontDeskCount})` : '离线' }}</span>
       </div>
     </div>
 
@@ -219,55 +239,101 @@
       </div>
     </a-modal>
 
-    <!-- 通话中悬浮窗 -->
-    <div v-if="callModal.visible" class="call-window">
-      <div class="call-header">
-        <PhoneOutlined class="call-icon-mini" />
-        <span class="caller-name-mini">{{ callModal.callerName }}</span>
-        <div class="connection-status" :class="callModal.connectionState">
-          {{ callModal.connectionStateText }}
-        </div>
-      </div>
-      <div class="call-duration">{{ callModal.duration }}</div>
-      
-      <!-- 通话状态 -->
-      <div class="call-status-banner" :class="callModal.connectionState">
-        <span class="status-dot"></span>
-        <span class="status-text">{{ callModal.statusText }}</span>
-      </div>
-      
-      <!-- 音频电平指示器 -->
-      <div class="audio-indicators">
-        <div class="audio-indicator" :class="{ speaking: callModal.localSpeaking }">
-          <div class="indicator-label">
-            <span class="indicator-icon">🎤</span>
-            <span class="indicator-text">我</span>
-            <span class="indicator-status" :class="{ active: callModal.inputVolume > 5, speaking: callModal.localSpeaking }">
-              {{ callModal.localSpeaking ? '说话中' : (callModal.inputVolume > 5 ? '正常' : '静音') }}
-            </span>
+    <!-- 通话中弹窗 -->
+    <a-modal
+      v-model:open="callModal.visible"
+      :footer="null"
+      :closable="false"
+      :maskClosable="false"
+      centered
+      width="340px"
+      class="call-modal"
+    >
+      <div class="call-content-modal">
+        <div class="call-header-modal">
+          <div class="caller-avatar">
+            <CustomerServiceOutlined />
           </div>
-          <div class="level-bar-container">
-            <div class="level-bar" :style="{ height: callModal.inputVolume + '%' }"></div>
+          <h3>{{ callModal.callerName }}</h3>
+          <div class="call-status-tag" :class="callModal.connectionState">
+            {{ callModal.connectionStateText }}
           </div>
         </div>
-        <div class="audio-indicator" :class="{ speaking: callModal.remoteSpeaking }">
-          <div class="indicator-label">
-            <span class="indicator-icon">🔊</span>
-            <span class="indicator-text">对方</span>
-            <span class="indicator-status" :class="{ active: callModal.outputVolume > 5, speaking: callModal.remoteSpeaking }">
-              {{ callModal.remoteSpeaking ? '说话中' : (callModal.outputVolume > 5 ? '正常' : '静音') }}
-            </span>
-          </div>
-          <div class="level-bar-container">
-            <div class="level-bar output" :style="{ height: callModal.outputVolume + '%' }"></div>
+
+        <div class="call-body-modal">
+          <div class="duration-display">{{ callModal.duration }}</div>
+          
+          <!-- 音频波形/电平指示 -->
+          <div class="audio-visualizer">
+            <div class="visualizer-item">
+              <span class="vis-label">您的声音</span>
+              <div class="level-meter">
+                <div class="level-bar" :style="{ width: callModal.inputVolume + '%', background: callModal.localSpeaking ? '#52c41a' : '#bfbfbf' }"></div>
+              </div>
+            </div>
+            <div class="visualizer-item">
+              <span class="vis-label">前台声音</span>
+              <div class="level-meter">
+                <div class="level-bar" :style="{ width: callModal.outputVolume + '%', background: callModal.remoteSpeaking ? '#1890ff' : '#bfbfbf' }"></div>
+              </div>
+            </div>
           </div>
         </div>
+
+        <div class="call-footer-modal">
+          <a-button type="primary" danger shape="round" size="large" block @click="hangupCall">
+            <template #icon><CloseOutlined /></template> 挂断
+          </a-button>
+        </div>
       </div>
-      
-      <a-button danger size="large" @click="hangupCall" class="hangup-btn" block>
-        <template #icon><CloseOutlined /></template> 挂断
-      </a-button>
-    </div>
+    </a-modal>
+
+    <!-- 工单详情弹窗 -->
+    <a-modal
+      v-model:open="ticketModal.visible"
+      :footer="null"
+      centered
+      width="340px"
+      class="ticket-modal"
+      title="服务请求详情"
+    >
+      <div class="ticket-detail">
+        <div class="ticket-header">
+          <CheckCircleOutlined class="success-icon" />
+          <h3>请求已提交</h3>
+        </div>
+        <div class="ticket-info">
+          <div class="info-item">
+            <span class="label">工单单号:</span>
+            <span class="value">{{ ticketModal.data.ticketNo }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">服务类型:</span>
+            <span class="value">{{ ticketModal.data.type }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">房间号码:</span>
+            <span class="value">{{ ticketModal.data.roomNumber }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">服务描述:</span>
+            <span class="value">{{ ticketModal.data.description }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">紧急程度:</span>
+            <span class="value" :class="{ 'urgent-text': ticketModal.data.urgency !== '普通' }">{{ ticketModal.data.urgency }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">创建时间:</span>
+            <span class="value">{{ ticketModal.data.createdAt }}</span>
+          </div>
+        </div>
+        <div class="ticket-footer">
+          <p>工作人员将尽快为您处理</p>
+          <a-button type="primary" block @click="ticketModal.visible = false">知道了</a-button>
+        </div>
+      </div>
+    </a-modal>
 
     <!-- 远程音频元素 -->
     <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
@@ -297,12 +363,16 @@ import {
   EditOutlined,
   SoundOutlined
 } from '@ant-design/icons-vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
 
 const route = useRoute()
+const router = useRouter()
 const roomId = ref(route.query.room as string || '101')
+const roomList = ref<string[]>([]) // 房间列表（一客多房）
+const frontDeskCount = ref(0) // 在线前台数量
+const currentHotelName = ref('智联酒店') // 当前酒店名称
 
 // 状态
 const isConnected = ref(false)
@@ -362,6 +432,19 @@ const callModal = ref({
   inputVolume: 0,
   outputVolume: 0,
   callId: ''
+})
+
+// 工单详情弹窗
+const ticketModal = ref({
+  visible: false,
+  data: {
+    ticketNo: '',
+    type: '',
+    description: '',
+    urgency: '',
+    roomNumber: '',
+    createdAt: ''
+  }
 })
 
 // 通话计时器
@@ -566,13 +649,44 @@ async function verifyAccess() {
     })
     
     if (res.data?.code === 403) {
-      message.error('该房间暂无入住记录，无法使用AI管家')
-    } else if (res.data?.data?.accessible) {
-      message.success(`欢迎${res.data.data.guestName}，我是您的AI管家小智`)
-    }
+        message.error('该房间暂无入住记录，无法使用AI管家')
+      } else if (res.data?.data?.accessible) {
+        message.success(`欢迎${res.data.data.guestName}，我是您的AI管家小智`)
+        // 更新酒店名称
+        if (res.data.data.hotelName) {
+          currentHotelName.value = res.data.data.hotelName
+        }
+        // 更新房间列表，支持一客多房切换
+        if (res.data.data.roomList && res.data.data.roomList.length > 0) {
+          roomList.value = res.data.data.roomList
+        } else {
+          roomList.value = [roomId.value]
+        }
+        // 更新前台在线数量
+        frontDeskCount.value = res.data.data.frontDeskCount || 0
+      }
   } catch (error) {
     console.error('验证失败:', error)
   }
+}
+
+// 切换房间（处理一客多房）
+function handleRoomChange(newRoomId: string) {
+  roomId.value = newRoomId
+  // 更新URL查询参数，方便刷新后保持状态
+  router.replace({ query: { ...route.query, room: newRoomId } })
+  // 重新注册WebSocket
+  if (socket && socket.connected) {
+    socket.emit('register_client', {
+      clientType: 'room',
+      clientId: roomId.value
+    })
+  }
+  // 清空当前对话（可选，这里选择清空以防混淆）
+  messages.value = []
+  message.success(`已切换到房间 ${newRoomId}`)
+  // 重新验证权限并加载新房间状态
+  verifyAccess()
 }
 
 // 初始化语音识别
@@ -775,6 +889,14 @@ async function sendToAI(text: string) {
       })
       
       scrollToBottom()
+
+      // 如果有工单详情，弹出弹窗
+      if (aiResponse.ticketData) {
+        setTimeout(() => {
+          ticketModal.value.data = aiResponse.ticketData
+          ticketModal.value.visible = true
+        }, 1500) // 等待打字机效果开始后弹出
+      }
 
       // 如果需要转接
       if (aiResponse.action === 'transfer') {
@@ -1227,13 +1349,51 @@ function scrollToBottom() {
   color: white;
 }
 
+.hotel-info {
+  display: flex;
+  align-items: center;
+}
+
+.hotel-name {
+  font-size: 16px;
+  font-weight: bold;
+  background: linear-gradient(to right, #ffffff, #8cc8ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .room-info, .connection-status {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.room-selector {
+  color: white !important;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.room-selector :deep(.ant-select-selection-item) {
+  color: white !important;
+}
+
+.room-selector :deep(.ant-select-arrow) {
+  color: white !important;
+}
+
 .connection-status.online {
+  color: #52c41a;
+}
+
+.front-desk-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #bfbfbf;
+}
+
+.front-desk-status.online {
   color: #52c41a;
 }
 
@@ -1296,6 +1456,147 @@ function scrollToBottom() {
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 1; }
   100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* 通话弹窗样式 */
+.call-content-modal {
+  padding: 10px 0;
+  text-align: center;
+}
+
+.call-header-modal {
+  margin-bottom: 30px;
+}
+
+.caller-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #e6f7ff;
+  color: #1890ff;
+  font-size: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 15px;
+  box-shadow: 0 0 20px rgba(24, 144, 255, 0.2);
+}
+
+.call-status-tag {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-top: 8px;
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+.call-status-tag.connected {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.duration-display {
+  font-size: 36px;
+  font-weight: bold;
+  font-family: monospace;
+  color: #262626;
+  margin-bottom: 30px;
+}
+
+.audio-visualizer {
+  margin-bottom: 40px;
+  padding: 0 20px;
+}
+
+.visualizer-item {
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.vis-label {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 5px;
+}
+
+.level-meter {
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.level-bar {
+  height: 100%;
+  transition: width 0.1s ease, background 0.3s ease;
+}
+
+.call-footer-modal {
+  padding-top: 10px;
+}
+
+/* 工单详情弹窗样式 */
+.ticket-detail {
+  padding: 10px 0;
+}
+
+.ticket-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.success-icon {
+  font-size: 48px;
+  color: #52c41a;
+  margin-bottom: 10px;
+}
+
+.ticket-info {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-item .label {
+  color: #666;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.info-item .value {
+  color: #333;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.urgent-text {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.ticket-footer {
+  text-align: center;
+}
+
+.ticket-footer p {
+  color: #999;
+  font-size: 12px;
+  margin-bottom: 15px;
 }
 
 .voice-waves {

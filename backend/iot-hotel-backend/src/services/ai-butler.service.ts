@@ -21,12 +21,15 @@ interface AIResponse {
   callId?: number;
   frontDeskCount?: number;
   toolCalls?: any[];
+  ticketData?: any;
+  hotelName?: string;
 }
 
 interface GuestSession {
   roomId: string;
   roomDbId: number;
   hotelId: number;
+  hotelName: string;
   guestId: number;
   bookingId: number;
   guestName: string;
@@ -165,9 +168,10 @@ export class AIButlerService {
   async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
     try {
       const [guests] = await pool.query<RowDataPacket[]>(
-        `SELECT g.*, r.room_number, r.hotel_id, b.check_in_date, b.check_out_date
+        `SELECT g.*, r.room_number, r.hotel_id, h.hotel_name, b.check_in_date, b.check_out_date
          FROM guests g
          JOIN rooms r ON g.room_id = r.id
+         JOIN hotels h ON r.hotel_id = h.id
          LEFT JOIN bookings b ON g.booking_id = b.id
          WHERE (r.id = ? OR r.room_number = ?)
          AND g.check_out_time IS NULL
@@ -186,6 +190,7 @@ export class AIButlerService {
         roomId: guest.room_number,
         roomDbId: guest.room_id,
         hotelId: guest.hotel_id,
+        hotelName: guest.hotel_name,
         guestId: guest.id,
         bookingId: guest.booking_id,
         guestName: guest.guest_name || '尊敬的客人',
@@ -199,6 +204,44 @@ export class AIButlerService {
     } catch (error) {
       logger.error('验证客人入住状态失败:', error.message);
       return null;
+    }
+  }
+
+  /**
+   * 获取客人的所有已入住房间
+   */
+  async getGuestRooms(roomId: string): Promise<string[]> {
+    try {
+      // 1. 先找到当前房间对应的客人信息
+      const [currentGuests] = await pool.query<RowDataPacket[]>(
+        `SELECT g.guest_phone, b.user_id 
+         FROM guests g 
+         LEFT JOIN bookings b ON g.booking_id = b.id
+         JOIN rooms r ON g.room_id = r.id
+         WHERE (r.id = ? OR r.room_number = ?) AND g.check_out_time IS NULL
+         LIMIT 1`,
+        [roomId, roomId]
+      );
+
+      if (currentGuests.length === 0) return [];
+
+      const { guest_phone, user_id } = currentGuests[0];
+
+      // 2. 查找该客人名下所有未退房的房间
+      const [rooms] = await pool.query<RowDataPacket[]>(
+        `SELECT DISTINCT r.room_number 
+         FROM guests g
+         JOIN rooms r ON g.room_id = r.id
+         LEFT JOIN bookings b ON g.booking_id = b.id
+         WHERE (g.guest_phone = ? OR (b.user_id IS NOT NULL AND b.user_id = ?))
+         AND g.check_out_time IS NULL`,
+        [guest_phone, user_id]
+      );
+
+      return rooms.map(r => r.room_number);
+    } catch (error) {
+      logger.error('获取客人房间列表失败:', error.message);
+      return [];
     }
   }
 
@@ -313,7 +356,7 @@ export class AIButlerService {
   /**
    * 执行工具调用
    */
-  async executeToolCall(toolName: string, args: any, session: GuestSession): Promise<string> {
+  async executeToolCall(toolName: string, args: any, session: GuestSession): Promise<any> {
     try {
       switch (toolName) {
         case 'control_device':
@@ -478,7 +521,7 @@ export class AIButlerService {
   /**
    * 请求服务
    */
-  private async requestService(args: any, session: GuestSession): Promise<string> {
+  private async requestService(args: any, session: GuestSession): Promise<any> {
     const { service_type, description, urgency = 'normal' } = args;
 
     // 映射服务类型
@@ -494,17 +537,18 @@ export class AIButlerService {
     const service = serviceMap[service_type] || serviceMap.other;
 
     try {
+      let orderNo = '';
       if (service.table === 'maintenance_tickets') {
         // 创建维修/保洁工单
-        const ticketNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
+        orderNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
         await pool.query(
           `INSERT INTO maintenance_tickets (ticket_no, booking_id, guest_id, room_id, fault_type, fault_description, priority, status, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
-          [ticketNo, session.bookingId, session.guestId, session.roomDbId, service.type, description, urgency]
+          [orderNo, session.bookingId, session.guestId, session.roomDbId, service.type, description, urgency]
         );
       } else {
         // 创建配送单
-        const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
+        orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
         await pool.query(
           `INSERT INTO delivery_orders (order_no, booking_id, guest_id, room_id, item_name, quantity, note, status, created_at)
            VALUES (?, ?, ?, ?, ?, 1, ?, 'pending', NOW())`,
@@ -522,7 +566,19 @@ export class AIButlerService {
         other: '其他服务'
       }[service_type];
 
-      return `已为您安排${serviceName}${urgencyText}，工作人员会尽快到达您的房间并为您处理。`;
+      const replyText = `已为您安排${serviceName}${urgencyText}，工作人员会尽快到达您的房间并为您处理。`;
+      
+      return {
+        text: replyText,
+        data: {
+          ticketNo: orderNo,
+          type: serviceName,
+          description: description,
+          urgency: urgencyText || '普通',
+          roomNumber: session.roomId,
+          createdAt: new Date().toLocaleString('zh-CN')
+        }
+      };
     } catch (error) {
       logger.error('创建服务请求失败:', error.message);
       return '创建服务请求失败，请直接拨打前台电话或转接人工服务。';
@@ -919,6 +975,7 @@ export class AIButlerService {
       // 4. 如果有工具调用，执行工具并生成最终回复
       if (llmResult.needToolCall && llmResult.tool_calls) {
         const toolResults: any[] = [];
+        let ticketData: any = null;
 
         for (const toolCall of llmResult.tool_calls) {
           const functionName = toolCall.function.name;
@@ -927,14 +984,26 @@ export class AIButlerService {
           logger.info(`执行工具: ${functionName}`, functionArgs);
 
           const toolResult = await this.executeToolCall(functionName, functionArgs, session);
+          
+          // 处理带数据的工具返回
+          let resultText = '';
+          if (typeof toolResult === 'object' && toolResult.text) {
+            resultText = toolResult.text;
+            if (toolResult.data) {
+              ticketData = toolResult.data;
+            }
+          } else {
+            resultText = toolResult;
+          }
+
           toolResults.push({
             id: toolCall.id,
-            result: toolResult
+            result: resultText
           });
         }
 
         const finalMessages = [
-          { role: 'system', content: '你是智慧酒店的AI管家"小智"。根据工具执行结果，用亲切的语气向客人汇报结果。严禁编造工具结果中未包含的信息（如具体的等待时间、具体的排队人数等）。' },
+          { role: 'system', content: '你是智慧酒店的AI管家"小智"。根据工具执行结果，用亲切的语气向客人汇报结果。严禁编造工具结果中未包含的信息（如具体的等待时间、具体的排队人数等）。如果涉及到转接前台，请务必根据提供的在线人数报出来（例如：正在为您转接前台，目前有2位工作人员在线）。' },
           { role: 'user', content: userText },
           { role: 'assistant', content: llmResult.content || '', tool_calls: llmResult.tool_calls },
           ...toolResults.map(tr => ({
@@ -987,7 +1056,9 @@ export class AIButlerService {
         return {
           text: finalText,
           audioUrl: audioBase64,
-          action: 'reply'
+          action: 'reply',
+          ticketData: ticketData,
+          hotelName: session.hotelName // 包含酒店名称
         };
       }
 

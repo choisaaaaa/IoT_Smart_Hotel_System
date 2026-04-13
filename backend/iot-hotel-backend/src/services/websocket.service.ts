@@ -9,6 +9,7 @@ interface ClientInfo {
   socketId: string;
   roomId?: string;
   role?: string;
+  hotelId?: number; // 新增：所属酒店ID
   clientType?: 'room' | 'front_desk' | 'ai' | 'app';
   clientId?: string;
   clientName?: string; // 新增：客户端显示名称
@@ -106,19 +107,28 @@ class WebSocketService {
           }
 
           let displayName = data.clientId;
+          let hotelId: number | undefined = undefined;
 
           // 人员识别逻辑
           if (data.clientType === 'front_desk') {
-            // 前台必须从数据库验证
+            // 前台必须从数据库验证，且角色必须是 staff (原 reception) 或管理角色
             const [rows] = await pool.query<RowDataPacket[]>(
-              'SELECT username, role FROM users WHERE id = ? OR username = ?',
+              'SELECT username, role, hotel_id FROM users WHERE id = ? OR username = ?',
               [data.clientId, data.clientId]
             );
             if (rows.length === 0) {
               socket.emit('error', { message: '身份验证失败：未找到该员工/用户' });
               return;
             }
+            
+            const userRole = rows[0].role;
+            if (userRole === 'customer') {
+              socket.emit('error', { message: '身份验证失败：普通顾客无法以柜台身份登录' });
+              return;
+            }
+            
             displayName = rows[0].username;
+            hotelId = rows[0].hotel_id;
           } else if (data.clientType === 'app') {
             // App端（顾客）不需要验证数据库，直接使用clientId作为显示名
             // 格式通常为 guest_{roomId} 或用户自定义ID
@@ -130,11 +140,15 @@ class WebSocketService {
             }
           } else if (data.clientType === 'room') {
             const [rows] = await pool.query<RowDataPacket[]>(
-              'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+              'SELECT id, room_number, hotel_id FROM rooms WHERE id = ? OR room_number = ?',
               [data.clientId, data.clientId]
             );
             if (rows.length > 0) {
-              displayName = `客房 ${rows[0].room_number}`;
+              const room = rows[0];
+              displayName = `客房 ${room.room_number}`;
+              hotelId = room.hotel_id;
+              // 强制将 clientId 统一为数据库 ID，确保全局唯一
+              data.clientId = String(room.id);
             }
           }
           
@@ -143,28 +157,34 @@ class WebSocketService {
             info.clientType = data.clientType;
             info.clientId = data.clientId;
             info.clientName = displayName;
+            info.hotelId = hotelId;
             
-            // 统一使用 {type}_{id} 格式加入房间，用于接收定向消息
-            const targetRoom = `${data.clientType}_${data.clientId}`;
-            socket.join(targetRoom);
-            logger.info(`客户端 ${socket.id} 加入房间: ${targetRoom}`);
+            // 1. 加入基于类型的全局房间
+            socket.join(data.clientType);
             
-            // 同时加入类型房间，用于接收广播消息
-            switch (data.clientType) {
-              case 'room':
-                socket.join(`room_${data.clientId}`);
-                break;
-              case 'front_desk':
-                socket.join('front_desk');
-                socket.join(`front_desk_${data.clientId}`); // 同时加入个人房间，用于接收定向来电
-                break;
-              case 'ai':
-                socket.join('ai');
-                break;
-              case 'app':
-                socket.join(`app_${data.clientId}`);
-                break;
+            // 2. 加入基于酒店的类型房间（实现门店隔离）
+            if (hotelId) {
+              const hotelTypeRoom = `${data.clientType}_hotel_${hotelId}`;
+              socket.join(hotelTypeRoom);
+              logger.info(`客户端 ${socket.id} 加入门店房间: ${hotelTypeRoom}`);
             }
+
+            // 3. 加入个人专属房间，用于接收定向消息
+            const personalRoom = `${data.clientType}_${data.clientId}`;
+            socket.join(personalRoom);
+            logger.info(`客户端 ${socket.id} 加入个人房间: ${personalRoom}`);
+
+            // 4. 兼容性：如果是前台，加入 legacy 房间名
+            if (data.clientType === 'front_desk') {
+              socket.join('front_desk');
+            }
+            
+            this.broadcastOnlineStatus();
+            socket.emit('registered', { 
+              clientId: data.clientId, 
+              clientName: displayName,
+              hotelId: hotelId 
+            });
           }
           
           socket.emit('registered', {
@@ -231,20 +251,16 @@ class WebSocketService {
       });
 
       socket.on('initiate_call', async (data: { 
-        caller_type?: 'room' | 'front_desk' | 'ai' | 'app'; 
-        caller_id?: string; 
+        caller_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+        caller_id: string; 
         callee_type: 'room' | 'front_desk' | 'ai' | 'app'; 
-        callee_id: string; 
-        type?: string 
+        callee_id: string;
+        type?: 'voice' | 'video'
       }) => {
         try {
+          const { caller_type, caller_id, callee_type, callee_id, type: callType = 'voice' } = data;
           const clientInfo = this.clients.get(socket.id);
-          const caller_type = data.caller_type || clientInfo?.clientType || 'room';
-          const caller_id = data.caller_id || clientInfo?.clientId || clientInfo?.roomId || 'unknown';
-          const callee_type = data.callee_type;
-          const callee_id = data.callee_id;
-          const callType = data.type || 'voice';
-          
+
           const validTypes = ['room', 'front_desk', 'ai', 'app'];
           
           if (!validTypes.includes(caller_type)) {
@@ -305,11 +321,24 @@ class WebSocketService {
             [callId, caller_type, caller_id, callee_type, callee_id, 'calling', new Date()]
           );
           
+          // 1. 获取主叫方的酒店信息（如果是房间）
+          let callerHotelName = '';
+          if (caller_type === 'room') {
+            const [hotelRows] = await pool.query<RowDataPacket[]>(
+              'SELECT h.hotel_name FROM rooms r JOIN hotels h ON r.hotel_id = h.id WHERE r.id = ? OR r.room_number = ?',
+              [caller_id, caller_id]
+            );
+            if (hotelRows.length > 0) {
+              callerHotelName = hotelRows[0].hotel_name;
+            }
+          }
+
           const callData = {
             call_id: callId,
             caller_type,
             caller_id,
-            caller_name: clientInfo?.clientName || caller_id, // 新增：主叫名称
+            caller_name: clientInfo?.clientName || caller_id,
+            hotel_name: callerHotelName, // 新增：所属酒店
             callee_type,
             callee_id,
             status: 'calling',
@@ -319,10 +348,19 @@ class WebSocketService {
           
           socket.emit('call_initiated', callData);
           
-          // 如果是呼叫所有前台，广播到 front_desk 房间
+          // 如果是呼叫所有前台，广播到所属酒店的前台房间
           if (callee_type === 'front_desk' && (callee_id === 'all' || callee_id === 'staff')) {
-            logger.info(`发送 incoming_call 到所有前台, 数据:`, callData);
-            this.io?.to('front_desk').emit('incoming_call', callData);
+            // 获取主叫方的酒店ID
+            const callerHotelId = clientInfo?.hotelId;
+            if (callerHotelId) {
+              const hotelRoom = `front_desk_hotel_${callerHotelId}`;
+              logger.info(`发送 incoming_call 到酒店前台房间: ${hotelRoom}, 数据:`, callData);
+              this.io?.to(hotelRoom).emit('incoming_call', callData);
+            } else {
+              // 回退方案：如果没有酒店ID，广播到全局前台房间
+              logger.warn(`主叫方 ${socket.id} 缺少酒店ID，回退到全局前台广播`);
+              this.io?.to('front_desk').emit('incoming_call', callData);
+            }
           } else {
             const targetRoom = `${callee_type}_${callee_id}`;
             logger.info(`发送 incoming_call 到房间: ${targetRoom}, 数据:`, callData);
@@ -543,9 +581,10 @@ class WebSocketService {
         }
       });
 
-      socket.on('answer_call', async (data: { callId: string }) => {
+      socket.on('answer_call', async (data: { callId?: string; call_id?: string }) => {
         try {
-          const callId = String(data.callId).trim();
+          const callId = String(data.callId || data.call_id).trim();
+          const currentClient = this.clients.get(socket.id);
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -568,10 +607,27 @@ class WebSocketService {
           const answerData = {
             call_id: callId,
             status: 'connected',
-            answered_at: new Date().toISOString()
+            answered_at: new Date().toISOString(),
+            caller_type: callData.caller_type,
+            caller_id: callData.caller_id,
+            callee_type: callData.callee_type,
+            callee_id: callData.callee_id
           };
           
+          // 1. 通知当前操作的 Socket（被叫方确认）
           socket.emit('call_answered', answerData);
+          
+          // 2. 通知主叫方（精准通知个人房间）
+          const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
+          logger.info(`发送 call_answered 到主叫房间: ${callerRoom}`);
+          this.io?.to(callerRoom).emit('call_answered', answerData);
+          
+          // 3. 通知该门店的所有前台（同步状态）
+          const hId = callData.hotel_id || currentClient?.hotelId;
+          if (hId) {
+            const hotelRoom = `front_desk_hotel_${hId}`;
+            this.io?.to(hotelRoom).emit('call_answered', answerData);
+          }
           
           // 如果是拨给房间，通知硬件接通
           if (callData.callee_type === 'room') {
@@ -592,9 +648,9 @@ class WebSocketService {
         }
       });
 
-      socket.on('reject_call', async (data: { callId: string }) => {
+      socket.on('reject_call', async (data: { callId?: string; call_id?: string }) => {
         try {
-          const callId = String(data.callId).trim();
+          const callId = String(data.callId || data.call_id).trim();
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -641,9 +697,9 @@ class WebSocketService {
         }
       });
 
-      socket.on('hangup_call', async (data: { callId: string }) => {
+      socket.on('hangup_call', async (data: { callId?: string; call_id?: string }) => {
         try {
-          const callId = String(data.callId).trim();
+          const callId = String(data.callId || data.call_id).trim();
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -794,80 +850,78 @@ class WebSocketService {
     return clients;
   }
 
-  getClientsByType(clientType: string): ClientInfo[] {
-    const result: ClientInfo[] = [];
-    this.clients.forEach((info) => {
-      if (info.clientType === clientType) result.push(info);
-    });
-    return result;
+  /**
+   * 发送在线状态给特定客户端
+   */
+  private sendOnlineStatus(socket: Socket) {
+    const clientInfo = this.clients.get(socket.id);
+    const hotelId = clientInfo?.hotelId;
+
+    const data = {
+      web: this.getClientsByType('front_desk', hotelId),
+      rooms: this.getClientsByType('room', hotelId),
+      ai: this.getClientsByType('ai', hotelId),
+      app: this.getClientsByType('app', hotelId)
+    };
+    socket.emit('online_status', data);
   }
 
-  async sendOnlineStatus(socket: Socket) {
-    try {
-      // 1. 获取在线的 WebSocket 客户端
-      const onlineWebClients: any[] = [];
-      this.clients.forEach((info) => {
-        if (info.clientType && info.clientId) {
-          onlineWebClients.push({
-            type: info.clientType,
-            id: info.clientId,
-            name: info.clientName
-          });
-        }
-      });
-
-      // 2. 获取在线的 MQTT 硬件设备
-      const onlineMqttDevices = await mqttService.getOnlineDevices();
-      const onlineRooms = onlineMqttDevices
-        .filter(d => d.device_type === 'room_terminal') // 只看房间终端
-        .map(d => ({
-          type: 'room',
-          id: d.device_id.startsWith('R') ? d.device_id.substring(1) : d.device_id,
-          name: d.device_name
-        }));
-
-      socket.emit('online_status', {
-        web: onlineWebClients,
-        rooms: onlineRooms,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      logger.error('获取在线状态失败:', error.message);
-    }
-  }
-
-  async broadcastOnlineStatus() {
-    if (!this.io) return;
+  /**
+   * 广播在线状态给所有相关客户端
+   */
+  private broadcastOnlineStatus() {
+    // 方案 A: 简单广播所有（不安全，但简单）
+    // 方案 B: 分酒店广播（推荐）
     
-    try {
-      const onlineWebClients: any[] = [];
-      this.clients.forEach((info) => {
-        if (info.clientType && info.clientId) {
-          onlineWebClients.push({
-            type: info.clientType,
-            id: info.clientId,
-            name: info.clientName
-          });
-        }
-      });
-
-      const onlineMqttDevices = await mqttService.getOnlineDevices();
-      const onlineRooms = onlineMqttDevices
-        .filter(d => d.device_type === 'room_terminal')
-        .map(d => ({
-          type: 'room',
-          id: d.device_id.startsWith('R') ? d.device_id.substring(1) : d.device_id,
-          name: d.device_name
-        }));
-
-      this.io.emit('online_status', {
-        web: onlineWebClients,
-        rooms: onlineRooms,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      logger.error('广播在线状态失败:', error.message);
+    // 我们获取所有唯一的酒店ID
+    const hotelIds = new Set<number>();
+    for (const info of this.clients.values()) {
+      if (info.hotelId) hotelIds.add(info.hotelId);
     }
+
+    // 为每个酒店广播
+    for (const hotelId of hotelIds) {
+      const data = {
+        web: this.getClientsByType('front_desk', hotelId),
+        rooms: this.getClientsByType('room', hotelId),
+        ai: this.getClientsByType('ai', hotelId),
+        app: this.getClientsByType('app', hotelId)
+      };
+      
+      // 发送给该酒店的前台房间
+      this.io?.to(`front_desk_hotel_${hotelId}`).emit('online_status', data);
+    }
+
+    // 同时保留全局广播给系统管理员（如果他们在 global front_desk 房间）
+    const globalData = {
+      web: this.getClientsByType('front_desk'),
+      rooms: this.getClientsByType('room'),
+      ai: this.getClientsByType('ai'),
+      app: this.getClientsByType('app')
+    };
+    this.io?.to('front_desk').emit('online_status', globalData);
+  }
+
+  /**
+   * 获取特定类型的客户端列表
+   */
+  public getClientsByType(type: string, hotelId?: number): any[] {
+    const list: any[] = [];
+    for (const info of this.clients.values()) {
+      if (info.clientType === type) {
+        // 如果指定了 hotelId，则过滤
+        if (hotelId !== undefined && info.hotelId !== hotelId) {
+          continue;
+        }
+        
+        list.push({
+          id: info.clientId,
+          name: info.clientName,
+          connectedAt: info.connectedAt
+        });
+      }
+    }
+    return list;
   }
 
   close() {

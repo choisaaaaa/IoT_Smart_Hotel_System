@@ -10,7 +10,10 @@
     >
       <div class="logo" @click="$router.push('/reception/dashboard')">
         <CustomerServiceOutlined style="font-size: 24px; color: #1890ff;" />
-        <span v-show="!collapsed" class="logo-text">前台端</span>
+        <div v-show="!collapsed" class="logo-wrapper">
+          <span class="logo-text">前台端</span>
+          <span class="hotel-tag">{{ hotelStore.hotelInfo?.hotel_name || '智联酒店' }}</span>
+        </div>
       </div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
@@ -153,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
@@ -162,12 +165,14 @@ import {
   BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined,
   CheckCircleOutlined, AlertOutlined
 } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
 import { environmentApi } from '@/api/environment'
+import { getSocket, initWebSocket } from '@/utils/websocket'
 
 const route = useRoute()
 const router = useRouter()
@@ -180,6 +185,18 @@ appStore.initUserInfo()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
+
+// WebSocket 全局监听来电
+function setupGlobalWebSocket() {
+  const socket = initWebSocket()
+  if (!socket) return
+
+  // 注册逻辑已在 websocket.ts 的 connect 回调中自动处理
+}
+
+onUnmounted(() => {
+  // WebSocket 监听器现在主要由 App.vue 处理
+})
 
 interface NotificationItem {
   id: string
@@ -207,6 +224,7 @@ function handleMenuClick({ key }: { key: string }) {
 onMounted(async () => {
   try {
     await hotelStore.fetchHotelInfo()
+    setupGlobalWebSocket()
   } catch (error) {}
 })
 
@@ -301,17 +319,38 @@ onMounted(() => {
 .reception-layout { min-height: 100vh; background: #f5f7fa; }
 .reception-sider { position: fixed; left: 0; top: 0; bottom: 0; z-index: 10; box-shadow: 2px 0 6px rgba(0,21,41,.04); overflow-y: auto; }
 .logo {
-  height: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 18px;
-  font-weight: 600;
   border-bottom: 1px solid #f0f0f0;
+  padding: 0 16px;
 }
-.logo-text { background: linear-gradient(135deg, #1890ff, #722ed1); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+.logo-text { 
+  font-size: 16px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #1890ff, #722ed1); 
+  background-clip: text; 
+  -webkit-background-clip: text; 
+  -webkit-text-fill-color: transparent; 
+}
+.hotel-tag {
+  font-size: 10px;
+  color: #8c8c8c;
+  font-weight: normal;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .reception-header {
   background: #fff;
   padding: 0 24px;

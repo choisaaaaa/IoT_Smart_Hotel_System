@@ -35,8 +35,12 @@ export function initWebSocket(roomId?: string): Socket {
     // 自动注册客户端上线
     const userInfo = appStore.userInfo
     if (userInfo && userInfo.username && socket) {
-      console.log('[WS] 自动注册客户端:', userInfo.username)
-      socket.emit('register_client', { clientType: 'front_desk', clientId: userInfo.username })
+      const isStaff = ['admin', 'staff', 'manager', 'reception'].includes(userInfo.role)
+      const clientType = isStaff ? 'front_desk' : 'app'
+      const clientId = userInfo.username
+      
+      console.log(`[WS] 自动注册客户端: ${clientId} as ${clientType}`)
+      socket.emit('register_client', { clientType, clientId })
       socket.once('registered', (data: any) => {
         console.log('[WS] 自动注册成功:', data)
         appStore.setRegistration(true, data.clientName)

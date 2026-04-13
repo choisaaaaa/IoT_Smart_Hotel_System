@@ -51,14 +51,20 @@ export const get = async (req: AuthRequest, res: Response) => {
 export const getById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const hotelId = req.user?.hotel_id;
     
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT d.*, r.room_number FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ?',
-      [id]
-    );
+    let query = 'SELECT d.*, r.room_number FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ?';
+    const params: any[] = [id];
+
+    if (hotelId) {
+      query += ' AND r.hotel_id = ?';
+      params.push(hotelId);
+    }
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
-      res.status(404).json(errorResponse('送物订单不存在'));
+      res.status(404).json(errorResponse('送物订单不存在或无权访问'));
       return;
     }
     
@@ -117,6 +123,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const hotelId = req.user?.hotel_id;
 
     if (!status) {
       res.status(400).json(errorResponse('缺少状态参数'));
@@ -131,14 +138,19 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       'cancelled': []
     };
 
-    // 获取当前状态
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT status FROM delivery_orders WHERE id = ?',
-      [id]
-    );
+    // 获取当前状态并检查酒店权限
+    let query = 'SELECT d.status FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ?';
+    const params: any[] = [id];
+
+    if (hotelId) {
+      query += ' AND r.hotel_id = ?';
+      params.push(hotelId);
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
     if (rows.length === 0) {
-      res.status(404).json(errorResponse('送物订单不存在'));
+      res.status(404).json(errorResponse('送物订单不存在或无权访问'));
       return;
     }
 
@@ -151,7 +163,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }
 
     let updateQuery = 'UPDATE delivery_orders SET status = ? WHERE id = ?';
-    const params: any[] = [status, id];
+    const updateParams: any[] = [status, id];
 
     if (status === 'delivering') {
       updateQuery = 'UPDATE delivery_orders SET status = ?, started_delivering_at = CURRENT_TIMESTAMP WHERE id = ?';
@@ -159,10 +171,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       updateQuery = 'UPDATE delivery_orders SET status = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?';
     }
 
-    const [result] = await pool.query<ResultSetHeader>(updateQuery, params);
+    const [result] = await pool.query<ResultSetHeader>(updateQuery, updateParams);
 
     if (result.affectedRows === 0) {
-      res.status(404).json(errorResponse('送物订单不存在'));
+      res.status(404).json(errorResponse('更新送物订单状态失败'));
       return;
     }
 

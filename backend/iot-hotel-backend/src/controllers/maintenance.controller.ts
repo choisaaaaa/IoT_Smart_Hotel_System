@@ -8,26 +8,35 @@ export const get = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, pageSize = 10, status, fault_type, priority } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
+    const hotelId = req.user?.hotel_id;
     
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
+    if (hotelId) {
+      whereClause += ' AND r.hotel_id = ?';
+      params.push(hotelId);
+    }
+
     if (status) {
-      whereClause += ' AND status = ?';
+      whereClause += ' AND m.status = ?';
       params.push(status);
     }
     
     if (fault_type) {
-      whereClause += ' AND fault_type = ?';
+      whereClause += ' AND m.fault_type = ?';
       params.push(fault_type);
     }
     
     if (priority) {
-      whereClause += ' AND priority = ?';
+      whereClause += ' AND m.priority = ?';
       params.push(priority);
     }
     
-    const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM maintenance_tickets ${whereClause}`, params);
+    const [totalRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id ${whereClause}`, 
+      params
+    );
     const total = (totalRows[0] as any).total;
     
     const [rows] = await pool.query<RowDataPacket[]>(
@@ -51,14 +60,20 @@ export const get = async (req: AuthRequest, res: Response) => {
 export const getById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const hotelId = req.user?.hotel_id;
+
+    let query = 'SELECT m.*, r.room_number FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?';
+    const params: any[] = [id];
+
+    if (hotelId) {
+      query += ' AND r.hotel_id = ?';
+      params.push(hotelId);
+    }
     
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT m.*, r.room_number FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?',
-      [id]
-    );
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
-      res.status(404).json(errorResponse('报修工单不存在'));
+      res.status(404).json(errorResponse('报修工单不存在或无权访问'));
       return;
     }
     
@@ -117,9 +132,23 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const hotelId = req.user?.hotel_id;
 
     if (!['pending', 'assigned', 'processing', 'completed'].includes(status)) {
       res.status(400).json(errorResponse('无效的工单状态'));
+      return;
+    }
+
+    // 权限检查
+    let checkQuery = 'SELECT m.id FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?';
+    const checkParams: any[] = [id];
+    if (hotelId) {
+      checkQuery += ' AND r.hotel_id = ?';
+      checkParams.push(hotelId);
+    }
+    const [checkRows] = await pool.query<RowDataPacket[]>(checkQuery, checkParams);
+    if (checkRows.length === 0) {
+      res.status(404).json(errorResponse('报修工单不存在或无权访问'));
       return;
     }
 
@@ -129,7 +158,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     );
 
     if (result.affectedRows === 0) {
-      res.status(404).json(errorResponse('报修工单不存在'));
+      res.status(404).json(errorResponse('更新工单状态失败'));
       return;
     }
 
@@ -144,14 +173,19 @@ export const complete = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { repair_description, repair_cost } = req.body;
+    const hotelId = req.user?.hotel_id;
 
-    const [ticketRows] = await pool.query<RowDataPacket[]>(
-      'SELECT room_id, status FROM maintenance_tickets WHERE id = ?',
-      [id]
-    );
+    let checkQuery = 'SELECT m.room_id, m.status FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?';
+    const checkParams: any[] = [id];
+    if (hotelId) {
+      checkQuery += ' AND r.hotel_id = ?';
+      checkParams.push(hotelId);
+    }
+    
+    const [ticketRows] = await pool.query<RowDataPacket[]>(checkQuery, checkParams);
 
     if (ticketRows.length === 0) {
-      res.status(404).json(errorResponse('报修工单不存在'));
+      res.status(404).json(errorResponse('报修工单不存在或无权访问'));
       return;
     }
 
@@ -187,19 +221,23 @@ export const complete = async (req: AuthRequest, res: Response) => {
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const hotelId = req.user?.hotel_id;
 
-    // 先检查工单是否存在
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT status FROM maintenance_tickets WHERE id = ?',
-      [id]
-    );
+    // 先检查工单是否存在并校验权限
+    let checkQuery = 'SELECT m.status FROM maintenance_tickets m LEFT JOIN rooms r ON m.room_id = r.id WHERE m.id = ?';
+    const checkParams: any[] = [id];
+    if (hotelId) {
+      checkQuery += ' AND r.hotel_id = ?';
+      checkParams.push(hotelId);
+    }
+    const [rows] = await pool.query<RowDataPacket[]>(checkQuery, checkParams);
 
     if (rows.length === 0) {
-      res.status(404).json(errorResponse('报修工单不存在'));
+      res.status(404).json(errorResponse('报修工单不存在或无权访问'));
       return;
     }
 
-    // 检查是否允许删除（只有pending状态的工单可以删除）
+    // 检查是否允许删除（只有pending或cancelled状态的工单可以删除）
     const ticketStatus = (rows[0] as any).status;
     if (!['pending', 'cancelled'].includes(ticketStatus)) {
       res.status(400).json(errorResponse(`当前状态(${ticketStatus})的工单不允许删除`));

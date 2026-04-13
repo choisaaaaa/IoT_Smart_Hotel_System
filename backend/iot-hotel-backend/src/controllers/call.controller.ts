@@ -114,7 +114,7 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const validOutboundCallerTypes = ['front_desk', 'ai', 'app'];
+    const validOutboundCallerTypes = ['room', 'front_desk', 'ai', 'app'];
     if (!validOutboundCallerTypes.includes(caller_type)) {
       res.status(400).json(errorResponse(`无效的caller_type参数，支持的值: ${validOutboundCallerTypes.join(', ')}`));
       return;
@@ -212,22 +212,66 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
     const wsService = getWebSocketService();
     const io = wsService?.getIO();
     if (io) {
-      const callData = {
-        call_id: callId,
-        caller_type,
-        caller_id,
-        caller_name: caller_id, // 使用 caller_id 作为名称
-        callee_type,
-        callee_id,
-        status: 'calling',
-        type,
-        started_at: new Date().toISOString()
-      };
+      // 获取主叫方的显示名称和酒店信息
+    let callerDisplayName = caller_id;
+    let callerHotelName = '';
+    let hotelId = currentUser.hotel_id;
 
-      // 只发送到定向房间，因为前台用户已经加入了自己的定向房间
-      const targetRoom = `${callee_type}_${callee_id}`;
-      logger.info(`[HTTP API] 发送 incoming_call 到房间: ${targetRoom}`);
-      io.to(targetRoom).emit('incoming_call', callData);
+    if (caller_type === 'room') {
+      const [roomRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id, room_number, hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+        [caller_id, caller_id]
+      );
+      if (roomRows.length > 0) {
+        const room = roomRows[0];
+        callerDisplayName = `客房 ${room.room_number}`;
+        hotelId = room.hotel_id;
+      }
+    }
+
+    if (hotelId) {
+      const [hotelRows] = await pool.query<RowDataPacket[]>(
+        'SELECT hotel_name FROM hotels WHERE id = ?',
+        [hotelId]
+      );
+      if (hotelRows.length > 0) {
+        callerHotelName = hotelRows[0].hotel_name;
+      }
+    }
+
+    const callData = {
+      call_id: callId,
+      caller_type,
+      caller_id,
+      caller_name: callerDisplayName,
+      hotel_name: callerHotelName,
+      callee_type,
+      callee_id,
+      status: 'calling',
+      type,
+      started_at: new Date().toISOString()
+    };
+
+      // 发起呼叫通知
+    if (callee_type === 'front_desk') {
+      // 门店隔离广播
+      if (hotelId) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`;
+        logger.info(`[CallController] 发送 incoming_call 到酒店前台房间: ${hotelRoom}`);
+        io.to(hotelRoom).emit('incoming_call', callData);
+        // 同时发送给全局前台（可选，方便系统管理，但在此处我们优先保证隔离）
+        io.to('front_desk').emit('incoming_call', callData);
+      } else {
+        // 回退到全局广播
+        logger.warn(`[CallController] 呼叫方无酒店ID，回退到全局前台广播`);
+        io.to('front_desk').emit('incoming_call', callData);
+      }
+    } else {
+        // 只发送到定向房间
+        const targetRoom = `${callee_type}_${callee_id}`;
+        logger.info(`[HTTP API] 发送 incoming_call 到房间: ${targetRoom}`);
+        io.to(targetRoom).emit('incoming_call', callData);
+      }
     }
 
     res.json(successResponse({

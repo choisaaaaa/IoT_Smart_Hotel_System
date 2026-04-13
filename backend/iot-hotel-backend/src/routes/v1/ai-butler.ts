@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
+import pool, { RowDataPacket } from '../../config/database';
 import aiButlerService from '../../services/ai-butler.service';
 import { CallService } from '../../services/call.service';
 import websocketService from '../../services/websocket.service';
@@ -31,11 +32,16 @@ router.post('/chat',
         sessionId: req.body.session_id || `${room_id}_${Date.now()}`
       });
 
+      // 获取酒店ID用于精准统计在线前台
+      const hotelId = result.hotelName ? undefined : req.user?.hotel_id; // 如果result里有酒店名，说明已经内部处理了session
+
+      // 查找在线的前台，用于补充信息
+      const onlineStaff = await getOnlineFrontDesk(hotelId);
+      result.frontDeskCount = onlineStaff.length;
+
       // 如果需要转接人工，发起通话（集体呼叫模式）
       if (result.action === 'transfer' && result.target === 'front_desk') {
         try {
-          // 查找在线的前台
-          const onlineStaff = await getOnlineFrontDesk();
           if (onlineStaff.length > 0) {
             // 获取房间所属酒店ID
             const hotelId = req.user?.hotel_id || 1;
@@ -112,6 +118,19 @@ router.post('/verify',
         });
       }
 
+      // 获取该客人的所有房间
+      const roomList = await aiButlerService.getGuestRooms(room_id);
+
+      // 获取在线前台数量
+      const onlineStaff = await getOnlineFrontDesk(session.hotelId);
+
+      // 获取酒店详情
+      const [hotels] = await pool.query<RowDataPacket[]>(
+        'SELECT hotel_name FROM hotels WHERE id = ?',
+        [session.hotelId]
+      );
+      const hotelName = hotels.length > 0 ? hotels[0].hotel_name : '智联酒店';
+
       res.json({
         code: 200,
         message: 'success',
@@ -119,7 +138,11 @@ router.post('/verify',
           accessible: true,
           guestName: session.guestName,
           checkInDate: session.checkInDate,
-          checkOutDate: session.checkOutDate
+          checkOutDate: session.checkOutDate,
+          roomList: roomList.length > 0 ? roomList : [room_id],
+          frontDeskOnline: onlineStaff.length > 0,
+          frontDeskCount: onlineStaff.length,
+          hotelName: hotelName
         }
       });
     } catch (error) {
@@ -186,12 +209,12 @@ router.post('/wake',
 /**
  * 获取在线前台列表
  */
-async function getOnlineFrontDesk(): Promise<any[]> {
+async function getOnlineFrontDesk(hotelId?: number): Promise<any[]> {
   // 从WebSocket服务获取真实在线的前台
-  const frontDeskClients = websocketService.getClientsByType('front_desk');
+  const frontDeskClients = websocketService.getClientsByType('front_desk', hotelId);
   return frontDeskClients.map(client => ({
-    clientId: client.clientId,
-    name: client.clientName || client.clientId
+    clientId: client.id, // 这里 WebSocketService 返回的是 { id, name, connectedAt }
+    name: client.name || client.id
   }));
 }
 

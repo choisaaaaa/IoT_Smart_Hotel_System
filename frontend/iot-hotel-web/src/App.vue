@@ -3,36 +3,10 @@
     <router-view />
     
     <!-- 全局来电弹窗 -->
-    <a-modal
-      :open="incomingCallVisible"
-      :footer="null"
-      :closable="false"
-      :maskClosable="false"
-      centered
-      width="320px"
-      class="global-incoming-call-modal"
-    >
-      <div class="incoming-call-content">
-        <div class="pulse-container">
-          <div class="pulse-ring"></div>
-          <PhoneOutlined class="call-icon" />
-        </div>
-        <h2 class="caller-name">{{ appStore.incomingCall?.caller_name || appStore.incomingCall?.caller_id }}</h2>
-        <p class="caller-id">正在呼叫...</p>
-        
-        <div class="modal-actions">
-          <a-button type="primary" shape="round" size="large" block @click="handleAcceptCall" class="accept-btn">
-            <template #icon><PhoneOutlined /></template> 接听
-          </a-button>
-          <a-button danger shape="round" size="large" block @click="handleRejectCall" class="reject-btn" style="margin-top: 12px">
-            <template #icon><CloseOutlined /></template> 拒绝
-          </a-button>
-        </div>
-      </div>
-    </a-modal>
-
+    <IncomingCallModal />
+    
     <!-- 全局通话中悬浮窗 -->
-    <div v-if="currentCallVisible" class="global-call-window">
+    <div v-if="currentCallVisible && route.path !== '/guest/room'" class="global-call-window">
       <div class="call-header">
         <PhoneOutlined class="call-icon-mini" />
         <span class="caller-name-mini">{{ currentCallInfo?.caller_name || currentCallInfo?.caller_id }}</span>
@@ -100,6 +74,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { PhoneOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
+import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
 import { useAppStore } from '@/stores/app'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { callApi } from '@/api/call'
@@ -107,61 +82,6 @@ import { callApi } from '@/api/call'
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
-
-// ============ 来电弹窗 ============
-const incomingCallVisible = computed(() => !!appStore.incomingCall)
-
-async function handleAcceptCall() {
-  if (appStore.incomingCall) {
-    const callToAccept = { ...appStore.incomingCall }
-    try {
-      await callApi.answer(callToAccept.call_id)
-      appStore.setCurrentCall(callToAccept)
-      appStore.clearIncomingCall()
-      // 初始化 WebRTC（被叫方接听后立即初始化并创建offer）
-      await initWebRTC(callToAccept.call_id, callToAccept.caller_type, callToAccept.caller_id)
-      
-      // 被叫方创建并发送offer
-      if (peerConnection.value) {
-        try {
-          const offer = await peerConnection.value.createOffer()
-          await peerConnection.value.setLocalDescription(offer)
-          console.log('[WebRTC] 被叫方已创建并设置 local description (offer)')
-          
-          const socket = getSocket()
-          if (socket) {
-            console.log('[WebRTC] 发送offer:', {
-              target_type: callToAccept.caller_type,
-              target_id: callToAccept.caller_id,
-              call_id: callToAccept.call_id
-            })
-            socket.emit('webrtc_offer', {
-              target_type: callToAccept.caller_type,
-              target_id: callToAccept.caller_id,
-              offer: offer,
-              call_id: callToAccept.call_id
-            })
-            console.log('[WebRTC] 被叫方已发送offer给主叫方')
-          }
-        } catch (e) {
-          console.error('[WebRTC] 被叫方创建offer失败:', e)
-        }
-      }
-    } catch (error) {
-      console.error('[Global] 接听失败:', error)
-      message.error('接听失败')
-    }
-  }
-}
-
-async function handleRejectCall() {
-  if (appStore.incomingCall) {
-    try {
-      await callApi.hangup(appStore.incomingCall.call_id)
-    } catch (e) {}
-    appStore.clearIncomingCall()
-  }
-}
 
 // ============ 通话中悬浮窗 ============
 const currentCallInfo = computed(() => appStore.currentCall)
@@ -253,6 +173,12 @@ function initInputVolumeDetection(stream: MediaStream) {
         } else if (Date.now() - lastLocalSpeakTime.value > 500) {
           localSpeaking.value = false
         }
+
+        // 同步到全局 store
+        appStore.setCallState({
+          inputVolume: inputVolume.value,
+          localSpeaking: localSpeaking.value
+        })
       }
     }, 100)
   } catch (e) {
@@ -290,6 +216,12 @@ function initOutputVolumeDetection(stream: MediaStream) {
         } else if (Date.now() - lastRemoteSpeakTime.value > 500) {
           remoteSpeaking.value = false
         }
+
+        // 同步到全局 store
+        appStore.setCallState({
+          outputVolume: outputVolume.value,
+          remoteSpeaking: remoteSpeaking.value
+        })
       } else {
         clearInterval(outputInterval)
       }
@@ -321,6 +253,7 @@ watch(() => appStore.currentCall, (newCall) => {
         const minutes = Math.floor(elapsed / 60)
         const seconds = elapsed % 60
         currentDuration.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        appStore.setCallState({ duration: currentDuration.value })
       }
     }, 1000)
   } else {
@@ -414,6 +347,9 @@ async function initWebRTC(callId: string, targetType: string, targetId: string) 
         connectionState.value = peerConnection.value.connectionState
         console.log('[WebRTC] 连接状态变化:', connectionState.value)
         
+        // 同步到全局 store
+        appStore.setCallState({ connectionState: connectionState.value })
+
         // 获取远端地址信息
         if (peerConnection.value.connectionState === 'connected') {
           peerConnection.value.getStats().then(stats => {
@@ -527,13 +463,8 @@ const handleConnect = () => {
   console.log('[App] WebSocket 已连接')
   appStore.setConnected(true)
   
-  const socket = getSocket()
-  if (socket && appStore.userInfo?.username) {
-    socket.emit('register_client', {
-      clientType: 'front_desk',
-      clientId: appStore.userInfo.username
-    })
-  }
+  // 注册逻辑已在 websocket.ts 的 connect 回调中通过 userInfo 自动处理
+  // 这里不再需要硬编码为 front_desk 的注册
 }
 
 const handleRegistered = (data: any) => {
@@ -636,7 +567,15 @@ const handleCallRejected = (data: any) => {
 }
 
 const handleCallAnswered = async (data: any) => {
-  console.log('[App] 对方已接听:', data)
+  console.log('[App] 收到 call_answered 事件:', data)
+
+  // 如果当前有这个来电，说明是被别人接听了，清除来电弹窗
+  if (appStore.incomingCall?.call_id === data.call_id) {
+    console.log('[App] 该来电已被他人接听，清除弹窗')
+    appStore.clearIncomingCall()
+    return
+  }
+
   if (appStore.currentCall?.call_id === data.call_id) {
     // 更新通话状态
     appStore.setCurrentCall({
@@ -644,17 +583,26 @@ const handleCallAnswered = async (data: any) => {
       status: 'connected'
     })
     
-    // 初始化 WebRTC 并创建 offer
-    const targetType = appStore.currentCall.callee_type
-    const targetId = appStore.currentCall.callee_id
+    // 判断当前端是主叫还是被叫
+    // 主叫需要发起 offer，被叫只需要 initWebRTC 并等待 offer
+    const myUsername = appStore.userInfo?.username
+    // 注意：room_id 可能来自 appStore.userStatus.checkin_info
+    const myRoomId = appStore.userStatus?.checkin_info?.room_id ? String(appStore.userStatus.checkin_info.room_id) : ''
+    const isCaller = String(data.caller_id) === myUsername || String(data.caller_id) === myRoomId
+    
+    console.log(`[App] 身份识别: ${isCaller ? '主叫' : '被叫'}, 我是: ${myUsername || myRoomId || 'unknown'}, 对方是: ${isCaller ? data.callee_id : data.caller_id}, data.caller_id: ${data.caller_id}`)
+    
+    const targetType = isCaller ? data.callee_type : data.caller_type
+    const targetId = isCaller ? data.callee_id : data.caller_id
+    
     await initWebRTC(data.call_id, targetType, targetId)
     
-    // 创建并发送 offer
-    if (peerConnection.value) {
+    // 只有主叫方发送 offer
+    if (isCaller && peerConnection.value) {
       try {
         const offer = await peerConnection.value.createOffer()
         await peerConnection.value.setLocalDescription(offer)
-        console.log('[WebRTC] 已创建并设置 local description (offer)')
+        console.log('[WebRTC] 主叫方已创建并发送 offer')
         
         const socket = getSocket()
         if (socket) {
@@ -668,6 +616,8 @@ const handleCallAnswered = async (data: any) => {
       } catch (e) {
         console.error('[WebRTC] 创建 offer 失败:', e)
       }
+    } else {
+      console.log('[WebRTC] 被叫方等待主叫方发送 offer')
     }
   }
 }

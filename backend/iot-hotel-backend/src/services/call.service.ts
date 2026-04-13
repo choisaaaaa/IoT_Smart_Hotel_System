@@ -30,8 +30,14 @@ export class CallService {
             calleeExists = room.length > 0;
             break;
           case 'front_desk':
-            const [employee] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
-            calleeExists = employee.length > 0;
+            const [employee] = await pool.query<RowDataPacket[]>('SELECT id, role FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
+            if (employee.length > 0) {
+              const userRole = employee[0].role;
+              if (userRole === 'customer') {
+                throw new Error('被叫方权限不足：无法拨打普通用户');
+              }
+              calleeExists = true;
+            }
             break;
           case 'ai':
             calleeExists = true;

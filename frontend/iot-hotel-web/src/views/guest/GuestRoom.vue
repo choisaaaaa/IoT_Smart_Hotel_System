@@ -139,20 +139,6 @@
                 <RightOutlined class="arrow" />
               </div>
             </div>
-
-            <!-- 常用热线 -->
-            <div class="hotlines-section">
-              <div class="sub-title">服务热线</div>
-              <div class="hotline-list">
-                <div v-for="item in hotlines" :key="item.name" class="hotline-item">
-                  <div class="h-info">
-                    <div class="h-name">{{ item.name }}</div>
-                    <div class="h-number">{{ item.number }}</div>
-                  </div>
-                  <a-button type="link" size="small"><PhoneOutlined /></a-button>
-                </div>
-              </div>
-            </div>
           </div>
         </a-col>
       </a-row>
@@ -211,39 +197,95 @@
       <a-textarea v-model:value="msgContent" :rows="4" placeholder="请输入您想对前台说的话..." />
     </a-modal>
 
-    <!-- 通话转接弹窗 -->
+    <!-- 呼叫中弹窗 -->
     <a-modal
       v-model:open="transferModal.visible"
       :footer="null"
       :closable="false"
       :maskClosable="false"
       centered
-      width="320px"
-      class="modern-call-modal"
+      width="300px"
+      class="transfer-modal"
     >
-      <div class="call-modal-content">
-        <div class="phone-pulse">
-          <PhoneOutlined />
+      <div class="transfer-content">
+        <div class="calling-animation">
+          <div class="circle"></div>
+          <div class="circle"></div>
+          <div class="circle"></div>
+          <PhoneOutlined class="phone-icon" />
         </div>
         <h3>{{ transferModal.statusText }}</h3>
         <p>{{ transferModal.statusDesc }}</p>
-        <a-button type="primary" danger shape="round" size="large" @click="cancelTransfer" block>
+        <a-button danger shape="round" @click="cancelTransfer" class="cancel-btn">
           取消呼叫
         </a-button>
       </div>
     </a-modal>
+
+    <!-- 通话中弹窗 -->
+    <a-modal
+      v-model:open="callModal.visible"
+      :footer="null"
+      :closable="false"
+      :maskClosable="false"
+      centered
+      width="340px"
+      class="call-modal"
+    >
+      <div class="call-content-modal">
+        <div class="call-header-modal">
+          <div class="caller-avatar">
+            <CustomerServiceOutlined />
+          </div>
+          <h3>{{ callModal.callerName }}</h3>
+          <div class="call-status-tag" :class="callModal.connectionState">
+            {{ callModal.connectionStateText }}
+          </div>
+        </div>
+
+        <div class="call-body-modal">
+          <div class="duration-display">{{ callModal.duration }}</div>
+          
+          <!-- 音频波形/电平指示 -->
+          <div class="audio-visualizer">
+            <div class="visualizer-item">
+              <span class="vis-label">您的声音</span>
+              <div class="level-meter">
+                <div class="level-bar" :style="{ width: callModal.inputVolume + '%', background: callModal.localSpeaking ? '#52c41a' : '#bfbfbf' }"></div>
+              </div>
+            </div>
+            <div class="visualizer-item">
+              <span class="vis-label">前台声音</span>
+              <div class="level-meter">
+                <div class="level-bar" :style="{ width: callModal.outputVolume + '%', background: callModal.remoteSpeaking ? '#1890ff' : '#bfbfbf' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="call-footer-modal">
+          <a-button type="primary" danger shape="round" size="large" block @click="hangupCall">
+            <template #icon><CloseOutlined /></template> 挂断
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 远程音频元素 -->
+    <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   SendOutlined, PhoneOutlined, MessageOutlined,
   ShoppingOutlined, ToolOutlined, ClearOutlined,
   RightOutlined, RobotOutlined, UserOutlined, 
   EditOutlined, SoundOutlined, HomeOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined, CloseOutlined,
+  CheckCircleOutlined, CustomerServiceOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -260,6 +302,8 @@ const appStore = useAppStore()
 const hotelStore = useHotelStore()
 
 // 基础状态
+
+let socket: any = null
 const isCheckedIn = computed(() => !!appStore.userStatus?.is_checked_in)
 const roomIdDisplay = computed(() => {
   if (appStore.userStatus?.is_checked_in) {
@@ -297,6 +341,58 @@ const transferModal = ref({
   callId: ''
 })
 
+// 通话中弹窗状态
+const callModal = ref({
+  visible: false,
+  callerName: '前台',
+  duration: '00:00',
+  connectionState: 'connecting',
+  connectionStateText: '连接中',
+  statusText: '正在建立连接...',
+  localSpeaking: false,
+  remoteSpeaking: false,
+  inputVolume: 0,
+  outputVolume: 0,
+  callId: '',
+  remoteId: '',
+  remoteType: ''
+})
+
+// 通话计时器
+const durationTimer = ref<NodeJS.Timeout | null>(null)
+const callStartTime = ref<number | null>(null)
+const remoteAudioRef = ref<HTMLAudioElement | null>(null)
+
+// 监听全局通话状态更新本地 UI
+watch(() => appStore.currentCall, (newCall) => {
+  if (newCall && (newCall.call_id === transferModal.value.callId || transferModal.value.visible)) {
+    // 如果是自己发起的通话接通了
+    if (newCall.status === 'connected') {
+      transferModal.value.visible = false
+      callModal.value.visible = true
+      callModal.value.callId = newCall.call_id
+      callModal.value.callerName = newCall.callee_name || '前台'
+    }
+  } else if (!newCall) {
+    // 通话结束
+    callModal.value.visible = false
+    transferModal.value.visible = false
+  }
+}, { immediate: true })
+
+// 监听全局通话实时状态
+watch(() => appStore.callState, (newState) => {
+  callModal.value.duration = newState.duration
+  callModal.value.connectionState = newState.connectionState
+  callModal.value.connectionStateText = 
+    newState.connectionState === 'connected' ? '已连接' : 
+    newState.connectionState === 'connecting' ? '连接中' : '等待中'
+  callModal.value.inputVolume = newState.inputVolume
+  callModal.value.outputVolume = newState.outputVolume
+  callModal.value.localSpeaking = newState.localSpeaking
+  callModal.value.remoteSpeaking = newState.remoteSpeaking
+}, { deep: true })
+
 const quickChips = [
   { icon: '💡', label: '开灯', text: '打开灯光' },
   { icon: '🧹', label: '保洁', text: '需要保洁服务' },
@@ -316,8 +412,6 @@ const hotlines = computed(() => [
   { name: '前台总机', icon: PhoneOutlined, number: hotelStore.hotelInfo?.hotel_phone || '010-12345678' },
   { name: '紧急救援', icon: SafetyCertificateOutlined, number: '110 / 120' }
 ])
-
-let socket: any = null
 
 onMounted(async () => {
   if (!appStore.userInfo) {
@@ -339,21 +433,67 @@ onUnmounted(() => {
 
 function initWebSocket() {
   socket = getSocket()
-  const roomId = appStore.userStatus?.checkin_info?.room_id || appStore.userStatus?.checkin_info?.room_number || '101'
-  if (socket && socket.connected) {
-    socket.emit('register_client', { clientType: 'room', clientId: String(roomId) })
+  
+  // 基础身份注册已在 websocket.ts 的 connect 回调中自动处理（作为 app 或 front_desk）
+  // 房间端如果已入住，则额外以 room 身份注册以监听设备控制和房间通话
+  const registerAsRoom = () => {
+    const roomId = appStore.userStatus?.checkin_info?.room_id
+    if (socket && socket.connected && roomId) {
+      console.log(`[GuestRoom] 房间端追加注册: ${roomId}`)
+      socket.emit('register_client', { clientType: 'room', clientId: String(roomId) })
+    }
   }
+
   if (socket) {
+    // 监听连接成功事件，确保重连后也能重新注册为 room
+    socket.on('connect', registerAsRoom)
+    
+    // 如果当前已连接，立即注册
+    if (socket.connected) {
+      registerAsRoom()
+    }
+
     socket.on('call_answered', (data: any) => {
-      if (data.call_id === transferModal.value.callId) {
+      console.log('[GuestRoom] 收到call_answered:', data)
+      if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
         transferModal.value.visible = false
-        message.success('前台已接听')
+        message.success('前台已接听，正在建立连接...')
+        
+        // 记录对方信息用于 UI
+        callModal.value.remoteId = data.callee_id
+        callModal.value.remoteType = data.callee_type
+        
+        // 切换到通话弹窗
+        callModal.value.visible = true
+        callModal.value.callId = data.call_id
       }
     })
-    socket.on('call_hungup', () => {
-      transferModal.value.visible = false
+    
+    socket.on('call_hungup', (data: any) => {
+      if (data.call_id === callModal.value.callId || data.call_id === transferModal.value.callId) {
+        callModal.value.visible = false
+        transferModal.value.visible = false
+        message.info('通话已结束')
+      }
     })
   }
+}
+
+// 通话相关方法
+function hangupCall() {
+  if (callModal.value.callId) {
+    socket?.emit('hangup_call', { call_id: callModal.value.callId })
+    appStore.clearCurrentCall()
+  }
+  callModal.value.visible = false
+}
+
+function cancelTransfer() {
+  if (transferModal.value.callId) {
+    socket?.emit('hangup_call', { call_id: transferModal.value.callId })
+    appStore.clearCurrentCall()
+  }
+  transferModal.value.visible = false
 }
 
 // AI Butler Logic
@@ -499,18 +639,36 @@ async function requestMaintenance() {
 }
 
 async function callFrontDesk() {
-  const roomId = appStore.userStatus?.checkin_info?.room_id
+  const roomId = appStore.userStatus?.checkin_info?.room_id || appStore.userStatus?.checkin_info?.room_number || '101'
   if (!roomId) return message.warning('请先办理入住')
   try {
-    await callApi.outbound({
-      caller_type: 'app',
+    const res: any = await callApi.outbound({
+      caller_type: 'room',
       caller_id: String(roomId),
       callee_type: 'front_desk',
-      callee_id: 'front-desk',
+      callee_id: 'all',
       type: 'voice'
     })
-    transferModal.value.visible = true
-    transferModal.value.statusText = '正在呼叫前台'
+    
+    if (res.data?.call_id) {
+      const callId = res.data.call_id
+      transferModal.value.callId = callId
+      transferModal.value.visible = true
+      transferModal.value.statusText = '正在呼叫前台'
+      transferModal.value.statusDesc = '正在为您接通前台，请稍候...'
+      
+      // 同步到全局状态，让 App.vue 知道当前有通话
+      appStore.setCurrentCall({
+        call_id: callId,
+        caller_id: String(roomId),
+        caller_type: 'room',
+        callee_id: 'all',
+        callee_type: 'front_desk',
+        status: 'calling'
+      })
+    } else {
+      message.error('呼叫请求失败')
+    }
   } catch (e) {
     message.error('呼叫失败')
   }
@@ -522,11 +680,6 @@ async function sendMsgToReception() {
   message.success('消息已发送至前台')
   msgContent.value = ''
   messageModalVisible.value = false
-}
-
-function cancelTransfer() {
-  transferModal.value.visible = false
-  if (transferModal.value.callId) socket?.emit('hangup_call', { call_id: transferModal.value.callId })
 }
 
 function scrollToBottom() {
@@ -773,30 +926,139 @@ function scrollToBottom() {
 .h-name { font-size: 14px; font-weight: 600; }
 .h-number { font-size: 13px; color: #1890ff; font-family: monospace; }
 
-/* Call Modal */
-.call-modal-content { text-align: center; padding: 24px 0; }
-.phone-pulse {
+/* 通话弹窗样式 */
+.call-content-modal {
+  padding: 10px 0;
+  text-align: center;
+}
+
+.call-header-modal {
+  margin-bottom: 30px;
+}
+
+.caller-avatar {
   width: 80px;
   height: 80px;
-  background: #1890ff;
-  color: #fff;
   border-radius: 50%;
-  margin: 0 auto 24px;
+  background: #e6f7ff;
+  color: #1890ff;
+  font-size: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
-  position: relative;
-}
-.phone-pulse::after {
-  content: '';
-  position: absolute;
-  width: 100%; height: 100%;
-  border: 4px solid #1890ff;
-  border-radius: 50%;
-  animation: pulse 1.5s infinite;
+  margin: 0 auto 15px;
+  box-shadow: 0 0 20px rgba(24, 144, 255, 0.2);
 }
 
-.call-modal-content h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-.call-modal-content p { color: #8c8c8c; margin-bottom: 32px; }
+.call-status-tag {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-top: 8px;
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+.call-status-tag.connected {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.duration-display {
+  font-size: 36px;
+  font-weight: bold;
+  font-family: monospace;
+  color: #262626;
+  margin-bottom: 30px;
+}
+
+.audio-visualizer {
+  margin-bottom: 40px;
+  padding: 0 20px;
+}
+
+.visualizer-item {
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.vis-label {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 5px;
+}
+
+.level-meter {
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.level-bar {
+  height: 100%;
+  transition: width 0.1s ease, background 0.3s ease;
+}
+
+.call-footer-modal {
+  padding-top: 10px;
+}
+
+.transfer-content {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.calling-animation {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid #1890ff;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+  opacity: 0;
+}
+
+.circle:nth-child(2) {
+  animation-delay: 0.6s;
+}
+
+.circle:nth-child(3) {
+  animation-delay: 1.2s;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.phone-icon {
+  font-size: 40px;
+  color: #1890ff;
+  z-index: 1;
+}
+
+.cancel-btn {
+  margin-top: 20px;
+  min-width: 120px;
+}
 </style>

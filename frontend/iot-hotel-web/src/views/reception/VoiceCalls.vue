@@ -190,10 +190,11 @@ const callableTargets = computed(() => {
     if (appStore.userInfo?.role !== 'system' && room.hotel_id !== appStore.userInfo?.hotel_id) {
       return
     }
-    const isOnline = onlineStatus.value.rooms.some((r: any) => r.id === String(room.room_number))
+    // 改用数据库ID判断在线状态，避免多门店同房间号冲突
+    const isOnline = onlineStatus.value.rooms.some((r: any) => String(r.id) === String(room.id))
     list.push({
       id: room.id,
-      clientId: String(room.room_number),
+      clientId: String(room.id), // 使用唯一ID呼叫
       name: `房间 ${room.room_number}`,
       desc: room.room_name,
       type: 'room',

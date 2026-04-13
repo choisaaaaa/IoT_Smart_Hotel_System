@@ -75,6 +75,16 @@ export const useAppStore = defineStore('app', () => {
   const isRegistered = ref(false)
   const clientDisplayName = ref('')
 
+  // 通话实时状态
+  const callState = ref({
+    connectionState: 'new',
+    inputVolume: 0,
+    outputVolume: 0,
+    localSpeaking: false,
+    remoteSpeaking: false,
+    duration: '00:00'
+  })
+
   function setIncomingCall(call: any) {
     incomingCall.value = call
   }
@@ -85,10 +95,29 @@ export const useAppStore = defineStore('app', () => {
 
   function setCurrentCall(call: any) {
     currentCall.value = call
+    if (!call) {
+      resetCallState()
+    }
   }
 
   function clearCurrentCall() {
     currentCall.value = null
+    resetCallState()
+  }
+
+  function setCallState(state: Partial<typeof callState.value>) {
+    Object.assign(callState.value, state)
+  }
+
+  function resetCallState() {
+    callState.value = {
+      connectionState: 'new',
+      inputVolume: 0,
+      outputVolume: 0,
+      localSpeaking: false,
+      remoteSpeaking: false,
+      duration: '00:00'
+    }
   }
 
   function setRegistration(status: boolean, name: string = '') {
@@ -106,6 +135,7 @@ export const useAppStore = defineStore('app', () => {
     notificationCount,
     incomingCall,
     currentCall,
+    callState,
     isRegistered,
     clientDisplayName,
     toggleSidebar,
@@ -122,6 +152,7 @@ export const useAppStore = defineStore('app', () => {
     clearIncomingCall,
     setCurrentCall,
     clearCurrentCall,
+    setCallState,
     setRegistration
   }
 })
