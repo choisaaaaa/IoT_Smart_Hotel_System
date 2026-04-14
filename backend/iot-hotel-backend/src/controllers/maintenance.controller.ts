@@ -272,7 +272,14 @@ export const complete = async (req: AuthRequest, res: Response) => {
         [roomId, 'pending', 'assigned', 'processing']
       );
       if ((pendingTickets[0] as any).cnt === 0) {
-        await pool.query('UPDATE rooms SET room_status = ? WHERE id = ? AND room_status = ?', ['available', roomId, 'maintenance']);
+        // 检查房间是否有正在入住的预订
+        const [bookingRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM bookings WHERE room_id = ? AND status = ? LIMIT 1',
+          [roomId, 'checked_in']
+        );
+        // 如果有入住记录，恢复为occupied（入住中），否则变为available（空闲）
+        const newStatus = bookingRows.length > 0 ? 'occupied' : 'available';
+        await pool.query('UPDATE rooms SET room_status = ? WHERE id = ? AND room_status = ?', [newStatus, roomId, 'maintenance']);
       }
     }
     

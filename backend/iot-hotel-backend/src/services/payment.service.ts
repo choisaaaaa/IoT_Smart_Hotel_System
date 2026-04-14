@@ -197,10 +197,14 @@ export class PaymentService {
               await connection.rollback();
               throw new Error(`余额不足，当前余额 ¥${member.balance}，需支付 ¥${payment.amount}`);
             }
-            await connection.query(
+            const [updateResult] = await connection.query(
               'UPDATE members SET balance = balance - ? WHERE id = ? AND balance >= ?',
               [payment.amount, member.id, payment.amount]
             );
+            if ((updateResult as any).affectedRows === 0) {
+              await connection.rollback();
+              throw new Error(`余额扣款失败，可能余额不足或并发操作冲突，当前余额 ¥${member.balance}，需支付 ¥${payment.amount}`);
+            }
             logger.info(`余额支付扣款成功: 手机号=${guestPhone}, 扣款=${payment.amount}`);
           }
         }
