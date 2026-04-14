@@ -5,7 +5,11 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 #include "cJSON.h"
+#if CONFIG_ROOM_TERMINAL_NET_TEST_MODE
+#include "esp_timer.h"
+#endif
 
 // 引入底层硬件抽象组件库
 #include "driver_rc522.h"
@@ -54,7 +58,9 @@ static const TickType_t VOICE_TASK_PERIOD = pdMS_TO_TICKS(100);
 static const TickType_t BUTTON_TASK_PERIOD = pdMS_TO_TICKS(60);
 static const TickType_t AUTO_LOCK_TASK_PERIOD = pdMS_TO_TICKS(200);
 static const TickType_t AUTO_LOCK_DELAY = pdMS_TO_TICKS(8000);
+#if !CONFIG_ROOM_TERMINAL_NET_TEST_MODE
 static const TickType_t MAIN_GUARD_PERIOD = pdMS_TO_TICKS(30000);
+#endif
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) {
@@ -579,9 +585,90 @@ void task_room_button_events(void *pvParameters) {
     }
 }
 
+#if CONFIG_ROOM_TERMINAL_NET_TEST_MODE
+
+/** 多块板互通测试：统一订阅/发布同一 topic，串口可看到彼此 payload */
+static void net_test_mqtt_cb(const char *topic, const char *data, int data_len)
+{
+    ESP_LOGI(TAG, "[NET-TEST] RX topic=%s len=%d", topic, data_len);
+    if (data != NULL && data_len > 0) {
+        size_t n = (size_t)data_len < 255u ? (size_t)data_len : 255u;
+        char buf[256];
+        memcpy(buf, data, n);
+        buf[n] = '\0';
+        ESP_LOGI(TAG, "[NET-TEST] payload: %s", buf);
+    }
+}
+
+static void net_test_on_network(bool connected, const char *ip_address)
+{
+    if (connected) {
+        ESP_LOGI(TAG, "[NET-TEST] WiFi OK, IP=%s", ip_address ? ip_address : "?");
+        esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[NET-TEST] MQTT start failed: %s", esp_err_to_name(err));
+            return;
+        }
+        const char *topic = "hotel/net_test/broadcast";
+        err = service_mqtt_subscribe(topic, net_test_mqtt_cb);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[NET-TEST] subscribe failed: %s", esp_err_to_name(err));
+        }
+        vTaskDelay(pdMS_TO_TICKS(800));
+        char pay[160];
+        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"msg\":\"online\"}", device_id);
+        service_mqtt_publish(topic, pay);
+    } else {
+        ESP_LOGW(TAG, "[NET-TEST] WiFi disconnected");
+    }
+}
+
+static void net_test_heartbeat_task(void *pvParameters)
+{
+    (void)pvParameters;
+    const char *topic = "hotel/net_test/broadcast";
+    char pay[192];
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(15000));
+        int64_t us = esp_timer_get_time();
+        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"uptime_s\":%lld}",
+                 device_id, (long long)(us / 1000000));
+        service_mqtt_publish(topic, pay);
+        ESP_LOGI(TAG, "[NET-TEST] heartbeat sent");
+    }
+}
+
+#endif /* CONFIG_ROOM_TERMINAL_NET_TEST_MODE */
+
 // 主入口
 void app_main(void)
 {
+#if CONFIG_ROOM_TERMINAL_NET_TEST_MODE
+    ESP_LOGW(TAG, "========== NET TEST MODE（无外设：仅配网 + MQTT）==========");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    load_nvs_string_with_fallback("Room_ID", current_room_id, sizeof(current_room_id), "301");
+    load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri),
+                                  GLOBAL_MQTT_BROKER_URI);
+    snprintf(device_id, sizeof(device_id), "room_%s", current_room_id);
+
+    ESP_LOGI(TAG, "[NET-TEST] client_id=%s", device_id);
+    ESP_LOGI(TAG, "[NET-TEST] broker=%s", mqtt_broker_uri);
+    ESP_LOGI(TAG, "[NET-TEST] topic: hotel/net_test/broadcast");
+
+    ESP_ERROR_CHECK(service_network_provisioning_start(net_test_on_network));
+    xTaskCreate(net_test_heartbeat_task, "net_hb", 4096, NULL, 5, NULL);
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(60000));
+        ESP_LOGI(TAG, "[NET-TEST] main alive");
+    }
+#else
     ESP_LOGI(TAG, "========== 🏨 智慧客房边缘控制终端 启动 ==========");
 
     // 1. 初始化系统非易失性存储 (NVS)
@@ -633,4 +720,5 @@ void app_main(void)
         vTaskDelay(MAIN_GUARD_PERIOD);
         ESP_LOGI(TAG, "main_guard alive, room=%s, net=%d", current_room_id, (int)s_network_ready);
     }
+#endif /* CONFIG_ROOM_TERMINAL_NET_TEST_MODE */
 }

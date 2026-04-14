@@ -1,0 +1,3 @@
+## IDF 6：配网在组件仓库，须与本组件一并声明依赖（供 Component Manager 解析）
+dependencies:
+  espressif/network_provisioning: "^1.1.0"
