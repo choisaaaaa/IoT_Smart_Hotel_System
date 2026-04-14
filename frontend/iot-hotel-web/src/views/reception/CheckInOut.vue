@@ -69,6 +69,8 @@
                 <a-col :span="12">
                   <a-form-item label="支付方式">
                     <a-select v-model:value="checkinForm.payment_method">
+                      <a-select-option value="front_desk">前台收款（现金/刷卡/扫码）</a-select-option>
+                      <a-select-option value="balance">会员余额支付</a-select-option>
                       <a-select-option value="alipay">支付宝</a-select-option>
                       <a-select-option value="wechat">微信支付</a-select-option>
                       <a-select-option value="credit_card">银行卡</a-select-option>
@@ -484,7 +486,7 @@ const checkinForm = reactive({
   guest_name: '', phone: '', id_type: 'idcard', id_number: '',
   room_id: undefined as number | undefined, guest_count: 1,
   check_in_date: dayjs(), check_out_date: dayjs().add(2, 'day'),
-  payment_method: 'alipay', remark: '',
+  payment_method: 'front_desk', remark: '',
   coupon_id: undefined as number | undefined,
   manual_discount: 1.0,
   manual_reduce: 0

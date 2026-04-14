@@ -89,6 +89,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, reactive } from 'vue'
+import { message } from 'ant-design-vue'
 import { 
   BankOutlined, TeamOutlined, DesktopOutlined, 
   DollarOutlined, ReloadOutlined 
@@ -121,26 +122,41 @@ const fetchStats = async () => {
   loading.value = true
   try {
     const res = await hotelApi.getStatistics()
-    console.log('[GlobalDashboard] 统计数据返回:', res.data)
-    if (res.data) {
-      // 深度合并并确保数值类型
-      stats.hotel_count = Number(res.data.hotel_count || 0)
-      stats.member_count = Number(res.data.member_count || 0)
-      stats.device_count = Number(res.data.device_count || 0)
-      stats.total_revenue = Number(res.data.total_revenue || 0)
-      
-      if (Array.isArray(res.data.monthly_revenue)) {
-        stats.monthly_revenue = res.data.monthly_revenue.map((v: any) => Number(v || 0))
+    console.log('[GlobalDashboard] API原始返回:', res)
+    
+    // 处理不同的返回格式
+    let apiData: any = {}
+    if (res && typeof res === 'object') {
+      // 如果 res 包含 data 字段，说明是标准响应格式 { code, message, data }
+      if ('data' in res && res.data) {
+        apiData = res.data
+      } else {
+        // 否则直接使用 res
+        apiData = res
       }
-      
-      stats.top_hotels = res.data.top_hotels || []
-      stats.room_stats = res.data.room_stats || []
-      stats.booking_stats = res.data.booking_stats || []
-      
-      renderCharts()
     }
+    
+    console.log('[GlobalDashboard] 提取的业务数据:', apiData)
+    
+    // 更新统计数据
+    stats.hotel_count = Number(apiData.hotel_count || 0)
+    stats.member_count = Number(apiData.member_count || 0)
+    stats.device_count = Number(apiData.device_count || 0)
+    stats.total_revenue = Number(apiData.total_revenue || 0)
+    
+    if (Array.isArray(apiData.monthly_revenue)) {
+      stats.monthly_revenue = apiData.monthly_revenue.map((v: any) => Number(v || 0))
+    }
+    
+    stats.top_hotels = apiData.top_hotels || []
+    stats.room_stats = apiData.room_stats || []
+    stats.booking_stats = apiData.booking_stats || []
+    
+    console.log('[GlobalDashboard] 更新后的stats:', { ...stats })
+    renderCharts()
   } catch (error) {
     console.error('获取统计数据失败:', error)
+    message.error('获取统计数据失败')
   } finally {
     loading.value = false
   }

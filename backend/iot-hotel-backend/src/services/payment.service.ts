@@ -140,7 +140,7 @@ export class PaymentService {
     }
   }
 
-  static async payPayment(id: number, hotelId: number, transaction_no: string): Promise<boolean> {
+  static async payPayment(id: number, hotelId: number, transaction_no: string, payerPhone?: string): Promise<boolean> {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
@@ -166,30 +166,40 @@ export class PaymentService {
 
       // 3. 如果是余额支付，扣除会员余额
       if (payment.payment_method === 'balance') {
-        let guestPhone: string | null = null;
+        // 使用支付者手机号（当前登录用户），而不是入住人手机号
+        let deductPhone: string | null = payerPhone || null;
 
-        if (payment.order_type === 'booking' || payment.order_type === 'booking_extend') {
+        // 如果没有提供支付者手机号，则尝试从预订关联的用户获取
+        if (!deductPhone && (payment.order_type === 'booking' || payment.order_type === 'booking_extend')) {
           const [bookingRows] = await connection.query<RowDataPacket[]>(
-            `SELECT guest_phone FROM bookings WHERE id = ?`,
+            `SELECT b.user_id, u.phone as user_phone, b.guest_phone 
+             FROM bookings b 
+             LEFT JOIN users u ON b.user_id = u.id 
+             WHERE b.id = ?`,
             [payment.order_id]
           );
           if (bookingRows.length > 0) {
-            guestPhone = (bookingRows[0] as any).guest_phone;
+            // 优先使用预订关联的用户手机号，而不是入住人手机号
+            deductPhone = (bookingRows[0] as any).user_phone || (bookingRows[0] as any).guest_phone;
           }
-        } else if (payment.order_type === 'delivery') {
+        } else if (!deductPhone && payment.order_type === 'delivery') {
           const [deliveryRows] = await connection.query<RowDataPacket[]>(
-            `SELECT b.guest_phone FROM delivery_orders d LEFT JOIN bookings b ON d.booking_id = b.id WHERE d.id = ?`,
+            `SELECT u.phone as user_phone, b.guest_phone 
+             FROM delivery_orders d 
+             LEFT JOIN bookings b ON d.booking_id = b.id 
+             LEFT JOIN users u ON b.user_id = u.id 
+             WHERE d.id = ?`,
             [payment.order_id]
           );
           if (deliveryRows.length > 0) {
-            guestPhone = (deliveryRows[0] as any).guest_phone;
+            deductPhone = (deliveryRows[0] as any).user_phone || (deliveryRows[0] as any).guest_phone;
           }
         }
 
-        if (guestPhone) {
+        if (deductPhone) {
           const [memberRows] = await connection.query<RowDataPacket[]>(
             'SELECT id, balance FROM members WHERE phone = ?',
-            [guestPhone]
+            [deductPhone]
           );
           if (memberRows.length > 0) {
             const member = memberRows[0] as any;
@@ -205,21 +215,84 @@ export class PaymentService {
               await connection.rollback();
               throw new Error(`余额扣款失败，可能余额不足或并发操作冲突，当前余额 ¥${member.balance}，需支付 ¥${payment.amount}`);
             }
-            logger.info(`余额支付扣款成功: 手机号=${guestPhone}, 扣款=${payment.amount}`);
+            logger.info(`余额支付扣款成功: 手机号=${deductPhone}, 扣款=${payment.amount}`);
+          } else {
+            await connection.rollback();
+            throw new Error(`会员不存在: 手机号 ${deductPhone}，无法使用余额支付`);
           }
+        } else {
+          await connection.rollback();
+          throw new Error('无法确定支付者手机号，余额支付失败');
         }
       }
 
-      // 4. 根据 order_type 更新关联表的状态
+      // 4. 处理预订相关的积分和优惠券扣除（仅在支付成功时执行）
       if (payment.order_type === 'booking') {
+        // 获取预订信息（包含优惠券和积分信息）
+        const [bookingRows] = await connection.query<RowDataPacket[]>(
+          `SELECT b.coupon_id, b.used_points, b.guest_phone, b.user_id, u.phone as user_phone
+           FROM bookings b
+           LEFT JOIN users u ON b.user_id = u.id
+           WHERE b.id = ?`,
+          [payment.order_id]
+        );
+        
+        if (bookingRows.length > 0) {
+          const booking = bookingRows[0] as any;
+          
+          // 确定权益扣除对象：优先使用预订关联的用户，其次是入住人
+          const deductPhone = booking.user_phone || booking.guest_phone;
+          
+          // 4.1 扣除积分（如果有）
+          if (booking.used_points > 0 && deductPhone) {
+            const [memberRows] = await connection.query<RowDataPacket[]>(
+              'SELECT id, points FROM members WHERE phone = ?',
+              [deductPhone]
+            );
+            if (memberRows.length > 0) {
+              const member = memberRows[0] as any;
+              if (member.points >= booking.used_points) {
+                await connection.query(
+                  'UPDATE members SET points = points - ? WHERE id = ?',
+                  [booking.used_points, member.id]
+                );
+                logger.info(`支付时扣除积分: 手机号=${deductPhone}, 积分=${booking.used_points}`);
+              } else {
+                logger.warn(`积分不足: 手机号=${deductPhone}, 可用=${member.points}, 需要=${booking.used_points}`);
+              }
+            }
+          }
+          
+          // 4.2 标记优惠券为已使用（如果有）
+          if (booking.coupon_id) {
+            // 验证优惠券是否属于该会员
+            const [couponRows] = await connection.query<RowDataPacket[]>(
+              `SELECT mc.id FROM member_coupons mc
+               JOIN members m ON mc.member_id = m.id
+               WHERE mc.id = ? AND m.phone = ? AND mc.status = 'unused'`,
+              [booking.coupon_id, deductPhone]
+            );
+            if (couponRows.length > 0) {
+              await connection.query(
+                'UPDATE member_coupons SET status = "used", used_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [booking.coupon_id]
+              );
+              logger.info(`支付时使用优惠券: coupon_id=${booking.coupon_id}, 手机号=${deductPhone}`);
+            } else {
+              logger.warn(`优惠券不可用: coupon_id=${booking.coupon_id}, 手机号=${deductPhone}`);
+            }
+          }
+        }
+        
+        // 4.3 更新预订状态
         await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
 
-        const [bookingRows] = await connection.query<RowDataPacket[]>(
+        const [roomRows] = await connection.query<RowDataPacket[]>(
           'SELECT room_id FROM bookings WHERE id = ?',
           [payment.order_id]
         );
-        if (bookingRows.length > 0) {
-          const roomId = (bookingRows[0] as any).room_id;
+        if (roomRows.length > 0) {
+          const roomId = (roomRows[0] as any).room_id;
           if (roomId) {
             await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['reserved', roomId]);
           }

@@ -515,15 +515,9 @@ export const create = async (req: AuthRequest, res: Response) => {
       rate_plan_id
     );
 
-    // 如果使用了优惠券，标记为已使用
-    if (coupon_id) {
-       await connection.query('UPDATE member_coupons SET status = "used", used_at = CURRENT_TIMESTAMP WHERE id = ?', [coupon_id]);
-    }
-
-    // 如果使用了积分，扣除积分
-    if (actualUsedPoints > 0) {
-      await connection.query('UPDATE members SET points = points - ? WHERE phone = ?', [actualUsedPoints, phone]);
-    }
+    // 注意：优惠券和积分在预订创建时不立即扣除
+    // 而是在支付成功后，由支付服务统一处理
+    // 这样可以避免预订取消时需要回退的复杂逻辑
 
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     const checkInTime = bookingStatus === 'checked_in' ? new Date() : null;
@@ -548,6 +542,38 @@ export const create = async (req: AuthRequest, res: Response) => {
     );
 
     const bookingId = result.insertId;
+
+    // 处理前台办理入住时的余额支付
+    if (bookingStatus === 'checked_in' && payment_method === 'balance' && guest_phone) {
+      // 前台使用会员余额支付 - 直接扣除余额
+      const [memberRows] = await connection.query<RowDataPacket[]>(
+        'SELECT id, balance FROM members WHERE phone = ?',
+        [guest_phone]
+      );
+      if (memberRows.length > 0) {
+        const member = memberRows[0] as any;
+        if (Number(member.balance) >= Number(total_price)) {
+          await connection.query(
+            'UPDATE members SET balance = balance - ? WHERE id = ? AND balance >= ?',
+            [total_price, member.id, total_price]
+          );
+          logger.info(`前台办理入住余额支付: booking_id=${bookingId}, phone=${guest_phone}, amount=${total_price}`);
+          
+          // 创建支付记录
+          await connection.query(
+            `INSERT INTO payments (hotel_id, order_type, order_id, amount, payment_method, status, paid_at, transaction_no)
+             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`,
+            [hotelId, 'booking', bookingId, total_price, 'balance', 'paid', 'FRONT_DESK_' + Date.now()]
+          );
+        } else {
+          await connection.rollback();
+          return res.status(400).json(errorResponse(`余额不足，当前余额 ¥${member.balance}，需支付 ¥${total_price}`));
+        }
+      } else {
+        await connection.rollback();
+        return res.status(400).json(errorResponse('该手机号未注册会员，无法使用余额支付'));
+      }
+    }
 
     if (bookingStatus === 'checked_in') {
       await connection.query(
@@ -1050,40 +1076,52 @@ export const cancel = async (req: AuthRequest, res: Response) => {
       [id]
     );
 
-    // 回退已使用的优惠券
-    if (booking.coupon_id) {
-      const [memberRows] = await connection.query<RowDataPacket[]>(
-        'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
-      );
-      if (memberRows.length > 0) {
-        await connection.query(
-          `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
-          [booking.coupon_id, memberRows[0].id]
+    // 注意：积分和优惠券现在只在支付成功后扣除
+    // 如果订单已支付，需要回退积分和优惠券
+    const isPaid = booking.status === 'confirmed' || booking.status === 'checked_in';
+    
+    if (isPaid) {
+      // 回退已使用的优惠券
+      if (booking.coupon_id) {
+        const [memberRows] = await connection.query<RowDataPacket[]>(
+          'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
         );
-        logger.info(`取消订单回退优惠券: booking_id=${id}, coupon_id=${booking.coupon_id}`);
+        if (memberRows.length > 0) {
+          await connection.query(
+            `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
+            [booking.coupon_id, memberRows[0].id]
+          );
+          logger.info(`取消订单回退优惠券: booking_id=${id}, coupon_id=${booking.coupon_id}`);
+        }
       }
-    }
 
-    // 回退已扣除的积分
-    if (booking.used_points && booking.used_points > 0) {
-      await connection.query(
-        'UPDATE members SET points = points + ? WHERE phone = ?',
-        [booking.used_points, booking.guest_phone]
-      );
-      logger.info(`取消订单回退积分: booking_id=${id}, points=${booking.used_points}`);
+      // 回退已扣除的积分
+      if (booking.used_points && booking.used_points > 0) {
+        await connection.query(
+          'UPDATE members SET points = points + ? WHERE phone = ?',
+          [booking.used_points, booking.guest_phone]
+        );
+        logger.info(`取消订单回退积分: booking_id=${id}, points=${booking.used_points}`);
+      }
     }
 
     // 回退已支付的余额
     const [paidPayments] = await connection.query<RowDataPacket[]>(
-      `SELECT amount, payment_method FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
+      `SELECT amount, payment_method, status FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
       [id]
     );
     for (const pay of paidPayments) {
       const refundAmount = Number(pay.amount);
-      if (refundAmount > 0) {
+      // 只回退已支付的余额，避免重复回退
+      if (refundAmount > 0 && pay.status === 'paid') {
         await connection.query(
           'UPDATE members SET balance = balance + ? WHERE phone = ?',
           [refundAmount, booking.guest_phone]
+        );
+        // 标记该支付记录为已回退，避免重复处理
+        await connection.query(
+          'UPDATE payments SET status = ? WHERE order_type IN (\'booking\', \'booking_extend\') AND order_id = ? AND payment_method = \'balance\' AND status = \'paid\'',
+          ['refunded', id]
         );
         logger.info(`取消订单回退余额: booking_id=${id}, amount=${refundAmount}`);
       }
@@ -1205,15 +1243,21 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       }
 
       const [paidPayments] = await connection.query<RowDataPacket[]>(
-        `SELECT amount FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
+        `SELECT amount, status FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
         [id]
       );
       for (const pay of paidPayments) {
         const refundAmount = Number(pay.amount);
-        if (refundAmount > 0 && booking.guest_phone) {
+        // 只回退已支付的余额，避免重复回退
+        if (refundAmount > 0 && booking.guest_phone && pay.status === 'paid') {
           await connection.query(
             'UPDATE members SET balance = balance + ? WHERE phone = ?',
             [refundAmount, booking.guest_phone]
+          );
+          // 标记该支付记录为已回退，避免重复处理
+          await connection.query(
+            'UPDATE payments SET status = ? WHERE order_type IN (\'booking\', \'booking_extend\') AND order_id = ? AND payment_method = \'balance\' AND status = \'paid\'',
+            ['refunded', id]
           );
         }
       }

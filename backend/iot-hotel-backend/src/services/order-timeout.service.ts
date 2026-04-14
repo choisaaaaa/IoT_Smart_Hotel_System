@@ -74,28 +74,8 @@ class OrderTimeoutService {
         [booking.id]
       );
 
-      // 回退已使用的优惠券
-      if (booking.coupon_id && booking.guest_phone) {
-        const [memberRows] = await connection.query<RowDataPacket[]>(
-          'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
-        );
-        if (memberRows.length > 0) {
-          await connection.query(
-            `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
-            [booking.coupon_id, memberRows[0].id]
-          );
-          logger.info(`[OrderTimeout] 回退优惠券: booking=${booking.booking_number}, coupon_id=${booking.coupon_id}`);
-        }
-      }
-
-      // 回退已扣除的积分
-      if (booking.used_points && booking.used_points > 0 && booking.guest_phone) {
-        await connection.query(
-          'UPDATE members SET points = points + ? WHERE phone = ?',
-          [booking.used_points, booking.guest_phone]
-        );
-        logger.info(`[OrderTimeout] 回退积分: booking=${booking.booking_number}, points=${booking.used_points}`);
-      }
+      // 注意：积分和优惠券现在只在支付成功后扣除
+      // 超时取消的订单状态为 'pending'，尚未支付，所以不需要回退积分和优惠券
 
       await connection.query(
         `UPDATE guests SET check_out_time = NOW() WHERE booking_id = ? AND check_out_time IS NULL`,

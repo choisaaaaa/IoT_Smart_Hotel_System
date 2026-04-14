@@ -45,3 +45,78 @@ body {
 .fade-leave-to {
   opacity: 0;
 }
+
+/* 全局消息弹窗 - 左下角气泡消息框设计 */
+.ant-message {
+  left: 96px !important;
+  right: auto !important;
+  width: auto !important;
+  top: auto !important;
+  bottom: 40px !important;
+}
+
+.ant-message .ant-message-notice {
+  text-align: left !important;
+  margin-bottom: 12px !important;
+}
+
+.ant-message-notice-content {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(15px) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #000000 !important; /* 细黑线边框 */
+  padding: 8px 16px !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+/* 消息框左侧的小尾巴 (气泡样式) */
+.ant-message-notice-content::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid #000000; /* 对应边框颜色 */
+  z-index: 1;
+}
+
+.ant-message-notice-content::after {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 5px solid rgba(255, 255, 255, 0.6); /* 对应背景颜色 */
+  backdrop-filter: blur(15px);
+  z-index: 2;
+}
+
+.ant-message-notice-content:hover {
+  background: rgba(255, 255, 255, 0.8) !important;
+  transform: scale(1.02);
+}
+
+/* 图标颜色 */
+.ant-message-success .anticon { color: #52c41a !important; }
+.ant-message-error .anticon { color: #ff4d4f !important; }
+.ant-message-info .anticon { color: #1890ff !important; }
+
+/* 消息文字 */
+.ant-message-custom-content > span:last-child {
+  font-size: 13px;
+  font-weight: 600;
+  color: #000;
+  margin-left: 8px;
+}

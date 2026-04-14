@@ -24,9 +24,18 @@
       <a-table :columns="columns" :data-source="coupons" :loading="loading" row-key="id">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'hotel_id'">
-            <a-tag v-if="record.hotel_id === 0" color="blue">通用券</a-tag>
+            <a-tag v-if="record.scope_type === 'global'" color="blue">全局券</a-tag>
             <a-tag v-else-if="record.hotel_name" color="purple">{{ record.hotel_name }}</a-tag>
             <span v-else>-</span>
+          </template>
+          <template v-if="column.key === 'scope_type'">
+            <a-tag v-if="record.scope_type === 'global'" color="blue">全局</a-tag>
+            <a-tag v-else-if="record.scope_type === 'hotel'" color="purple">酒店专属</a-tag>
+            <a-tag v-else-if="record.scope_type === 'private'" color="orange">私密发放</a-tag>
+          </template>
+          <template v-if="column.key === 'is_public'">
+            <a-tag v-if="record.is_public" color="green">公开</a-tag>
+            <a-tag v-else color="default">私密</a-tag>
           </template>
           <template v-if="column.key === 'coupon_type'">
             <a-tag :color="record.coupon_type === 'discount' ? 'blue' : 'green'">
@@ -44,8 +53,9 @@
               <a-button type="link" size="small" @click="handleRedeem(record)" :disabled="record.status !== 'active'">
                 <QrcodeOutlined /> 核销
               </a-button>
+              <a-button type="link" size="small" @click="showDirectIssueModal(record)">发放</a-button>
             </a-space>
-            <a-space v-else>
+            <a-space v-else-if="isSystemAdmin || isAdmin">
               <a-button type="link" size="small" @click="showDirectIssueModal(record)">发放给用户</a-button>
               <a-button type="link" size="small" @click="editCoupon(record)">编辑</a-button>
               <a-popconfirm title="确定删除此优惠券吗？" @confirm="deleteCoupon(record.id)">
@@ -120,9 +130,19 @@
         <a-form-item label="允许多次导入">
           <a-switch v-model:checked="formState.is_multiple_use" />
         </a-form-item>
-        <a-form-item v-if="isSystemAdmin && hotels.length > 0" label="选择门店">
-          <a-select v-model:value="formState.hotel_id" placeholder="不选则为通用券（所有门店可用）" allow-clear>
-            <a-select-option :value="0">通用券（所有门店可用）</a-select-option>
+        <a-form-item label="优惠券范围" required>
+          <a-select v-model:value="formState.scope_type" @change="handleScopeTypeChange">
+            <a-select-option v-if="isSystemAdmin" value="global">全局券（所有门店通用）</a-select-option>
+            <a-select-option value="hotel">酒店专属券</a-select-option>
+            <a-select-option value="private">私密发放券（仅管理员可发放）</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item v-if="formState.scope_type !== 'global'" label="是否公开领取">
+          <a-switch v-model:checked="formState.is_public" :checked-children="'公开'" :un-checked-children="'私密'" />
+          <div class="form-hint">公开：顾客可自行领取；私密：仅管理员可发放</div>
+        </a-form-item>
+        <a-form-item v-if="isSystemAdmin && formState.scope_type !== 'global' && hotels.length > 0" label="选择门店">
+          <a-select v-model:value="formState.hotel_id" placeholder="请选择适用门店">
             <a-select-option v-for="h in hotels" :key="h.id" :value="h.id">{{ h.hotel_name }}</a-select-option>
           </a-select>
         </a-form-item>
@@ -163,8 +183,10 @@ const isSystemAdmin = computed(() => userStore.userInfo?.role === CANONICAL_ROLE
 const isAdmin = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN)
 const isStaff = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.STAFF)
 
-const columns = [
+const columns = computed(() => [
   { title: '券名', dataIndex: 'coupon_name', key: 'coupon_name' },
+  { title: '范围', key: 'scope_type', width: 100 },
+  { title: '领取', key: 'is_public', width: 80 },
   { title: '所属门店', key: 'hotel_id', width: 120 },
   { title: '券码', dataIndex: 'coupon_code', key: 'coupon_code' },
   { title: '类型', dataIndex: 'coupon_type', key: 'coupon_type', width: 90 },
@@ -172,8 +194,8 @@ const columns = [
   { title: '门槛', dataIndex: 'min_amount', key: 'min_amount', customRender: ({ text }: any) => `\u00a5${text}`, width: 80 },
   { title: '已领/总量', key: 'counts', customRender: ({ record }: any) => `${record.received_count}/${record.total_count || '\u221e'}`, width: 90 },
   { title: '有效期', key: 'validity', width: 200 },
-  { title: '操作', key: 'action', width: isStaff.value ? 80 : 220 }
-]
+  { title: '操作', key: 'action', width: isStaff.value ? 150 : 220 }
+])
 
 const coupons = ref([])
 const loading = ref(false)
@@ -203,7 +225,9 @@ const formState = reactive({
   min_amount: 0,
   total_count: 0,
   is_multiple_use: false,
-  hotel_id: null as number | null
+  hotel_id: null as number | null,
+  scope_type: 'hotel',
+  is_public: true
 })
 
 const formatDate = (date: any) => date ? dayjs(date).format('YYYY-MM-DD') : '-'
@@ -279,6 +303,13 @@ const handleConfirmRedeem = async () => {
   }
 }
 
+const handleScopeTypeChange = (value: string) => {
+  if (value === 'global') {
+    formState.is_public = true
+    formState.hotel_id = null
+  }
+}
+
 const showAddModal = () => {
   editingId.value = null
   Object.assign(formState, {
@@ -289,7 +320,9 @@ const showAddModal = () => {
     min_amount: 0,
     total_count: 0,
     is_multiple_use: false,
-    hotel_id: null
+    hotel_id: isSystemAdmin.value ? null : userStore.userInfo?.hotel_id,
+    scope_type: isSystemAdmin.value ? 'global' : 'hotel',
+    is_public: true
   })
   validRange.value = []
   modalVisible.value = true
@@ -305,7 +338,9 @@ const editCoupon = (record: any) => {
     min_amount: Number(record.min_amount),
     total_count: record.total_count,
     is_multiple_use: !!record.is_multiple_use,
-    hotel_id: record.hotel_id ?? null
+    hotel_id: record.hotel_id ?? null,
+    scope_type: record.scope_type || 'hotel',
+    is_public: record.is_public !== undefined ? record.is_public : true
   })
   validRange.value = [dayjs(record.valid_from), dayjs(record.valid_to)]
   modalVisible.value = true
@@ -324,6 +359,14 @@ const handleSave = async () => {
       valid_to: validRange.value[1].format('YYYY-MM-DD')
     }
 
+    // 全局券不需要hotel_id
+    if (data.scope_type === 'global') {
+      data.hotel_id = 0
+    } else if (!data.hotel_id && !isSystemAdmin.value) {
+      // 非系统管理员必须设置本店ID
+      data.hotel_id = userStore.userInfo?.hotel_id
+    }
+
     if (editingId.value) {
       await request.put(`/coupons/${editingId.value}`, data)
       message.success('更新成功')
@@ -333,8 +376,8 @@ const handleSave = async () => {
     }
     modalVisible.value = false
     fetchCoupons()
-  } catch (error) {
-    message.error('保存失败')
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '保存失败')
   } finally {
     submitLoading.value = false
   }
@@ -358,4 +401,9 @@ onMounted(() => {
 
 <style scoped>
 .text-danger { color: #ff4d4f; }
+.form-hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
 </style>

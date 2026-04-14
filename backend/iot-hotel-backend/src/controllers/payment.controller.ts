@@ -109,8 +109,10 @@ export const pay = async (req: AuthRequest, res: Response) => {
     }
     if (!hotelId) hotelId = req.user?.hotel_id || 1;
 
-    logger.info(`[Payment Pay] Processing payment with id: ${numericId}, hotelId: ${hotelId}`);
-    const success = await PaymentService.payPayment(numericId, hotelId, transaction_no || 'T' + Date.now());
+    logger.info(`[Payment Pay] Processing payment with id: ${numericId}, hotelId: ${hotelId}, payerPhone: ${req.user?.phone}`);
+    // 传递当前登录用户的手机号作为支付者手机号
+    const payerPhone = req.user?.phone || req.user?.username;
+    const success = await PaymentService.payPayment(numericId, hotelId, transaction_no || 'T' + Date.now(), payerPhone);
     logger.info(`[Payment Pay] Payment result: ${success}`);
     if (!success) {
       return res.status(404).json(errorResponse('支付失败或支付记录不存在'));
