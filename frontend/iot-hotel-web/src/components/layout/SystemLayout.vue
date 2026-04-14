@@ -22,6 +22,10 @@
           <template #icon><UserOutlined /></template>
           <span>账户管理</span>
         </a-menu-item>
+        <a-menu-item key="/admin/coupons">
+          <template #icon><GiftOutlined /></template>
+          <span>优惠券管理</span>
+        </a-menu-item>
         <a-menu-item key="/system/settings">
           <template #icon><SettingOutlined /></template>
           <span>系统配置</span>
@@ -76,7 +80,7 @@ import { useAppStore } from '@/stores/app'
 import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
-  UserOutlined, MenuFoldOutlined,
+  UserOutlined, MenuFoldOutlined, GiftOutlined,
   MenuUnfoldOutlined, LogoutOutlined, SettingOutlined
 } from '@ant-design/icons-vue'
 
