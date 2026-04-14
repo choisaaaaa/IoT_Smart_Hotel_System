@@ -41,6 +41,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '账户管理', icon: 'UserOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       },
       {
+        path: 'coupons',
+        name: 'SystemCoupons',
+        component: () => import('@/views/admin/CouponManage.vue'),
+        meta: { title: '优惠券管理', icon: 'GiftOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
+      },
+      {
         path: 'settings',
         name: 'SystemSettings',
         component: () => import('@/views/system/SystemSettings.vue'),

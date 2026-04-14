@@ -22,7 +22,7 @@
           <template #icon><UserOutlined /></template>
           <span>账户管理</span>
         </a-menu-item>
-        <a-menu-item key="/admin/coupons">
+        <a-menu-item key="/system/coupons">
           <template #icon><GiftOutlined /></template>
           <span>优惠券管理</span>
         </a-menu-item>
