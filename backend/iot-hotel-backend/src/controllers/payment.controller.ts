@@ -118,6 +118,12 @@ export const pay = async (req: AuthRequest, res: Response) => {
     res.json(successResponse(null, '支付成功'));
   } catch (error) {
     logger.error('支付失败:', error.message);
-    res.status(500).json(errorResponse('支付失败'));
+    const businessErrors = ['余额不足', '支付记录不存在'];
+    const isBusinessError = businessErrors.some(e => error.message?.includes(e));
+    if (isBusinessError) {
+      res.status(400).json(errorResponse(error.message));
+    } else {
+      res.status(500).json(errorResponse('支付失败'));
+    }
   }
 };

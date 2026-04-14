@@ -348,7 +348,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
        FROM guests g
        LEFT JOIN rooms r ON g.room_id = r.id
        LEFT JOIN bookings b ON g.booking_id = b.id
-       WHERE (b.user_id = ? OR g.guest_phone = ?) AND g.check_out_time IS NULL
+       WHERE (b.user_id = ? OR g.guest_phone = ?) AND g.check_out_time IS NULL AND b.status IN ('checked_in', 'pre_checked_in')
        ORDER BY g.check_in_time DESC
        LIMIT 1`,
       [userId, phone]

@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/message_service.dart';
+import '../../models/app_notification.dart';
 
 class NotificationCenterPage extends ConsumerStatefulWidget {
   const NotificationCenterPage({super.key});
@@ -16,7 +17,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  List<dynamic> _messages = [];
+  List<AppNotification> _messages = [];
   int _unreadCount = 0;
   String _currentType = 'all';
 
@@ -69,7 +70,12 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
       final type = _currentType == 'all' ? null : _currentType;
       final result = await ref.read(messageServiceProvider).getMessages(type: type);
       if (result.success && mounted) {
-        setState(() => _messages = result.data ?? []);
+        final data = result.data;
+        if (data is List) {
+          setState(() => _messages = data.map((m) => AppNotification.fromJson(m as Map<String, dynamic>)).toList());
+        } else {
+          setState(() => _messages = []);
+        }
       }
     } catch (e) {
       debugPrint('鉁?messages: $e');
@@ -82,7 +88,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     final result = await ref.read(messageServiceProvider).markAsRead(messageId);
     if (result.success && mounted) {
       setState(() {
-        _messages[index]['is_read'] = true;
+        _messages[index] = _messages[index].copyWith(isRead: true);
         _unreadCount = (_unreadCount - 1).clamp(0, _unreadCount);
       });
     }
@@ -92,9 +98,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     final result = await ref.read(messageServiceProvider).markAllAsRead();
     if (result.success && mounted) {
       setState(() {
-        for (var msg in _messages) {
-          msg['is_read'] = true;
-        }
+        _messages = _messages.map((m) => m.copyWith(isRead: true)).toList();
         _unreadCount = 0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +110,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
   Future<void> _deleteMessage(int messageId, int index) async {
     final result = await ref.read(messageServiceProvider).deleteMessage(messageId);
     if (result.success && mounted) {
-      final wasUnread = _messages[index]['is_read'] != true;
+      final wasUnread = !_messages[index].isRead;
       setState(() {
         _messages.removeAt(index);
         if (wasUnread) _unreadCount = (_unreadCount - 1).clamp(0, _unreadCount);
@@ -162,25 +166,24 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
     }
   }
 
-  String _formatTime(String? timeStr) {
-    if (timeStr == null) return '';
+  String _formatTime(DateTime? time) {
+    if (time == null) return '';
     try {
-      final date = DateTime.parse(timeStr);
       final now = DateTime.now();
-      final diff = now.difference(date);
+      final diff = now.difference(time);
       if (diff.inMinutes < 1) return '刚刚';
       if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
       if (diff.inDays < 1) return '${diff.inHours}小时前';
       if (diff.inDays < 7) return '${diff.inDays}天前';
-      return DateFormat('MM-dd HH:mm').format(date);
+      return DateFormat('yyyy-MM-dd HH:mm').format(time);
     } catch (e) {
-      return timeStr;
+      return '';
     }
   }
 
-  void _showMessageDetail(Map<String, dynamic> message, int index) {
-    if (message['is_read'] != true) {
-      _markAsRead(message['id'] ?? 0, index);
+  void _showMessageDetail(AppNotification message, int index) {
+    if (!message.isRead) {
+      _markAsRead(message.id, index);
     }
     showModalBottomSheet(
       context: context,
@@ -216,12 +219,12 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: _getMessageIconColor(message['type']).withValues(alpha: 0.1),
+                            color: _getMessageIconColor(message.type).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
-                            _getMessageIcon(message['type']),
-                            color: _getMessageIconColor(message['type']),
+                            _getMessageIcon(message.type),
+                            color: _getMessageIconColor(message.type),
                             size: 20,
                           ),
                         ),
@@ -231,14 +234,14 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _getTypeLabel(message['type']),
+                                _getTypeLabel(message.type),
                                 style: GoogleFonts.notoSansSc(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
                               Text(
-                                _formatTime(message['created_at']),
+                                _formatTime(message.createdAt),
                                 style: GoogleFonts.notoSansSc(
                                   fontSize: 11,
                                   color: AppColors.textHint,
@@ -251,7 +254,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      message['title'] ?? '消息通知',
+                      message.title,
                       style: GoogleFonts.notoSansSc(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -259,7 +262,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      message['content'] ?? '',
+                      message.content,
                       style: GoogleFonts.notoSansSc(
                         fontSize: 15,
                         color: AppColors.textPrimary,
@@ -349,17 +352,16 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
                         final message = _messages[index];
-                        final isRead = message['is_read'] == true;
-                        return _buildMessageItem(message, index, isRead);
+                        return _buildMessageItem(message, index);
                       },
                     ),
             ),
     );
   }
 
-  Widget _buildMessageItem(Map<String, dynamic> message, int index, bool isRead) {
+  Widget _buildMessageItem(AppNotification message, int index) {
     return Dismissible(
-      key: ValueKey(message['id'] ?? index),
+      key: ValueKey(message.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
@@ -387,17 +389,17 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
           ),
         );
       },
-      onDismissed: (direction) => _deleteMessage(message['id'] ?? 0, index),
+      onDismissed: (direction) => _deleteMessage(message.id, index),
       child: InkWell(
         onTap: () => _showMessageDetail(message, index),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isRead ? Colors.white : AppColors.primary.withValues(alpha: 0.03),
+            color: message.isRead ? Colors.white : AppColors.primary.withValues(alpha: 0.03),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isRead ? AppColors.divider : AppColors.primary.withValues(alpha: 0.15),
+              color: message.isRead ? AppColors.divider : AppColors.primary.withValues(alpha: 0.15),
             ),
           ),
           child: Row(
@@ -406,12 +408,12 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _getMessageIconColor(message['type']).withValues(alpha: 0.1),
+                  color: _getMessageIconColor(message.type).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  _getMessageIcon(message['type']),
-                  color: _getMessageIconColor(message['type']),
+                  _getMessageIcon(message.type),
+                  color: _getMessageIconColor(message.type),
                   size: 22,
                 ),
               ),
@@ -422,7 +424,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                   children: [
                     Row(
                       children: [
-                        if (!isRead)
+                        if (!message.isRead)
                           Container(
                             width: 8,
                             height: 8,
@@ -434,11 +436,11 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                           ),
                         Expanded(
                           child: Text(
-                            message['title'] ?? '消息通知',
+                            message.title,
                             style: GoogleFonts.notoSansSc(
                               fontSize: 15,
-                              fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
-                              color: isRead ? AppColors.textSecondary : AppColors.textPrimary,
+                              fontWeight: message.isRead ? FontWeight.w500 : FontWeight.bold,
+                              color: message.isRead ? AppColors.textSecondary : AppColors.textPrimary,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -448,7 +450,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      message['content'] ?? '',
+                      message.content,
                       style: GoogleFonts.notoSansSc(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -462,14 +464,14 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _getTypeLabel(message['type']),
+                          _getTypeLabel(message.type),
                           style: GoogleFonts.notoSansSc(
                             fontSize: 11,
                             color: AppColors.textHint,
                           ),
                         ),
                         Text(
-                          _formatTime(message['created_at']),
+                          _formatTime(message.createdAt),
                           style: GoogleFonts.notoSansSc(
                             fontSize: 11,
                             color: AppColors.textHint,

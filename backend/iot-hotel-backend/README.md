@@ -248,11 +248,11 @@ Device-Key: <device_key>
 
 ```bash
 # Windows
-netstat -ano | findstr :3000
+netstat -ano | findstr :9000
 taskkill /PID <PID> /F
 
 # Linux/Mac
-lsof -i :3000
+lsof -i :9000
 kill -9 <PID>
 ```
 

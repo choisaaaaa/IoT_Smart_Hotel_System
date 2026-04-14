@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
+import '../../models/frequent_guest.dart';
 
 class FrequentGuestPage extends ConsumerStatefulWidget {
   const FrequentGuestPage({super.key});
@@ -12,7 +13,7 @@ class FrequentGuestPage extends ConsumerStatefulWidget {
 }
 
 class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
-  List<Map<String, dynamic>> _guests = [];
+  List<FrequentGuest> _guests = [];
   bool _isLoading = true;
 
   @override
@@ -29,7 +30,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         if (data is List) {
-          setState(() => _guests = data.cast<Map<String, dynamic>>());
+          setState(() => _guests = data.map((g) => FrequentGuest.fromJson(g as Map<String, dynamic>)).toList());
         }
       }
     } catch (e) {
@@ -39,13 +40,13 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
     }
   }
 
-  Future<void> _saveGuest(Map<String, dynamic> guest) async {
+  Future<void> _saveGuest(FrequentGuest guest) async {
     try {
       final dio = DioClient();
-      if (guest['id'] != null) {
-        await dio.put('${ApiConstants.frequentGuests}/${guest['id']}', data: guest);
+      if (guest.id != null) {
+        await dio.put('${ApiConstants.frequentGuests}/${guest.id}', data: guest.toJson());
       } else {
-        await dio.post(ApiConstants.frequentGuests, data: guest);
+        await dio.post(ApiConstants.frequentGuests, data: guest.toJson());
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -81,12 +82,12 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
     }
   }
 
-  void _showAddEditDialog({Map<String, dynamic>? existing}) {
-    final nameCtrl = TextEditingController(text: existing?['name'] ?? '');
-    final idNumberCtrl = TextEditingController(text: existing?['id_number'] ?? '');
-    final phoneCtrl = TextEditingController(text: existing?['phone'] ?? '');
-    String idType = existing?['id_type'] ?? 'idcard';
-    String relationship = existing?['relationship'] ?? 'self';
+  void _showAddEditDialog({FrequentGuest? existing}) {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final idNumberCtrl = TextEditingController(text: existing?.idNumber ?? '');
+    final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
+    String idType = existing?.idType ?? 'idcard';
+    String relationship = existing?.relationship ?? 'self';
 
     showDialog(
       context: context,
@@ -182,14 +183,14 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                       return;
                     }
                     Navigator.pop(ctx);
-                    _saveGuest({
-                      if (existing?['id'] != null) 'id': existing!['id'],
-                      'name': nameCtrl.text.trim(),
-                      'id_type': idType,
-                      'id_number': idNumberCtrl.text.trim(),
-                      'phone': phoneCtrl.text.trim(),
-                      'relationship': relationship,
-                    });
+                    _saveGuest(FrequentGuest(
+                      id: existing?.id,
+                      name: nameCtrl.text.trim(),
+                      idType: idType,
+                      idNumber: idNumberCtrl.text.trim(),
+                      phone: phoneCtrl.text.trim(),
+                      relationship: relationship,
+                    ));
                   },
                   child: const Text('保存'),
                 ),
@@ -201,18 +202,18 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
     );
   }
 
-  void _confirmDelete(Map<String, dynamic> guest) {
+  void _confirmDelete(FrequentGuest guest) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确认删除'),
-        content: Text('确定要删除常旅客「${guest['name']}」吗？'),
+        content: Text('确定要删除常旅客「${guest.name}」吗？'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              if (guest['id'] != null) _deleteGuest(guest['id'] as int);
+              if (guest.id != null) _deleteGuest(guest.id!);
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('删除'),
@@ -222,40 +223,11 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
     );
   }
 
-  void _quickFillToBooking(Map<String, dynamic> guest) {
-    Navigator.pop(context, guest);
+  void _quickFillToBooking(FrequentGuest guest) {
+    Navigator.pop(context, guest.toJson());
   }
 
-  String _idTypeLabel(String? type) {
-    switch (type) {
-      case 'idcard': return '身份证/永居证/居住证';
-      case 'hkm_pass': return '港澳居民来往内地通行证';
-      case 'taiwan_pass': return '台湾居民来往大陆通行证';
-      case 'passport': return '外国护照';
-      case 'other': return '其他';
-      default: return '证件';
-    }
-  }
-
-  String _relationshipLabel(String? rel) {
-    switch (rel) {
-      case 'self': return '本人';
-      case 'spouse': return '配偶';
-      case 'child': return '子女';
-      case 'parent': return '父母';
-      case 'friend': return '朋友';
-      case 'colleague': return '同事';
-      default: return '其他';
-    }
-  }
-
-  String _maskIdNumber(String? idNumber) {
-    if (idNumber == null || idNumber.isEmpty) return '-';
-    if (idNumber.length <= 10) return idNumber;
-    return '${idNumber.substring(0, 6)}********${idNumber.substring(14)}';
-  }
-
-  IconData _relationshipIcon(String? rel) {
+  IconData _relationshipIcon(String rel) {
     switch (rel) {
       case 'self': return Icons.person;
       case 'spouse': return Icons.favorite;
@@ -324,9 +296,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
     );
   }
 
-  Widget _buildGuestCard(Map<String, dynamic> guest) {
-    final relationship = guest['relationship'] as String? ?? 'other';
-
+  Widget _buildGuestCard(FrequentGuest guest) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -349,7 +319,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(_relationshipIcon(relationship), color: AppColors.primary, size: 24),
+                  child: Icon(_relationshipIcon(guest.relationship), color: AppColors.primary, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -358,7 +328,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     children: [
                       Row(
                         children: [
-                          Text(guest['name'] ?? '-', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          Text(guest.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -366,16 +336,16 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                               color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text(_relationshipLabel(relationship), style: const TextStyle(fontSize: 11, color: AppColors.primary)),
+                            child: Text(guest.relationshipLabel, style: const TextStyle(fontSize: 11, color: AppColors.primary)),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('${_idTypeLabel(guest['id_type'])}：${_maskIdNumber(guest['id_number'])}',
+                      Text('${guest.idTypeLabel}：${guest.maskedIdNumber}',
                           style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                      if (guest['phone'] != null && (guest['phone'] as String).isNotEmpty) ...[
+                      if (guest.phone != null && guest.phone!.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text('手机：${guest['phone']}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        Text('手机：${guest.phone}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       ],
                     ],
                   ),

@@ -225,7 +225,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
               SizedBox(
                 width: 120,
                 child: DropdownButtonFormField<String>(
-                  value: _idType,
+                  initialValue: _idType,
                   decoration: const InputDecoration(labelText: '证件类型', border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'idcard', child: Text('身份证')),
@@ -244,7 +244,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _paymentMethod,
+                  initialValue: _paymentMethod,
                   decoration: const InputDecoration(labelText: '支付方式', border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'front_desk', child: Text('前台支付')),
@@ -260,7 +260,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
               SizedBox(
                 width: 100,
                 child: DropdownButtonFormField<int>(
-                  value: _guestCount,
+                  initialValue: _guestCount,
                   decoration: const InputDecoration(labelText: '人数', border: OutlineInputBorder()),
                   items: List.generate(5, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1}人'))),
                   onChanged: (v) => setState(() => _guestCount = v ?? 1),
@@ -392,7 +392,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
             children: [
               Expanded(
                 child: DropdownButtonFormField<int?>(
-                  value: _selectedCouponId,
+                  initialValue: _selectedCouponId,
                   decoration: const InputDecoration(labelText: '优惠券', border: OutlineInputBorder(), isDense: true),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('不使用优惠券')),
@@ -489,15 +489,9 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
             TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: '手机号', border: OutlineInputBorder()), keyboardType: TextInputType.phone),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: idType,
+              initialValue: idType,
               decoration: const InputDecoration(labelText: '证件类型', border: OutlineInputBorder()),
-              items: const [
-                DropdownMenuItem(value: 'idcard', child: Text('身份证/永居证/居住证')),
-                DropdownMenuItem(value: 'hkm_pass', child: Text('港澳居民来往内地通行证')),
-                DropdownMenuItem(value: 'taiwan_pass', child: Text('台湾居民来往大陆通行证')),
-                DropdownMenuItem(value: 'passport', child: Text('外国护照')),
-                DropdownMenuItem(value: 'other', child: Text('其他')),
-              ],
+              items: const [DropdownMenuItem(value: 'idcard', child: Text('身份证')), DropdownMenuItem(value: 'passport', child: Text('护照'))],
               onChanged: (v) => idType = v ?? 'idcard',
             ),
             const SizedBox(height: 12),
@@ -532,7 +526,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
             contentPadding: EdgeInsets.zero,
             leading: const CircleAvatar(radius: 14, backgroundColor: AppColors.success, child: Icon(Icons.assignment_turned_in, size: 14, color: Colors.white)),
             title: Text('${b.guestName ?? '-'} · ${b.roomNumber ?? '${b.roomId}号房'}', style: GoogleFonts.notoSansSc(fontSize: 13)),
-            subtitle: Text('${b.guestPhone ?? ''}', style: const TextStyle(fontSize: 11)),
+            subtitle: Text(b.guestPhone ?? '', style: const TextStyle(fontSize: 11)),
             trailing: FilledButton.tonal(
               onPressed: () => _handleQuickCheckin(b),
               style: FilledButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(60, 32)),

@@ -9,12 +9,38 @@ export const get = async (req: AuthRequest, res: Response) => {
     const { page = 1, pageSize = 10, status } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
     const hotelId = req.user?.hotel_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
     
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
-    // 按酒店过滤：通过 room_id 关联 rooms 表
-    if (hotelId) {
+    // 如果是顾客角色，只能查看自己房间的订单
+    if (userRole === 'customer') {
+      // 获取顾客当前入住的房间
+      const [bookingRows] = await pool.query<RowDataPacket[]>(
+        `SELECT room_id FROM bookings 
+         WHERE user_id = ? AND status = 'checked_in'
+         LIMIT 1`,
+        [userId]
+      );
+      
+      if (bookingRows.length === 0) {
+        // 顾客没有入住，返回空列表
+        return res.json(successResponse({
+          list: [],
+          total: 0,
+          page: Number(page),
+          pageSize: Number(pageSize),
+          totalPages: 0
+        }, '获取送物订单列表成功'));
+      }
+      
+      const roomId = (bookingRows[0] as any).room_id;
+      whereClause += ' AND d.room_id = ?';
+      params.push(roomId);
+    } else if (hotelId) {
+      // 按酒店过滤：通过 room_id 关联 rooms 表
       whereClause += ' AND r.hotel_id = ?';
       params.push(hotelId);
     }
@@ -52,11 +78,30 @@ export const getById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const hotelId = req.user?.hotel_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
     
     let query = 'SELECT d.*, r.room_number FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ?';
     const params: any[] = [id];
 
-    if (hotelId) {
+    // 如果是顾客角色，只能查看自己房间的订单
+    if (userRole === 'customer') {
+      const [bookingRows] = await pool.query<RowDataPacket[]>(
+        `SELECT room_id FROM bookings 
+         WHERE user_id = ? AND status = 'checked_in'
+         LIMIT 1`,
+        [userId]
+      );
+      
+      if (bookingRows.length === 0) {
+        res.status(403).json(errorResponse('您当前没有入住记录'));
+        return;
+      }
+      
+      const roomId = (bookingRows[0] as any).room_id;
+      query += ' AND d.room_id = ?';
+      params.push(roomId);
+    } else if (hotelId) {
       query += ' AND r.hotel_id = ?';
       params.push(hotelId);
     }

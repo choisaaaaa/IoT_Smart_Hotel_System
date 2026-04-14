@@ -234,6 +234,14 @@ async function handleLogout() {
 }
 
 async function loadNotifications() {
+  // 检查用户角色，只有前台员工才加载通知
+  const userInfo = appStore.userInfo
+  const userRole = userInfo?.role
+  if (!userRole || userRole === 'customer') {
+    notificationItems.value = []
+    return
+  }
+
   try {
     const [maintenanceRes, deliveryRes, envRes] = await Promise.allSettled([
       maintenanceApi.getList({ status: 'pending', pageSize: 5 }),
@@ -311,7 +319,11 @@ function clearAllNotifications() {
 
 onMounted(() => {
   loadNotifications()
-  setInterval(loadNotifications, 30000)
+  // 只有非顾客角色才启动定时刷新
+  const userRole = appStore.userInfo?.role
+  if (userRole && userRole !== 'customer') {
+    setInterval(loadNotifications, 30000)
+  }
 })
 </script>
 

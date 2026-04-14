@@ -28,7 +28,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
       _settings = {
         'app_name': 'IoT智慧酒店',
         'app_version': '1.0.0',
-        'api_base_url': 'http://8.134.166.69:3000',
+        'api_base_url': 'http://8.134.166.69:9000',
         'mqtt_broker': 'mqtt://8.134.166.69:1883',
         'auto_update': true,
         'push_notifications': true,

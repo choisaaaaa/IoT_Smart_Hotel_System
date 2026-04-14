@@ -5,6 +5,8 @@ import '../../core/auth/auth_state_notifier.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../services/auth_service.dart';
+import '../../models/role_application.dart';
+import '../../models/hotel.dart';
 import '../../models/user.dart';
 
 class PersonalInfoPage extends ConsumerStatefulWidget {
@@ -16,9 +18,9 @@ class PersonalInfoPage extends ConsumerStatefulWidget {
 
 class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   User? _user;
-  List<Map<String, dynamic>> _applications = [];
-  List<Map<String, dynamic>> _hotels = [];
-  List<Map<String, dynamic>> _allHotels = [];
+  List<RoleApplication> _applications = [];
+  List<Hotel> _hotels = [];
+  List<Hotel> _allHotels = [];
   bool _isLoading = true;
 
   @override
@@ -39,7 +41,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       if (meResponse.statusCode == 200 && meResponse.data['code'] == 200) {
         final data = meResponse.data['data'];
         if (data['managed_hotels'] != null) {
-          setState(() => _hotels = List<Map<String, dynamic>>.from(data['managed_hotels']));
+          setState(() => _hotels = List<Map<String, dynamic>>.from(data['managed_hotels']).map((h) => Hotel.fromJson(h)).toList());
         }
       }
     } catch (e) {
@@ -49,7 +51,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     try {
       final appResponse = await dio.get(ApiConstants.authRoleApplications);
       if (appResponse.statusCode == 200 && appResponse.data['code'] == 200) {
-        setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []));
+        setState(() => _applications = List<Map<String, dynamic>>.from(appResponse.data['data'] ?? []).map((a) => RoleApplication.fromJson(a)).toList());
       }
     } catch (e) {
       debugPrint('applications: $e');
@@ -59,7 +61,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       final hotelResponse = await dio.get('${ApiConstants.hotels}/search');
       if (hotelResponse.statusCode == 200 && hotelResponse.data['code'] == 200) {
         final list = hotelResponse.data['data']?['hotels'] ?? hotelResponse.data['data'] ?? [];
-        setState(() => _allHotels = List<Map<String, dynamic>>.from(list));
+        setState(() => _allHotels = List<Map<String, dynamic>>.from(list).map((h) => Hotel.fromJson(h)).toList());
       }
     } catch (e) {
       debugPrint('hotelList: $e');
@@ -317,8 +319,8 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
           if (_hotels.isNotEmpty) ...[
             ..._hotels.map((h) => ListTile(
               leading: const Icon(Icons.hotel_outlined, color: AppColors.primary),
-              title: Text(h['hotel_name'] ?? '未知酒店'),
-              subtitle: Text('酒店ID: ${h['id']}'),
+              title: Text(h.hotelName),
+              subtitle: Text('酒店ID: ${h.id}'),
               dense: true,
             )),
             const Divider(),
@@ -627,8 +629,8 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
                       hintText: '请选择要绑定的酒店',
                     ),
                     items: _allHotels.map((h) => DropdownMenuItem<int>(
-                      value: h['id'] as int,
-                      child: Text(h['name'] ?? h['hotel_name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
+                      value: h.id,
+                      child: Text(h.hotelName, overflow: TextOverflow.ellipsis),
                     )).toList(),
                     onChanged: (v) => setDialogState(() => selectedHotelId = v),
                   ),
@@ -697,13 +699,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
           const Text('我的申请', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ..._applications.map((app) {
-            final type = app['application_type'] as String? ?? '';
-            final status = app['status'] as String? ?? 'pending';
-            final createdAt = app['created_at']?.toString().substring(0, 10) ?? '-';
-
             Color statusColor;
             String statusText;
-            switch (status) {
+            switch (app.status) {
               case 'approved':
                 statusColor = AppColors.success;
                 statusText = '已通过';
@@ -718,9 +716,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
             }
 
             return ListTile(
-              leading: Icon(type == 'create_hotel' ? Icons.add_business_outlined : Icons.badge_outlined, color: AppColors.primary),
-              title: Text(type == 'create_hotel' ? '创建酒店: ${app['hotel_name'] ?? '-'}' : '绑定员工: ${app['target_hotel_name'] ?? '-'}'),
-              subtitle: Text('申请时间: $createdAt'),
+              leading: Icon(app.applicationType == 'create_hotel' ? Icons.add_business_outlined : Icons.badge_outlined, color: AppColors.primary),
+              title: Text(app.applicationType == 'create_hotel' ? '创建酒店: ${app.hotelName ?? '-'}' : '绑定员工: ${app.hotelName ?? '-'}'),
+              subtitle: Text('申请时间: ${app.createdAt?.toString().substring(0, 10) ?? '-'}'),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),

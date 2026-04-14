@@ -130,6 +130,24 @@
                 <RightOutlined class="arrow" />
               </div>
 
+              <div class="service-item-card" @click="showMyDeliveryRecords">
+                <div class="icon-box records"><ShoppingOutlined /></div>
+                <div class="info">
+                  <div class="name">我的配送</div>
+                  <div class="desc">查看配送订单记录</div>
+                </div>
+                <RightOutlined class="arrow" />
+              </div>
+
+              <div class="service-item-card" @click="showMyMaintenanceRecords">
+                <div class="icon-box records"><FileTextOutlined /></div>
+                <div class="info">
+                  <div class="name">我的报修</div>
+                  <div class="desc">查看维修工单记录</div>
+                </div>
+                <RightOutlined class="arrow" />
+              </div>
+
               <div class="service-item-card" @click="askQuick('需要保洁服务')">
                 <div class="icon-box cleaning"><ClearOutlined /></div>
                 <div class="info">
@@ -224,6 +242,37 @@
 
     <!-- 远程音频元素 -->
     <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
+
+    <!-- 我的配送记录弹窗 -->
+    <a-modal v-model:open="showDeliveryRecordsModal" title="我的配送记录" :footer="null" width="600px">
+      <a-table :dataSource="deliveryRecords" :columns="deliveryColumns" :loading="deliveryRecordsLoading" :pagination="{ pageSize: 5 }" size="small">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="getDeliveryStatusColor(record.status)">{{ getDeliveryStatusText(record.status) }}</a-tag>
+          </template>
+          <template v-if="column.key === 'created_at'">
+            {{ formatDate(record.created_at) }}
+          </template>
+        </template>
+      </a-table>
+    </a-modal>
+
+    <!-- 我的维修记录弹窗 -->
+    <a-modal v-model:open="showMaintenanceRecordsModal" title="我的维修记录" :footer="null" width="600px">
+      <a-table :dataSource="maintenanceRecords" :columns="maintenanceColumns" :loading="maintenanceRecordsLoading" :pagination="{ pageSize: 5 }" size="small">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="getMaintenanceStatusColor(record.status)">{{ getMaintenanceStatusText(record.status) }}</a-tag>
+          </template>
+          <template v-if="column.key === 'priority'">
+            <a-tag :color="getPriorityColor(record.priority)">{{ getPriorityText(record.priority) }}</a-tag>
+          </template>
+          <template v-if="column.key === 'created_at'">
+            {{ formatDate(record.created_at) }}
+          </template>
+        </template>
+      </a-table>
+    </a-modal>
   </div>
 </template>
 
@@ -233,10 +282,11 @@ import { message } from 'ant-design-vue'
 import {
   SendOutlined, PhoneOutlined, MessageOutlined,
   ShoppingOutlined, ToolOutlined, ClearOutlined,
-  RightOutlined, RobotOutlined, UserOutlined, 
+  RightOutlined, RobotOutlined, UserOutlined,
   EditOutlined, SoundOutlined, HomeOutlined,
   SafetyCertificateOutlined, CloseOutlined,
-  CheckCircleOutlined, CustomerServiceOutlined
+  CheckCircleOutlined, CustomerServiceOutlined,
+  FileTextOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -281,6 +331,33 @@ const deliveryForm = reactive({ category: 'beverage', item_name: '', quantity: 1
 const showMaintenanceModal = ref(false)
 const maintenanceLoading = ref(false)
 const maintenanceForm = reactive({ fault_type: 'electric', fault_description: '', priority: 'medium' as any })
+
+// 我的记录状态
+const showDeliveryRecordsModal = ref(false)
+const deliveryRecordsLoading = ref(false)
+const deliveryRecords = ref<any[]>([])
+
+const showMaintenanceRecordsModal = ref(false)
+const maintenanceRecordsLoading = ref(false)
+const maintenanceRecords = ref<any[]>([])
+
+// 表格列定义
+const deliveryColumns = [
+  { title: '订单号', dataIndex: 'order_no', key: 'order_no' },
+  { title: '物品', dataIndex: 'item_name', key: 'item_name' },
+  { title: '数量', dataIndex: 'quantity', key: 'quantity' },
+  { title: '状态', key: 'status' },
+  { title: '时间', key: 'created_at' }
+]
+
+const maintenanceColumns = [
+  { title: '工单号', dataIndex: 'ticket_no', key: 'ticket_no' },
+  { title: '故障类型', dataIndex: 'fault_type', key: 'fault_type' },
+  { title: '描述', dataIndex: 'fault_description', key: 'fault_description', ellipsis: true },
+  { title: '优先级', key: 'priority' },
+  { title: '状态', key: 'status' },
+  { title: '时间', key: 'created_at' }
+]
 
 const messageModalVisible = ref(false)
 const msgContent = ref('')
@@ -571,6 +648,111 @@ async function sendMsgToReception() {
   messageModalVisible.value = false
 }
 
+// 我的记录方法
+async function showMyDeliveryRecords() {
+  if (!appStore.userStatus?.is_checked_in) {
+    message.warning('请先办理入住')
+    return
+  }
+  showDeliveryRecordsModal.value = true
+  deliveryRecordsLoading.value = true
+  try {
+    const res: any = await deliveryApi.getList({ pageSize: 50 })
+    deliveryRecords.value = res.data?.list || res.data?.data?.list || []
+  } catch (e) {
+    message.error('获取配送记录失败')
+  } finally {
+    deliveryRecordsLoading.value = false
+  }
+}
+
+async function showMyMaintenanceRecords() {
+  if (!appStore.userStatus?.is_checked_in) {
+    message.warning('请先办理入住')
+    return
+  }
+  showMaintenanceRecordsModal.value = true
+  maintenanceRecordsLoading.value = true
+  try {
+    const res: any = await maintenanceApi.getList({ pageSize: 50 })
+    maintenanceRecords.value = res.data?.list || res.data?.data?.list || []
+  } catch (e) {
+    message.error('获取维修记录失败')
+  } finally {
+    maintenanceRecordsLoading.value = false
+  }
+}
+
+// 状态转换函数
+function getDeliveryStatusColor(status: string) {
+  const colorMap: Record<string, string> = {
+    pending: 'orange',
+    delivering: 'blue',
+    completed: 'green'
+  }
+  return colorMap[status] || 'default'
+}
+
+function getDeliveryStatusText(status: string) {
+  const textMap: Record<string, string> = {
+    pending: '待处理',
+    delivering: '配送中',
+    completed: '已完成'
+  }
+  return textMap[status] || status
+}
+
+function getMaintenanceStatusColor(status: string) {
+  const colorMap: Record<string, string> = {
+    pending: 'orange',
+    assigned: 'blue',
+    processing: 'cyan',
+    completed: 'green'
+  }
+  return colorMap[status] || 'default'
+}
+
+function getMaintenanceStatusText(status: string) {
+  const textMap: Record<string, string> = {
+    pending: '待处理',
+    assigned: '已分配',
+    processing: '处理中',
+    completed: '已完成'
+  }
+  return textMap[status] || status
+}
+
+function getPriorityColor(priority: string) {
+  const colorMap: Record<string, string> = {
+    low: 'green',
+    medium: 'blue',
+    high: 'orange',
+    urgent: 'red'
+  }
+  return colorMap[priority] || 'default'
+}
+
+function getPriorityText(priority: string) {
+  const textMap: Record<string, string> = {
+    low: '普通',
+    medium: '一般',
+    high: '紧急',
+    urgent: '特急'
+  }
+  return textMap[priority] || priority
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 function scrollToBottom() {
   nextTick(() => { if (chatContainerRef.value) chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight })
 }
@@ -803,6 +985,7 @@ function scrollToBottom() {
 .icon-box.message { background: #fff7e6; color: #fa8c16; }
 .icon-box.repair { background: #fff1f0; color: #ff4d4f; }
 .icon-box.cleaning { background: #f9f0ff; color: #722ed1; }
+.icon-box.records { background: #e6fffb; color: #13c2c2; }
 
 .service-item-card .info { flex: 1; }
 .service-item-card .name { font-weight: 700; font-size: 15px; margin-bottom: 2px; }

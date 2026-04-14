@@ -137,7 +137,7 @@ export const useAppStore = defineStore('app', () => {
       return url
     }
     // 获取当前 API 的基础路径
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'
     return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`
   }
 

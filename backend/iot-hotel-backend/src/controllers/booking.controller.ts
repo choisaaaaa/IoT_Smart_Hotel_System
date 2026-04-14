@@ -965,7 +965,7 @@ export const checkout = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     // 获取订单信息
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_phone, total_price FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_phone, total_price, coupon_id, used_points, status FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
@@ -973,6 +973,12 @@ export const checkout = async (req: AuthRequest, res: Response) => {
     }
     const booking = bookingRows[0] as any;
     const roomId = booking.room_id;
+
+    if (!['checked_in'].includes(booking.status)) {
+      await connection.rollback();
+      res.status(400).json(errorResponse('当前预订状态不允许办理退房，仅已入住状态可退房'));
+      return;
+    }
 
     await connection.query<ResultSetHeader>(
       'UPDATE bookings SET status = ?, check_out_time = CURRENT_TIMESTAMP WHERE id = ?',
@@ -987,7 +993,10 @@ export const checkout = async (req: AuthRequest, res: Response) => {
 
     // 同步更新房间状态为“待扫”
     if (roomId) {
-      await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['cleaning', roomId]);
+      await connection.query(
+        `UPDATE rooms SET room_status = ?, locked_by_booking = NULL, locked_at = NULL WHERE id = ?`,
+        ['cleaning', roomId]
+      );
     }
 
     // 更新会员成长值
@@ -1012,14 +1021,23 @@ export const cancel = async (req: AuthRequest, res: Response) => {
     await connection.beginTransaction();
     const { id } = req.params;
 
-    // 获取订单信息
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>(
+      'SELECT room_id, guest_phone, coupon_id, used_points, points_discount, status FROM bookings WHERE id = ?',
+      [id]
+    );
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
       return;
     }
-    const roomId = (bookingRows[0] as any).room_id;
+    const booking = bookingRows[0] as any;
+    const roomId = booking.room_id;
+
+    if (['checked_out', 'cancelled'].includes(booking.status)) {
+      await connection.rollback();
+      res.status(400).json(errorResponse(`当前预订状态为${booking.status === 'checked_out' ? '已退房' : '已取消'}，无法取消`));
+      return;
+    }
 
     await connection.query<ResultSetHeader>(
       'UPDATE bookings SET status = ?, cancelled_at = CURRENT_TIMESTAMP, lock_version = lock_version + 1 WHERE id = ?',
@@ -1028,9 +1046,48 @@ export const cancel = async (req: AuthRequest, res: Response) => {
 
     await connection.query(
       `UPDATE payments SET status = 'expired', expired_at = NOW() 
-       WHERE order_type = 'booking' AND order_id = ? AND status = 'pending'`,
+       WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status IN ('pending', 'paid')`,
       [id]
     );
+
+    // 回退已使用的优惠券
+    if (booking.coupon_id) {
+      const [memberRows] = await connection.query<RowDataPacket[]>(
+        'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
+      );
+      if (memberRows.length > 0) {
+        await connection.query(
+          `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
+          [booking.coupon_id, memberRows[0].id]
+        );
+        logger.info(`取消订单回退优惠券: booking_id=${id}, coupon_id=${booking.coupon_id}`);
+      }
+    }
+
+    // 回退已扣除的积分
+    if (booking.used_points && booking.used_points > 0) {
+      await connection.query(
+        'UPDATE members SET points = points + ? WHERE phone = ?',
+        [booking.used_points, booking.guest_phone]
+      );
+      logger.info(`取消订单回退积分: booking_id=${id}, points=${booking.used_points}`);
+    }
+
+    // 回退已支付的余额
+    const [paidPayments] = await connection.query<RowDataPacket[]>(
+      `SELECT amount, payment_method FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
+      [id]
+    );
+    for (const pay of paidPayments) {
+      const refundAmount = Number(pay.amount);
+      if (refundAmount > 0) {
+        await connection.query(
+          'UPDATE members SET balance = balance + ? WHERE phone = ?',
+          [refundAmount, booking.guest_phone]
+        );
+        logger.info(`取消订单回退余额: booking_id=${id}, amount=${refundAmount}`);
+      }
+    }
 
     if (roomId) {
       await connection.query(
@@ -1038,6 +1095,11 @@ export const cancel = async (req: AuthRequest, res: Response) => {
         [roomId]
       );
     }
+
+    await connection.query(
+      `UPDATE guests SET check_out_time = NOW() WHERE booking_id = ? AND check_out_time IS NULL`,
+      [id]
+    );
 
     await connection.commit();
     res.json(successResponse(null, '取消预订成功'));
@@ -1062,7 +1124,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('缺少状态参数'));
     }
 
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_phone, total_price FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_phone, total_price, status AS current_status FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
@@ -1070,6 +1132,21 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }
     const booking = bookingRows[0] as any;
     const roomId = booking.room_id;
+    const currentStatus = booking.current_status;
+
+    const validTransitions: Record<string, string[]> = {
+      pending: ['confirmed', 'pre_checked_in', 'checked_in', 'cancelled'],
+      confirmed: ['pre_checked_in', 'checked_in', 'cancelled'],
+      pre_checked_in: ['checked_in', 'cancelled'],
+      checked_in: ['checked_out'],
+      checked_out: [],
+      cancelled: []
+    };
+    const allowed = validTransitions[currentStatus] || [];
+    if (!allowed.includes(status)) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse(`不允许从"${currentStatus}"状态转换到"${status}"状态`));
+    }
 
     await connection.query<ResultSetHeader>(
       'UPDATE bookings SET status = ?, lock_version = lock_version + 1 WHERE id = ?',
@@ -1098,6 +1175,54 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
            SELECT 1 FROM guests WHERE booking_id = ?
          )`,
         [id, id]
+      );
+    }
+
+    if (status === 'cancelled') {
+      await connection.query(
+        `UPDATE payments SET status = 'expired', expired_at = NOW() 
+         WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status IN ('pending', 'paid')`,
+        [id]
+      );
+
+      if (booking.coupon_id && booking.guest_phone) {
+        const [memberRows] = await connection.query<RowDataPacket[]>(
+          'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
+        );
+        if (memberRows.length > 0) {
+          await connection.query(
+            `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
+            [booking.coupon_id, memberRows[0].id]
+          );
+        }
+      }
+
+      if (booking.used_points && booking.used_points > 0 && booking.guest_phone) {
+        await connection.query(
+          'UPDATE members SET points = points + ? WHERE phone = ?',
+          [booking.used_points, booking.guest_phone]
+        );
+      }
+
+      const [paidPayments] = await connection.query<RowDataPacket[]>(
+        `SELECT amount FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
+        [id]
+      );
+      for (const pay of paidPayments) {
+        const refundAmount = Number(pay.amount);
+        if (refundAmount > 0 && booking.guest_phone) {
+          await connection.query(
+            'UPDATE members SET balance = balance + ? WHERE phone = ?',
+            [refundAmount, booking.guest_phone]
+          );
+        }
+      }
+    }
+
+    if (status === 'cancelled') {
+      await connection.query(
+        `UPDATE guests SET check_out_time = NOW() WHERE booking_id = ? AND check_out_time IS NULL`,
+        [id]
       );
     }
 

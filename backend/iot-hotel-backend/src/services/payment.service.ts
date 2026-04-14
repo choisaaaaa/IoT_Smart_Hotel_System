@@ -164,7 +164,49 @@ export class PaymentService {
         return false;
       }
 
-      // 3. 根据 order_type 更新关联表的状态
+      // 3. 如果是余额支付，扣除会员余额
+      if (payment.payment_method === 'balance') {
+        let guestPhone: string | null = null;
+
+        if (payment.order_type === 'booking' || payment.order_type === 'booking_extend') {
+          const [bookingRows] = await connection.query<RowDataPacket[]>(
+            `SELECT guest_phone FROM bookings WHERE id = ?`,
+            [payment.order_id]
+          );
+          if (bookingRows.length > 0) {
+            guestPhone = (bookingRows[0] as any).guest_phone;
+          }
+        } else if (payment.order_type === 'delivery') {
+          const [deliveryRows] = await connection.query<RowDataPacket[]>(
+            `SELECT b.guest_phone FROM delivery_orders d LEFT JOIN bookings b ON d.booking_id = b.id WHERE d.id = ?`,
+            [payment.order_id]
+          );
+          if (deliveryRows.length > 0) {
+            guestPhone = (deliveryRows[0] as any).guest_phone;
+          }
+        }
+
+        if (guestPhone) {
+          const [memberRows] = await connection.query<RowDataPacket[]>(
+            'SELECT id, balance FROM members WHERE phone = ?',
+            [guestPhone]
+          );
+          if (memberRows.length > 0) {
+            const member = memberRows[0] as any;
+            if (Number(member.balance) < Number(payment.amount)) {
+              await connection.rollback();
+              throw new Error(`余额不足，当前余额 ¥${member.balance}，需支付 ¥${payment.amount}`);
+            }
+            await connection.query(
+              'UPDATE members SET balance = balance - ? WHERE id = ? AND balance >= ?',
+              [payment.amount, member.id, payment.amount]
+            );
+            logger.info(`余额支付扣款成功: 手机号=${guestPhone}, 扣款=${payment.amount}`);
+          }
+        }
+      }
+
+      // 4. 根据 order_type 更新关联表的状态
       if (payment.order_type === 'booking') {
         await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
 
