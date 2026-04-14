@@ -231,6 +231,9 @@ export class PaymentService {
     } catch (error) {
       await connection.rollback();
       logger.error('支付失败:', error.message);
+      if (error.message?.includes('余额不足')) {
+        throw error;
+      }
       throw new Error('支付失败');
     } finally {
       connection.release();
