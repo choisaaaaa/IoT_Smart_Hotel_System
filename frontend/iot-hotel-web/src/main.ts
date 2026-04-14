@@ -11,9 +11,8 @@ import { message } from 'ant-design-vue'
 
 // 全局消息配置
 message.config({
-  bottom: '40px', // 距离底部距离
   duration: 3,
-  maxCount: 3, // 最大存留数调成 2
+  maxCount: 2, // 最大存留数调成 2
 })
 const app = createApp(App)
 
