@@ -26,6 +26,7 @@ import ratePlanRouter from './v1/rate-plans';
 import systemConfigRouter from './v1/system-config';
 import environmentRouter from './v1/environment';
 import knowledgeBaseRouter from './v1/knowledge-base';
+import mqttRouter from './v1/mqtt';
 
 const router = Router();
 
@@ -61,5 +62,6 @@ router.use('/rate-plans', ratePlanRouter);
 router.use('/system-config', systemConfigRouter);
 router.use('/environment', environmentRouter);
 router.use('/knowledge-base', knowledgeBaseRouter);
+router.use('/mqtt', mqttRouter);
 
 export default router;

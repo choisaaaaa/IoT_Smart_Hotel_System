@@ -60,6 +60,10 @@
           <template #icon><BookOutlined /></template>
           <span>AI知识库</span>
         </a-menu-item>
+        <a-menu-item key="/hotel-admin/mqtt">
+          <template #icon><ClusterOutlined /></template>
+          <span>MQTT 通信管理</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
 
@@ -127,7 +131,8 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined,
   TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
-  EnvironmentOutlined, CalendarOutlined, TagOutlined, BookOutlined
+  EnvironmentOutlined, CalendarOutlined, TagOutlined, BookOutlined,
+  ClusterOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, CANONICAL_ROLES } from '@/api/auth'

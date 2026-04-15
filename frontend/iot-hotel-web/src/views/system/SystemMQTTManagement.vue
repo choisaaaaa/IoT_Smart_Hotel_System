@@ -93,12 +93,12 @@
                 </a-tag>
               </template>
               <template v-if="column.key === 'payload'">
-                <a-typography-paragraph
+                <a-typography-text
                   :ellipsis="{ rows: 1, expandable: true, symbol: '展开' }"
                   style="margin-bottom: 0"
                 >
                   <code>{{ record.payload }}</code>
-                </a-typography-paragraph>
+                </a-typography-text>
               </template>
               <template v-if="column.key === 'timestamp'">
                 {{ formatDate(record.timestamp) }}
@@ -106,7 +106,7 @@
             </template>
           </a-table>
         </a-card>
-      </col>
+      </a-col>
     </a-row>
   </div>
 </template>
