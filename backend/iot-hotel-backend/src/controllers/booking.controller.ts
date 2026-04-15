@@ -118,7 +118,9 @@ async function calculateBookingPrice(
   memberPhone?: string, 
   couponId?: number,
   usedPoints?: number,
-  ratePlanId?: number
+  ratePlanId?: number,
+  manualDiscount?: number,
+  manualReduce?: number
 ) {
   const floor2 = (v: number) => Math.floor(Number(v || 0) * 100) / 100;
 
@@ -251,7 +253,21 @@ async function calculateBookingPrice(
       actualUsedPoints = Math.ceil(pointsDiscount * redeemRate);
     }
     totalPrice = floor2(Math.max(0, totalPrice - pointsDiscount));
-    logger.info(`价格计算 - 应用积分: 使用=${actualUsedPoints}, 抵扣=${pointsDiscount}`);
+    logger.info(`价格计算 - 应用积分: 使用=${actualUsedPoints},抵扣=${pointsDiscount}`);
+  }
+
+  // 应用前台手动打折 (现场打折)
+  if (manualDiscount !== undefined && manualDiscount < 1 && manualDiscount > 0) {
+    const priceBeforeManual = totalPrice;
+    totalPrice = floor2(totalPrice * manualDiscount);
+    logger.info(`价格计算 - 应用手动折扣: 折扣=${manualDiscount}, 之前=${priceBeforeManual}, 之后=${totalPrice}`);
+  }
+
+  // 应用前台手动立减
+  if (manualReduce !== undefined && manualReduce > 0) {
+    const priceBeforeManualReduce = totalPrice;
+    totalPrice = floor2(Math.max(0, totalPrice - manualReduce));
+    logger.info(`价格计算 - 应用手动立减: 立减=${manualReduce}, 之前=${priceBeforeManualReduce}, 之后=${totalPrice}`);
   }
 
   return {
@@ -405,7 +421,8 @@ export const create = async (req: AuthRequest, res: Response) => {
     const { 
       room_id, rate_plan_id, guest_name, guest_phone, guest_id_number, 
       check_in_date, check_out_date, guest_count, special_requests, 
-      payment_method, coupon_id, used_points, status 
+      payment_method, coupon_id, used_points, status,
+      manual_discount, manual_reduce
     } = req.body;
 
     if (!room_id) {
@@ -533,7 +550,9 @@ export const create = async (req: AuthRequest, res: Response) => {
       phone,
       coupon_id,
       used_points,
-      rate_plan_id
+      rate_plan_id,
+      manual_discount,
+      manual_reduce
     );
 
     // 注意：优惠券和积分在预订创建时不立即扣除
@@ -828,10 +847,13 @@ export const checkin = async (req: AuthRequest, res: Response) => {
   try {
     await connection.beginTransaction();
     const { id } = req.params;
-    const { user_id, guest_name, guest_phone, guest_id_number, special_requests } = req.body || {};
+    const { 
+      user_id, guest_name, guest_phone, guest_id_number, special_requests,
+      manual_discount, manual_reduce, total_price 
+    } = req.body || {};
 
     // 获取订单信息
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number, status, auto_checkout_at, check_out_date FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number, status, auto_checkout_at, check_out_date, total_price FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
@@ -916,6 +938,19 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     if (special_requests !== undefined) {
       updateFields.push('special_requests = ?');
       params.splice(params.length - 1, 0, special_requests);
+    }
+
+    if (manual_discount !== undefined) {
+      updateFields.push('manual_discount = ?');
+      params.splice(params.length - 1, 0, manual_discount);
+    }
+    if (manual_reduce !== undefined) {
+      updateFields.push('manual_reduce = ?');
+      params.splice(params.length - 1, 0, manual_reduce);
+    }
+    if (total_price !== undefined) {
+      updateFields.push('total_price = ?');
+      params.splice(params.length - 1, 0, total_price);
     }
 
     if (!booking.auto_checkout_at) {
@@ -1538,7 +1573,10 @@ export const extendStay = async (req: AuthRequest, res: Response) => {
 export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
-    const { room_id, check_in_date, check_out_date, guest_phone, coupon_id, used_points, rate_plan_id } = req.query;
+    const { 
+      room_id, check_in_date, check_out_date, guest_phone, coupon_id, 
+      used_points, rate_plan_id, manual_discount, manual_reduce 
+    } = req.query;
 
     if (!room_id || !check_in_date || !check_out_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
@@ -1570,7 +1608,9 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
       finalPhone,
       coupon_id ? Number(coupon_id) : undefined,
       used_points ? Number(used_points) : undefined,
-      normalizedPlanId
+      normalizedPlanId,
+      manual_discount ? Number(manual_discount) : undefined,
+      manual_reduce ? Number(manual_reduce) : undefined
     );
 
     res.json(successResponse(result, '价格计算成功'));

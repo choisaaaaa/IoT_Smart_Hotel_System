@@ -22,5 +22,13 @@ export const userApi = {
 
   // 修改密码
   updatePassword: (id: number, data: any) =>
-    request.put<ApiResponse<any>>(`/users/${id}/password`, data)
+    request.put<ApiResponse<any>>(`/users/${id}/password`, data),
+
+  // 获取用户列表 (可用于获取经理列表)
+  getUserList: (params: any) =>
+    request.get<ApiResponse<{ users: UserProfile[]; total: number }>>('/users', { params }),
+
+  // 经理授权
+  authorizeManager: (data: { manager_id: number; password: string }) =>
+    request.post<ApiResponse<any>>('/users/authorize-manager', data)
 }

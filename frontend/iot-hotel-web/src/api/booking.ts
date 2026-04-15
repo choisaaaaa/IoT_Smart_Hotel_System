@@ -37,13 +37,28 @@ export const bookingApi = {
       room_pin: string
     }>>(`/bookings/${id}/checkin-online`, data),
 
-  getCalculatedPrice: (params: { room_id: number; check_in_date: string; check_out_date: string; guest_phone?: string; coupon_id?: number }) =>
+  getCalculatedPrice: (params: { 
+    room_id: number; 
+    check_in_date: string; 
+    check_out_date: string; 
+    guest_phone?: string; 
+    coupon_id?: number;
+    manual_discount?: number;
+    manual_reduce?: number;
+  }) =>
     request.get<ApiResponse<{ total_price: number; discount_rate: number }>>('/bookings/calculate-price', { params }),
 
   updateBookingStatus: (id: number, status: string, hotelId?: number) =>
     request.patch<ApiResponse<BookingInfo>>(`/bookings/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) }),
 
-  checkin: (id: number, data?: { guest_name?: string; guest_phone?: string; guest_id_number?: string }) =>
+  checkin: (id: number, data?: { 
+    guest_name?: string; 
+    guest_phone?: string; 
+    guest_id_number?: string;
+    manual_discount?: number;
+    manual_reduce?: number;
+    total_price?: number;
+  }) =>
     request.put<ApiResponse<null>>(`/bookings/${id}/checkin`, data || {}),
 
   calculateExtendPrice: (id: number, data: { new_check_out_date: string; coupon_id?: number; used_points?: number }) =>

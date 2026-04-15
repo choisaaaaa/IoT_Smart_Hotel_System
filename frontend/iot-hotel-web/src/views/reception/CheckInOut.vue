@@ -107,45 +107,57 @@
               <a-row :gutter="16">
                 <a-col :span="12">
                   <a-form-item label="使用优惠券">
-                <div style="display: flex; gap: 8px;">
-                  <a-select
-                    v-model:value="checkinForm.coupon_id"
-                    placeholder="选择可用优惠券"
-                    allow-clear
-                    :loading="couponsLoading"
-                    style="flex: 1;"
-                    @change="updateEstimatedPrice"
-                  >
-                    <a-select-option v-for="c in userCoupons" :key="c.id" :value="c.id">
-                      {{ c.coupon_name }} ({{ c.coupon_type === 'discount' ? c.discount_value + '折' : '减¥' + c.discount_value }})
-                    </a-select-option>
-                  </a-select>
-                  <a-button type="primary" ghost @click="showIssueCouponModal">
-                    发放优惠券
-                  </a-button>
-                </div>
-              </a-form-item>
-                </a-col>
-                <a-col :span="6">
-                  <a-form-item label="折扣率">
-                    <a-input-number
-                      v-model:value="checkinForm.manual_discount"
-                      :min="0.1" :max="1" :step="0.05"
-                      style="width: 100%"
-                      placeholder="1.0"
-                      @change="updateEstimatedPrice"
-                    />
+                    <div style="display: flex; gap: 8px;">
+                      <a-select
+                        v-model:value="checkinForm.coupon_id"
+                        placeholder="选择可用优惠券"
+                        allow-clear
+                        :loading="couponsLoading"
+                        style="flex: 1;"
+                        @change="updateEstimatedPrice"
+                      >
+                        <a-select-option v-for="c in userCoupons" :key="c.id" :value="c.id">
+                          {{ c.coupon_name }} ({{ c.coupon_type === 'discount' ? c.discount_value + '折' : '减¥' + c.discount_value }})
+                        </a-select-option>
+                      </a-select>
+                      <a-button type="primary" ghost @click="showIssueCouponModal">
+                        发放优惠券
+                      </a-button>
+                    </div>
                   </a-form-item>
                 </a-col>
-                <a-col :span="6">
-                  <a-form-item label="立减金额">
-                    <a-input-number
-                      v-model:value="checkinForm.manual_reduce"
-                      :min="0"
-                      style="width: 100%"
-                      placeholder="0"
-                      @change="updateEstimatedPrice"
-                    />
+                <a-col :span="12">
+                  <a-form-item label="现场打折 (需经理授权)">
+                    <div style="display: flex; gap: 8px;">
+                      <a-input-number
+                        v-model:value="checkinForm.manual_discount"
+                        :min="0.1" :max="1" :step="0.05"
+                        style="width: 45%"
+                        placeholder="折扣率"
+                        :disabled="!isAuthorized"
+                        @change="updateEstimatedPrice"
+                      >
+                        <template #addonBefore>折</template>
+                      </a-input-number>
+                      <a-input-number
+                        v-model:value="checkinForm.manual_reduce"
+                        :min="0"
+                        style="width: 45%"
+                        placeholder="立减"
+                        :disabled="!isAuthorized"
+                        @change="updateEstimatedPrice"
+                      >
+                        <template #addonBefore>减</template>
+                      </a-input-number>
+                      <a-button 
+                        :type="isAuthorized ? 'default' : 'primary'" 
+                        :danger="isAuthorized"
+                        @click="openAuthorizeModal"
+                      >
+                        <template #icon><ControlOutlined /></template>
+                        {{ isAuthorized ? '取消' : '授权' }}
+                      </a-button>
+                    </div>
                   </a-form-item>
                 </a-col>
               </a-row>
@@ -349,6 +361,29 @@
       </a-form>
     </a-modal>
 
+    <!-- 经理授权弹窗 -->
+    <a-modal
+      v-model:open="authorizeModalVisible"
+      title="经理权限授权"
+      @ok="handleAuthorize"
+      :confirmLoading="authorizing"
+      width="400px"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="选择经理" required>
+          <a-select v-model:value="authForm.manager_id" placeholder="选择当前门店经理">
+            <a-select-option v-for="m in managers" :key="m.id" :value="m.id">
+              {{ m.username }} ({{ m.phone || '无手机号' }})
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="授权密码" required>
+          <a-input-password v-model:value="authForm.password" placeholder="请输入经理登录密码" />
+        </a-form-item>
+        <a-alert message="现场打折需要经理级别账号输入密码进行二次确认" type="info" show-icon />
+      </a-form>
+    </a-modal>
+
     <!-- 房卡管理弹窗 -->
     <a-modal
       v-model:open="cardModalVisible"
@@ -410,6 +445,7 @@ import { useHotelStore } from '@/stores/hotel'
 import { bookingApi } from '@/api/booking'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
+import { userApi, type UserProfile } from '@/api/user'
 import type { RoomInfo } from '@/types'
 
 const hotelStore = useHotelStore()
@@ -425,6 +461,66 @@ const selectedBookingKeys = ref<number[]>([])
 // const memberPhones = ref<Set<string>>(new Set())
 const todayBookingLoading = ref(false)
 const companions = ref<any[]>([])
+
+// 经理授权相关
+const isAuthorized = ref(false)
+const authorizeModalVisible = ref(false)
+const authorizing = ref(false)
+const managers = ref<UserProfile[]>([])
+const authForm = reactive({
+  manager_id: undefined as number | undefined,
+  password: ''
+})
+
+async function fetchManagers() {
+  try {
+    const res: any = await userApi.getUserList({ 
+      role: 'hotel_admin', 
+      hotel_id: hotelStore.hotelInfo?.id,
+      pageSize: 100 
+    })
+    managers.value = res.data?.users || []
+  } catch (error) {
+    console.error('获取经理列表失败:', error)
+  }
+}
+
+function openAuthorizeModal() {
+  if (isAuthorized.value) {
+    isAuthorized.value = false
+    checkinForm.manual_discount = 1.0
+    checkinForm.manual_reduce = 0
+    updateEstimatedPrice()
+    message.info('已解除授权，重置折扣')
+    return
+  }
+  
+  authForm.manager_id = undefined
+  authForm.password = ''
+  fetchManagers()
+  authorizeModalVisible.value = true
+}
+
+async function handleAuthorize() {
+  if (!authForm.manager_id || !authForm.password) {
+    return message.warning('请选择经理并输入密码')
+  }
+
+  try {
+    authorizing.value = true
+    await userApi.authorizeManager({
+      manager_id: authForm.manager_id,
+      password: authForm.password
+    })
+    isAuthorized.value = true
+    authorizeModalVisible.value = false
+    message.success('授权成功，您可以进行手动打折')
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '授权失败')
+  } finally {
+    authorizing.value = false
+  }
+}
 
 // 房间详情
 const roomDetailVisible = ref(false)
@@ -458,7 +554,7 @@ async function handleCardOp() {
 
   try {
     cardOpLoading.value = true
-    const res = await request.post('/devices/room-card', {
+    const res: any = await request.post('/devices/room-card', {
       action: cardOpType.value,
       booking_id: selectedGuestForCard.value.id,
       id_last_four: idLastFour.value
@@ -519,7 +615,7 @@ async function showIssueCouponModalForPhone(phone: string, name: string) {
   targetIssueName.value = name || '客人'
 
   try {
-    const res = await request.get('/coupons')
+    const res: any = await request.get('/coupons')
     allAvailableCoupons.value = res.data.list || []
     issueCouponModalVisible.value = true
   } catch (error) {
@@ -555,7 +651,7 @@ async function fetchUserCoupons(phone: string) {
   }
   try {
     couponsLoading.value = true
-    const res = await request.get('/coupons/me', { params: { phone } })
+    const res: any = await request.get('/coupons/me', { params: { phone } })
     userCoupons.value = res.data || []
   } catch (error) {
     console.error('获取用户优惠券失败:', error)
@@ -620,23 +716,13 @@ async function updateEstimatedPrice() {
       check_in_date: checkinForm.check_in_date.format('YYYY-MM-DD'),
       check_out_date: checkinForm.check_out_date.format('YYYY-MM-DD'),
       guest_phone: checkinForm.phone || undefined,
-      coupon_id: checkinForm.coupon_id
+      coupon_id: checkinForm.coupon_id,
+      manual_discount: checkinForm.manual_discount < 1 ? checkinForm.manual_discount : undefined,
+      manual_reduce: checkinForm.manual_reduce > 0 ? checkinForm.manual_reduce : undefined
     })
 
     let price = res.data?.total_price || 0
-    let detail = `系统计价: ¥${price.toFixed(2)}`
-
-    // 应用手动折扣
-    if (checkinForm.manual_discount < 1) {
-      price *= checkinForm.manual_discount
-      detail += ` -> 手动${checkinForm.manual_discount * 10}折: ¥${price.toFixed(2)}`
-    }
-
-    // 应用立减
-    if (checkinForm.manual_reduce > 0) {
-      price = Math.max(0, price - checkinForm.manual_reduce)
-      detail += ` -> 立减¥${checkinForm.manual_reduce}: ¥${price.toFixed(2)}`
-    }
+    let detail = `计价详情: ¥${price.toFixed(2)}`
 
     estimatedPrice.value = price
     priceDetailText.value = detail
@@ -647,7 +733,15 @@ async function updateEstimatedPrice() {
   }
 }
 
-watch(() => [checkinForm.room_id, checkinForm.check_in_date, checkinForm.check_out_date, checkinForm.phone], () => {
+watch(() => [
+  checkinForm.room_id, 
+  checkinForm.check_in_date, 
+  checkinForm.check_out_date, 
+  checkinForm.phone,
+  checkinForm.coupon_id,
+  checkinForm.manual_discount,
+  checkinForm.manual_reduce
+], () => {
   updateEstimatedPrice()
 })
 
@@ -810,6 +904,12 @@ function fillByBooking(booking: any) {
   if (booking.check_in_date) checkinForm.check_in_date = dayjs(booking.check_in_date)
   if (booking.check_out_date) checkinForm.check_out_date = dayjs(booking.check_out_date)
   if (booking.payment_method) checkinForm.payment_method = booking.payment_method
+  
+  // 重置授权状态
+  isAuthorized.value = false
+  checkinForm.manual_discount = 1.0
+  checkinForm.manual_reduce = 0
+  
   companions.value = []
   
   if (booking.room_id) {
@@ -875,7 +975,10 @@ async function handleCheckIn() {
       res = await bookingApi.checkin(existingBookingId, {
         guest_name: checkinForm.guest_name,
         guest_phone: checkinForm.phone,
-        guest_id_number: checkinForm.id_number
+        guest_id_number: checkinForm.id_number,
+        manual_discount: checkinForm.manual_discount < 1 ? checkinForm.manual_discount : undefined,
+        manual_reduce: checkinForm.manual_reduce > 0 ? checkinForm.manual_reduce : undefined,
+        total_price: estimatedPrice.value
       })
       message.success(`入住成功！${checkinForm.guest_name} 的预订已确认入住`)
     } else {
@@ -943,6 +1046,7 @@ function resetCheckinForm() {
   checkinForm.remark = ''
   checkinForm.manual_discount = 1
   checkinForm.manual_reduce = 0
+  isAuthorized.value = false
   companions.value = []
   // selectedRoom 是计算属性，通过设置 room_id 为 undefined 来重置
   estimatedPrice.value = 0

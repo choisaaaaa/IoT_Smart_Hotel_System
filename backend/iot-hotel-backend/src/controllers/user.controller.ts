@@ -250,15 +250,58 @@ export async function remove(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('无权删除其他门店的用户', 403));
     }
 
-    if (!isSystemAdmin(currentUser.role) && !isHotelAdmin(currentUser.role)) {
-      return sendError(res, errorResponse('权限不足', 403));
-    }
-
     await db.execute('DELETE FROM users WHERE id = ?', [userId]);
 
     sendSuccess(res, { message: '用户删除成功' });
   } catch (error) {
     console.error('删除用户失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
+export async function authorizeManager(req: AuthRequest, res: Response) {
+  try {
+    const { manager_id, password } = req.body;
+    const currentUser = req.user;
+
+    if (!currentUser) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
+
+    if (!manager_id || !password) {
+      return sendError(res, errorResponse('经理ID和密码不能为空', 400));
+    }
+
+    const [users]: any = await db.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [manager_id]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('经理用户不存在', 404));
+    }
+
+    const manager = users[0];
+    const role = normalizeRole(manager.role);
+
+    // 只有门店管理员或系统管理员才能授权
+    if (!isHotelAdmin(role) && !isSystemAdmin(role)) {
+      return sendError(res, errorResponse('该用户没有授权权限', 403));
+    }
+
+    // 如果是门店管理员，必须属于同一门店
+    if (isHotelAdmin(role) && manager.hotel_id !== currentUser.hotel_id) {
+      return sendError(res, errorResponse('无权为该门店授权', 403));
+    }
+
+    const isPasswordCorrect = await comparePassword(password, manager.password);
+    if (!isPasswordCorrect) {
+      return sendError(res, errorResponse('密码错误', 401));
+    }
+
+    sendSuccess(res, { message: '授权成功' });
+  } catch (error) {
+    console.error('经理授权失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
 }
