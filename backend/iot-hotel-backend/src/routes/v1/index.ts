@@ -22,6 +22,7 @@ import roomTypes from './room-types';
 import priceCalendar from './price-calendar';
 import ratePlans from './rate-plans';
 import knowledgeBase from './knowledge-base';
+import mqtt from './mqtt';
 
 const router = Router();
 
@@ -47,6 +48,7 @@ router.use('/upload', upload);
 router.use('/ai-butler', aiButler);
 router.use('/environment', environment);
 router.use('/knowledge-base', knowledgeBase);
+router.use('/mqtt', mqtt);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({

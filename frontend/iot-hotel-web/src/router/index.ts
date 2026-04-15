@@ -51,6 +51,12 @@ const routes: RouteRecordRaw[] = [
         name: 'SystemSettings',
         component: () => import('@/views/system/SystemSettings.vue'),
         meta: { title: '会员方案配置', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'mqtt',
+        name: 'SystemMQTTManagement',
+        component: () => import('@/views/system/SystemMQTTManagement.vue'),
+        meta: { title: 'MQTT 服务管理', icon: 'ClusterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       }
     ]
   },
@@ -134,6 +140,12 @@ const routes: RouteRecordRaw[] = [
         name: 'KnowledgeBaseManage',
         component: () => import('@/views/admin/KnowledgeBaseManage.vue'),
         meta: { title: 'AI知识库', icon: 'BookOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'mqtt',
+        name: 'AdminMQTTManagement',
+        component: () => import('@/views/system/SystemMQTTManagement.vue'),
+        meta: { title: 'MQTT 通信管理', icon: 'ClusterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
       }
     ]
   },

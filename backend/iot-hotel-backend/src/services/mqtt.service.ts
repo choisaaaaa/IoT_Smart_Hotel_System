@@ -3,6 +3,7 @@ import config from '../config';
 import logger from '../utils/logger';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import { calculateSignature, verifySignature } from '../utils/signature';
+import { AIButlerService } from './ai-butler.service';
 
 interface DeviceStatusPayload {
   device_id: string;
@@ -66,6 +67,47 @@ class MQTTService {
     return device;
   }
 
+  private async logCommunication(topic: string, payload: any, direction: 'in' | 'out', qos: number = 0, retain: boolean = false) {
+    try {
+      let deviceId = null;
+      let hotelId = 0;
+
+      // 尝试从 payload 中提取 device_id
+      if (payload && typeof payload === 'object') {
+        deviceId = payload.device_id || null;
+      } else if (typeof payload === 'string') {
+        try {
+          const parsed = JSON.parse(payload);
+          deviceId = parsed.device_id || null;
+        } catch (e) {
+          // 不是 JSON，尝试从 topic 中提取
+          const parts = topic.split('/');
+          if (parts.length > 0) {
+            deviceId = parts[parts.length - 1];
+          }
+        }
+      }
+
+      // 如果有 deviceId，尝试获取 hotelId
+      if (deviceId) {
+        const device = await this.getDeviceMetadata(deviceId);
+        if (device) {
+          hotelId = device.hotel_id || 0;
+        }
+      }
+
+      const payloadStr = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
+      
+      await pool.query(
+        `INSERT INTO mqtt_communication_logs (hotel_id, device_id, topic, payload, direction, qos, retain)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [hotelId, deviceId, topic, payloadStr.substring(0, 5000), direction, qos, retain ? 1 : 0]
+      );
+    } catch (error) {
+      logger.error('记录MQTT通信日志失败:', error.message);
+    }
+  }
+
   connect(): Promise<boolean> {
     return new Promise((resolve) => {
       const options: IClientOptions = {
@@ -111,7 +153,7 @@ class MQTTService {
         }
       });
 
-      this.client.on('message', async (topic: string, message: Buffer) => {
+      this.client.on('message', async (topic: string, message: Buffer, packet: any) => {
         // 通话音频流是二进制，不需要 toString 和 JSON.parse
         if (topic.startsWith('hotel/call/audio/')) {
           await this.handleCallAudio(topic, message);
@@ -120,6 +162,9 @@ class MQTTService {
 
         const msgStr = message.toString();
         logger.debug(`收到MQTT消息 [${topic}]: ${msgStr}`);
+
+        // 记录入站消息
+        await this.logCommunication(topic, msgStr, 'in', packet.qos, packet.retain);
         
         try {
           const data = JSON.parse(msgStr);
@@ -164,7 +209,8 @@ class MQTTService {
       'hotel/security/event',
       'hotel/room/control/result',
       'hotel/call/signaling/+',
-      'hotel/call/audio/+'
+      'hotel/call/audio/+',
+      'hotel/ai/request/room/+'
     ];
 
     topics.forEach((topic) => {
@@ -180,6 +226,10 @@ class MQTTService {
     }
     if (topic.startsWith('hotel/call/audio/')) {
       await this.handleCallAudio(topic, message);
+      return;
+    }
+    if (topic.startsWith('hotel/ai/request/room/')) {
+      await this.handleAIRequest(topic, data);
       return;
     }
 
@@ -304,6 +354,38 @@ class MQTTService {
           chunk: message
         });
       }
+    }
+  }
+
+  async handleAIRequest(topic: string, data: any) {
+    const roomId = topic.split('/').pop();
+    if (!roomId) return;
+
+    logger.info(`收到硬件端 AI 请求 [房间 ${roomId}]: ${JSON.stringify(data)}`);
+
+    try {
+      const aiButler = AIButlerService.getInstance();
+      
+      // 如果硬件发送的是音频数据（base64）
+      const aiResponse = await aiButler.processRequest({
+        roomId: roomId,
+        audioData: data.audio_data, // 假设硬件发送 audio_data 字段
+        text: data.text,           // 或者直接发送识别好的文字
+        sessionId: data.session_id || `hw_${roomId}_${Date.now()}`
+      });
+
+      // 将 AI 的回复发送回硬件
+      const responseTopic = `hotel/ai/response/room/${roomId}`;
+      await this.publish(responseTopic, {
+        text: aiResponse.text,
+        audio_data: aiResponse.audioUrl, // processRequest 返回的是 base64 字符串
+        action: aiResponse.action,
+        ticket_data: aiResponse.ticketData
+      });
+
+      logger.info(`已发送 AI 回复到硬件 [房间 ${roomId}]`);
+    } catch (error) {
+      logger.error(`处理硬件 AI 请求失败: ${error.message}`);
     }
   }
 
@@ -441,19 +523,21 @@ class MQTTService {
     }
   }
 
-  async publish(topic: string, message: object): Promise<boolean> {
+  async publish(topic: string, message: object, qos: number = 1, retain: boolean = false): Promise<boolean> {
     if (!this.connected || !this.client) {
       logger.warn(`MQTT未连接，无法发送消息到 ${topic}`);
       return false;
     }
 
     return new Promise((resolve) => {
-      this.client!.publish(topic, JSON.stringify(message), { qos: 1, retain: false }, (err) => {
+      this.client!.publish(topic, JSON.stringify(message), { qos: qos as any, retain }, (err) => {
         if (err) {
           logger.error(`发送MQTT消息失败 [${topic}]:`, err.message);
           resolve(false);
         } else {
           logger.debug(`发送MQTT消息成功 [${topic}]`);
+          // 异步记录出站日志
+          this.logCommunication(topic, message, 'out', qos, retain).catch(() => {});
           resolve(true);
         }
       });
@@ -472,10 +556,43 @@ class MQTTService {
           logger.error(`发送MQTT二进制消息失败 [${topic}]:`, err.message);
           resolve(false);
         } else {
+          // 二进制消息通常很大（如音频），不记录完整 payload，只记录 topic
+          this.logCommunication(topic, '[Binary Data]', 'out', 0, false).catch(() => {});
           resolve(true);
         }
       });
     });
+  }
+
+  async getCommunicationLogs(hotelId?: number, deviceId?: string, limit: number = 100, offset: number = 0): Promise<any[]> {
+    try {
+      let query = 'SELECT * FROM mqtt_communication_logs';
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (hotelId !== undefined && hotelId !== 0) {
+        conditions.push('hotel_id = ?');
+        params.push(hotelId);
+      }
+
+      if (deviceId) {
+        conditions.push('device_id = ?');
+        params.push(deviceId);
+      }
+
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+
+      query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
+      return rows;
+    } catch (error) {
+      logger.error('获取MQTT通信日志失败:', error.message);
+      return [];
+    }
   }
 
   async sendDeviceCommand(deviceId: string, commandType: string, commandValue: string, createdBy?: string): Promise<number | null> {

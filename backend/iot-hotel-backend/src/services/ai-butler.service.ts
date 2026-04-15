@@ -4,6 +4,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import WebSocket from 'ws';
 import { KnowledgeBaseService } from './knowledge-base.service';
+import mqttService from './mqtt.service';
 
 interface AIRequest {
   roomId: string;
@@ -141,7 +142,7 @@ export class AIButlerService {
       type: 'function',
       function: {
         name: 'transfer_to_human',
-        description: '转接人工前台服务',
+        description: '转接人工前台服务（进行语音通话）',
         parameters: {
           type: 'object',
           properties: {
@@ -151,6 +152,24 @@ export class AIButlerService {
             }
           },
           required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'voice_call',
+        description: '呼叫前台或拨打语音电话',
+        parameters: {
+          type: 'object',
+          properties: {
+            target: {
+              type: 'string',
+              enum: ['front_desk', 'room_service', 'maintenance'],
+              description: '呼叫目标：front_desk=前台, room_service=送餐部, maintenance=维修部'
+            }
+          },
+          required: ['target']
         }
       }
     }
@@ -369,7 +388,8 @@ export class AIButlerService {
         case 'get_hotel_info':
           return await this.getHotelInfo(args.info_type, session);
         case 'transfer_to_human':
-          return '[TRANSFER:front_desk]';
+        case 'voice_call':
+          return `正在为您转接${args.target === 'room_service' ? '送餐部' : args.target === 'maintenance' ? '维修部' : '前台'}，请稍候。[TRANSFER:front_desk]`;
         default:
           return '抱歉，该功能暂不可用。';
       }
@@ -414,14 +434,18 @@ export class AIButlerService {
       return `抱歉，您房间没有找到${typeName}设备。`;
     }
 
-    // 通过MQTT发送控制指令（模拟实现）
+    // 发送MQTT指令
     const results: string[] = [];
     for (const device of targetDevices) {
       const command = this.buildDeviceCommand(device_type, action, value);
-      logger.info(`发送设备指令到 ${device.device_id}:`, command);
+      logger.info(`通过AI发送设备指令到 ${device.device_id}:`, command);
 
-      // TODO: 实际通过MQTT发送指令
-      // mqttService.publish(`hotel/device/command/${device.device_id}`, command);
+      // 通过MQTT发送指令到对应的 Topic
+      const topic = `hotel/device/command/room/${session.roomId}`;
+      await mqttService.publish(topic, {
+        device_id: device.device_id,
+        ...command
+      });
 
       const actionText = this.getActionText(action, value, device_type);
       results.push(`${device.device_name || device.device_id}${actionText}`);

@@ -259,6 +259,11 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         snprintf(sub_topic, sizeof(sub_topic), "hotel/device/command/room/%s", device_id);
         service_mqtt_subscribe(sub_topic, hotel_mqtt_callback);
 
+        // 订阅 AI 助手响应 (规范 12.1)
+        char ai_sub_topic[128];
+        snprintf(ai_sub_topic, sizeof(ai_sub_topic), MQTT_TOPIC_AI_RESPONSE, current_room_id);
+        service_mqtt_subscribe(ai_sub_topic, ai_mqtt_callback);
+
         // 延迟一小段以确保 MQTT 连接建立后再发送状态 (Mock演示用)
         vTaskDelay(pdMS_TO_TICKS(1000));
         
@@ -300,17 +305,103 @@ void task_sensor_monitor(void *pvParameters) {
 
 // --- 语音通话相关任务 (新) ---
 
+// AI 助手相关配置
+#define AI_WAKE_WORD "小智"
+#define MQTT_TOPIC_AI_REQUEST "hotel/ai/request/room/%s"
+#define MQTT_TOPIC_AI_RESPONSE "hotel/ai/response/room/%s"
+
+static bool is_ai_awake = false;
+
+// 语音唤醒处理 (伪代码/逻辑说明)
+void handle_voice_wake_word(const char* recognized_text) {
+    if (strstr(recognized_text, AI_WAKE_WORD)) {
+        ESP_LOGI(TAG, "AI 助手已唤醒");
+        is_ai_awake = true;
+        // 播放唤醒提示音
+        hal_interactive_beep(2, 50);
+        
+        // 发送唤醒事件到后台
+        char topic[128];
+        snprintf(topic, sizeof(topic), MQTT_TOPIC_AI_REQUEST, current_room_id);
+        
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "event", "awake");
+        cJSON_AddStringToObject(root, "room_id", current_room_id);
+        char *json_str = cJSON_PrintUnformatted(root);
+        service_mqtt_publish(topic, json_str);
+        free(json_str);
+        cJSON_Delete(root);
+    }
+}
+
+// AI 响应处理回调
+void ai_mqtt_callback(const char *topic, const char *data, int data_len) {
+    ESP_LOGI(TAG, "收到 AI 助手回复");
+    
+    cJSON *root = cJSON_ParseWithLength(data, data_len);
+    if (root == NULL) return;
+
+    cJSON *text = cJSON_GetObjectItem(root, "text");
+    cJSON *audio_data = cJSON_GetObjectItem(root, "audio_data");
+    cJSON *action = cJSON_GetObjectItem(root, "action");
+
+    if (cJSON_IsString(text)) {
+        ESP_LOGI(TAG, "AI 说: %s", text->valuestring);
+        driver_oled_show_text_line(2, text->valuestring);
+    }
+
+    if (cJSON_IsString(audio_data)) {
+        ESP_LOGI(TAG, "正在播放 AI 语音...");
+        // 调用底层音频组件播放 base64 或者是 URL
+        // hal_audio_play_base64(audio_data->valuestring);
+    }
+
+    if (cJSON_IsString(action)) {
+        if (strcmp(action->valuestring, "transfer") == 0) {
+            ESP_LOGI(TAG, "AI 请求转接前台");
+            // 触发通话逻辑
+            is_on_call = true;
+            hal_interactive_beep(1, 500);
+        }
+    }
+
+    cJSON_Delete(root);
+    is_ai_awake = false; // 处理完回复后重置唤醒状态
+}
+
+// 修改任务以支持 AI 语音
 void task_voice_call(void *pvParameters) {
     (void)pvParameters;
     uint8_t audio_buffer[1024];
     size_t read_len = 0;
     
     while(1) {
-        if (is_on_call) {
+        if (is_on_call || is_ai_awake) {
             // 1. 录制一段音频
             if (hal_audio_record_chunk(audio_buffer, sizeof(audio_buffer), &read_len) == ESP_OK) {
-                // 2. 通过 MQTT 发送音频数据块 (演示用)
-                ESP_LOGD(TAG, "正在通话中，录制并发送音频块: %zu Bytes", read_len);
+                // 2. 发送音频数据
+                if (is_ai_awake) {
+                    // 硬件端实时发送语音片段到后端进行 ASR
+                    char topic[128];
+                    snprintf(topic, sizeof(topic), MQTT_TOPIC_AI_REQUEST, current_room_id);
+                    
+                    // 这里通常会将音频转为 base64 或直接发二进制（取决于 MQTT 服务端支持）
+                    // 简化演示：封装为 JSON 发送音频数据块
+                    cJSON *root = cJSON_CreateObject();
+                    cJSON_AddStringToObject(root, "event", "voice_stream");
+                    cJSON_AddStringToObject(root, "room_id", current_room_id);
+                    // cJSON_AddStringToObject(root, "audio_chunk", base64_encode(audio_buffer, read_len));
+                    
+                    char *json_str = cJSON_PrintUnformatted(root);
+                    service_mqtt_publish(topic, json_str);
+                    free(json_str);
+                    cJSON_Delete(root);
+                } else if (is_on_call) {
+                    // 正在与前台通话中，发送音频流到通话 Topic
+                    char call_topic[128];
+                    snprintf(call_topic, sizeof(call_topic), "hotel/call/audio/%s", current_call_id);
+                    // service_mqtt_publish_binary(call_topic, audio_buffer, read_len);
+                }
             }
         }
         vTaskDelay(VOICE_TASK_PERIOD);
