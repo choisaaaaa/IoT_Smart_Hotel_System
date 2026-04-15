@@ -3,6 +3,7 @@ import { AuthRequest } from '../../types';
 import { hashPassword, comparePassword } from '../../utils/password';
 import { generateToken, verifyToken, JwtPayload } from '../../utils/jwt';
 import { successResponse, errorResponse, sendSuccess, sendError } from '../../types';
+import { authenticate } from '../../middleware/auth';
 import crypto from 'crypto';
 import db from '../../config/database';
 import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../../utils/role';
@@ -659,6 +660,63 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
     sendError(res, errorResponse('服务器错误', 500));
   } finally {
     connection.release();
+  }
+});
+
+// 切换酒店 (仅系统管理员可用)
+router.post('/switch-hotel', authenticate as any, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user;
+
+    if (!user || user.role !== CANONICAL_ROLES.SYSTEM_ADMIN) {
+      return res.status(403).json(errorResponse('权限不足', 403));
+    }
+
+    const { hotel_id } = req.body;
+
+    if (hotel_id === undefined) {
+      return res.status(400).json(errorResponse('酒店 ID 不能为空', 400));
+    }
+
+    let hotelName = '智联酒店集团总部';
+    const targetHotelId = Number(hotel_id);
+
+    if (targetHotelId !== 0) {
+      // 验证酒店是否存在
+      const [hotels]: any = await db.execute(
+        'SELECT id, hotel_name FROM hotels WHERE id = ?',
+        [targetHotelId]
+      );
+
+      if (hotels.length === 0) {
+        return res.status(404).json(errorResponse('酒店不存在', 404));
+      }
+      hotelName = hotels[0].hotel_name;
+    }
+
+    // 生成新的 JWT，包含指定的 hotel_id
+    const jwtPayload: JwtPayload = {
+      id: user.id,
+      username: user.username,
+      phone: user.phone,
+      role: user.role,
+      hotel_id: targetHotelId,
+      permissions: user.permissions
+    };
+
+    const jwtToken = generateToken(jwtPayload);
+
+    sendSuccess(res, {
+      token: jwtToken,
+      hotel: {
+        id: targetHotelId,
+        name: hotelName
+      },
+      message: `成功切换到: ${hotelName}`
+    });
+  } catch (error) {
+    console.error('切换酒店失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
   }
 });
 

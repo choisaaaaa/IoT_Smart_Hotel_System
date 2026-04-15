@@ -30,6 +30,10 @@
           <template #icon><SettingOutlined /></template>
           <span>会员方案配置</span>
         </a-menu-item>
+        <a-menu-item key="/system/hotel-access">
+          <template #icon><EnterOutlined /></template>
+          <span>分店快速进入</span>
+        </a-menu-item>
         <a-menu-item key="/system/mqtt">
           <template #icon><ClusterOutlined /></template>
           <span>MQTT 服务管理</span>
@@ -90,7 +94,7 @@ import {
   DashboardOutlined, BankOutlined, MobileOutlined,
   UserOutlined, MenuFoldOutlined, GiftOutlined,
   MenuUnfoldOutlined, LogoutOutlined, SettingOutlined,
-  ClusterOutlined
+  ClusterOutlined, EnterOutlined
 } from '@ant-design/icons-vue'
 
 const route = useRoute()

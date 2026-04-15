@@ -53,6 +53,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '会员方案配置', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       },
       {
+        path: 'hotel-access',
+        name: 'HotelAccess',
+        component: () => import('@/views/system/HotelAccess.vue'),
+        meta: { title: '分店快速进入', icon: 'EnterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
+      },
+      {
         path: 'mqtt',
         name: 'SystemMQTTManagement',
         component: () => import('@/views/system/SystemMQTTManagement.vue'),
@@ -63,7 +69,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/hotel-admin',
     component: () => import('@/components/layout/AdminLayout.vue'),
-    meta: { title: '管理端', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] },
+    meta: { title: '管理端', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN] },
     children: [
       {
         path: '',
@@ -152,7 +158,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reception',
     component: () => import('@/components/layout/ReceptionLayout.vue'),
-    meta: { title: '前台端', icon: 'CustomerServiceOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF] },
+    meta: { title: '前台端', icon: 'CustomerServiceOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN] },
     children: [
       {
         path: '',

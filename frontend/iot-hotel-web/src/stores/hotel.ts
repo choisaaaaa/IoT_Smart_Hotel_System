@@ -18,7 +18,7 @@ export const useHotelStore = defineStore('hotel', () => {
       const { hotelManageApi } = await import('@/api/hotel-manage')
       const res: any = await hotelManageApi.getHotelInfo()
       hotelInfo.value = res.data
-      if (res.data?.id) {
+      if (res.data && res.data.id !== undefined) {
         currentHotelId.value = res.data.id
       }
     } finally {

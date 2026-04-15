@@ -37,7 +37,7 @@
                 <a-statistic
                   title="设备状态"
                   :value="dashboardStats.devices?.online || 0"
-                  suffix="/{{ dashboardStats.devices?.total || 0 }} 在线"
+                  :suffix="`/${dashboardStats.devices?.total || 0} 在线`"
                   :value-style="{ color: '#722ed1', fontSize: '28px' }"
                 >
                   <template #prefix><ApartmentOutlined style="font-size: 28px;" /></template>

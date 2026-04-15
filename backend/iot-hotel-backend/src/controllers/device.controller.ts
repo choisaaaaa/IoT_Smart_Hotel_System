@@ -32,7 +32,9 @@ class DeviceController {
   async audit(req: Request, res: Response) {
     try {
       let hotelId = (req as any).user?.hotel_id;
-      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (isSystemAdmin((req as any).user?.role)) {
+        hotelId = req.body.hotel_id || hotelId || 1;
+      }
       if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
@@ -112,7 +114,9 @@ class DeviceController {
     try {
       const user = (req as any).user;
       let hotelId = user?.hotel_id;
-      if (isSystemAdmin(user?.role) && !hotelId) hotelId = 1;
+      if (isSystemAdmin(user?.role)) {
+        hotelId = req.query.hotel_id || hotelId || 1;
+      }
 
       if (isCustomer(user?.role)) {
         const [bookings]: any = await pool.query(
@@ -148,7 +152,9 @@ class DeviceController {
   async delete(req: Request, res: Response) {
     try {
       let hotelId = (req as any).user?.hotel_id;
-      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
+      if (isSystemAdmin((req as any).user?.role)) {
+        hotelId = req.query.hotel_id || hotelId || 1;
+      }
       if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const id = parseInt(req.params.id);
@@ -170,7 +176,9 @@ class DeviceController {
     try {
       const user = (req as any).user;
       let hotelId = user?.hotel_id;
-      if (isSystemAdmin(user?.role) && !hotelId) hotelId = 1;
+      if (isSystemAdmin(user?.role)) {
+        hotelId = req.body.hotel_id || hotelId || 1;
+      }
 
       const id = parseInt(req.params.id);
       const { command_type, command_value } = req.body;

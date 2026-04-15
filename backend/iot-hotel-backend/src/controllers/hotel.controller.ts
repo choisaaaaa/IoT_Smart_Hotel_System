@@ -10,18 +10,17 @@ export const get = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     const userRole = normalizeRole(req.user?.role);
 
-    // 如果是集团超管 (Hotel ID 为 0 或 角色为 system)
-    if (isSystemAdmin(userRole) || hotelId === 0) {
-      // 集团超管返回一个虚拟的集团信息，或者根据 query 指定酒店
-      const queryHotelId = req.query.hotel_id;
-      if (queryHotelId) {
-        const id = parseInt(queryHotelId as string);
-        const hotel = await HotelService.getHotelById(id);
-        if (!hotel) return res.status(404).json(errorResponse('酒店不存在'));
-        return res.json(successResponse(hotel, '获取指定酒店信息成功'));
-      }
+    // 系统管理员可以指定查看某个酒店的详情
+    const queryHotelId = req.query.hotel_id;
+    if (isSystemAdmin(userRole) && queryHotelId) {
+      const id = parseInt(queryHotelId as string);
+      const hotel = await HotelService.getHotelById(id);
+      if (!hotel) return res.status(404).json(errorResponse('酒店不存在'));
+      return res.json(successResponse(hotel, '获取指定酒店信息成功'));
+    }
 
-      // 返回虚拟的集团信息
+    // 如果 hotelId 为 0 且是系统管理员，则显示总部信息
+    if (isSystemAdmin(userRole) && hotelId === 0) {
       return res.json(successResponse({
         id: 0,
         hotel_name: '智联酒店集团总部',
@@ -32,7 +31,8 @@ export const get = async (req: AuthRequest, res: Response) => {
       }, '获取集团总部信息成功'));
     }
 
-    if (hotelId === undefined || hotelId === null) {
+    // 否则（包括已切换到分店上下文的系统管理员），根据 hotelId 获取对应酒店信息
+    if (!hotelId) {
       return res.status(401).json(errorResponse('未授权，缺少酒店绑定信息'));
     }
 
@@ -148,8 +148,8 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     const userRole = normalizeRole(req.user?.role);
 
-    // 如果是集团超管 (Hotel ID 为 0 或 角色为 system)
-    if (isSystemAdmin(userRole) || hotelId === 0) {
+    // 如果是系统管理员且 hotelId 为 0，则统计所有酒店的数据 (集团全局视角)
+    if (isSystemAdmin(userRole) && hotelId === 0) {
       // 统计所有酒店的数据
       // 1. 房间状态统计 (所有酒店)
       const [roomStats] = await pool.query<RowDataPacket[]>(
@@ -231,9 +231,9 @@ export const getStatistics = async (req: AuthRequest, res: Response) => {
       }, '获取集团全局统计数据成功'));
     }
 
-    // 原有的单酒店逻辑
-    if (!hotelId) {
-      // 如果是普通用户，尝试从其最近的预订中获取酒店 ID
+    // 原有的单酒店逻辑 (包括已切换到分店上下文的系统管理员)
+    if (hotelId === undefined || (hotelId === 0 && !isSystemAdmin(userRole))) {
+      // 如果是普通用户且没有 hotel_id，尝试从其最近的预订中获取酒店 ID
       const [lastBooking] = await pool.query<RowDataPacket[]>(
         'SELECT hotel_id FROM bookings WHERE user_id = ? OR guest_phone = ? ORDER BY id DESC LIMIT 1',
         [req.user?.id, req.user?.username]

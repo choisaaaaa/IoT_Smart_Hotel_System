@@ -223,8 +223,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { EditOutlined, PlusOutlined, FormOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, FormOutlined, EditOutlined } from '@ant-design/icons-vue'
 import KnowledgeBaseWizard from '@/components/admin/KnowledgeBaseWizard.vue'
+import { useHotelStore } from '@/stores/hotel'
 import {
   getKnowledgeList,
   createOrUpdateKnowledge,
@@ -236,6 +237,7 @@ import {
 } from '@/api/knowledge-base'
 import { KNOWLEDGE_BASE_CONFIG, getCategoryConfig, checkCompletion } from '@/config/knowledge-base.config'
 
+const hotelStore = useHotelStore()
 const loading = ref(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
 const filterCategory = ref('')
@@ -254,7 +256,8 @@ const formData = reactive({
   content: '',
   keywords: '',
   sort_order: 50,
-  is_active: true
+  is_active: true,
+  hotel_id: undefined as number | undefined
 })
 
 const formRules = {
@@ -353,6 +356,10 @@ const loadData = async () => {
     if (filterCategory.value) {
       params.category = filterCategory.value
     }
+    // 显式传入当前酒店ID，增强系统管理员切换分店后的准确性
+    if (hotelStore.currentHotelId !== null) {
+      params.hotel_id = hotelStore.currentHotelId
+    }
     const res: any = await getKnowledgeList(params)
     knowledgeList.value = res.data || []
   } catch (error) {
@@ -408,19 +415,27 @@ const editRecord = (record: KnowledgeBase) => {
   formData.keywords = record.keywords || ''
   formData.sort_order = record.sort_order
   formData.is_active = record.is_active === 1
+  formData.hotel_id = record.hotel_id
   modalVisible.value = true
 }
 
 const handleSubmit = async () => {
   submitLoading.value = true
   try {
-    await createOrUpdateKnowledge(formData.category, {
+    const submitData: any = {
       title: formData.title,
       content: formData.content,
       keywords: formData.keywords,
       sort_order: formData.sort_order,
       is_active: formData.is_active ? 1 : 0
-    })
+    }
+    
+    // 如果是系统管理员在管理分店，带上酒店ID
+    if (hotelStore.currentHotelId !== null) {
+      submitData.hotel_id = hotelStore.currentHotelId
+    }
+
+    await createOrUpdateKnowledge(formData.category, submitData)
     
     message.success('保存成功')
     modalVisible.value = false
@@ -452,7 +467,8 @@ const showInitModal = () => {
 const handleInit = async () => {
   initLoading.value = true
   try {
-    const res: any = await initDefaultKnowledge()
+    // 传入当前酒店ID
+    const res: any = await initDefaultKnowledge(hotelStore.currentHotelId || undefined)
     message.success(res.message || '初始化成功')
     initModalVisible.value = false
     await loadData()

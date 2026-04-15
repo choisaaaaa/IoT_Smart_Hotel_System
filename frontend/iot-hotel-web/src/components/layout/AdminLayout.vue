@@ -68,7 +68,7 @@
     </a-layout-sider>
 
     <a-layout>
-      <a-layout-header class="admin-header">
+      <a-layout-header class="admin-header" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
         <div class="header-left">
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
@@ -89,7 +89,7 @@
           <a-tag :color="appStore.connected ? 'success' : 'error'" class="ws-status">
             {{ appStore.connected ? '系统正常' : '连接异常' }}
           </a-tag>
-          <a-dropdown>
+          <a-dropdown :overlay-style="{ minWidth: '160px' }">
             <span class="user-trigger">
               <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #722ed1;">
                 <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
@@ -101,6 +101,12 @@
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
+                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" key="reception" @click="$router.push('/reception')">
+                  <CustomerServiceOutlined /> 进入前台端
+                </a-menu-item>
+                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" key="system" @click="returnToSystem">
+                  <SwapOutlined /> 返回系统端
+                </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
@@ -111,11 +117,11 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="admin-content">
+      <a-layout-content class="admin-content" :style="{ marginLeft: collapsed ? '96px' : '256px' }">
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer class="admin-footer">
+      <a-layout-footer class="admin-footer" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
         智慧酒店物联网控制系统 ©2026 - 管理端
       </a-layout-footer>
     </a-layout>
@@ -129,7 +135,7 @@ import {
   SettingOutlined, DashboardOutlined, MonitorOutlined,
   HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined,
+  BellOutlined, SwapOutlined,
   TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
   EnvironmentOutlined, CalendarOutlined, TagOutlined, BookOutlined,
   ClusterOutlined
@@ -137,10 +143,13 @@ import {
 import { useAppStore } from '@/stores/app'
 import { authService, CANONICAL_ROLES } from '@/api/auth'
 import { hotelManageApi } from '@/api/hotel-manage'
+import request from '@/api/request'
+import { useHotelStore } from '@/stores/hotel'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
 
 // 初始化用户信息
 appStore.initUserInfo()
@@ -162,7 +171,7 @@ function handleMenuClick({ key }: { key: string }) {
 }
 
 async function loadHotelInfo() {
-  if (appStore.userInfo?.role !== CANONICAL_ROLES.HOTEL_ADMIN) {
+  if (appStore.userInfo?.role !== CANONICAL_ROLES.HOTEL_ADMIN && appStore.userInfo?.role !== CANONICAL_ROLES.SYSTEM_ADMIN) {
     return
   }
   hotelInfoLoading.value = true
@@ -171,10 +180,6 @@ async function loadHotelInfo() {
     const data = res?.data
     if (data?.hotel_name) {
       hotelName.value = data.hotel_name
-      appStore.setUserInfo({
-        ...appStore.userInfo,
-        hotel_name: data.hotel_name
-      })
     }
   } finally {
     hotelInfoLoading.value = false
@@ -188,6 +193,33 @@ onMounted(() => {
 async function handleLogout() {
   await authService.logout()
   router.push('/guest/booking')
+}
+
+async function returnToSystem() {
+  try {
+    // 切换回全局 Token (hotel_id = 0)
+    const res = await request.post('/auth/switch-hotel', {
+      hotel_id: 0
+    })
+
+    if (res.data.token) {
+      localStorage.setItem('auth_token', res.data.token)
+      
+      // 更新用户信息中的酒店 ID 和名称
+      if (appStore.userInfo) {
+        appStore.setUserInfo({
+          ...appStore.userInfo,
+          hotel_id: 0,
+          hotel_name: '智联酒店集团总部'
+        })
+      }
+      
+      hotelStore.setCurrentHotelId(0)
+      router.push('/system/dashboard')
+    }
+  } catch (error) {
+    router.push('/system/dashboard')
+  }
 }
 </script>
 

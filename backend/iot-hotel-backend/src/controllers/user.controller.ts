@@ -125,6 +125,9 @@ export async function create(req: AuthRequest, res: Response) {
         return sendError(res, errorResponse('酒店管理员只能创建门店管理员、员工或顾客', 403));
       }
     } else if (isSystemAdmin(currentUser.role)) {
+      // 如果未显式指定 hotel_id，则尝试使用当前上下文中的 hotel_id
+      finalHotelId = finalHotelId || currentUser.hotel_id;
+      
       if (finalRole !== CANONICAL_ROLES.SYSTEM_ADMIN && !finalHotelId) {
         return sendError(res, errorResponse('创建非系统管理员用户必须指定酒店 ID', 400));
       }

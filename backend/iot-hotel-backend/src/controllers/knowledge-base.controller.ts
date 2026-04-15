@@ -7,11 +7,25 @@ import { isHotelAdmin, isSystemAdmin, normalizeRole, CANONICAL_ROLES } from '../
 
 export const getAll = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
     const userRole = normalizeRole(req.user?.role);
 
-    if (!hotelId) {
+    // 系统管理员可以指定查看某个酒店的知识库
+    if (isSystemAdmin(userRole)) {
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      }
+    }
+
+    if (!hotelId && !isSystemAdmin(userRole)) {
       return res.status(400).json(errorResponse('未关联酒店'));
+    }
+
+    // 如果是系统管理员且 hotelId 为 0/未指定，则默认显示全部或提示选择
+    if (isSystemAdmin(userRole) && !hotelId) {
+      // 也可以选择返回所有酒店的知识库，但目前先要求指定或使用切换后的上下文
+      // 为了兼容性，如果没有指定且已经切换了上下文，hotelId 已经是切换后的值
     }
 
     const filters: any = {};
@@ -59,8 +73,17 @@ export const getById = async (req: AuthRequest, res: Response) => {
 export const createOrUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const category = req.params.category;
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
     const userId = req.user?.id;
+    const userRole = normalizeRole(req.user?.role);
+
+    // 系统管理员可以指定为某个酒店操作
+    if (isSystemAdmin(userRole)) {
+      const bodyHotelId = req.body.hotel_id;
+      if (bodyHotelId) {
+        hotelId = parseInt(bodyHotelId as string);
+      }
+    }
 
     if (!hotelId) {
       return res.status(400).json(errorResponse('未关联酒店'));
@@ -145,14 +168,22 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
 export const initDefault = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
     const userId = req.user?.id;
+    const userRole = normalizeRole(req.user?.role);
+
+    // 系统管理员可以指定为某个酒店初始化
+    if (isSystemAdmin(userRole)) {
+      const bodyHotelId = req.body.hotel_id;
+      if (bodyHotelId) {
+        hotelId = parseInt(bodyHotelId as string);
+      }
+    }
 
     if (!hotelId) {
       return res.status(400).json(errorResponse('未关联酒店'));
     }
 
-    const userRole = normalizeRole(req.user?.role);
     if (!isHotelAdmin(userRole) && !isSystemAdmin(userRole)) {
       return res.status(403).json(errorResponse('仅门店经理或系统管理员可初始化知识库'));
     }

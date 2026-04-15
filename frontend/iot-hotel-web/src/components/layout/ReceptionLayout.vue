@@ -75,7 +75,7 @@
     </a-layout-sider>
 
     <a-layout>
-      <a-layout-header class="reception-header">
+      <a-layout-header class="reception-header" :style="{ marginLeft: collapsed ? '80px' : '220px' }">
         <div class="header-left">
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
@@ -125,7 +125,7 @@
             </a-badge>
           </a-popover>
           <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
-          <a-dropdown>
+          <a-dropdown :overlay-style="{ minWidth: '160px' }">
             <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
               <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #1890ff;">
                 <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
@@ -137,6 +137,12 @@
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
+                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" key="hotel-admin" @click="$router.push('/hotel-admin')">
+                  <SettingOutlined /> 进入管理端
+                </a-menu-item>
+                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" key="system" @click="returnToSystem">
+                  <SwapOutlined /> 返回系统端
+                </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
@@ -147,11 +153,11 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="reception-content">
+      <a-layout-content class="reception-content" :style="{ marginLeft: collapsed ? '96px' : '236px' }">
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer class="reception-footer">
+      <a-layout-footer class="reception-footer" :style="{ marginLeft: collapsed ? '80px' : '220px' }">
         智慧酒店物联网控制系统 ©2026 - 前台端
       </a-layout-footer>
     </a-layout>
@@ -166,16 +172,18 @@ import {
   CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
   PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined,
-  CheckCircleOutlined, AlertOutlined
+  CheckCircleOutlined, AlertOutlined, UserOutlined, SwapOutlined,
+  ControlOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
-import { authService } from '@/api/auth'
+import { authService, CANONICAL_ROLES } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
 import { environmentApi } from '@/api/environment'
 import { getSocket, initWebSocket } from '@/utils/websocket'
+import request from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -188,6 +196,37 @@ appStore.initUserInfo()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
+
+async function handleLogout() {
+  await authService.logout()
+  router.push('/guest/booking')
+}
+
+async function returnToSystem() {
+  try {
+    const res = await request.post('/auth/switch-hotel', {
+      hotel_id: 0
+    })
+
+    if (res.data.token) {
+      localStorage.setItem('auth_token', res.data.token)
+      
+      // 更新用户信息中的酒店 ID 和名称
+      if (appStore.userInfo) {
+        appStore.setUserInfo({
+          ...appStore.userInfo,
+          hotel_id: 0,
+          hotel_name: '智联酒店集团总部'
+        })
+      }
+      
+      hotelStore.setCurrentHotelId(0)
+      router.push('/system/dashboard')
+    }
+  } catch (error) {
+    router.push('/system/dashboard')
+  }
+}
 
 // WebSocket 全局监听来电
 function setupGlobalWebSocket() {
@@ -230,11 +269,6 @@ onMounted(async () => {
     setupGlobalWebSocket()
   } catch (error) {}
 })
-
-async function handleLogout() {
-  await authService.logout()
-  router.push('/guest/booking')
-}
 
 async function loadNotifications() {
   // 检查用户角色，只有前台员工才加载通知

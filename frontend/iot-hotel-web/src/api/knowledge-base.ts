@@ -29,7 +29,7 @@ export const CATEGORIES: Record<CategoryType, { label: string; icon: string; col
   other: { label: '其他信息', icon: 'ℹ️', color: '#8c8c8c' }
 }
 
-export const getKnowledgeList = (params?: { category?: string; is_active?: number }) => {
+export const getKnowledgeList = (params?: { category?: string; is_active?: number; hotel_id?: number }) => {
   return request.get('/knowledge-base', { params })
 }
 
@@ -37,7 +37,7 @@ export const getKnowledgeById = (id: number) => {
   return request.get(`/knowledge-base/${id}`)
 }
 
-export const createOrUpdateKnowledge = (category: string, data: Partial<KnowledgeBase>) => {
+export const createOrUpdateKnowledge = (category: string, data: Partial<KnowledgeBase> & { hotel_id?: number }) => {
   return request.put(`/knowledge-base/${category}`, data)
 }
 
@@ -49,6 +49,6 @@ export const deleteKnowledge = (id: number) => {
   return request.delete(`/knowledge-base/${id}`)
 }
 
-export const initDefaultKnowledge = () => {
-  return request.get('/knowledge-base/init')
+export const initDefaultKnowledge = (hotel_id?: number) => {
+  return request.post('/knowledge-base/init', { hotel_id })
 }
