@@ -54,11 +54,12 @@ export class RoomService {
     pageSize?: number;
     status?: string;
     type?: string;
+    room_type_id?: number;
     floor?: number;
     hotelId: number;
   }): Promise<RoomListResponse> {
     try {
-      const { page = 1, pageSize = 10, status, type, floor, hotelId } = params;
+      const { page = 1, pageSize = 10, status, type, room_type_id, floor, hotelId } = params;
       const offset = (Number(page) - 1) * Number(pageSize);
       
       let whereClause = 'WHERE r.hotel_id = ?';
@@ -74,6 +75,11 @@ export class RoomService {
         paramsArray.push(type, type);
       }
 
+      if (room_type_id) {
+        whereClause += ' AND (r.room_type_id = ? OR rt.id = ?)';
+        paramsArray.push(Number(room_type_id), Number(room_type_id));
+      }
+
       if (floor) {
         whereClause += ' AND r.floor = ?';
         paramsArray.push(Number(floor));
@@ -81,14 +87,14 @@ export class RoomService {
       
       const totalSql = `SELECT COUNT(*) as total
            FROM rooms r
-           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id OR (r.room_type_id IS NULL AND r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0))
            ${whereClause}`;
       const [totalRows] = await pool.query<RowDataPacket[]>(totalSql, paramsArray);
       const total = (totalRows[0] as any).total;
       
       const listSql = `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
            FROM rooms r
-           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id OR (r.room_type_id IS NULL AND r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0))
            ${whereClause}
            ORDER BY r.floor ASC, r.room_number ASC
            LIMIT ? OFFSET ?`;
@@ -111,7 +117,7 @@ export class RoomService {
     try {
       const listByFloorSql = `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
            FROM rooms r
-           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id OR (r.room_type_id IS NULL AND r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0))
            WHERE r.hotel_id = ?
            ORDER BY r.floor ASC, r.room_number ASC`;
       const [rows] = await pool.query<RowDataPacket[]>(listByFloorSql, [hotelId]);
@@ -141,7 +147,7 @@ export class RoomService {
       const getByIdSql = hasRoomTypesTable
         ? `SELECT r.*, rt.name as room_type_name, rt.code as room_type_code
            FROM rooms r
-           LEFT JOIN room_types rt ON r.room_type_id = rt.id
+           LEFT JOIN room_types rt ON r.room_type_id = rt.id OR (r.room_type_id IS NULL AND r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0))
            WHERE r.id = ? AND r.hotel_id = ?`
         : `SELECT r.*, r.room_type as room_type_name, r.room_type as room_type_code
            FROM rooms r

@@ -15,6 +15,8 @@ export const bookingApi = {
       guest_name: string
       guest_phone: string
       room_id: number
+      room_type_id: number
+      hotel_id: number
       room_name: string
       check_in: string
       check_out: string
@@ -28,6 +30,7 @@ export const bookingApi = {
     id_number: string
     arrival_time?: string | null
     plate_number?: string | null
+    room_id: number
   }) =>
     request.post<ApiResponse<{
       booking_id: number
@@ -38,7 +41,9 @@ export const bookingApi = {
     }>>(`/bookings/${id}/checkin-online`, data),
 
   getCalculatedPrice: (params: { 
-    room_id: number; 
+    room_id?: number; 
+    room_type_id?: number;
+    rate_plan_id?: number;
     check_in_date: string; 
     check_out_date: string; 
     guest_phone?: string; 

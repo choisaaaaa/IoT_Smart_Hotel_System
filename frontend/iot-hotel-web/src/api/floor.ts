@@ -2,8 +2,8 @@ import request from './request'
 import type { FloorInfo, ApiResponse } from '@/types'
 
 export const floorApi = {
-  getFloorList: () =>
-    request.get<ApiResponse<FloorInfo[]>>('/floors'),
+  getFloorList: (params?: any) =>
+    request.get<ApiResponse<FloorInfo[]>>('/floors', { params }),
 
   getFloorDetail: (id: number) =>
     request.get<ApiResponse<FloorInfo>>(`/floors/${id}`),

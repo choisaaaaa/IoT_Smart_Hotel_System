@@ -124,30 +124,25 @@ export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 1. 获取物理房间及其房型元数据
-    const roomsSql = `
+    // 1. 获取所有房型基础信息 (不再受限于物理房间状态)
+    const rtSql = `
       SELECT 
-        r.id as room_id,
-        r.room_number,
-        r.room_name,
-        r.room_type as code,
-        r.room_price,
-        r.floor,
-        r.area,
-        r.bed_type,
-        r.max_guests,
-        r.room_status,
-        r.facilities as room_facilities,
-        rt.name as type_name,
-        rt.id as room_type_id,
-        COALESCE(r.facilities, rt.facilities) as facilities,
-        COALESCE(r.images, rt.images) as images
-      FROM rooms r
-      LEFT JOIN room_types rt ON r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0)
-      WHERE r.hotel_id = ? AND r.room_status = 'available'
+        id as room_type_id,
+        name as type_name,
+        code,
+        base_price as room_price,
+        area,
+        bed_type,
+        max_guests,
+        facilities,
+        images,
+        hotel_id,
+        default_inventory
+      FROM room_types
+      WHERE hotel_id = ? OR hotel_id = 0
     `;
 
-    const [rooms]: any = await db.execute(roomsSql, [hotelId]);
+    const [roomTypesData]: any = await db.execute(rtSql, [hotelId]);
 
     // 2. 获取所有相关的子房价方案
     const [ratePlans]: any = await db.execute(
@@ -155,72 +150,91 @@ export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
       [hotelId]
     );
 
-    // 3. 按房型分组并组合方案
+    // 3. 组织房型基础结构
     const groupedRooms: any = {};
     
-    rooms.forEach((r: any) => {
-      if (!groupedRooms[r.code]) {
-        groupedRooms[r.code] = {
-          code: r.code,
-          name: r.type_name || r.room_name,
-          room_type_id: r.room_type_id,
-          room_id: r.room_id,
-          hotel_id: r.hotel_id || hotelId,
-          area: r.area,
-          bedType: r.bed_type === 'king' ? '大床' : r.bed_type === 'twin' ? '双床' : '单床',
-          maxGuests: r.max_guests,
-          facilities: parseFacilities(r.facilities),
-          images: parseFacilities(r.images),
-          availableCount: 0,
-          room_price: r.room_price,
-          plans: []
-        };
-      }
-      groupedRooms[r.code].availableCount++;
+    roomTypesData.forEach((rt: any) => {
+      groupedRooms[rt.code] = {
+        code: rt.code,
+        name: rt.type_name,
+        room_type_id: rt.room_type_id,
+        hotel_id: rt.hotel_id === 0 ? hotelId : rt.hotel_id,
+        area: rt.area,
+        bedType: rt.bed_type === 'king' ? '大床' : rt.bed_type === 'twin' ? '双床' : '单床',
+        maxGuests: rt.max_guests,
+        facilities: parseFacilities(rt.facilities),
+        images: parseFacilities(rt.images),
+        availableCount: 0,
+        room_price: rt.room_price,
+        plans: []
+      };
     });
 
-    // 为每个房型匹配方案并计算今日价格 (简化处理，取第一天的价格)
+    // 为每个房型匹配方案并计算各日期余量与价格
+    const checkInDate = dayjs(check_in as string);
+    const checkOutDate = dayjs(check_out as string);
+    const stayNights = checkOutDate.diff(checkInDate, 'day');
+
     for (const code in groupedRooms) {
       const type = groupedRooms[code];
       const typePlans = ratePlans.filter((p: any) => p.room_type_id === type.room_type_id);
       
-      // 始终包含一个标准方案 (id: null)
       const allPlans = [
         {
           id: null,
           plan_name: '标准价',
-          base_price: 0, // 标准价直接用房型基准价
+          base_price: type.room_price,
           meal_plan: 'none',
           breakfast_count: 0,
           cancellation_policy: 'free',
           cancel_time_limit: 0,
           payment_type: 'all',
           is_guaranteed: 0,
-          prepayment_ratio: 0
+          prepayment_ratio: 0,
+          default_inventory: type.default_inventory || 10 // 标准方案默认余量
         },
         ...typePlans
       ];
 
       for (const plan of allPlans) {
-        // 查询该日期该方案的价格
-        const [priceRows]: any = await db.execute(
-          'SELECT final_price FROM room_prices WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
-          [type.room_type_id, check_in, plan.id, plan.id]
-        );
+        let minInventory = 999;
+        let totalPrice = 0;
+        let hasNoPriceRecord = false;
 
-        const baseRoomPrice = rooms.find((r: any) => r.code === code)?.room_price || 0;
-        // 优先级：日历价格 > 方案底价 > 房型底价
-        let finalPrice = baseRoomPrice;
-        if (priceRows.length > 0) {
-          finalPrice = priceRows[0].final_price;
-        } else if (plan.id && plan.base_price > 0) {
-          finalPrice = plan.base_price;
+        for (let i = 0; i < stayNights; i++) {
+          const dateStr = checkInDate.add(i, 'day').format('YYYY-MM-DD');
+          
+          const [priceRows]: any = await db.execute(
+            'SELECT final_price, inventory_count, sold_count FROM room_prices WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
+            [type.room_type_id, dateStr, plan.id, plan.id]
+          );
+
+          let dayPrice = 0;
+          let dayInventory = 0;
+
+          if (priceRows.length > 0) {
+            dayPrice = priceRows[0].final_price;
+            // 修正：如果 inventory_count 为 0 且没有设置过，可能需要使用默认值
+            const totalInv = priceRows[0].inventory_count !== null ? priceRows[0].inventory_count : (plan.default_inventory || 10);
+            dayInventory = Math.max(0, totalInv - priceRows[0].sold_count);
+          } else {
+            hasNoPriceRecord = true;
+            // 如果没有价格记录，使用方案底价或房型底价，余量使用默认值
+            dayPrice = (plan.id && plan.base_price > 0) ? plan.base_price : type.room_price;
+            dayInventory = plan.default_inventory || 10;
+          }
+
+          totalPrice += dayPrice;
+          minInventory = Math.min(minInventory, dayInventory);
         }
 
+        // 只有当全程都有余量时才返回该方案 (或者返回余量为0)
         type.plans.push({
           id: plan.id,
           name: plan.plan_name,
-          price: finalPrice, // 选房列表显示方案原价，明细里再算优惠
+          price: Math.floor(totalPrice / stayNights * 100) / 100, // 显示平均单晚价格
+          total_price: totalPrice,
+          inventory: minInventory,
           mealPlan: plan.meal_plan,
           breakfastCount: plan.breakfast_count || 0,
           cancelPolicy: plan.cancellation_policy,
@@ -232,6 +246,9 @@ export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
           freeCancel: plan.cancellation_policy === 'free'
         });
       }
+      
+      // 更新房型的总可用数量（取所有方案中最大的余量，或求和，这里取方案中最大值作为参考）
+      type.availableCount = Math.max(...type.plans.map((p: any) => p.inventory));
     }
 
     sendSuccess(res, {

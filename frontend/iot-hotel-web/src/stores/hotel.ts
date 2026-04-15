@@ -12,11 +12,13 @@ export const useHotelStore = defineStore('hotel', () => {
   const roomFetchPromise = ref<Promise<any> | null>(null)
   const roomRateLimitedUntil = ref(0)
 
-  async function fetchHotelInfo() {
+  async function fetchHotelInfo(hotelId?: number) {
     loading.value = true
     try {
       const { hotelManageApi } = await import('@/api/hotel-manage')
-      const res: any = await hotelManageApi.getHotelInfo()
+      // 如果传入了 hotelId，或者 currentHotelId 有值，则作为参数传递
+      const params = (hotelId || currentHotelId.value) ? { hotel_id: hotelId || currentHotelId.value! } : undefined
+      const res: any = await hotelManageApi.getHotelInfo(params)
       hotelInfo.value = res.data
       if (res.data && res.data.id !== undefined) {
         currentHotelId.value = res.data.id

@@ -14,6 +14,12 @@
           <div class="hotel-name">🏨 {{ hotelStore.hotelInfo?.hotel_name || '当前门店' }}</div>
           <div class="hotel-id">集团编号: {{ hotelStore.hotelInfo?.id || '-' }}</div>
         </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+          <a-button type="primary" ghost @click="() => { inventoryModalVisible = true; fetchTodayInventory(); }">
+            <template #icon><ShopOutlined /></template>
+            今日可售余量管理
+          </a-button>
+        </div>
       </div>
     </div>
     <a-tabs v-model:activeKey="activeTab">
@@ -266,14 +272,8 @@
                 :row-selection="{ selectedRowKeys: selectedBookingKeys, onChange: onBookingSelectionChange }"
               >
                 <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'status'">
-                    <a-tag :color="bookingStatusColor(record.status)">{{ bookingStatusText(record.status) }}</a-tag>
-                  </template>
-                  <template v-if="column.key === 'registered'">
-                    <a-tag v-if="getMemberByPhone(record.guest_phone)" color="gold">
-                      {{ getLevelName(getMemberByPhone(record.guest_phone)) }}
-                    </a-tag>
-                    <a-tag v-else color="default">非会员</a-tag>
+                  <template v-if="column.key === 'nights'">
+                    {{ record.stay_nights }}晚
                   </template>
                   <template v-if="column.key === 'action'">
                     <a-button type="link" size="small" style="padding: 0;" @click="fillByBooking(record)">办理入住</a-button>
@@ -384,6 +384,46 @@
       </a-form>
     </a-modal>
 
+    <!-- 今日余量管理弹窗 -->
+    <a-modal
+      v-model:open="inventoryModalVisible"
+      title="今日可售余量与挂牌价管理"
+      @ok="handleUpdateInventory"
+      :confirmLoading="updatingInventory"
+      :ok-button-props="{ disabled: !['hotel_admin', 'system_admin', 'staff'].includes(appStore.userInfo?.role || '') }"
+      width="800px"
+    >
+      <a-alert v-if="!['hotel_admin', 'system_admin', 'staff'].includes(appStore.userInfo?.role || '')" message="您的权限仅支持查看今日余量，无法进行修改。请联系门店经理进行调整。" type="info" show-icon style="margin-bottom: 16px;" />
+      <a-alert v-else message="此处设置仅影响今日（或实时）各房型及方案的可售余量与挂牌价格。预订系统将根据此处设置进行库存校验与计费。" type="warning" show-icon style="margin-bottom: 16px;" />
+      <a-table
+        :columns="[
+          { title: '房型', dataIndex: 'room_type_name', key: 'room_type_name', width: 120 },
+          { title: '方案名称', dataIndex: 'plan_name', key: 'plan_name', width: 150 },
+          { title: '今日挂牌价', key: 'price', width: 120 },
+          { title: '今日余量', key: 'inventory', width: 120 },
+          { title: '标准余量', key: 'default_inventory', width: 120 },
+          { title: '已售', dataIndex: 'sold_count', key: 'sold_count', width: 80 }
+        ]"
+        :data-source="todayInventoryList"
+        :loading="inventoryLoading"
+        :pagination="false"
+        size="small"
+        :row-key="(record: any) => `${record.room_type_id}-${record.rate_plan_id || 'default'}`"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'price'">
+            <a-input-number v-model:value="record.current_price" :min="0" :precision="2" prefix="¥" style="width: 100%" />
+          </template>
+          <template v-if="column.key === 'inventory'">
+            <a-input-number v-model:value="record.inventory_count" :min="0" style="width: 100%" />
+          </template>
+          <template v-if="column.key === 'default_inventory'">
+            <a-input-number v-model:value="record.default_inventory" :min="0" style="width: 100%" placeholder="默认值" />
+          </template>
+        </template>
+      </a-table>
+    </a-modal>
+
     <!-- 房卡管理弹窗 -->
     <a-modal
       v-model:open="cardModalVisible"
@@ -438,10 +478,12 @@ import {
   SafetyCertificateOutlined,
   DownOutlined,
   InfoCircleOutlined,
-  ControlOutlined
+  ControlOutlined,
+  ShopOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
+import { useAppStore } from '@/stores/app'
 import { bookingApi } from '@/api/booking'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
@@ -449,6 +491,7 @@ import { userApi, type UserProfile } from '@/api/user'
 import type { RoomInfo } from '@/types'
 
 const hotelStore = useHotelStore()
+const appStore = useAppStore()
 const route = useRoute()
 const activeTab = ref('checkin')
 const submitting = ref(false)
@@ -471,6 +514,44 @@ const authForm = reactive({
   manager_id: undefined as number | undefined,
   password: ''
 })
+
+// 今日余量管理相关
+const inventoryModalVisible = ref(false)
+const inventoryLoading = ref(false)
+const updatingInventory = ref(false)
+const todayInventoryList = ref<any[]>([])
+
+async function fetchTodayInventory() {
+  inventoryLoading.value = true
+  try {
+    const res: any = await request.get('/price-calendar/today')
+    todayInventoryList.value = res.data || []
+  } catch (error) {
+    message.error('获取今日余量失败')
+  } finally {
+    inventoryLoading.value = false
+  }
+}
+
+async function handleUpdateInventory() {
+  updatingInventory.value = true
+  try {
+    const updates = todayInventoryList.value.map(item => ({
+      room_type_id: item.room_type_id,
+      rate_plan_id: item.rate_plan_id,
+      price: item.current_price,
+      inventory: item.inventory_count,
+      default_inventory: item.default_inventory
+    }))
+    await request.post('/price-calendar/today/update', { updates })
+    message.success('更新成功')
+    inventoryModalVisible.value = false
+  } catch (error) {
+    message.error('更新失败')
+  } finally {
+    updatingInventory.value = false
+  }
+}
 
 async function fetchManagers() {
   try {
@@ -754,14 +835,11 @@ const checkoutColumns = [
 ]
 
 const todayBookingColumns = [
-  { title: '客人', dataIndex: 'guest_name', width: 70 },
-  { title: '手机号', dataIndex: 'guest_phone', width: 105 },
-  { title: '房号', dataIndex: 'room_number', width: 50 },
-  { title: '入住', dataIndex: 'check_in_date', key: 'check_in_date', width: 100, customRender: ({ text }: { text: string }) => formatDateTime(text) },
-  { title: '退房', dataIndex: 'check_out_date', key: 'check_out_date', width: 100, customRender: ({ text }: { text: string }) => formatDateTime(text) },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 70 },
-  { title: '会员', key: 'registered', width: 70 },
-  { title: '操作', key: 'action', width: 65 }
+  { title: '姓名', dataIndex: 'guest_name', width: 80 },
+  { title: '手机号', dataIndex: 'guest_phone', width: 110 },
+  { title: '房间', dataIndex: 'room_number', width: 60 },
+  { title: '夜数', key: 'nights', width: 60 },
+  { title: '操作', key: 'action', width: 70 }
 ]
 
 function formatDateTime(val: string | null | undefined): string {
@@ -882,10 +960,14 @@ async function fetchTodayBookings(force = false) {
       }, {})
     )
 
-    todayBookings.value = list.map((item: any) => ({
-      ...item,
-      phone_registered: isPhoneRegistered(item.guest_phone)
-    }))
+    todayBookings.value = list.map((item: any) => {
+      const nights = dayjs(item.check_out_date).diff(dayjs(item.check_in_date), 'day') || 1
+      return {
+        ...item,
+        stay_nights: nights,
+        phone_registered: isPhoneRegistered(item.guest_phone)
+      }
+    })
   } catch (error) {
     message.error('获取今日预订失败')
   } finally {

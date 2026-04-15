@@ -28,12 +28,17 @@
   - 请求体：`{ manager_id: number, password: string }`
   - 业务逻辑：校验经理是否存在、角色是否有权、所属酒店是否匹配、密码是否正确。
 
-### 2. 酒店资源管理 (`/hotels`, `/rooms`, `/room-types`)
+### 2. 酒店资源管理 (`/hotels`, `/rooms`, `/room-types`, `/price-calendar`)
 - `GET /hotels/search`: 根据目的地和日期搜索酒店。
 - `GET /hotels/:id/rooms/availability`: 查询指定酒店的房型余量及价格。
-- `GET /rooms`: 获取房间列表 (支持分页及状态筛选)。
+- `GET /rooms`: 获取房间列表 (支持分页及状态、房型 ID、楼层等筛选)。
+  - 查询参数：`page`, `pageSize`, `status?`, `type?` (房型代码), `room_type_id?`, `floor?`, `hotel_id?`, `groupBy?` (如 'floor')。
 - `PATCH /rooms/:id/status`: 更新房间状态 (空闲/在住/清洁等)。
 - `GET /room-types`: 获取所有房型定义及基础价格（按酒店过滤）。
+- `GET /floors`: 获取楼层列表及平面图（支持 hotel_admin/staff/system_admin/customer 角色）。
+- `GET /price-calendar/today`: 获取今日各房型、各方案的可售余量与挂牌价格（需登录）。
+- `POST /price-calendar/today/update`: 实时更新今日房型余量与价格（仅 hotel_admin/system_admin）。
+  - 请求体：`{ updates: [{ room_type_id, rate_plan_id, price, inventory }] }`
 - `GET /rooms/guest/my-room`: 获取顾客当前入住房间信息（需 customer 角色，通过 user_id 或 guest_phone 匹配入住记录）。
 - `GET /rooms/guest/:id/devices`: 获取顾客入住房间的设备列表（需 customer 角色）。
 
@@ -63,16 +68,18 @@
 ### 4. 业务订单系统 (`/bookings`, `/payments`)
 - `POST /bookings`: 创建客房预订。
   - **业务逻辑**：自动关联用户账号，通过手机号匹配 user_id；自动设置 auto_checkout_at 为退房日期中午12:00。
+  - **解耦逻辑**：支持仅传 `room_type_id` 进行房型预订（不绑定具体房间）。
   - **支持手动优惠**：`manual_discount` (折扣率，如0.8), `manual_reduce` (直减金额)。需经理授权后由前端调用。
 - `GET /bookings/lookup`: 顾客查询预订（用于在线入住前验证）。
   - **业务逻辑**：仅返回状态为 `pending` 或 `confirmed` 且 **退房日期未过期** 的订单。
 - `GET /bookings/calculate-price`: 预计算订单总价 (考虑优惠券、会员折扣及手动打折)。
-  - **查询参数**：`room_id`, `check_in_date`, `check_out_date`, `guest_phone?`, `coupon_id?`, `manual_discount?`, `manual_reduce?`。
+  - **查询参数**：`room_id?`, `room_type_id?`, `check_in_date`, `check_out_date`, `guest_phone?`, `coupon_id?`, `manual_discount?`, `manual_reduce?`。
 - `PUT /bookings/:id/checkin`: 办理入住，激活房卡。
   - **业务逻辑**：自动通过手机号关联用户账号，设置 auto_checkout_at。
   - **支持同步更新价格**：支持在办理入住时动态传入 `manual_discount`, `manual_reduce`, `total_price` 更新订单最终价。
 - `POST /bookings/:id/checkin-online`: 顾客在线办理入住。
   - **业务逻辑**：将状态改为 `pre_checked_in`（预入住），需校验退房日期未过期。
+  - **选房绑定**：支持传入 `room_id` 进行物理房间绑定，并将房间状态改为 `reserved`。
 - `PUT /bookings/:id/checkout`: 办理退房，结清账单。
 - `PUT /bookings/:id/cancel`: 取消预订。
 - `POST /bookings/:id/extend-price`: 计算续住价格（需登录，支持优惠券和积分抵扣参数）。

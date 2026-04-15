@@ -46,7 +46,18 @@
           <div class="order-body">
             <div class="hotel-info">
               <h3>{{ order.hotel_name || '智联酒店' }}</h3>
-              <p class="room-type">{{ order.room_type }} - {{ order.room_number || order.room_name }}</p>
+              <p class="room-type">
+                {{ order.room_type_name || order.room_type }}
+                <template v-if="order.room_number || order.room_name">
+                  - {{ order.room_number || order.room_name }}
+                </template>
+                <template v-else-if="order.status === 'confirmed'">
+                  - 待办理预入住
+                </template>
+                <template v-else-if="order.status === 'pending'">
+                  - 待支付后选房
+                </template>
+              </p>
             </div>
 
             <div class="stay-info">
@@ -94,26 +105,25 @@
                 续住
               </a-button>
               <a-button
-                v-if="order.status === 'confirmed'"
+                v-if="['confirmed', 'pre_checked_in'].includes(order.status)"
                 type="primary"
                 @click="handleCheckIn(order)"
               >
-                预入住
+                {{ order.status === 'pre_checked_in' ? '修改预入住' : '预入住' }}
               </a-button>
               <a-button
-                v-if="order.status === 'pending' || order.status === 'confirmed'"
+                v-if="order.status === 'pending'"
+                type="primary"
+                @click="handlePayOrder(order)"
+              >
+                立即支付
+              </a-button>
+              <a-button
+                v-if="['pending', 'confirmed', 'pre_checked_in'].includes(order.status)"
                 @click="handleCancel(order.id)"
               >
                 取消订单
               </a-button>
-              <template v-if="order.status === 'pre_checked_in'">
-                <a-button disabled style="margin-right: 8px;">
-                  待确认
-                </a-button>
-                <a-button @click="handleCancel(order.id)">
-                  取消订单
-                </a-button>
-              </template>
             </div>
           </div>
         </a-card>
@@ -126,6 +136,7 @@
 
     <a-modal
       v-model:open="extendModalVisible"
+      :destroyOnClose="true"
       title="在线续住"
       :confirm-loading="extendSubmitting"
       @ok="handleExtendStay"
@@ -136,7 +147,7 @@
       <div v-if="extendOrder" class="extend-modal-content">
         <a-descriptions :column="2" size="small" bordered>
           <a-descriptions-item label="酒店">{{ extendOrder.hotel_name || '智联酒店' }}</a-descriptions-item>
-          <a-descriptions-item label="房间">{{ extendOrder.room_type }} - {{ extendOrder.room_number || extendOrder.room_name }}</a-descriptions-item>
+          <a-descriptions-item label="房间">{{ extendOrder.room_type_name || extendOrder.room_type }} - {{ extendOrder.room_number || extendOrder.room_name }}</a-descriptions-item>
           <a-descriptions-item label="入住日期">{{ formatDate(extendOrder.check_in_date || extendOrder.check_in) }}</a-descriptions-item>
           <a-descriptions-item label="当前退房">{{ formatDate(extendOrder.check_out_date || extendOrder.check_out) }}</a-descriptions-item>
         </a-descriptions>
@@ -217,6 +228,66 @@
         </div>
       </div>
     </a-modal>
+
+    <a-modal
+      v-model:open="payModalVisible"
+      title="选择支付方式"
+      :confirm-loading="loading"
+      @ok="confirmPay"
+      ok-text="立即支付"
+      cancel-text="取消"
+      width="400px"
+    >
+      <div v-if="selectedOrder" class="pay-modal-content">
+        <div class="pay-amount-summary">
+          <span class="label">应付金额：</span>
+          <span class="value">¥{{ selectedOrder.total_price }}</span>
+        </div>
+        
+        <a-radio-group v-model:value="payMethod" class="pay-method-group">
+          <a-radio value="balance" class="pay-method-item">
+            <div class="method-info">
+              <WalletOutlined class="icon balance" />
+              <div class="text">
+                <div class="name">余额支付</div>
+                <div class="desc">可用余额: ¥{{ memberInfo?.balance || 0 }}</div>
+              </div>
+            </div>
+          </a-radio>
+          <a-radio value="wechat" class="pay-method-item">
+            <div class="method-info">
+              <WechatOutlined class="icon wechat" />
+              <div class="text">
+                <div class="name">微信支付</div>
+                <div class="desc">使用微信快捷支付</div>
+              </div>
+            </div>
+          </a-radio>
+          <a-radio value="alipay" class="pay-method-item">
+            <div class="method-info">
+              <AlipayCircleOutlined class="icon alipay" />
+              <div class="text">
+                <div class="name">支付宝</div>
+                <div class="desc">使用支付宝快捷支付</div>
+              </div>
+            </div>
+          </a-radio>
+        </a-radio-group>
+
+        <div v-if="payMethod === 'balance' && Number(memberInfo?.balance || 0) < Number(selectedOrder.total_price)" class="pay-warning">
+          <a-alert type="warning" show-icon size="small">
+            <template #message>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>余额不足，建议使用其他方式</span>
+                <a-button type="link" size="small" @click="payMethod = 'wechat'" style="padding: 0; height: auto;">
+                  切换微信支付
+                </a-button>
+              </div>
+            </template>
+          </a-alert>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -224,7 +295,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { MinusOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import {
+  MinusOutlined,
+  PlusOutlined,
+  WalletOutlined,
+  WechatOutlined,
+  AlipayCircleOutlined
+} from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import request from '@/api/request'
 import { bookingApi } from '@/api/booking'
@@ -250,6 +327,10 @@ const paymentMethod = ref('balance')
 const priceDetails = ref<any>(null)
 const memberInfo = ref<any>(null)
 const coupons = ref<any[]>([])
+
+const payModalVisible = ref(false)
+const selectedOrder = ref<any>(null)
+const payMethod = ref('balance')
 
 const isLoggedIn = computed(() => !!appStore.userInfo)
 
@@ -289,6 +370,17 @@ const getStatusText = (status: string) => {
 const formatDate = (date: string) => {
   if (!date) return '-'
   return dayjs(date).format('YYYY-MM-DD HH:mm')
+}
+
+const fetchMemberInfo = async () => {
+  try {
+    const res = await memberApi.getMyAssets()
+    if (res?.data) {
+      memberInfo.value = res.data
+    }
+  } catch (e) {
+    console.error('获取会员信息失败:', e)
+  }
 }
 
 // 加载登录用户的订单
@@ -348,6 +440,52 @@ const handleCheckIn = (order: any) => {
     path: '/guest/checkin-online',
     query: { booking_no: bookingNumber }
   })
+}
+
+// 立即支付
+const handlePayOrder = async (order: any) => {
+  selectedOrder.value = order
+  payModalVisible.value = true
+  // 预加载会员信息以显示余额
+  fetchMemberInfo()
+}
+
+// 确认支付
+const confirmPay = async () => {
+  if (!selectedOrder.value) return
+  
+  if (payMethod.value === 'balance') {
+    const balance = Number(memberInfo.value?.balance || 0)
+    if (balance < Number(selectedOrder.value.total_price)) {
+      message.error('余额不足，请选择其他支付方式或先充值')
+      return
+    }
+  }
+
+  try {
+    loading.value = true
+    // 1. 创建支付订单
+    const payment = await paymentApi.createPayment({
+      order_type: 'booking',
+      order_id: selectedOrder.value.id,
+      amount: Number(selectedOrder.value.total_price),
+      payment_method: payMethod.value,
+      description: `支付预订订单: ${selectedOrder.value.booking_number || selectedOrder.value.booking_no}`
+    })
+
+    if (payment && payment.id) {
+      // 2. 执行支付
+      await paymentApi.payPayment(payment.id)
+      message.success('支付成功！现在可以办理预入住选房了。')
+      payModalVisible.value = false
+      fetchOrders()
+    }
+  } catch (error: any) {
+    console.error('支付失败:', error)
+    message.error(error?.response?.data?.message || '支付失败，请重试')
+  } finally {
+    loading.value = false
+  }
 }
 
 // 取消订单
@@ -589,7 +727,85 @@ onMounted(() => {
   gap: 12px;
 }
 
-.loading-state, .empty-state {
+.loading-state, .pay-modal-content {
+  padding: 10px 0;
+}
+
+.pay-amount-summary {
+  text-align: center;
+  margin-bottom: 24px;
+  background: #fdf2f2;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.pay-amount-summary .label {
+  color: #666;
+  font-size: 14px;
+}
+
+.pay-amount-summary .value {
+  color: #ff4d4f;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.pay-method-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.pay-method-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  width: 100%;
+  margin: 0 !important;
+}
+
+.pay-method-item :deep(.ant-radio) {
+  align-self: center;
+}
+
+.pay-method-item.ant-radio-wrapper-checked {
+  border-color: #1890ff;
+  background: #f0f7ff;
+}
+
+.method-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 8px;
+}
+
+.method-info .icon {
+  font-size: 24px;
+}
+
+.method-info .icon.balance { color: #faad14; }
+.method-info .icon.wechat { color: #52c41a; }
+.method-info .icon.alipay { color: #1890ff; }
+
+.method-info .text .name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.method-info .text .desc {
+  font-size: 12px;
+  color: #999;
+}
+
+.pay-warning {
+  margin-top: 16px;
+}
+
+.empty-state {
   padding: 40px;
   text-align: center;
 }

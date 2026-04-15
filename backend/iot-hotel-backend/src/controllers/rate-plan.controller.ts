@@ -31,7 +31,7 @@ export const createRatePlan = async (req: AuthRequest, res: Response) => {
     const { 
       room_type_id, plan_name, base_price, meal_plan, breakfast_count, 
       cancellation_policy, cancel_time_limit, payment_type, 
-      is_guaranteed, prepayment_ratio 
+      is_guaranteed, prepayment_ratio, default_inventory 
     } = req.body;
 
     if (!room_type_id || !plan_name) {
@@ -42,8 +42,8 @@ export const createRatePlan = async (req: AuthRequest, res: Response) => {
       `INSERT INTO rate_plans (
         hotel_id, room_type_id, plan_name, base_price, meal_plan, breakfast_count, 
         cancellation_policy, cancel_time_limit, payment_type, 
-        is_guaranteed, prepayment_ratio
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        is_guaranteed, prepayment_ratio, default_inventory
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         hotelId, 
         room_type_id, 
@@ -55,7 +55,8 @@ export const createRatePlan = async (req: AuthRequest, res: Response) => {
         cancel_time_limit || 0,
         payment_type || 'all', 
         is_guaranteed || 0, 
-        prepayment_ratio || 0
+        prepayment_ratio || 0,
+        Number(default_inventory) || 10
       ]
     );
 
@@ -73,7 +74,7 @@ export const updateRatePlan = async (req: AuthRequest, res: Response) => {
     const { 
       plan_name, base_price, meal_plan, breakfast_count, 
       cancellation_policy, cancel_time_limit, payment_type, 
-      is_guaranteed, prepayment_ratio, is_active 
+      is_guaranteed, prepayment_ratio, is_active, default_inventory 
     } = req.body;
 
     logger.info(`更新房价方案 [ID: ${id}]:`, { plan_name, base_price });
@@ -86,7 +87,7 @@ export const updateRatePlan = async (req: AuthRequest, res: Response) => {
       `UPDATE rate_plans SET 
         plan_name = ?, base_price = ?, meal_plan = ?, breakfast_count = ?, 
         cancellation_policy = ?, cancel_time_limit = ?, payment_type = ?, 
-        is_guaranteed = ?, prepayment_ratio = ?, is_active = ? 
+        is_guaranteed = ?, prepayment_ratio = ?, is_active = ?, default_inventory = ? 
        WHERE id = ? AND hotel_id = ?`,
       [
         plan_name, 
@@ -99,6 +100,7 @@ export const updateRatePlan = async (req: AuthRequest, res: Response) => {
         is_guaranteed || 0, 
         prepayment_ratio || 0, 
         is_active === undefined ? 1 : is_active, 
+        Number(default_inventory) || 10,
         id, 
         hotelId
       ]

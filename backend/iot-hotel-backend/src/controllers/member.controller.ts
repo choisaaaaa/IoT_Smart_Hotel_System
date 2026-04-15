@@ -357,7 +357,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
        LEFT JOIN bookings b ON g.booking_id = b.id
        WHERE (b.user_id = ? OR g.guest_phone = ?) 
        AND g.check_out_time IS NULL 
-       AND b.status IN ('checked_in', 'pre_checked_in')
+       AND b.status = 'checked_in'
        AND DATE(b.check_out_date) >= CURDATE()
        ORDER BY g.check_in_time DESC
        LIMIT 1`,

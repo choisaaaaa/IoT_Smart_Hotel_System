@@ -3,27 +3,29 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { RoomService } from '../services/room.service';
 import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
-import { isSystemAdmin, isStaff, isHotelAdmin, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    // 统一获取 hotelId 的逻辑：优先使用 req.user 中的，如果是系统管理员则可从 query 覆盖
+    // 统一获取 hotelId 的逻辑：优先使用 req.user 中的，如果是系统管理员或顾客则可从 query 覆盖
     let hotelId = req.user?.hotel_id;
     
-    if (isSystemAdmin(req.user?.role)) {
+    // 系统管理员和顾客可以从 query 指定 hotel_id
+    if (isSystemAdmin(req.user?.role) || isCustomer(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
-      } else if (!hotelId) {
+      } else if (!hotelId && isSystemAdmin(req.user?.role)) {
+        // 系统管理员若未指定，则默认为 1
         hotelId = 1;
       }
     }
 
-    if (hotelId === undefined || hotelId === null) {
-      return res.status(401).json(errorResponse('未授权，无法获取门店 ID'));
+    if (hotelId === undefined || hotelId === null || hotelId === 0) {
+      return res.status(401).json(errorResponse('未授权，无法获取有效的门店 ID'));
     }
 
-    const { page = 1, pageSize = 10, status, type, floor, groupBy } = req.query;
+    const { page = 1, pageSize = 10, status, type, room_type_id, floor, groupBy } = req.query;
     
     if (groupBy === 'floor') {
       const data = await RoomService.getRoomsByFloor(hotelId);
@@ -35,6 +37,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       pageSize: Number(pageSize),
       status: status as string,
       type: type as string,
+      room_type_id: room_type_id ? Number(room_type_id) : undefined,
       floor: floor ? Number(floor) : undefined,
       hotelId
     });

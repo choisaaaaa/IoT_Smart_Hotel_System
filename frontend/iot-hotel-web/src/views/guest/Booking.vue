@@ -326,12 +326,14 @@
                     <a-button 
                       type="primary" 
                       class="plan-book-btn"
-                      :disabled="type.availableCount === 0"
+                      :disabled="plan.inventory === 0"
                       @click="selectPlan(type, plan)"
                     >
-                      预订
+                      {{ plan.inventory === 0 ? '已售罄' : '预订' }}
                     </a-button>
-                    <div class="inventory-tip" v-if="type.availableCount < 3">仅剩{{ type.availableCount }}间</div>
+                    <div class="inventory-tip" :class="{ 'danger': plan.inventory <= 2 }">
+                      {{ plan.inventory === 0 ? '暂时售罄' : (plan.inventory < 5 ? `仅剩${plan.inventory}间` : '余量充足') }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -421,26 +423,6 @@
                   <a-checkbox v-model:checked="saveAsFrequent">保存到常用入住人名册</a-checkbox>
                 </a-form-item>
               </a-form>
-            </div>
-
-            <!-- Room Selection Card -->
-            <div class="ctrip-card" style="margin-top: 20px;">
-              <div class="card-header-ctrip">
-                <span class="title">选择具体房间</span>
-              </div>
-              <div class="room-selector-ctrip">
-                <div class="selector-row">
-                  <span class="label">房间号:</span>
-                  <a-radio-group v-model:value="selectedRoomId" @change="(e: any) => handleRoomChange(e.target.value)">
-                    <a-radio-button v-for="room in availableRoomsInType" :key="room.id" :value="room.id">
-                      {{ room.room_number }}号房 ({{ room.floor }}层)
-                    </a-radio-button>
-                  </a-radio-group>
-                </div>
-                <div class="selector-tips">
-                  <InfoCircleOutlined /> 温馨提示：您可以自由选择心仪的房间号进行预订
-                </div>
-              </div>
             </div>
 
             <!-- Payment Method Card -->
@@ -620,7 +602,7 @@
 
       <!-- Payment Modal (Mock) -->
       <a-modal
-        v-model:visible="paymentModalVisible"
+        v-model:open="paymentModalVisible"
         title="收银台"
         :footer="null"
         width="400px"
@@ -694,7 +676,7 @@
 
     <!-- Frequent Guest Management Modal -->
     <a-modal
-      v-model:visible="showGuestModal"
+      v-model:open="showGuestModal"
       :title="editingGuestId ? '编辑联系人' : '添加联系人'"
       @ok="saveGuest"
     >
@@ -739,7 +721,8 @@ import {
   CheckCircleOutlined, LeftOutlined, WifiOutlined,
   CoffeeOutlined, WalletOutlined, WechatOutlined, AlipayCircleOutlined,
   SecurityScanOutlined, PlusOutlined, DeleteOutlined, EditOutlined, InfoCircleOutlined,
-  QrcodeOutlined, UnlockOutlined, HomeOutlined, FullscreenOutlined, ThunderboltOutlined
+  QrcodeOutlined, UnlockOutlined, HomeOutlined, FullscreenOutlined, ThunderboltOutlined,
+  CloseOutlined, CreditCardOutlined
 } from '@ant-design/icons-vue'
 
 // --- State ---
@@ -766,7 +749,18 @@ const handlePreSubmit = () => {
   if (paymentMethod.value === 'balance') {
     const balance = Number(memberInfo.value?.balance || 0)
     if (balance < finalTotalPrice.value) {
-      return message.error(`余额不足！当前余额 ¥${balance}，还需充值 ¥${(finalTotalPrice.value - balance).toFixed(2)}`)
+      // 余额不足时，不直接报错，而是弹出提示并允许切换支付方式
+      return Modal.confirm({
+        title: '余额不足',
+        content: `当前余额 ¥${balance}，需支付 ¥${finalTotalPrice.value.toFixed(2)}。建议切换到微信或支付宝支付。`,
+        okText: '去切换',
+        cancelText: '取消',
+        onOk: () => {
+          // 可以在这里自动切换到微信支付，或者让用户手动在界面选
+          paymentMethod.value = 'wechat'
+          message.info('已为您切换至微信支付，请再次点击提交')
+        }
+      })
     }
   }
 
@@ -935,16 +929,16 @@ watch([selectedRoom, nights], () => {
 }, { immediate: true })
 
 const updateCalculatedPrice = async () => {
-  const roomId = selectedRoom.value?.id || selectedRoom.value?.room_id
-  if (!roomId || !dateRange.value || dateRange.value.length < 2) {
-    console.warn('Skipping price calculation: Missing roomId or dates', { roomId, dateRange: dateRange.value })
+  const roomTypeId = selectedRoom.value?.room_type_id
+  if (!roomTypeId || !dateRange.value || dateRange.value.length < 2) {
+    console.warn('Skipping price calculation: Missing roomTypeId or dates', { roomTypeId, dateRange: dateRange.value })
     return
   }
 
   try {
     const res = await request.get('/bookings/calculate-price', {
       params: {
-        room_id: roomId,
+        room_type_id: roomTypeId,
         rate_plan_id: selectedRoom.value.rate_plan_id,
         check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
         check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
@@ -1053,33 +1047,9 @@ const selectPlan = async (type: any, plan: any) => {
     await fetchAvailableCoupons()
   }
 
-  // 获取房型下的所有可用房间
-  try {
-    const res = await request.get('/rooms', {
-      params: {
-        room_status: 'available',
-        pageSize: 100
-      }
-    })
-    const allAvailableRooms = res.data.list || []
-    // 过滤出当前房型的房间
-    availableRoomsInType.value = allAvailableRooms.filter((r: any) => 
-      r.room_name === type.name || r.room_type === type.code
-    )
-    
-    // 默认选择第一个可用房间
-    if (availableRoomsInType.value.length > 0) {
-      selectedRoomId.value = availableRoomsInType.value[0].id
-    }
-  } catch (error) {
-    console.error('获取可用房间列表失败:', error)
-  }
-
   selectedRoom.value = {
     ...type,
-    id: selectedRoomId.value || type.room_id || type.id,
-    room_id: selectedRoomId.value || type.room_id,
-    room_type_id: type.room_type_id,
+    room_type_id: type.id || type.room_type_id,
     hotel_id: type.hotel_id,
     price: plan.price,
     rate_plan_id: plan.id,
@@ -1096,18 +1066,6 @@ const selectPlan = async (type: any, plan: any) => {
   currentStep.value = 3
   updateCalculatedPrice()
   fetchFrequentGuests()
-}
-
-const availableRoomsInType = ref<any[]>([])
-const selectedRoomId = ref<number | null>(null)
-
-const handleRoomChange = (val: number) => {
-  selectedRoomId.value = val
-  if (selectedRoom.value) {
-    selectedRoom.value.id = val
-    selectedRoom.value.room_id = val
-    updateCalculatedPrice()
-  }
 }
 
 const fetchFrequentGuests = async () => {
@@ -1185,13 +1143,8 @@ const submitBooking = async () => {
     return message.warning('请填写正确的身份证号码')
   }
 
-  const roomId = Number(selectedRoom.value?.id || selectedRoom.value?.room_id)
-  if (!roomId || isNaN(roomId)) {
-    return message.error('无效的房间 ID，请重新选择房间')
-  }
-
   const payload = {
-    room_id: roomId,
+    room_type_id: selectedRoom.value?.room_type_id,
     rate_plan_id: selectedRoom.value?.rate_plan_id,
     check_in_date: dateRange.value[0].format('YYYY-MM-DD'),
     check_out_date: dateRange.value[1].format('YYYY-MM-DD'),
@@ -1908,7 +1861,8 @@ watch(() => appStore.userInfo, (newVal) => {
 .original-price { color: #999; font-size: 12px; text-decoration: line-through; margin-top: 4px; text-align: right; }
 
 .plan-book-btn { width: 80px; height: 36px; font-weight: 700; border-radius: 6px; }
-.inventory-tip { font-size: 11px; color: #fa8c16; margin-top: 4px; font-weight: 600; }
+.inventory-tip { font-size: 11px; color: #8c8c8c; margin-top: 4px; font-weight: 600; text-align: center; }
+.inventory-tip.danger { color: #ff4d4f; }
 
 .ota-form-card {
   border-radius: 12px;

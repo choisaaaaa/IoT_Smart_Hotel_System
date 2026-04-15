@@ -2,7 +2,16 @@ import request from './request'
 import type { RoomInfo, PaginatedResponse, ApiResponse } from '@/types'
 
 export const roomApi = {
-  getRoomList: (params?: { page?: number; pageSize?: number; status?: string; floor?: number; type?: string; groupBy?: string; hotel_id?: number }) =>
+  getRoomList: (params?: { 
+    page?: number; 
+    pageSize?: number; 
+    status?: string; 
+    floor?: number; 
+    type?: string; 
+    groupBy?: string; 
+    hotel_id?: number;
+    room_type_id?: number;
+  }) =>
     request.get<PaginatedResponse<RoomInfo>>('/rooms', { params }),
 
   getRoomsByFloor: (hotelId?: number) =>

@@ -20,8 +20,8 @@ export interface HotelManageInfo {
 
 export const hotelManageApi = {
   // 获取当前登录用户所属酒店的信息
-  getHotelInfo: () =>
-    request.get<ApiResponse<HotelManageInfo>>('/hotel'),
+  getHotelInfo: (params?: { hotel_id?: number }) =>
+    request.get<ApiResponse<HotelManageInfo>>('/hotel', { params }),
 
   // 获取所有酒店列表 (仅 System 角色)
   getAllHotels: () =>

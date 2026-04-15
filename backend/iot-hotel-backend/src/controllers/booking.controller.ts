@@ -112,7 +112,7 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
 // 辅助函数：计算预订最终价格 (集成价格日历、会员折扣、优惠券与积分抵扣)
 async function calculateBookingPrice(
   connection: PoolConnection, 
-  roomId: number, 
+  roomId: number | null, 
   checkInDate: string, 
   checkOutDate: string, 
   memberPhone?: string, 
@@ -120,7 +120,8 @@ async function calculateBookingPrice(
   usedPoints?: number,
   ratePlanId?: number,
   manualDiscount?: number,
-  manualReduce?: number
+  manualReduce?: number,
+  roomTypeId?: number // 新增参数
 ) {
   const floor2 = (v: number) => Math.floor(Number(v || 0) * 100) / 100;
 
@@ -135,12 +136,35 @@ async function calculateBookingPrice(
     throw new Error('退房日期必须晚于入住日期');
   }
 
-  const [roomRows] = await connection.query<RowDataPacket[]>(
-    'SELECT r.room_price, r.hotel_id, COALESCE(r.room_type_id, rt.id) as room_type_id FROM rooms r LEFT JOIN room_types rt ON r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0) WHERE r.id = ?',
-    [roomId]
-  );
-  if (roomRows.length === 0) throw new Error('房间不存在');
-  const room = roomRows[0];
+  let finalRoomTypeId = roomTypeId;
+  let fallbackPrice = 0;
+  let hotelId = 0;
+
+  if (roomId) {
+    const [roomRows] = await connection.query<RowDataPacket[]>(
+      'SELECT r.room_price, r.hotel_id, COALESCE(r.room_type_id, rt.id) as room_type_id FROM rooms r LEFT JOIN room_types rt ON r.room_type = rt.code AND (rt.hotel_id = r.hotel_id OR rt.hotel_id = 0) WHERE r.id = ?',
+      [roomId]
+    );
+    if (roomRows.length > 0) {
+      const room = roomRows[0];
+      if (!finalRoomTypeId) finalRoomTypeId = room.room_type_id;
+      fallbackPrice = Number(room.room_price);
+      hotelId = room.hotel_id;
+    }
+  }
+
+  if (!finalRoomTypeId) {
+    throw new Error('未指定房型，无法计算价格');
+  }
+
+  // 获取房型基础价格（如果没有房间，则从房型表获取）
+  if (fallbackPrice === 0) {
+    const [rtRows] = await connection.query<RowDataPacket[]>('SELECT base_price, hotel_id FROM room_types WHERE id = ?', [finalRoomTypeId]);
+    if (rtRows.length > 0) {
+      fallbackPrice = Number(rtRows[0].base_price);
+      hotelId = rtRows[0].hotel_id;
+    }
+  }
 
   let planBasePrice = 0;
   if (ratePlanId) {
@@ -160,7 +184,7 @@ async function calculateBookingPrice(
     const dateStr = checkIn.add(i, 'day').format('YYYY-MM-DD');
     const [priceRows] = await connection.query<RowDataPacket[]>(
       'SELECT final_price FROM room_prices WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
-      [room.room_type_id, dateStr, normalizedPlanId, normalizedPlanId]
+      [finalRoomTypeId, dateStr, normalizedPlanId, normalizedPlanId]
     );
 
     if (priceRows.length > 0) {
@@ -168,7 +192,7 @@ async function calculateBookingPrice(
     } else if (planBasePrice > 0) {
       basePrice += planBasePrice;
     } else {
-      basePrice += Number(room.room_price);
+      basePrice += fallbackPrice;
     }
   }
   basePrice = floor2(basePrice);
@@ -366,10 +390,15 @@ export const get = async (req: AuthRequest, res: Response) => {
     const total = (totalRows[0] as any).total;
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.*, r.room_number, r.room_type, r.room_name, h.hotel_name
+      `SELECT b.*, r.room_number, r.room_type, r.room_name, h.hotel_name, rt.name as room_type_name,
+              rt.base_price as room_type_base_price, rp.plan_name, rp.base_price as plan_base_price,
+              c.coupon_name as coupon_name
        FROM bookings b
        LEFT JOIN rooms r ON b.room_id = r.id
        LEFT JOIN hotels h ON b.hotel_id = h.id
+       LEFT JOIN room_types rt ON b.room_type_id = rt.id
+       LEFT JOIN rate_plans rp ON b.rate_plan_id = rp.id
+       LEFT JOIN coupons c ON b.coupon_id = c.id
        ${whereClause}
        ORDER BY b.id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
@@ -393,10 +422,14 @@ export const getById = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.*, r.room_number, r.room_type, r.room_name, rp.plan_name, rp.meal_plan, rp.cancellation_policy
+      `SELECT b.*, r.room_number, r.room_type, r.room_name, rt.name as room_type_name,
+              rt.base_price as room_type_base_price, rp.plan_name, rp.base_price as plan_base_price,
+              rp.meal_plan, rp.cancellation_policy, c.coupon_name as coupon_name
        FROM bookings b 
        LEFT JOIN rooms r ON b.room_id = r.id 
+       LEFT JOIN room_types rt ON b.room_type_id = rt.id
        LEFT JOIN rate_plans rp ON b.rate_plan_id = rp.id
+       LEFT JOIN coupons c ON b.coupon_id = c.id
        WHERE b.id = ?`,
       [id]
     );
@@ -419,145 +452,104 @@ export const create = async (req: AuthRequest, res: Response) => {
   try {
     await connection.beginTransaction();
     const { 
-      room_id, rate_plan_id, guest_name, guest_phone, guest_id_number, 
+      room_id, room_type_id, rate_plan_id, guest_name, guest_phone, guest_id_number, 
       check_in_date, check_out_date, guest_count, special_requests, 
       payment_method, coupon_id, used_points, status,
       manual_discount, manual_reduce
     } = req.body;
 
-    if (!room_id) {
+    if (!room_id && !room_type_id) {
       await connection.rollback();
-      return res.status(400).json(errorResponse('请选择房间'));
+      return res.status(400).json(errorResponse('请选择房间或房型'));
     }
 
-    const [roomRows] = await connection.query<RowDataPacket[]>(
-      'SELECT room_price, hotel_id, room_status, room_number, locked_by_booking FROM rooms WHERE id = ? FOR UPDATE',
-      [room_id]
-    );
+    let hotelId = 0;
+    let finalRoomTypeId = room_type_id;
+    let roomNumber = null;
 
-    if (roomRows.length === 0) {
-      await connection.rollback();
-      res.status(404).json(errorResponse(`房间(ID:${room_id})不存在`));
-      return;
+    if (room_id) {
+      const [roomRows] = await connection.query<RowDataPacket[]>(
+        'SELECT hotel_id, room_status, room_number, COALESCE(room_type_id, (SELECT id FROM room_types WHERE code = rooms.room_type LIMIT 1)) as room_type_id FROM rooms WHERE id = ? FOR UPDATE',
+        [room_id]
+      );
+
+      if (roomRows.length === 0) {
+        await connection.rollback();
+        res.status(404).json(errorResponse(`房间(ID:${room_id})不存在`));
+        return;
+      }
+
+      const room = roomRows[0] as any;
+      hotelId = room.hotel_id;
+      roomNumber = room.room_number;
+      if (!finalRoomTypeId) finalRoomTypeId = room.room_type_id;
+    } else {
+      const [rtRows] = await connection.query<RowDataPacket[]>('SELECT hotel_id FROM room_types WHERE id = ?', [room_type_id]);
+      if (rtRows.length === 0) {
+        await connection.rollback();
+        return res.status(404).json(errorResponse('房型不存在'));
+      }
+      hotelId = rtRows[0].hotel_id;
     }
 
-    const room = roomRows[0] as any;
-    const hotelId = room.hotel_id;
-    const roomNumber = room.room_number;
+    // 检查房型余量 (解耦逻辑)
+    const checkIn = dayjs(check_in_date);
+    const checkOut = dayjs(check_out_date);
+    const nights = checkOut.diff(checkIn, 'day');
+    
+    for (let i = 0; i < nights; i++) {
+      const dateStr = checkIn.add(i, 'day').format('YYYY-MM-DD');
+      let currentInventory = 0;
+      let currentSold = 0;
+
+      if (rate_plan_id) {
+        const [inventoryRows] = await connection.query<RowDataPacket[]>(
+          `SELECT p.inventory_count, p.sold_count, rp.default_inventory 
+           FROM rate_plans rp
+           LEFT JOIN room_prices p ON rp.id = p.rate_plan_id AND p.room_type_id = rp.room_type_id AND p.price_date = ?
+           WHERE rp.id = ?`,
+          [dateStr, rate_plan_id]
+        );
+        if (inventoryRows.length > 0) {
+          const inv = inventoryRows[0];
+          currentInventory = inv.inventory_count !== null ? inv.inventory_count : (inv.default_inventory || 10);
+          currentSold = inv.sold_count || 0;
+        } else {
+          await connection.rollback();
+          return res.status(409).json(errorResponse(`日期 ${dateStr} 的房价方案已不存在`));
+        }
+      } else {
+        // 标准价方案
+        const [pRows] = await connection.query<RowDataPacket[]>(
+          'SELECT inventory_count, sold_count FROM room_prices WHERE room_type_id = ? AND price_date = ? AND rate_plan_id IS NULL',
+          [finalRoomTypeId, dateStr]
+        );
+        currentInventory = pRows.length > 0 ? pRows[0].inventory_count : 10;
+        currentSold = pRows.length > 0 ? pRows[0].sold_count : 0;
+      }
+
+      if (currentInventory <= currentSold) {
+        await connection.rollback();
+        return res.status(409).json(errorResponse(`日期 ${dateStr} 的该方案已售罄`));
+      }
+    }
+
     const bookingStatus = status || 'pending';
 
-    // 关键修复：实现同一证件号跨店入住限制
-    if (guest_id_number) {
-      const today = dayjs().format('YYYY-MM-DD');
-      const [duplicateIdRows] = await connection.query<RowDataPacket[]>(
-        `SELECT b.id, b.booking_number, h.hotel_name, r.room_number 
-         FROM bookings b
-         LEFT JOIN hotels h ON b.hotel_id = h.id
-         LEFT JOIN rooms r ON b.room_id = r.id
-         WHERE b.guest_id_number = ? 
-         AND b.status IN ('confirmed', 'pre_checked_in', 'checked_in')
-         AND (
-           DATE(b.check_in_date) = ? 
-           OR (DATE(b.check_in_date) <= ? AND DATE(b.check_out_date) > ?)
-         )
-         LIMIT 1`,
-        [guest_id_number, today, today, today]
-      );
-
-      if (duplicateIdRows.length > 0) {
-        const dup = duplicateIdRows[0] as any;
-        await connection.rollback();
-        return res.status(409).json(errorResponse(
-          `证件号 ${guest_id_number} 今日已有活跃入住或预订（酒店: ${dup.hotel_name}, 房号: ${dup.room_number}）。同一证件不可在同一天入住多个房间。`
-        ));
-      }
-    }
-
-    if (guest_phone) {
-      const [existingBookings] = await connection.query<RowDataPacket[]>(
-        `SELECT id, booking_number, status FROM bookings 
-         WHERE guest_phone = ? AND room_id = ? AND status IN ('pending', 'confirmed', 'pre_checked_in', 'checked_in')
-         LIMIT 1`,
-        [guest_phone, room_id]
-      );
-      if (existingBookings.length > 0) {
-        const existing = existingBookings[0] as any;
-        await connection.rollback();
-        return res.status(409).json(errorResponse(`该顾客在此房间已有未完成的预订（编号: ${existing.booking_number}，状态: ${existing.status}），请直接办理入住`));
-      }
-    }
-
-    if (room.room_status !== 'available' && room.room_status !== 'cleaning') {
-      if (room.locked_by_booking) {
-        await connection.rollback();
-        return res.status(409).json(errorResponse(`房间 ${roomNumber} 已被占用，请选择其他房间`));
-      }
-    }
-
-    // 校验子房价方案及其限制
-    if (rate_plan_id) {
-      const [planRows] = await connection.query<RowDataPacket[]>('SELECT * FROM rate_plans WHERE id = ?', [rate_plan_id]);
-      if (planRows.length === 0) {
-        await connection.rollback();
-        return res.status(400).json(errorResponse('无效的房价方案'));
-      }
-      const plan = planRows[0];
-      if (plan.payment_type === 'online_only' && payment_method === 'front_desk') {
-        await connection.rollback();
-        return res.status(400).json(errorResponse('该方案仅限在线支付'));
-      }
-      if (plan.payment_type === 'front_desk_only' && payment_method !== 'front_desk') {
-        await connection.rollback();
-        return res.status(400).json(errorResponse('该方案仅限到店支付'));
-      }
-    }
-
-    // 对于前台端办理入住，需要根据顾客手机号查找或创建顾客用户
-    let userId = req.user?.id || null;
-    const phone = guest_phone || req.user?.phone || req.user?.username;
-    
-    // 如果当前用户是前台/管理员，且提供了顾客手机号，则查找顾客用户
-    if (isStaff(req.user?.role) || isHotelAdmin(req.user?.role)) {
-      if (guest_phone) {
-        // 查找顾客用户 (兼容 customer, user, guest 角色)
-        const [userRows] = await connection.query<RowDataPacket[]>(
-          'SELECT id FROM users WHERE phone = ? AND role IN ("customer", "user", "guest") LIMIT 1',
-          [guest_phone]
-        );
-        if (userRows.length > 0) {
-          userId = (userRows[0] as any).id;
-          logger.info(`前台端办理入住：找到顾客用户 ID=${userId}, phone=${guest_phone}`);
-        } else {
-          // 如果没有找到顾客用户，创建一个新顾客用户
-          // 必须提供默认密码，否则 INSERT 可能失败 (500)
-          const [createResult] = await connection.query<ResultSetHeader>(
-            `INSERT INTO users (username, phone, role, password, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-            [guest_name || guest_phone, guest_phone, CANONICAL_ROLES.CUSTOMER, '123123'] // 默认密码 123123
-          );
-          userId = createResult.insertId;
-          logger.info(`前台端办理入住：创建新顾客用户 ID=${userId}, phone=${guest_phone}`);
-        }
-      }
-    }
-
-    // 使用辅助函数计算最终价格 (集成价格日历、子房价方案、会员折扣、优惠券、积分抵扣)
+    // 计算最终价格
     const { total_price, discount_rate, used_points: actualUsedPoints, points_discount } = await calculateBookingPrice(
       connection,
-      room_id,
+      room_id || null,
       check_in_date,
       check_out_date,
-      phone,
+      guest_phone,
       coupon_id,
       used_points,
       rate_plan_id,
       manual_discount,
-      manual_reduce
+      manual_reduce,
+      finalRoomTypeId
     );
-
-    // 注意：优惠券和积分在预订创建时不立即扣除
-    // 而是在支付成功后，由支付服务统一处理
-    // 这样可以避免预订取消时需要回退的复杂逻辑
 
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     const checkInTime = bookingStatus === 'checked_in' ? new Date() : null;
@@ -566,75 +558,50 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO bookings (
-        booking_number, hotel_id, room_id, rate_plan_id, user_id, 
+        booking_number, hotel_id, room_id, room_type_id, rate_plan_id, user_id, 
         guest_name, guest_phone, id_type, guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id, used_points, 
         points_discount, total_price, deposit, status, check_in_time,
-        locked_at, locked_by, payment_deadline, auto_checkout_at, room_number
+        locked_at, payment_deadline, auto_checkout_at, room_number
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        bookingNumber, hotelId, room_id, rate_plan_id || null, userId, 
+        bookingNumber, hotelId, room_id || null, finalRoomTypeId, rate_plan_id || null, null, 
         guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id || null, actualUsedPoints, 
         points_discount, total_price, 0, bookingStatus, checkInTime,
-        new Date(), userId, bookingStatus === 'pending' ? paymentDeadline : null, autoCheckoutAt, roomNumber
+        new Date(), bookingStatus === 'pending' ? paymentDeadline : null, autoCheckoutAt, roomNumber
       ]
     );
 
     const bookingId = result.insertId;
 
-    // 处理前台办理入住时的余额支付
-    if (bookingStatus === 'checked_in' && payment_method === 'balance' && guest_phone) {
-      // 前台使用会员余额支付 - 直接扣除余额
-      const [memberRows] = await connection.query<RowDataPacket[]>(
-        'SELECT id, balance FROM members WHERE phone = ?',
-        [guest_phone]
-      );
-      if (memberRows.length > 0) {
-        const member = memberRows[0] as any;
-        if (Number(member.balance) >= Number(total_price)) {
-          await connection.query(
-            'UPDATE members SET balance = balance - ? WHERE id = ? AND balance >= ?',
-            [total_price, member.id, total_price]
-          );
-          logger.info(`前台办理入住余额支付: booking_id=${bookingId}, phone=${guest_phone}, amount=${total_price}`);
-          
-          // 创建支付记录
-          await connection.query(
-            `INSERT INTO payments (hotel_id, order_type, order_id, amount, payment_method, status, paid_at, transaction_no)
-             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`,
-            [hotelId, 'booking', bookingId, total_price, 'balance', 'paid', 'FRONT_DESK_' + Date.now()]
-          );
-        } else {
-          await connection.rollback();
-          return res.status(400).json(errorResponse(`余额不足，当前余额 ¥${member.balance}，需支付 ¥${total_price}`));
-        }
+    // 增加已售数量
+    for (let i = 0; i < nights; i++) {
+      const dateStr = checkIn.add(i, 'day').format('YYYY-MM-DD');
+      if (rate_plan_id) {
+        await connection.query(
+          `INSERT INTO room_prices (room_type_id, rate_plan_id, hotel_id, price_date, inventory_count, sold_count, base_price, final_price)
+           SELECT ?, ?, ?, ?, default_inventory, 1, base_price, base_price
+           FROM rate_plans WHERE id = ?
+           ON DUPLICATE KEY UPDATE sold_count = sold_count + 1`,
+          [finalRoomTypeId, rate_plan_id, hotelId, dateStr, rate_plan_id]
+        );
       } else {
-        await connection.rollback();
-        return res.status(400).json(errorResponse('该手机号未注册会员，无法使用余额支付'));
+        // 标准价方案 (rate_plan_id 为空)
+        const [rtRows] = await connection.query<RowDataPacket[]>('SELECT base_price FROM room_types WHERE id = ?', [finalRoomTypeId]);
+        const basePrice = rtRows.length > 0 ? rtRows[0].base_price : 0;
+        await connection.query(
+          `INSERT INTO room_prices (room_type_id, rate_plan_id, hotel_id, price_date, inventory_count, sold_count, base_price, final_price)
+           VALUES (?, NULL, ?, ?, 10, 1, ?, ?)
+           ON DUPLICATE KEY UPDATE sold_count = sold_count + 1`,
+          [finalRoomTypeId, hotelId, dateStr, basePrice, basePrice]
+        );
       }
     }
 
-    if (bookingStatus === 'checked_in') {
-      await connection.query(
-        `INSERT INTO guests (booking_id, guest_name, guest_phone, id_type, guest_id_number, room_id, check_in_time)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-         ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), id_type = VALUES(id_type), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id)`,
-        [bookingId, guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number || null, room_id]
-      );
+    if (bookingStatus === 'checked_in' && room_id) {
       await connection.query(
         `UPDATE rooms SET room_status = 'occupied', locked_by_booking = ?, locked_at = NOW() WHERE id = ?`,
-        [bookingId, room_id]
-      );
-    } else if (bookingStatus === 'pending') {
-      await connection.query(
-        `UPDATE rooms SET room_status = 'reserved', locked_by_booking = ?, locked_at = NOW() WHERE id = ?`,
-        [bookingId, room_id]
-      );
-      logger.info(`[悲观锁] 房间 ${roomNumber}(id=${room_id}) 已被预订 ${bookingNumber} 锁定，15分钟内需完成支付`);
-    } else if (bookingStatus === 'confirmed') {
-      await connection.query(
-        `UPDATE rooms SET room_status = 'reserved', locked_by_booking = ?, locked_at = NOW() WHERE id = ?`,
         [bookingId, room_id]
       );
     }
@@ -643,10 +610,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     res.json(successResponse({ 
       id: bookingId, 
       booking_number: bookingNumber, 
-      total_price: total_price,
-      payment_deadline: bookingStatus === 'pending' ? paymentDeadline : null,
-      auto_checkout_at: autoCheckoutAt,
-      room_number: roomNumber
+      total_price: total_price
     }, '创建预订成功'));
   } catch (error) {
     await connection.rollback();
@@ -669,13 +633,15 @@ export const lookupForGuest = async (req: Request, res: Response) => {
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT b.id, b.booking_number, b.guest_name, b.guest_phone, b.check_in_date, b.check_out_date, b.status,
+              b.room_type_id, b.hotel_id, rt.name as room_type_name,
               r.id as room_id, r.room_number, r.room_name
        FROM bookings b
+       LEFT JOIN room_types rt ON b.room_type_id = rt.id
        LEFT JOIN rooms r ON b.room_id = r.id
        WHERE (b.booking_number = ? OR b.guest_phone = ?) 
-       AND b.status IN ('confirmed', 'pending')
+       AND b.status IN ('confirmed', 'pending', 'pre_checked_in')
        AND DATE(b.check_out_date) >= CURDATE()
-       ORDER BY CASE WHEN b.status = 'confirmed' THEN 1 ELSE 2 END ASC, b.id DESC
+       ORDER BY CASE WHEN b.status = 'confirmed' THEN 1 WHEN b.status = 'pre_checked_in' THEN 2 ELSE 3 END ASC, b.id DESC
        LIMIT 1`,
       [normalizedKeyword, normalizedKeyword]
     );
@@ -686,16 +652,21 @@ export const lookupForGuest = async (req: Request, res: Response) => {
     }
 
     const booking = rows[0] as any;
+    // 调试日志
+    logger.info(`查找预订结果: id=${booking.id}, room_type_id=${booking.room_type_id}, hotel_id=${booking.hotel_id}, room_type_name=${booking.room_type_name}`);
+
     res.json(successResponse({
       id: booking.id,
       booking_no: booking.booking_number,
       guest_name: booking.guest_name,
       guest_phone: booking.guest_phone,
       room_id: booking.room_id,
-      room_name: booking.room_name || booking.room_number,
+      room_type_id: booking.room_type_id,
+      room_name: booking.room_type_name || booking.room_name || booking.room_number || '未知房型',
       check_in: booking.check_in_date,
       check_out: booking.check_out_date,
-      status: booking.status
+      status: booking.status,
+      hotel_id: booking.hotel_id
     }, '查询预订成功'));
   } catch (error) {
     logger.error('查询预订失败:', error.message);
@@ -708,7 +679,7 @@ export const checkinOnline = async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     const { id } = req.params;
-    const { guest_phone, real_name, id_type, id_number, arrival_time, plate_number } = req.body || {};
+    const { guest_phone, real_name, id_type, id_number, arrival_time, plate_number, room_id } = req.body || {};
 
     if (!guest_phone || !real_name || !id_number) {
       await connection.rollback();
@@ -763,31 +734,74 @@ export const checkinOnline = async (req: Request, res: Response) => {
       return;
     }
 
+    // 如果用户选择了房间，则验证并更新房间ID
+    let finalRoomId = room_id || booking.room_id;
+    let roomNumber = booking.room_number;
+
+    if (room_id) {
+      const [roomRows] = await connection.query<RowDataPacket[]>(
+        'SELECT id, room_number, room_name, room_status FROM rooms WHERE id = ? FOR UPDATE',
+        [room_id]
+      );
+      if (roomRows.length === 0) {
+        await connection.rollback();
+        res.status(404).json(errorResponse('所选房间不存在'));
+        return;
+      }
+      
+      // 允许选择自己已经锁定的房间，或者是空闲房间
+      const isRoomAvailable = roomRows[0].room_status === 'available' || roomRows[0].room_status === 'cleaning';
+      const isSameAsOldRoom = booking.room_id && Number(booking.room_id) === Number(room_id);
+
+      if (!isRoomAvailable && !isSameAsOldRoom) {
+        await connection.rollback();
+        res.status(400).json(errorResponse('所选房间已被占用，请选择其他房间'));
+        return;
+      }
+      
+      // 如果换了新房间，释放旧房间
+      if (booking.room_id && Number(booking.room_id) !== Number(room_id)) {
+        await connection.query(
+          "UPDATE rooms SET room_status = 'available', locked_by_booking = NULL, locked_at = NULL WHERE id = ?",
+          [booking.room_id]
+        );
+      }
+
+      finalRoomId = room_id;
+      roomNumber = roomRows[0].room_number;
+    }
+
     // 在线办理入住：状态改为 pre_checked_in（预入住），等待前台核实
     await connection.query<ResultSetHeader>(
       `UPDATE bookings
-       SET guest_name = ?, id_type = ?, guest_id_number = ?, status = ?, pre_checkin_time = CURRENT_TIMESTAMP
+       SET guest_name = ?, id_type = ?, guest_id_number = ?, room_id = ?, room_number = ?, status = ?, pre_checkin_time = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [real_name, id_type || 'idcard', id_number, 'pre_checked_in', id]
+      [real_name, id_type || 'idcard', id_number, finalRoomId, roomNumber, 'pre_checked_in', id]
     );
+
+    // 修改房间状态为 reserved
+    if (finalRoomId) {
+      await connection.query(
+        `UPDATE rooms SET room_status = 'reserved', locked_by_booking = ?, locked_at = NOW() WHERE id = ?`,
+        [id, finalRoomId]
+      );
+    }
 
     // 插入到 guests 表，状态为预入住
     await connection.query(
       `INSERT INTO guests (booking_id, guest_name, guest_phone, id_type, guest_id_number, room_id, status, check_in_time)
        VALUES (?, ?, ?, ?, ?, ?, 'pre_checked_in', CURRENT_TIMESTAMP)
        ON DUPLICATE KEY UPDATE guest_name = VALUES(guest_name), id_type = VALUES(id_type), guest_id_number = VALUES(guest_id_number), room_id = VALUES(room_id), status = 'pre_checked_in'`,
-      [id, real_name, guest_phone, id_type || 'idcard', id_number, booking.room_id]
+      [id, real_name, guest_phone, id_type || 'idcard', id_number, finalRoomId]
     );
-
-    // 预入住状态不更新房间状态，等待前台核实后才更新
 
     await connection.commit();
     const roomPin = uuidv4().replace(/-/g, '').slice(0, 6).toUpperCase();
     res.json(successResponse({
       booking_id: booking.id,
       booking_no: booking.booking_number,
-      room_id: booking.room_id,
-      room_name: booking.room_name || booking.room_number,
+      room_id: finalRoomId,
+      room_name: roomNumber || booking.room_name || booking.room_number,
       room_pin: roomPin,
       profile: {
         real_name,
@@ -1113,7 +1127,7 @@ export const cancel = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     const [bookingRows] = await connection.query<RowDataPacket[]>(
-      'SELECT room_id, guest_phone, coupon_id, used_points, points_discount, status FROM bookings WHERE id = ?',
+      'SELECT room_id, room_type_id, rate_plan_id, check_in_date, check_out_date, guest_phone, coupon_id, used_points, points_discount, status FROM bookings WHERE id = ?',
       [id]
     );
     if (bookingRows.length === 0) {
@@ -1135,15 +1149,62 @@ export const cancel = async (req: AuthRequest, res: Response) => {
       ['cancelled', id]
     );
 
-    await connection.query(
-      `UPDATE payments SET status = 'expired', expired_at = NOW() 
-       WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status IN ('pending', 'paid')`,
+    // 1. 恢复库存 (针对房型级库存)
+    if (booking.room_type_id && booking.check_in_date && booking.check_out_date) {
+      const checkIn = dayjs(booking.check_in_date);
+      const checkOut = dayjs(booking.check_out_date);
+      const nights = checkOut.diff(checkIn, 'day');
+      
+      for (let i = 0; i < nights; i++) {
+        const dateStr = checkIn.add(i, 'day').format('YYYY-MM-DD');
+        await connection.query(
+          'UPDATE room_prices SET sold_count = GREATEST(0, sold_count - 1) WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
+          [booking.room_type_id, dateStr, booking.rate_plan_id || null, booking.rate_plan_id || null]
+        );
+      }
+      logger.info(`取消订单恢复库存: booking_id=${id}, room_type_id=${booking.room_type_id}, nights=${nights}`);
+    }
+
+    // 2. 处理退款逻辑
+    // 先获取所有已支付的记录
+    const [paidPayments] = await connection.query<RowDataPacket[]>(
+      `SELECT id, amount, payment_method, status FROM payments 
+       WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status = 'paid'`,
       [id]
     );
 
-    // 注意：积分和优惠券现在只在支付成功后扣除
-    // 如果订单已支付，需要回退积分和优惠券
-    const isPaid = booking.status === 'confirmed' || booking.status === 'checked_in';
+    for (const pay of paidPayments) {
+      const refundAmount = Number(pay.amount);
+      if (refundAmount <= 0) continue;
+
+      if (pay.payment_method === 'balance') {
+        // 余额支付：回退到会员余额
+        await connection.query(
+          'UPDATE members SET balance = balance + ? WHERE phone = ?',
+          [refundAmount, booking.guest_phone]
+        );
+        logger.info(`取消订单回退余额: booking_id=${id}, amount=${refundAmount}, phone=${booking.guest_phone}`);
+      } else {
+        // 其他支付方式（微信/支付宝/到店）：目前系统内模拟原路退回，标记为已退款
+        logger.info(`取消订单标记模拟退款 (${pay.payment_method}): booking_id=${id}, amount=${refundAmount}`);
+      }
+
+      // 统一标记支付记录为已退款
+      await connection.query(
+        'UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['refunded', pay.id]
+      );
+    }
+
+    // 3. 处理待支付记录 (将 pending 设为 expired)
+    await connection.query(
+      `UPDATE payments SET status = 'expired', expired_at = NOW() 
+       WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status = 'pending'`,
+      [id]
+    );
+
+    // 4. 回退积分和优惠券
+    const isPaid = booking.status === 'confirmed' || booking.status === 'checked_in' || booking.status === 'pre_checked_in';
     
     if (isPaid) {
       // 回退已使用的优惠券
@@ -1167,28 +1228,6 @@ export const cancel = async (req: AuthRequest, res: Response) => {
           [booking.used_points, booking.guest_phone]
         );
         logger.info(`取消订单回退积分: booking_id=${id}, points=${booking.used_points}`);
-      }
-    }
-
-    // 回退已支付的余额
-    const [paidPayments] = await connection.query<RowDataPacket[]>(
-      `SELECT amount, payment_method, status FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
-      [id]
-    );
-    for (const pay of paidPayments) {
-      const refundAmount = Number(pay.amount);
-      // 只回退已支付的余额，避免重复回退
-      if (refundAmount > 0 && pay.status === 'paid') {
-        await connection.query(
-          'UPDATE members SET balance = balance + ? WHERE phone = ?',
-          [refundAmount, booking.guest_phone]
-        );
-        // 标记该支付记录为已回退，避免重复处理
-        await connection.query(
-          'UPDATE payments SET status = ? WHERE order_type IN (\'booking\', \'booking_extend\') AND order_id = ? AND payment_method = \'balance\' AND status = \'paid\'',
-          ['refunded', id]
-        );
-        logger.info(`取消订单回退余额: booking_id=${id}, amount=${refundAmount}`);
       }
     }
 
@@ -1227,7 +1266,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('缺少状态参数'));
     }
 
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_phone, total_price, status AS current_status FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, room_type_id, rate_plan_id, check_in_date, check_out_date, guest_phone, total_price, status AS current_status, coupon_id, used_points FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
@@ -1282,53 +1321,84 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }
 
     if (status === 'cancelled') {
-      await connection.query(
-        `UPDATE payments SET status = 'expired', expired_at = NOW() 
-         WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status IN ('pending', 'paid')`,
-        [id]
-      );
-
-      if (booking.coupon_id && booking.guest_phone) {
-        const [memberRows] = await connection.query<RowDataPacket[]>(
-          'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
-        );
-        if (memberRows.length > 0) {
+      // 1. 恢复库存 (针对房型级库存)
+      if (booking.room_type_id && booking.check_in_date && booking.check_out_date) {
+        const checkIn = dayjs(booking.check_in_date);
+        const checkOut = dayjs(booking.check_out_date);
+        const nights = checkOut.diff(checkIn, 'day');
+        
+        for (let i = 0; i < nights; i++) {
+          const dateStr = checkIn.add(i, 'day').format('YYYY-MM-DD');
           await connection.query(
-            `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
-            [booking.coupon_id, memberRows[0].id]
+            'UPDATE room_prices SET sold_count = GREATEST(0, sold_count - 1) WHERE room_type_id = ? AND price_date = ? AND (rate_plan_id = ? OR (rate_plan_id IS NULL AND ? IS NULL))',
+            [booking.room_type_id, dateStr, booking.rate_plan_id || null, booking.rate_plan_id || null]
           );
         }
+        logger.info(`状态更新取消订单恢复库存: booking_id=${id}, room_type_id=${booking.room_type_id}, nights=${nights}`);
       }
 
-      if (booking.used_points && booking.used_points > 0 && booking.guest_phone) {
-        await connection.query(
-          'UPDATE members SET points = points + ? WHERE phone = ?',
-          [booking.used_points, booking.guest_phone]
-        );
-      }
-
+      // 2. 处理退款逻辑 (余额、积分、优惠券)
+      // 先获取所有已支付的记录
       const [paidPayments] = await connection.query<RowDataPacket[]>(
-        `SELECT amount, status FROM payments WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND payment_method = 'balance'`,
+        `SELECT id, amount, payment_method, status FROM payments 
+         WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status = 'paid'`,
         [id]
       );
+
       for (const pay of paidPayments) {
         const refundAmount = Number(pay.amount);
-        // 只回退已支付的余额，避免重复回退
-        if (refundAmount > 0 && booking.guest_phone && pay.status === 'paid') {
+        if (refundAmount <= 0) continue;
+
+        if (pay.payment_method === 'balance' && booking.guest_phone) {
+          // 余额支付：回退到会员余额
           await connection.query(
             'UPDATE members SET balance = balance + ? WHERE phone = ?',
             [refundAmount, booking.guest_phone]
           );
-          // 标记该支付记录为已回退，避免重复处理
+          logger.info(`状态更新取消订单回退余额: booking_id=${id}, amount=${refundAmount}, phone=${booking.guest_phone}`);
+        }
+
+        // 统一标记支付记录为已退款
+        await connection.query(
+          'UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['refunded', pay.id]
+        );
+      }
+
+      // 3. 处理待支付记录 (将 pending 设为 expired)
+      await connection.query(
+        `UPDATE payments SET status = 'expired', expired_at = NOW() 
+         WHERE order_type IN ('booking', 'booking_extend') AND order_id = ? AND status = 'pending'`,
+        [id]
+      );
+
+      // 4. 回退积分和优惠券 (如果订单已支付或预入住)
+      const isPaid = currentStatus === 'confirmed' || currentStatus === 'checked_in' || currentStatus === 'pre_checked_in';
+      
+      if (isPaid && booking.guest_phone) {
+        // 回退优惠券
+        if (booking.coupon_id) {
+          const [memberRows] = await connection.query<RowDataPacket[]>(
+            'SELECT id FROM members WHERE phone = ?', [booking.guest_phone]
+          );
+          if (memberRows.length > 0) {
+            await connection.query(
+              `UPDATE member_coupons SET status = 'unused', used_at = NULL WHERE id = ? AND member_id = ? AND status = 'used'`,
+              [booking.coupon_id, memberRows[0].id]
+            );
+          }
+        }
+
+        // 回退积分
+        if (booking.used_points && booking.used_points > 0) {
           await connection.query(
-            'UPDATE payments SET status = ? WHERE order_type IN (\'booking\', \'booking_extend\') AND order_id = ? AND payment_method = \'balance\' AND status = \'paid\'',
-            ['refunded', id]
+            'UPDATE members SET points = points + ? WHERE phone = ?',
+            [booking.used_points, booking.guest_phone]
           );
         }
       }
-    }
 
-    if (status === 'cancelled') {
+      // 5. 更新住客表状态
       await connection.query(
         `UPDATE guests SET check_out_time = NOW() WHERE booking_id = ? AND check_out_time IS NULL`,
         [id]
@@ -1574,11 +1644,11 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
     const { 
-      room_id, check_in_date, check_out_date, guest_phone, coupon_id, 
+      room_id, room_type_id, check_in_date, check_out_date, guest_phone, coupon_id, 
       used_points, rate_plan_id, manual_discount, manual_reduce 
     } = req.query;
 
-    if (!room_id || !check_in_date || !check_out_date) {
+    if ((!room_id && !room_type_id) || !check_in_date || !check_out_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
     }
 
@@ -1598,11 +1668,11 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
       normalizedPlanId = Number(rate_plan_id);
     }
 
-    logger.info(`收到价格计算请求: room_id=${room_id}, phone=${finalPhone}, plan_id=${normalizedPlanId}, points=${used_points}`);
+    logger.info(`收到价格计算请求: room_id=${room_id}, room_type_id=${room_type_id}, phone=${finalPhone}, plan_id=${normalizedPlanId}, points=${used_points}`);
 
     const result = await calculateBookingPrice(
       connection,
-      Number(room_id),
+      room_id ? Number(room_id) : null,
       check_in_date as string,
       check_out_date as string,
       finalPhone,
@@ -1610,7 +1680,8 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
       used_points ? Number(used_points) : undefined,
       normalizedPlanId,
       manual_discount ? Number(manual_discount) : undefined,
-      manual_reduce ? Number(manual_reduce) : undefined
+      manual_reduce ? Number(manual_reduce) : undefined,
+      room_type_id ? Number(room_type_id) : undefined
     );
 
     res.json(successResponse(result, '价格计算成功'));

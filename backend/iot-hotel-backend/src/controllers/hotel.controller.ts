@@ -3,16 +3,16 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { HotelService } from '../services/hotel.service';
 import pool, { ResultSetHeader, RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin, isHotelAdmin, normalizeRole, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isHotelAdmin, isCustomer, normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     let hotelId = req.user?.hotel_id;
     const userRole = normalizeRole(req.user?.role);
 
-    // 系统管理员可以指定查看某个酒店的详情
+    // 系统管理员和顾客可以从 query 指定 hotel_id
     const queryHotelId = req.query.hotel_id;
-    if (isSystemAdmin(userRole) && queryHotelId) {
+    if ((isSystemAdmin(userRole) || isCustomer(userRole)) && queryHotelId) {
       const id = parseInt(queryHotelId as string);
       const hotel = await HotelService.getHotelById(id);
       if (!hotel) return res.status(404).json(errorResponse('酒店不存在'));

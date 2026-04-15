@@ -98,15 +98,22 @@ export interface DeviceInfo {
 export interface BookingInfo {
   id: number
   booking_number: string
-  room_id: number
+  booking_no?: string
+  room_id?: number
+  room_type_id?: number
   guest_name: string
   guest_phone: string
+  guest_id_number?: string
   check_in_date: string
   check_out_date: string
   guest_count: number
   payment_method: string
-  total_price: string
+  total_price: string | number
   status: string
+  special_requests?: string
+  rate_plan_id?: number
+  coupon_id?: number
+  used_points?: number
   created_at: string
   updated_at: string
 }

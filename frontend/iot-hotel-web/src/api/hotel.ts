@@ -63,7 +63,8 @@ class HotelApi {
   }
 
   async createBooking(bookingData: {
-    room_id: number
+    room_id?: number
+    room_type_id?: number
     rate_plan_id?: number
     check_in_date: string
     check_out_date: string

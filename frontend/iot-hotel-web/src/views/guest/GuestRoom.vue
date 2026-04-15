@@ -396,7 +396,16 @@ onMounted(async () => {
     router.push('/guest/booking')
     return
   }
-  await hotelStore.fetchHotelInfo()
+  
+  // 前台未办理入住前不开放客房服务页面
+  if (!appStore.userStatus?.is_checked_in) {
+    message.warning('您当前未入住，无法使用客房服务。请先在预入住页面选房或到前台办理。')
+    router.push('/guest/checkin-online')
+    return
+  }
+
+  const hotelId = appStore.userStatus?.checkin_info?.hotel_id
+  await hotelStore.fetchHotelInfo(hotelId)
   initWebSocket()
 })
 
