@@ -1,6 +1,6 @@
 <template>
   <div class="profile-page-container" :class="'theme-' + (memberInfo.member_level || 'standard')">
-    <!-- 隐藏的头像上传输入框 -->
+    <!-- 顶部状态栏 -->
     <input
       type="file"
       ref="avatarInput"
@@ -18,8 +18,8 @@
                 <div class="hotel-logo">{{ memberProgramName }}</div>
                 <div class="hotel-brand">SMART HOTEL</div>
               </div>
-              <div class="member-badge-new">
-                <span class="level-text">{{ memberInfo.level_label || `LEVEL ${memberInfo.level || 1}` }}</span>
+              <div class="member-badge-new" :class="`badge-level-${memberInfo.member_level || 'standard'}`">
+                <span class="level-text">{{ memberLevelInfo.label }}</span>
               </div>
             </div>
 
@@ -387,7 +387,7 @@
                   <InfoCircleOutlined class="icon" />
                   <div class="text">
                     <strong>充值说明：</strong><br/>
-                    您的当前等级为 <strong>{{ memberInfo?.level_label }}</strong>，充值立享 <strong>{{ ((1 - discountRate) * 100).toFixed(0) }}%</strong> 额度赠送（等同于您的房价折扣力度）。充值后的余额可用于预订房费支付，享受折上折，余额永不过期。
+                    您的当前等级为 <strong>{{ memberLevelInfo.label }}</strong>，充值立享 <strong>{{ ((1 - memberLevelInfo.discount) * 100).toFixed(0) }}%</strong> 额度赠送（等同于您的房价折扣力度）。充值后的余额可用于预订房费支付，享受折上折，余额永不过期。
                   </div>
                 </div>
               </div>
@@ -625,18 +625,20 @@ const onAvatarChange = async (e: Event) => {
 
 // 会员等级逻辑
 const memberLevelInfo = computed(() => {
-  const mLevel = memberInfo.value.member_level || 'standard'
-  const exp = memberInfo.value.experience || 0
+  const mLevel = String(memberInfo.value.member_level || 'standard').toLowerCase().trim()
+  const exp = Number(memberInfo.value.experience || 0)
   
   const levelConfig: any = {
     'diamond': { label: '钻石会员', level: 5, discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 },
-    'platinum': { label: '铂金会员', level: 4, discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor((exp - 2000) / 3000 * 100) },
-    'gold': { label: '金会员', level: 3, discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor((exp - 500) / 1500 * 100) },
-    'silver': { label: '银会员', level: 2, discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor((exp - 100) / 400 * 100) },
-    'standard': { label: '普通会员', level: 1, discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(exp / 100 * 100) }
+    'platinum': { label: '铂金会员', level: 4, discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor(Math.max(0, exp - 2000) / 3000 * 100) },
+    'gold': { label: '金会员', level: 3, discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor(Math.max(0, exp - 500) / 1500 * 100) },
+    'silver': { label: '银会员', level: 2, discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor(Math.max(0, exp - 100) / 400 * 100) },
+    'standard': { label: '普通会员', level: 1, discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(Math.min(100, exp / 100 * 100)) }
   }
   
-  return levelConfig[mLevel] || levelConfig['standard']
+  const config = levelConfig[mLevel] || levelConfig['standard']
+  console.log('[Profile] 会员等级信息:', { mLevel, exp, config })
+  return config
 })
 
 // 会员与资产信息
@@ -1062,14 +1064,43 @@ onMounted(() => {
 }
 
 .member-badge-new {
-  background: linear-gradient(90deg, #d4af37, #f9e29c);
   padding: 8px 20px;
   border-radius: 14px;
-  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.3);
+  transition: all 0.3s ease;
 }
 
+/* 勋章颜色方案 */
+.badge-level-standard {
+  background: linear-gradient(90deg, #4b6cb7, #182848);
+  box-shadow: 0 6px 15px rgba(75, 108, 183, 0.3);
+}
+.badge-level-standard .level-text { color: #fff; }
+
+.badge-level-silver {
+  background: linear-gradient(90deg, #bdc3c7, #2c3e50);
+  box-shadow: 0 6px 15px rgba(189, 195, 199, 0.3);
+}
+.badge-level-silver .level-text { color: #fff; }
+
+.badge-level-gold {
+  background: linear-gradient(90deg, #d4af37, #f9e29c);
+  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.3);
+}
+.badge-level-gold .level-text { color: #1a1a1a; }
+
+.badge-level-platinum {
+  background: linear-gradient(90deg, #e5e4e2, #434343);
+  box-shadow: 0 6px 15px rgba(229, 228, 226, 0.3);
+}
+.badge-level-platinum .level-text { color: #1a1a1a; }
+
+.badge-level-diamond {
+  background: linear-gradient(90deg, #30cfd0, #330867);
+  box-shadow: 0 6px 15px rgba(48, 207, 208, 0.3);
+}
+.badge-level-diamond .level-text { color: #fff; }
+
 .level-text {
-  color: #1a1a1a;
   font-weight: 800;
   font-size: 14px;
 }

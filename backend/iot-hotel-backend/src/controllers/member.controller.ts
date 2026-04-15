@@ -136,37 +136,37 @@ export const get = async (req: AuthRequest, res: Response) => {
         }, '获取会员列表成功'));
       }
       
-      const membersWithLevel = rows.map(m => ({
-        ...m,
-        level: getLevelNumber(m.member_level),
-        level_label: getLevelLabel(m.member_level)
-      }));
-      return res.json(successResponse({
-        list: membersWithLevel, total: 1, page: 1, pageSize: 10, totalPages: 1
-      }, '获取会员列表成功'));
-    }
-
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
-
-    if (level) {
-      whereClause += ' AND member_level = ?';
-      params.push(level);
-    }
-
-    const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM members ${whereClause}`, params);
-    const total = (totalRows[0] as any).total;
-
-    const [rows] = await pool.query<RowDataPacket[]>( 
-      `SELECT * FROM members ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), offset]
-    );
-
-    const membersWithLevel = rows.map(m => ({
+      const membersWithLevel = await Promise.all(rows.map(async m => ({
       ...m,
       level: getLevelNumber(m.member_level),
-      level_label: getLevelLabel(m.member_level)
-    }));
+      level_label: await getLevelLabel(m.member_level)
+    })));
+    return res.json(successResponse({
+      list: membersWithLevel, total: 1, page: 1, pageSize: 10, totalPages: 1
+    }, '获取会员列表成功'));
+  }
+
+  let whereClause = 'WHERE 1=1';
+  const params: any[] = [];
+
+  if (level) {
+    whereClause += ' AND member_level = ?';
+    params.push(level);
+  }
+
+  const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM members ${whereClause}`, params);
+  const total = (totalRows[0] as any).total;
+
+  const [rows] = await pool.query<RowDataPacket[]>( 
+    `SELECT * FROM members ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [...params, Number(pageSize), offset]
+  );
+
+  const membersWithLevel = await Promise.all(rows.map(async m => ({
+    ...m,
+    level: getLevelNumber(m.member_level),
+    level_label: await getLevelLabel(m.member_level)
+  })));
 
     res.json(successResponse({
       list: membersWithLevel,
@@ -195,7 +195,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     const member = {
       ...rows[0],
       level: getLevelNumber(rows[0].member_level),
-      level_label: getLevelLabel(rows[0].member_level)
+      level_label: await getLevelLabel(rows[0].member_level)
     };
 
     res.json(successResponse(member, '获取会员详情成功'));
@@ -300,7 +300,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     
     // 计算等级 (以数据库存储的 member_level 为准，映射数字等级和标签)
     const levelNum = getLevelNumber(member.member_level);
-    const levelLabel = getLevelLabel(member.member_level);
+    const levelLabel = await getLevelLabel(member.member_level);
 
     // 显式构建结果对象，确保所有字段都包含在内
     const result = {
@@ -463,7 +463,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     // 自动升级逻辑 (保持原有阈值)
     const newLevelKey = calculateMemberLevel(newExp);
     const newLevelNum = getLevelNumber(newLevelKey);
-    const newLevelLabel = getLevelLabel(newLevelKey);
+    const newLevelLabel = await getLevelLabel(newLevelKey);
 
     await pool.query(
       'UPDATE members SET experience = ?, points = ?, member_level = ?, last_checkin_date = ? WHERE id = ?',

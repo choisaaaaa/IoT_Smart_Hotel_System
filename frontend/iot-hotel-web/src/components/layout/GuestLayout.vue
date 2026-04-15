@@ -46,7 +46,13 @@
           </template>
           <template v-else>
             <div class="user-status-tags" v-if="appStore.userStatus">
-              <a-tag v-if="appStore.userStatus.is_member" color="gold">会员</a-tag>
+              <a-tag 
+                v-if="appStore.userStatus.is_member && memberLevelInfo" 
+                :color="memberLevelInfo.color"
+                :style="{ color: memberLevelInfo.textColor, border: 'none', fontWeight: 'bold' }"
+              >
+                {{ memberLevelInfo.label }}
+              </a-tag>
               <a-tag v-if="appStore.userStatus.is_checked_in" color="cyan">已入住</a-tag>
             </div>
 
@@ -305,6 +311,25 @@ const appStore = useAppStore()
 
 // 用户信息
 const userInfo = computed(() => appStore.userInfo)
+
+// 会员等级逻辑
+const memberLevelInfo = computed(() => {
+  if (!appStore.userStatus?.is_member || !appStore.userStatus?.member_info) {
+    return null
+  }
+  const member = appStore.userStatus.member_info
+  const mLevel = String(member.member_level || 'standard').toLowerCase().trim()
+  
+  const levelConfig: any = {
+    'diamond': { label: '钻石会员', color: '#330867', textColor: '#fff' },
+    'platinum': { label: '铂金会员', color: '#434343', textColor: '#fff' },
+    'gold': { label: '金会员', color: '#d4af37', textColor: '#1a1a1a' },
+    'silver': { label: '银会员', color: '#2c3e50', textColor: '#fff' },
+    'standard': { label: '普通会员', color: '#4b6cb7', textColor: '#fff' }
+  }
+  
+  return levelConfig[mLevel] || levelConfig['standard']
+})
 
 // 初始化
 appStore.initUserInfo()
