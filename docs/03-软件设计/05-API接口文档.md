@@ -24,6 +24,9 @@
 - `GET /auth/me`: 获取当前登录用户信息及权限。
 - `POST /auth/register`: 新用户注册。
 - `POST /auth/logout`: 登出系统，注销会话。
+- `POST /users/authorize-manager`: 经理授权校验 (用于现场打折等特权操作)。
+  - 请求体：`{ manager_id: number, password: string }`
+  - 业务逻辑：校验经理是否存在、角色是否有权、所属酒店是否匹配、密码是否正确。
 
 ### 2. 酒店资源管理 (`/hotels`, `/rooms`, `/room-types`)
 - `GET /hotels/search`: 根据目的地和日期搜索酒店。
@@ -58,11 +61,16 @@
 - `DELETE /devices/:id`: 移除设备。
 
 ### 4. 业务订单系统 (`/bookings`, `/payments`)
-- `POST /bookings`: 创建客房预订（自动关联用户账号，通过手机号匹配 user_id；自动设置 auto_checkout_at 为退房日期中午12:00）。
+- `POST /bookings`: 创建客房预订。
+  - **业务逻辑**：自动关联用户账号，通过手机号匹配 user_id；自动设置 auto_checkout_at 为退房日期中午12:00。
+  - **支持手动优惠**：`manual_discount` (折扣率，如0.8), `manual_reduce` (直减金额)。需经理授权后由前端调用。
 - `GET /bookings/lookup`: 顾客查询预订（用于在线入住前验证）。
   - **业务逻辑**：仅返回状态为 `pending` 或 `confirmed` 且 **退房日期未过期** 的订单。
-- `GET /bookings/calculate-price`: 预计算订单总价 (考虑优惠券及会员折扣)。
-- `PUT /bookings/:id/checkin`: 办理入住，激活房卡（自动通过手机号关联用户账号，设置 auto_checkout_at）。
+- `GET /bookings/calculate-price`: 预计算订单总价 (考虑优惠券、会员折扣及手动打折)。
+  - **查询参数**：`room_id`, `check_in_date`, `check_out_date`, `guest_phone?`, `coupon_id?`, `manual_discount?`, `manual_reduce?`。
+- `PUT /bookings/:id/checkin`: 办理入住，激活房卡。
+  - **业务逻辑**：自动通过手机号关联用户账号，设置 auto_checkout_at。
+  - **支持同步更新价格**：支持在办理入住时动态传入 `manual_discount`, `manual_reduce`, `total_price` 更新订单最终价。
 - `POST /bookings/:id/checkin-online`: 顾客在线办理入住。
   - **业务逻辑**：将状态改为 `pre_checked_in`（预入住），需校验退房日期未过期。
 - `PUT /bookings/:id/checkout`: 办理退房，结清账单。
