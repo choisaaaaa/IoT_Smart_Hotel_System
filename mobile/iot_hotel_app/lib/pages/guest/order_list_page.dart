@@ -371,6 +371,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             ),
             child: const Text('评价', style: TextStyle(color: Colors.white, fontSize: 12)),
           ),
+        if (order.canEditReview)
+          OutlinedButton(
+            onPressed: () => context.push('/my-reviews'),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            child: const Text('修改评价', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+          ),
         const SizedBox(width: 8),
         OutlinedButton(
           onPressed: () => context.push('/hotel-detail', extra: {'hotelId': order.hotelId ?? 1}),

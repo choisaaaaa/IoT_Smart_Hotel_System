@@ -25,9 +25,9 @@ class ReviewSubmitPage extends ConsumerStatefulWidget {
 
 class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
   int _overallRating = 0;
-  int _serviceRating = 0;
-  int _cleanlinessRating = 0;
+  int _environmentRating = 0;
   int _facilityRating = 0;
+  int _comfortRating = 0;
   final _contentController = TextEditingController();
   final List<File> _selectedImages = [];
   final List<String> _uploadedImageUrls = [];
@@ -42,9 +42,9 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
 
   bool get _canSubmit =>
       _overallRating > 0 &&
-      _serviceRating > 0 &&
-      _cleanlinessRating > 0 &&
+      _environmentRating > 0 &&
       _facilityRating > 0 &&
+      _comfortRating > 0 &&
       _contentController.text.trim().isNotEmpty &&
       !_isSubmitting;
 
@@ -104,14 +104,14 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
       }
 
       final result = await ref.read(reviewServiceProvider).createReview(
-            bookingId: widget.bookingId,
+            orderId: widget.bookingId,
             hotelId: widget.hotelId,
-            rating: _overallRating,
+            score: _overallRating,
             content: _contentController.text.trim(),
-            serviceRating: _serviceRating,
-            cleanlinessRating: _cleanlinessRating,
+            environmentRating: _environmentRating,
             facilityRating: _facilityRating,
-            images: _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls : null,
+            comfortRating: _comfortRating,
+            photos: _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls : null,
           );
 
       if (result.success && mounted) {
@@ -278,24 +278,24 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
           ),
           const SizedBox(height: 20),
           _buildDimensionRow(
-            icon: Icons.room_service_rounded,
-            label: '服务质量',
-            rating: _serviceRating,
-            onRatingChanged: (r) => setState(() => _serviceRating = r),
-          ),
-          const SizedBox(height: 16),
-          _buildDimensionRow(
-            icon: Icons.cleaning_services_rounded,
-            label: '卫生状况',
-            rating: _cleanlinessRating,
-            onRatingChanged: (r) => setState(() => _cleanlinessRating = r),
+            icon: Icons.nature_people_rounded,
+            label: '环境',
+            rating: _environmentRating,
+            onRatingChanged: (r) => setState(() => _environmentRating = r),
           ),
           const SizedBox(height: 16),
           _buildDimensionRow(
             icon: Icons.apartment_rounded,
-            label: '设施设备',
+            label: '设施',
             rating: _facilityRating,
             onRatingChanged: (r) => setState(() => _facilityRating = r),
+          ),
+          const SizedBox(height: 16),
+          _buildDimensionRow(
+            icon: Icons.weekend_rounded,
+            label: '舒适',
+            rating: _comfortRating,
+            onRatingChanged: (r) => setState(() => _comfortRating = r),
           ),
         ],
       ),

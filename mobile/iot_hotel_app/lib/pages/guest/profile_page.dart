@@ -466,14 +466,14 @@ class ProfilePage extends ConsumerWidget {
           Container(width: 1, height: 16, color: AppColors.divider),
           Expanded(
             child: InkWell(
-              onTap: () {},
+              onTap: () => context.push('/my-reviews'),
               borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history_rounded, size: 18, color: AppColors.textSecondary),
+                  Icon(Icons.rate_review_outlined, size: 18, color: AppColors.textSecondary),
                   SizedBox(width: 4),
-                  Text('浏览历史 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Text('我的评价 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -495,7 +495,7 @@ class ProfilePage extends ConsumerWidget {
   Widget _buildToolSection(BuildContext context, WidgetRef ref) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -507,7 +507,7 @@ class ProfilePage extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('常用工具', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
+          const SizedBox(height: 4),
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -517,11 +517,11 @@ class ProfilePage extends ConsumerWidget {
               _buildToolItem(Icons.person_outline_rounded, '账号管理', onTap: () => context.push('/personal-info')),
               _buildToolItem(Icons.people_outline_rounded, '常旅客', onTap: () => context.push('/frequent-guests')),
               _buildToolItem(Icons.receipt_long_outlined, '我的订单', onTap: () => context.push('/orders')),
+              _buildToolItem(Icons.rate_review_outlined, '我的评价', onTap: () => context.push('/my-reviews')),
               _buildToolItem(Icons.headset_mic_outlined, '在线客服', onTap: () => context.push('/ai-butler')),
               _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
               _buildToolItem(Icons.card_travel_outlined, '自助退房', onTap: () => context.push('/orders')),
               _buildToolItem(Icons.update_outlined, '在线续住', onTap: () => context.push('/orders')),
-              _buildToolItem(Icons.logout_rounded, '退出登录', onTap: () => _showLogoutConfirmation(context, ref)),
             ],
           ),
         ],

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../models/device.dart';
-import '../../../services/device_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../models/device.dart';
+import '../../services/device_service.dart';
 
 class DeviceMonitorPage extends ConsumerStatefulWidget {
   const DeviceMonitorPage({super.key});

@@ -25,8 +25,8 @@ class HotelDetailPage extends ConsumerStatefulWidget {
 class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   final List<dynamic> _reviews = [];
   bool _isLoadingReviews = false;
-  bool _hasMoreReviews = true;
   int _reviewPage = 1;
+  Map<String, dynamic>? _reviewStats;
   
   Hotel? _hotelInfo;
   List<RoomType> _rooms = [];
@@ -117,28 +117,37 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Future<void> _fetchReviews() async {
-    if (_isLoadingReviews || !_hasMoreReviews) return;
+    if (_isLoadingReviews) return;
 
     setState(() => _isLoadingReviews = true);
     try {
-      final result = await ref.read(reviewServiceProvider).getHotelReviews(
-        widget.hotelId ?? 1,
-        page: _reviewPage,
-        pageSize: 10,
-      );
+      final hotelId = widget.hotelId ?? _hotelInfo?.id ?? 1;
 
-      if (result.success && mounted) {
-        final newReviews = result.data ?? [];
+      final results = await Future.wait([
+        ref.read(reviewServiceProvider).getHotelReviews(
+          hotelId,
+          page: _reviewPage,
+          pageSize: 10,
+        ),
+        if (_reviewStats == null)
+          ref.read(reviewServiceProvider).getReviewStats(hotelId),
+      ]);
+
+      final reviewResult = results[0];
+      if (reviewResult.success && mounted) {
+        final data = reviewResult.data;
+        final newReviews = data is Map ? (data?['list'] as List<dynamic>? ?? []) : (data as List<dynamic>? ?? []);
         setState(() {
           _reviews.addAll(newReviews);
           _reviewPage++;
-          if (newReviews.length < 10) {
-            _hasMoreReviews = false;
-          }
         });
       }
+
+      if (results.length > 1 && results[1].success && results[1].data != null) {
+        setState(() => _reviewStats = results[1].data as Map<String, dynamic>);
+      }
     } catch (e) {
-      debugPrint('鉁?reviews: $e');
+      debugPrint('Fetch reviews error: $e');
     } finally {
       if (mounted) setState(() => _isLoadingReviews = false);
     }
@@ -265,9 +274,9 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
               children: [
                 Row(
                   children: [
-                    const Text('4.8', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text(_reviewStats?['avg_score'] ?? _hotelInfo?.rating?.toString() ?? '4.5', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
                     const SizedBox(width: 4),
-                    Text('很棒 ${_reviews.isEmpty ? "连续281条" : "${_reviews.length}条"}好评', style: TextStyle(fontSize: 13, color: AppColors.primary)),
+                    Text('很棒 ${_reviewStats?['total_reviews'] ?? _reviews.length}条好评', style: TextStyle(fontSize: 13, color: AppColors.primary)),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -489,37 +498,90 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('住客评价 (${_reviews.length})', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
-              if (_reviews.isNotEmpty)
-                TextButton(
-                  onPressed: () {},
-                  child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 13)),
+          GestureDetector(
+            onTap: () {
+              final hotelId = widget.hotelId ?? _hotelInfo?.id;
+              if (hotelId != null) {
+                context.push('/hotel-reviews/$hotelId', extra: {
+                  'hotelName': _hotelInfo?.hotelName ?? '酒店',
+                });
+              }
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text('住客评价', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    if (_reviewStats != null)
+                      Text('${_reviewStats!['avg_score'] ?? '0.0'}分', style: GoogleFonts.notoSansSc(fontSize: 14, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ],
                 ),
-            ],
+                Row(
+                  children: [
+                    Text('${_reviewStats?['total_reviews'] ?? _reviews.length}条', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    const SizedBox(width: 4),
+                    Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+          if (_reviewStats != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildMiniStat('环境', _reviewStats!['avg_environment'] ?? '0.0'),
+                const SizedBox(width: 12),
+                _buildMiniStat('设施', _reviewStats!['avg_facility'] ?? '0.0'),
+                const SizedBox(width: 12),
+                _buildMiniStat('舒适', _reviewStats!['avg_comfort'] ?? '0.0'),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
           if (_reviews.isEmpty && !_isLoadingReviews)
             _buildEmptyReviews()
           else
             ..._reviews.take(3).map((review) => _buildReviewItem(review)),
-          if (_hasMoreReviews)
+          if (_reviews.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.only(top: 12),
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _fetchReviews,
-                  child: _isLoadingReviews
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('加载更多评价'),
+                  onPressed: () {
+                    final hotelId = widget.hotelId ?? _hotelInfo?.id;
+                    if (hotelId != null) {
+                      context.push('/hotel-reviews/$hotelId', extra: {
+                        'hotelName': _hotelInfo?.hotelName ?? '酒店',
+                      });
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text('查看全部评价', style: GoogleFonts.notoSansSc(fontSize: 14)),
                 ),
               ),
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMiniStat(String label, String value) {
+    final v = double.tryParse(value) ?? 0.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(width: 4),
+        Text(value, style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: v >= 4 ? AppColors.success : v >= 3 ? AppColors.warning : AppColors.error)),
+      ],
     );
   }
 
@@ -539,10 +601,14 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Widget _buildReviewItem(dynamic review) {
-    final rating = review['rating'] ?? 5.0;
-    final userName = review['user_name'] ?? '匿名用户';
+    final rating = (review['score'] ?? 5.0).toDouble();
+    final userName = review['member_name'] ?? review['member_phone'] ?? '匿名用户';
     final content = review['content'] ?? '';
     final createdAt = review['created_at'] ?? '';
+    final envRating = review['environment_rating'];
+    final facRating = review['facility_rating'];
+    final comRating = review['comfort_rating'];
+    final reply = review['reply'];
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -566,13 +632,52 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
               ),
             ],
           ),
+          if (envRating != null || facRating != null || comRating != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (envRating != null) _buildReviewTag('环境$envRating'),
+                if (facRating != null) ...[const SizedBox(width: 6), _buildReviewTag('设施$facRating')],
+                if (comRating != null) ...[const SizedBox(width: 6), _buildReviewTag('舒适$comRating')],
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Text(content, style: TextStyle(fontSize: 14, color: AppColors.textPrimary, height: 1.5)),
+          if (reply != null && reply.toString().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.reply_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text('酒店回复：$reply', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Text(_formatDate(createdAt), style: TextStyle(fontSize: 12, color: AppColors.textHint)),
           const Divider(height: 24),
         ],
       ),
+    );
+  }
+
+  Widget _buildReviewTag(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(text, style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textSecondary)),
     );
   }
 

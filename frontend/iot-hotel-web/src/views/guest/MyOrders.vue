@@ -124,6 +124,21 @@
               >
                 取消订单
               </a-button>
+              <a-button
+                v-if="order.status === 'checked_out' && !order.has_review"
+                type="primary"
+                @click="openReviewModal(order)"
+              >
+                <template #icon><FormOutlined /></template>
+                评价
+              </a-button>
+              <a-button
+                v-if="order.status === 'checked_out' && order.has_review"
+                @click="openReviewModal(order, true)"
+              >
+                <template #icon><EditOutlined /></template>
+                修改评价
+              </a-button>
             </div>
           </div>
         </a-card>
@@ -288,11 +303,59 @@
         </div>
       </div>
     </a-modal>
+    <!-- Review Modal -->
+    <a-modal
+      v-model:open="reviewModalVisible"
+      :title="isEditReview ? '修改评价' : '评价订单'"
+      @ok="submitReview"
+      :confirm-loading="reviewSubmitting"
+      ok-text="提交评价"
+      cancel-text="取消"
+      width="520px"
+    >
+      <div v-if="reviewOrder" class="review-modal-content">
+        <div class="review-order-info">
+          <span class="hotel-name">{{ reviewOrder.hotel_name || '酒店' }}</span>
+          <span class="room-type">{{ reviewOrder.room_type_name || reviewOrder.room_type }}</span>
+        </div>
+
+        <div class="rating-section">
+          <div class="rating-row">
+            <span class="rating-label">环境评分</span>
+            <a-rate v-model:value="reviewForm.environment_rating" :count="5" />
+            <span class="rating-val">{{ reviewForm.environment_rating }}分</span>
+          </div>
+          <div class="rating-row">
+            <span class="rating-label">设施评分</span>
+            <a-rate v-model:value="reviewForm.facility_rating" :count="5" />
+            <span class="rating-val">{{ reviewForm.facility_rating }}分</span>
+          </div>
+          <div class="rating-row">
+            <span class="rating-label">舒适评分</span>
+            <a-rate v-model:value="reviewForm.comfort_rating" :count="5" />
+            <span class="rating-val">{{ reviewForm.comfort_rating }}分</span>
+          </div>
+        </div>
+
+        <a-form layout="vertical" style="margin-top: 16px;">
+          <a-form-item label="评价内容">
+            <a-textarea
+              v-model:value="reviewForm.content"
+              placeholder="请分享您的入住体验..."
+              :rows="4"
+              :maxlength="500"
+              show-count
+            />
+          </a-form-item>
+        </a-form>
+      </div>
+    </a-modal>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -300,13 +363,17 @@ import {
   PlusOutlined,
   WalletOutlined,
   WechatOutlined,
-  AlipayCircleOutlined
+  AlipayCircleOutlined,
+  StarFilled,
+  FormOutlined,
+  EditOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import request from '@/api/request'
 import { bookingApi } from '@/api/booking'
 import { memberApi } from '@/api/member'
 import { paymentApi } from '@/api/payment'
+import { createReview, updateReview, getMyReviews } from '@/api/review'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
@@ -331,6 +398,18 @@ const coupons = ref<any[]>([])
 const payModalVisible = ref(false)
 const selectedOrder = ref<any>(null)
 const payMethod = ref('balance')
+
+const reviewModalVisible = ref(false)
+const reviewSubmitting = ref(false)
+const reviewOrder = ref<any>(null)
+const isEditReview = ref(false)
+const existingReviewId = ref<number | null>(null)
+const reviewForm = reactive({
+  environment_rating: 5,
+  facility_rating: 5,
+  comfort_rating: 5,
+  content: ''
+})
 
 const isLoggedIn = computed(() => !!appStore.userInfo)
 
@@ -583,6 +662,76 @@ const handleExtendStay = async () => {
     message.error(errMsg)
   } finally {
     extendSubmitting.value = false
+  }
+}
+
+const openReviewModal = async (order: any, isEdit = false) => {
+  reviewOrder.value = order
+  isEditReview.value = isEdit
+  reviewForm.environment_rating = 5
+  reviewForm.facility_rating = 5
+  reviewForm.comfort_rating = 5
+  reviewForm.content = ''
+
+  if (isEdit && order.has_review) {
+    try {
+      const res = await getMyReviews({ page: 1, pageSize: 50 })
+      const reviews = res.data?.list || []
+      const existing = reviews.find((r: any) => r.order_id === order.id)
+      if (existing) {
+        existingReviewId.value = existing.id
+        reviewForm.environment_rating = existing.environment_rating || 5
+        reviewForm.facility_rating = existing.facility_rating || 5
+        reviewForm.comfort_rating = existing.comfort_rating || 5
+        reviewForm.content = existing.content || ''
+      }
+    } catch (e) {
+      console.error('获取评价失败:', e)
+    }
+  }
+
+  reviewModalVisible.value = true
+}
+
+const submitReview = async () => {
+  if (!reviewOrder.value) return
+  if (!reviewForm.content.trim()) {
+    return message.warning('请填写评价内容')
+  }
+
+  try {
+    reviewSubmitting.value = true
+    const score = Math.round((reviewForm.environment_rating + reviewForm.facility_rating + reviewForm.comfort_rating) / 3 * 10) / 10
+
+    if (isEditReview.value && existingReviewId.value) {
+      await updateReview(existingReviewId.value, {
+        score,
+        environment_rating: reviewForm.environment_rating,
+        facility_rating: reviewForm.facility_rating,
+        comfort_rating: reviewForm.comfort_rating,
+        content: reviewForm.content
+      })
+      message.success('评价已更新')
+    } else {
+      await createReview({
+        order_id: reviewOrder.value.id,
+        hotel_id: reviewOrder.value.hotel_id,
+        room_type_id: reviewOrder.value.room_type_id,
+        score,
+        environment_rating: reviewForm.environment_rating,
+        facility_rating: reviewForm.facility_rating,
+        comfort_rating: reviewForm.comfort_rating,
+        content: reviewForm.content
+      })
+      message.success('评价提交成功')
+    }
+
+    reviewModalVisible.value = false
+    fetchOrders()
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '评价提交失败')
+  } finally {
+    reviewSubmitting.value = false
   }
 }
 
@@ -897,5 +1046,47 @@ onMounted(() => {
   color: #ff4d4f;
   font-size: 20px;
   font-weight: 700;
+}
+
+.review-modal-content {
+  padding: 8px 0;
+}
+.review-order-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+.review-order-info .hotel-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.review-order-info .room-type {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+.rating-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rating-label {
+  font-size: 14px;
+  color: #595959;
+  width: 70px;
+}
+.rating-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #faad14;
+  width: 30px;
 }
 </style>

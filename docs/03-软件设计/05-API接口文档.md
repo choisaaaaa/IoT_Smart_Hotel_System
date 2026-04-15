@@ -223,6 +223,67 @@
 - **权限**：仅 `system_admin`
 - **请求体**：`{ key: value, ... }` (支持嵌套 JSON 对象作为 value)
 
+### 9. 评价与申诉系统 (`/reviews`)
+> **权限要求**：部分接口需登录，申诉处理仅 `system_admin`
+
+#### 9.1 获取评价列表
+- **接口**：`GET /reviews`
+- **参数**：`hotel_id`(可选), `user_id`(可选), `page`, `pageSize`
+- **说明**：获取评价列表，支持按酒店和用户过滤，排除已软删除的评价
+
+#### 9.2 获取评价详情
+- **接口**：`GET /reviews/:id`
+- **说明**：获取单条评价详情，包含酒店名称和房型名称
+
+#### 9.3 获取我的评价
+- **接口**：`GET /reviews/my`
+- **权限**：需登录
+- **说明**：获取当前登录用户的所有评价，支持分页
+
+#### 9.4 获取评价统计
+- **接口**：`GET /reviews/stats`
+- **参数**：`hotel_id`(必填)
+- **返回数据**：`{ total_reviews, avg_score, avg_environment, avg_facility, avg_comfort, good_count, medium_count, bad_count, distribution }`
+
+#### 9.5 创建评价
+- **接口**：`POST /reviews`
+- **权限**：需登录（顾客）
+- **请求体**：`{ order_id, hotel_id?, room_type_id?, score, environment_rating, facility_rating, comfort_rating, content, photos? }`
+- **业务约束**：订单必须已退房、只能评价自己的订单、不可重复评价
+
+#### 9.6 修改评价
+- **接口**：`PUT /reviews/:id`
+- **权限**：评价本人或系统管理员
+- **请求体**：`{ score?, environment_rating?, facility_rating?, comfort_rating?, content?, photos? }`
+
+#### 9.7 删除评价
+- **接口**：`DELETE /reviews/:id`
+- **权限**：评价本人或系统管理员
+- **说明**：软删除，删除后自动更新酒店评分
+
+#### 9.8 回复评价
+- **接口**：`POST /reviews/:id/reply`
+- **权限**：酒店管理员、前台、系统管理员
+- **请求体**：`{ reply }`
+
+#### 9.9 获取申诉列表
+- **接口**：`GET /reviews/appeals`
+- **权限**：需登录
+- **参数**：`hotel_id`(可选), `status`(可选), `page`, `pageSize`
+- **说明**：酒店管理员只能查看本酒店的申诉，系统管理员可查看所有
+
+#### 9.10 创建申诉
+- **接口**：`POST /reviews/appeals`
+- **权限**：酒店管理员或前台
+- **请求体**：`{ review_id, appeal_reason }`
+- **业务约束**：同一评价不能重复提交待处理的申诉
+
+#### 9.11 处理申诉
+- **接口**：`PUT /reviews/appeals/:id`
+- **权限**：仅系统管理员
+- **请求体**：`{ action: 'approved'|'rejected', handle_reason? }`
+- **说明**：approved 通过后评价自动软删除
+
 ---
 
 ## 📡 实时推送 (WebSocket)

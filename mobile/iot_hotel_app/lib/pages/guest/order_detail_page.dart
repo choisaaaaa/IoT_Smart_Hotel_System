@@ -148,7 +148,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         const SizedBox(height: 12),
                         _buildTimelineCard(),
                         const SizedBox(height: 12),
-                        if (_order!.canPay || _order!.canCheckin || _order!.canCancel || _order!.canExtend || _order!.canEnterRoom || _order!.canReview)
+                        if (_order!.canPay || _order!.canCheckin || _order!.canCancel || _order!.canExtend || _order!.canEnterRoom || _order!.canReview || _order!.canEditReview)
                           _buildActionButtons(),
                         const SizedBox(height: 32),
                       ],
@@ -557,14 +557,26 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: OutlinedButton(
+              child: FilledButton(
                 onPressed: () => context.push('/review-submit/${widget.orderId}', extra: {
                   'bookingId': widget.orderId,
                   'hotelId': _order?.hotelId,
                   'hotelName': _order?.hotelName,
                 }),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
                 child: const Text('去评价'),
+              ),
+            ),
+          ],
+          if (_order!.canEditReview) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => context.push('/my-reviews'),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: const BorderSide(color: AppColors.primary)),
+                child: const Text('修改评价'),
               ),
             ),
           ],

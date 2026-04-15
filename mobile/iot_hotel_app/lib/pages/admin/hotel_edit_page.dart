@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../services/hotel_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../services/hotel_service.dart';
 
 class HotelEditPage extends ConsumerStatefulWidget {
   const HotelEditPage({super.key});
@@ -60,7 +60,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
           children: [
             Center(
               child: Stack(alignment: Alignment.bottomRight, children: [
-                Container(width: 120, height: 120, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.hotel, size: 48, color: AppColors.textHint)),
+                Container(width: 120, height: 120, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(12)), child: Icon(Icons.hotel, size: 48, color: AppColors.textHint)),
                 Positioned(bottom: -4, right: -4, child: FloatingActionButton.small(onPressed: () => _pickImage(), child: const Icon(Icons.camera_alt))),
               ]),
             ),
@@ -115,7 +115,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
       if (!mounted) return;
 
       if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('酒店信息保存成功'), backgroundColor: AppColors.success));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('酒店信息保存成功'), backgroundColor: AppColors.success));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '保存失败')));
       }

@@ -6,7 +6,7 @@ import '../core/constants/api_constants.dart';
 class ReviewService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<List<dynamic>>> getHotelReviews(int hotelId, {
+  Future<ApiResult<Map<String, dynamic>>> getHotelReviews(int hotelId, {
     int page = 1,
     int pageSize = 10,
   }) async {
@@ -21,9 +21,7 @@ class ReviewService {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
-        if (data is List) return ApiResult.success(List<dynamic>.from(data));
-        return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取评价列表失败');
     } catch (e) {
@@ -32,26 +30,28 @@ class ReviewService {
   }
 
   Future<ApiResult<Map<String, dynamic>>> createReview({
-    Map<String, dynamic>? data,
-    int? bookingId,
+    int? orderId,
     int? hotelId,
-    int? rating,
-    String? content,
-    int? serviceRating,
-    int? cleanlinessRating,
+    int? roomTypeId,
+    int? score,
+    int? environmentRating,
     int? facilityRating,
-    List<String>? images,
+    int? comfortRating,
+    String? content,
+    List<String>? photos,
   }) async {
     try {
-      final payload = data ??
-          {
-            if (bookingId != null) 'order_id': bookingId,
-            if (hotelId != null) 'hotel_id': hotelId,
-            if (rating != null) 'score': rating,
-            if (content != null) 'content': content,
-            'order_type': 'booking',
-            if (images != null && images.isNotEmpty) 'photos': images,
-          };
+      final payload = <String, dynamic>{
+        if (orderId != null) 'order_id': orderId,
+        if (hotelId != null) 'hotel_id': hotelId,
+        if (roomTypeId != null) 'room_type_id': roomTypeId,
+        if (score != null) 'score': score,
+        if (environmentRating != null) 'environment_rating': environmentRating,
+        if (facilityRating != null) 'facility_rating': facilityRating,
+        if (comfortRating != null) 'comfort_rating': comfortRating,
+        if (content != null) 'content': content,
+        if (photos != null && photos.isNotEmpty) 'photos': photos,
+      };
       final response = await _dioClient.post(ApiConstants.reviews, data: payload);
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
@@ -63,13 +63,13 @@ class ReviewService {
     }
   }
 
-  Future<ApiResult<List<dynamic>>> getMyReviews({
+  Future<ApiResult<Map<String, dynamic>>> getMyReviews({
     int page = 1,
     int pageSize = 10,
   }) async {
     try {
       final response = await _dioClient.get(
-        ApiConstants.reviews,
+        '${ApiConstants.reviews}/my',
         queryParameters: {
           'page': page,
           'pageSize': pageSize,
@@ -77,9 +77,7 @@ class ReviewService {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
-        if (data is List) return ApiResult.success(List<dynamic>.from(data));
-        return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取我的评价失败');
     } catch (e) {
@@ -90,32 +88,170 @@ class ReviewService {
   Future<ApiResult<Map<String, dynamic>>> getReviewStats(int hotelId) async {
     try {
       final response = await _dioClient.get(
-        ApiConstants.reviews,
-        queryParameters: {'hotel_id': hotelId, 'pageSize': 200},
+        '${ApiConstants.reviews}/stats',
+        queryParameters: {'hotel_id': hotelId},
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
-        List<dynamic> reviews = [];
-        if (data is List) {
-          reviews = List<dynamic>.from(data);
-        } else if (data is Map) {
-          reviews = List<dynamic>.from(data['list'] ?? []);
-        }
-
-        double totalScore = 0;
-        int count = reviews.length;
-        for (final r in reviews) {
-          totalScore += (r['score'] as num?)?.toDouble() ?? 0;
-        }
-
-        return ApiResult.success({
-          'average_score': count > 0 ? totalScore / count : 0,
-          'total_reviews': count,
-          'score_distribution': {},
-        });
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取评价统计失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> updateReview({
+    required int id,
+    int? score,
+    int? environmentRating,
+    int? facilityRating,
+    int? comfortRating,
+    String? content,
+    List<String>? photos,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        if (score != null) 'score': score,
+        if (environmentRating != null) 'environment_rating': environmentRating,
+        if (facilityRating != null) 'facility_rating': facilityRating,
+        if (comfortRating != null) 'comfort_rating': comfortRating,
+        if (content != null) 'content': content,
+        if (photos != null) 'photos': photos,
+      };
+      final response = await _dioClient.put('${ApiConstants.reviews}/$id', data: payload);
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '修改评价失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> deleteReview(int id) async {
+    try {
+      final response = await _dioClient.delete('${ApiConstants.reviews}/$id');
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '删除评价失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> replyReview({
+    required int id,
+    required String reply,
+  }) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.reviews}/$id/reply',
+        data: {'reply': reply},
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '回复评价失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> getAppeals({
+    int? hotelId,
+    String? status,
+    int page = 1,
+    int pageSize = 10,
+  }) async {
+    try {
+      final response = await _dioClient.get(
+        '${ApiConstants.reviews}/appeals',
+        queryParameters: {
+          if (hotelId != null) 'hotel_id': hotelId,
+          if (status != null) 'status': status,
+          'page': page,
+          'pageSize': pageSize,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取申诉列表失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> createAppeal({
+    required int reviewId,
+    required String appealReason,
+  }) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.reviews}/appeals',
+        data: {
+          'review_id': reviewId,
+          'appeal_reason': appealReason,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '提交申诉失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> handleAppeal({
+    required int id,
+    required String action,
+    String? handleReason,
+  }) async {
+    try {
+      final response = await _dioClient.put(
+        '${ApiConstants.reviews}/appeals/$id',
+        data: {
+          'action': action,
+          if (handleReason != null) 'handle_reason': handleReason,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '处理申诉失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> getAllReviews({
+    int? hotelId,
+    int page = 1,
+    int pageSize = 10,
+  }) async {
+    try {
+      final response = await _dioClient.get(
+        ApiConstants.reviews,
+        queryParameters: {
+          if (hotelId != null) 'hotel_id': hotelId,
+          'page': page,
+          'pageSize': pageSize,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取评价列表失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

@@ -34,6 +34,8 @@ import '../pages/guest/favorites_page.dart';
 import '../pages/guest/online_checkin_page.dart';
 import '../pages/guest/notification_center_page.dart';
 import '../pages/guest/review_submit_page.dart';
+import '../pages/guest/my_reviews_page.dart';
+import '../pages/guest/hotel_reviews_page.dart';
 import '../pages/guest/checkout_page.dart';
 import '../pages/guest/coupon_center_page.dart';
 import '../pages/guest/extend_stay_page.dart';
@@ -103,7 +105,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoggedIn) {
-        final protectedPaths = ['/booking-flow', '/orders', '/order-detail', '/online-checkin', '/checkout', '/extend-stay', '/review-submit', '/favorites', '/personal-info', '/wallet', '/coupons'];
+        final protectedPaths = ['/booking-flow', '/orders', '/order-detail', '/online-checkin', '/checkout', '/extend-stay', '/review-submit', '/my-reviews', '/hotel-reviews', '/favorites', '/personal-info', '/wallet', '/coupons'];
         if (protectedPaths.any((p) => currentPath.startsWith(p)) && 
             (authState.currentMode != AppMode.guest && authState.currentMode != AppMode.customer)) {
           debugPrint('🚫 [Router Access Denied] Path "$currentPath" not allowed for mode "${authState.currentMode}"');
@@ -225,6 +227,23 @@ final routerProvider = Provider<GoRouter>((ref) {
           return ReviewSubmitPage(
             bookingId: bookingId,
             hotelId: extra['hotelId'] as int?,
+            hotelName: extra['hotelName'] as String?,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/my-reviews',
+        name: 'my-reviews',
+        builder: (context, state) => const MyReviewsPage(),
+      ),
+      GoRoute(
+        path: '/hotel-reviews/:hotelId',
+        name: 'hotel-reviews',
+        builder: (context, state) {
+          final hotelId = int.tryParse(state.pathParameters['hotelId'] ?? '0') ?? 0;
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return HotelReviewsPage(
+            hotelId: hotelId,
             hotelName: extra['hotelName'] as String?,
           );
         },

@@ -3,15 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../services/auth_service.dart';
-import '../../../services/hotel_service.dart';
-import '../../../services/room_service.dart';
-import '../../../services/payment_service.dart';
-import '../../../services/device_service.dart';
-import '../../../core/network/dio_client.dart';
-import '../../../core/constants/api_constants.dart';
-import '../../../core/auth/auth_state_notifier.dart';
+import '../../core/theme/app_colors.dart';
+import '../../services/auth_service.dart';
+import '../../services/hotel_service.dart';
+import '../../services/room_service.dart';
+import '../../services/payment_service.dart';
+import '../../services/device_service.dart';
+import '../../core/network/dio_client.dart';
+import '../../core/constants/api_constants.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import 'device_monitor_page.dart';
 import 'room_manage_page.dart';
 import 'hotel_edit_page.dart';
@@ -22,6 +22,7 @@ import 'price_calendar_page.dart';
 import 'coupon_manage_page.dart';
 import 'user_manage_page.dart';
 import 'room_type_manage_page.dart';
+import 'review_manage_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});
@@ -44,6 +45,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     _MoreItem(icon: Icons.hotel_rounded, label: '酒店信息', pageKey: 'hotel'),
     _MoreItem(icon: Icons.assessment_rounded, label: '报表', pageKey: 'reports'),
     _MoreItem(icon: Icons.fact_check_rounded, label: '审核', pageKey: 'review'),
+    _MoreItem(icon: Icons.rate_review_rounded, label: '评价管理', pageKey: 'review_manage'),
     _MoreItem(icon: Icons.thermostat_rounded, label: '环境', pageKey: 'environment'),
     _MoreItem(icon: Icons.layers_rounded, label: '楼层', pageKey: 'floor'),
     _MoreItem(icon: Icons.price_check_rounded, label: '价格', pageKey: 'price'),
@@ -82,6 +84,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       case 'hotel': page = const HotelEditPage(); break;
       case 'reports': page = const ReportsPage(); break;
       case 'review': page = const _AdminReviewTab(); break;
+      case 'review_manage': page = const AdminReviewManagePage(); break;
       case 'environment': page = const EnvironmentMonitorPage(); break;
       case 'floor': page = const FloorManagePage(); break;
       case 'price': page = const PriceCalendarPage(); break;

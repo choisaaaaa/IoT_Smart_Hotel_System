@@ -392,7 +392,8 @@ export const get = async (req: AuthRequest, res: Response) => {
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT b.*, r.room_number, r.room_type, r.room_name, h.hotel_name, rt.name as room_type_name,
               rt.base_price as room_type_base_price, rp.plan_name, rp.base_price as plan_base_price,
-              c.coupon_name as coupon_name
+              c.coupon_name as coupon_name,
+              EXISTS(SELECT 1 FROM reviews WHERE order_id = b.id AND is_deleted = 0) as has_review
        FROM bookings b
        LEFT JOIN rooms r ON b.room_id = r.id
        LEFT JOIN hotels h ON b.hotel_id = h.id

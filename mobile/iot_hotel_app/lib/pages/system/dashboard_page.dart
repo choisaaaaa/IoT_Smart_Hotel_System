@@ -10,6 +10,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
+import '../../services/review_service.dart';
 import '../../services/user_service.dart';
 import '../../services/device_service.dart';
 import '../../services/payment_service.dart';
@@ -33,6 +34,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
     _NavItem(icon: Icons.devices_rounded, label: '设备'),
     _NavItem(icon: Icons.people_rounded, label: '账户'),
     _NavItem(icon: Icons.fact_check_rounded, label: '审核'),
+    _NavItem(icon: Icons.rate_review_rounded, label: '评价'),
     _NavItem(icon: Icons.settings_rounded, label: '设置'),
   ];
 
@@ -44,6 +46,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
       const _DevicesTab(),
       const _UsersTab(),
       const _ReviewTab(),
+      const _SystemReviewControlTab(),
       const SystemSettingsPage(),
     ];
 
@@ -1633,6 +1636,510 @@ class _ReviewTabState extends State<_ReviewTab> {
           ),
         );
       },
+    );
+  }
+}
+
+class _SystemReviewControlTab extends ConsumerStatefulWidget {
+  const _SystemReviewControlTab();
+
+  @override
+  ConsumerState<_SystemReviewControlTab> createState() => _SystemReviewControlTabState();
+}
+
+class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<dynamic> _reviews = [];
+  List<dynamic> _appeals = [];
+  int _reviewTotal = 0;
+  int _appealTotal = 0;
+  bool _isLoading = true;
+  int? _selectedHotelId;
+  List<dynamic> _hotels = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _fetchHotels();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchHotels() async {
+    try {
+      final result = await ref.read(hotelServiceProvider).getHotels();
+      if (result.success && result.data != null) {
+        setState(() {
+          _hotels = result.data is List ? List<dynamic>.from(result.data as List) : List<dynamic>.from((result.data as Map<String, dynamic>?)?['list'] ?? []);
+          if (_hotels.isNotEmpty && _selectedHotelId == null) {
+            final firstId = _hotels[0]['id'];
+            if (firstId is int) _selectedHotelId = firstId;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Fetch hotels error: $e');
+    }
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final results = await Future.wait([
+        ref.read(reviewServiceProvider).getAllReviews(
+              hotelId: _selectedHotelId,
+              page: 1,
+              pageSize: 50,
+            ),
+        ref.read(reviewServiceProvider).getAppeals(
+              hotelId: _selectedHotelId,
+              page: 1,
+              pageSize: 50,
+            ),
+      ]);
+
+      if (results[0].success && results[0].data != null) {
+        final data = results[0].data!;
+        setState(() {
+          _reviews = data['list'] ?? [];
+          _reviewTotal = data['total'] ?? 0;
+        });
+      }
+
+      if (results[1].success && results[1].data != null) {
+        final data = results[1].data!;
+        setState(() {
+          _appeals = data['list'] ?? [];
+          _appealTotal = data['total'] ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Fetch review data error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteReview(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认删除'),
+        content: const Text('确定要删除这条评价吗？此操作不可恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final result = await ref.read(reviewServiceProvider).deleteReview(id);
+    if (result.success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('评价已删除'), backgroundColor: AppColors.success),
+      );
+      _fetchData();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? '删除失败')),
+      );
+    }
+  }
+
+  Future<void> _handleAppeal(dynamic appeal, String action) async {
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(action == 'approved' ? '通过申诉' : '驳回申诉'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(action == 'approved' ? '通过申诉后，该评价将被删除。' : '驳回申诉后，评价将保留。'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              maxLength: 200,
+              decoration: InputDecoration(
+                hintText: '处理意见（可选）',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                filled: true,
+                fillColor: AppColors.background,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: action == 'approved' ? AppColors.error : AppColors.primary,
+            ),
+            child: Text(action == 'approved' ? '通过并删除' : '驳回'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final result = await ref.read(reviewServiceProvider).handleAppeal(
+          id: appeal['id'],
+          action: action,
+          handleReason: reasonController.text.trim(),
+        );
+
+    if (result.success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(action == 'approved' ? '申诉已通过，评价已删除' : '申诉已驳回'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      _fetchData();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? '操作失败')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            children: [
+              Text('选择酒店：', style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButton<int>(
+                  value: _selectedHotelId,
+                  isExpanded: true,
+                  items: _hotels.map<DropdownMenuItem<int>>((h) => DropdownMenuItem(
+                    value: h['id'] as int,
+                    child: Text(h['hotel_name'] ?? h['name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
+                  )).toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() => _selectedHotelId = v);
+                      _fetchData();
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: '评价列表 ($_reviewTotal)'),
+              Tab(text: '申诉处理 ($_appealTotal)'),
+            ],
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildReviewsList(),
+                    _buildAppealsList(),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewsList() {
+    if (_reviews.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.rate_review_outlined, size: 64, color: AppColors.textHint),
+            const SizedBox(height: 16),
+            Text('暂无评价', style: GoogleFonts.notoSansSc(fontSize: 16, color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: _reviews.length,
+        itemBuilder: (ctx, index) {
+          final review = _reviews[index];
+          final score = (review['score'] ?? 5).toDouble();
+          final memberName = review['member_name'] ?? review['member_phone'] ?? '匿名';
+          final content = review['content'] ?? '';
+          final envRating = review['environment_rating'] ?? 5;
+          final facRating = review['facility_rating'] ?? 5;
+          final comRating = review['comfort_rating'] ?? 5;
+          final reply = review['reply'];
+          final createdAt = review['created_at'] ?? '';
+          final hotelName = review['hotel_name'] ?? '';
+          final roomTypeName = review['room_type_name'] ?? '';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text('$memberName · $hotelName', style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.bold))),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(5, (i) => Icon(
+                        i < score.toInt() ? Icons.star_rounded : Icons.star_outline_rounded,
+                        size: 16, color: i < score.toInt() ? AppColors.secondary : AppColors.textHint,
+                      )),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    _buildChip('环境$envRating', envRating >= 4 ? AppColors.success : envRating >= 3 ? AppColors.warning : AppColors.error),
+                    const SizedBox(width: 6),
+                    _buildChip('设施$facRating', facRating >= 4 ? AppColors.success : facRating >= 3 ? AppColors.warning : AppColors.error),
+                    const SizedBox(width: 6),
+                    _buildChip('舒适$comRating', comRating >= 4 ? AppColors.success : comRating >= 3 ? AppColors.warning : AppColors.error),
+                    if (roomTypeName.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      _buildChip(roomTypeName, AppColors.primary),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(content, style: GoogleFonts.notoSansSc(fontSize: 13, height: 1.4)),
+                if (reply != null && reply.toString().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(6)),
+                    child: Text('酒店回复：$reply', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => _deleteReview(review['id']),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.delete_outline, size: 14, color: AppColors.error),
+                            const SizedBox(width: 4),
+                            Text('删除', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.error)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: GoogleFonts.notoSansSc(fontSize: 11, color: color)),
+    );
+  }
+
+  Widget _buildAppealsList() {
+    final pendingAppeals = _appeals.where((a) => a['status'] == 'pending').toList();
+    final handledAppeals = _appeals.where((a) => a['status'] != 'pending').toList();
+
+    if (_appeals.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.gavel_outlined, size: 64, color: AppColors.textHint),
+            const SizedBox(height: 16),
+            Text('暂无申诉记录', style: GoogleFonts.notoSansSc(fontSize: 16, color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchData,
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          if (pendingAppeals.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('待处理 (${pendingAppeals.length})', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.warning)),
+            ),
+            ...pendingAppeals.map((a) => _buildAppealCard(a, showActions: true)),
+            const SizedBox(height: 16),
+          ],
+          if (handledAppeals.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('已处理 (${handledAppeals.length})', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+            ),
+            ...handledAppeals.map((a) => _buildAppealCard(a, showActions: false)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppealCard(dynamic appeal, {bool showActions = false}) {
+    final status = appeal['status'] ?? 'pending';
+    final appealReason = appeal['appeal_reason'] ?? '';
+    final reviewContent = appeal['review_content'] ?? '';
+    final score = appeal['score'] ?? 5;
+    final envRating = appeal['environment_rating'];
+    final facRating = appeal['facility_rating'];
+    final comRating = appeal['comfort_rating'];
+    final hotelName = appeal['hotel_name'] ?? '';
+    final appellantName = appeal['appellant_name'] ?? '管理员';
+    final createdAt = appeal['created_at'] ?? '';
+    final handleReason = appeal['handle_reason'] ?? '';
+    final handlerName = appeal['handler_name'] ?? '';
+
+    Color statusColor;
+    String statusText;
+    switch (status) {
+      case 'pending':
+        statusColor = AppColors.warning;
+        statusText = '待处理';
+        break;
+      case 'approved':
+        statusColor = AppColors.success;
+        statusText = '已通过';
+        break;
+      case 'rejected':
+        statusColor = AppColors.error;
+        statusText = '已驳回';
+        break;
+      default:
+        statusColor = AppColors.textHint;
+        statusText = status;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: status == 'pending' ? Border.all(color: AppColors.warning.withValues(alpha: 0.3)) : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                child: Text(statusText, style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor)),
+              ),
+              const SizedBox(width: 8),
+              Text('$hotelName · $appellantName', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+              const Spacer(),
+              Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('被申诉评价（评分：$score）', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+          if (envRating != null || facRating != null || comRating != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                if (envRating != null) _buildChip('环境$envRating', envRating >= 4 ? AppColors.success : AppColors.warning),
+                if (facRating != null) ...[const SizedBox(width: 6), _buildChip('设施$facRating', facRating >= 4 ? AppColors.success : AppColors.warning)],
+                if (comRating != null) ...[const SizedBox(width: 6), _buildChip('舒适$comRating', comRating >= 4 ? AppColors.success : AppColors.warning)],
+              ],
+            ),
+          ],
+          if (reviewContent.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(reviewContent, style: GoogleFonts.notoSansSc(fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+          const Divider(height: 20),
+          Text('申诉理由：', style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(appealReason, style: GoogleFonts.notoSansSc(fontSize: 13, color: AppColors.textSecondary)),
+          if (status != 'pending') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(6)),
+              child: Text('处理人：$handlerName | 意见：${handleReason.isNotEmpty ? handleReason : "无"}', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
+            ),
+          ],
+          if (showActions) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: () => _handleAppeal(appeal, 'rejected'),
+                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.textSecondary),
+                  child: const Text('驳回'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => _handleAppeal(appeal, 'approved'),
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                  child: const Text('通过并删除'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -19,6 +19,7 @@ DROP TABLE IF EXISTS devices;
 DROP TABLE IF EXISTS maintenance_tickets;
 DROP TABLE IF EXISTS delivery_orders;
 DROP TABLE IF EXISTS calls;
+DROP TABLE IF EXISTS review_appeals;
 DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS guests;
@@ -224,6 +225,55 @@ CREATE TABLE payments (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_payment_no (payment_no),
     INDEX idx_hotel_order (hotel_id, order_type, order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 8.1 服务评价表 (Reviews)
+-- -----------------------------------------------------------------------------
+CREATE TABLE reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    order_type VARCHAR(20) DEFAULT 'booking',
+    member_id INT DEFAULT NULL,
+    hotel_id INT DEFAULT NULL,
+    room_type_id INT DEFAULT NULL,
+    user_id INT DEFAULT NULL,
+    score DECIMAL(2,1) DEFAULT 5.0,
+    environment_rating INT DEFAULT 5 COMMENT '环境评分1-5',
+    facility_rating INT DEFAULT 5 COMMENT '设施评分1-5',
+    comfort_rating INT DEFAULT 5 COMMENT '舒适评分1-5',
+    content TEXT,
+    photos JSON,
+    reply TEXT DEFAULT NULL,
+    replied_at DATETIME DEFAULT NULL,
+    is_deleted TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_order_id (order_id),
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 8.2 评价申诉表 (Review Appeals)
+-- -----------------------------------------------------------------------------
+CREATE TABLE review_appeals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    review_id INT NOT NULL,
+    hotel_id INT NOT NULL,
+    appellant_id INT NOT NULL,
+    appeal_reason TEXT NOT NULL,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    handler_id INT DEFAULT NULL,
+    handle_reason TEXT DEFAULT NULL,
+    handled_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_review_id (review_id),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (review_id) REFERENCES reviews(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------

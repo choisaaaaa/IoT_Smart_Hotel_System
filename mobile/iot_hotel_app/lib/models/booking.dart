@@ -69,6 +69,9 @@ class Booking {
   @JsonKey(name: 'room_name')
   final String? roomName;
 
+  @JsonKey(name: 'has_review')
+  final bool hasReview;
+
   Booking({
     required this.id,
     this.bookingNumber,
@@ -93,6 +96,7 @@ class Booking {
     this.usedPoints,
     this.paymentId,
     this.roomName,
+    this.hasReview = false,
   });
 
   String get statusText {
@@ -122,7 +126,9 @@ class Booking {
   bool get canCancel =>
       status == 'pending' || status == 'confirmed';
 
-  bool get canReview => status == 'checked_out';
+  bool get canReview => status == 'checked_out' && !hasReview;
+
+  bool get canEditReview => status == 'checked_out' && hasReview;
 
   bool get canExtend => status == 'checked_in';
 
@@ -176,6 +182,7 @@ class Booking {
       usedPoints: normalized['used_points'],
       paymentId: normalized['payment_id'],
       roomName: normalized['room_name'],
+      hasReview: normalized['has_review'] == 1 || normalized['has_review'] == true,
     );
   }
 
@@ -202,5 +209,7 @@ class Booking {
         'coupon_id': couponId,
         'used_points': usedPoints,
         'payment_id': paymentId,
+        'room_name': roomName,
+        'has_review': hasReview,
       };
 }

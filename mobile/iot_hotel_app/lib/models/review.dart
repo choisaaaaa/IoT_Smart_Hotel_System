@@ -1,115 +1,152 @@
-import 'package:json_annotation/json_annotation.dart';
+import 'dart:convert' show JsonDecoder;
 
 class Review {
   final int id;
 
-  @JsonKey(name: 'user_id')
-  final int userId;
+  final int orderId;
 
-  @JsonKey(name: 'hotel_id')
-  final int hotelId;
+  final int? hotelId;
 
-  @JsonKey(name: 'booking_id')
-  final int? bookingId;
+  final int? roomTypeId;
 
-  @JsonKey(name: 'rating')
-  final double rating;
+  final int? userId;
 
-  @JsonKey(name: 'cleanliness_rating')
-  final double? cleanlinessRating;
+  final int? memberId;
 
-  @JsonKey(name: 'service_rating')
-  final double? serviceRating;
+  final double score;
 
-  @JsonKey(name: 'location_rating')
-  final double? locationRating;
+  final int environmentRating;
 
-  @JsonKey(name: 'value_rating')
-  final double? valueRating;
+  final int facilityRating;
 
-  @JsonKey(name: 'content')
+  final int comfortRating;
+
   final String? content;
 
-  @JsonKey(name: 'images')
-  final List<String>? images;
+  final List<String> photos;
 
-  @JsonKey(name: 'reply')
   final String? reply;
 
-  @JsonKey(name: 'username')
-  final String? username;
+  final String? repliedAt;
 
-  @JsonKey(name: 'created_at')
+  final int isDeleted;
+
   final String? createdAt;
+
+  final String? updatedAt;
+
+  final String? memberName;
+
+  final String? memberPhone;
+
+  final String? hotelName;
+
+  final String? roomTypeName;
 
   Review({
     required this.id,
-    required this.userId,
-    required this.hotelId,
-    this.bookingId,
-    this.rating = 5.0,
-    this.cleanlinessRating,
-    this.serviceRating,
-    this.locationRating,
-    this.valueRating,
+    this.orderId = 0,
+    this.hotelId,
+    this.roomTypeId,
+    this.userId,
+    this.memberId,
+    this.score = 5.0,
+    this.environmentRating = 5,
+    this.facilityRating = 5,
+    this.comfortRating = 5,
     this.content,
-    this.images,
+    this.photos = const [],
     this.reply,
-    this.username,
+    this.repliedAt,
+    this.isDeleted = 0,
     this.createdAt,
+    this.updatedAt,
+    this.memberName,
+    this.memberPhone,
+    this.hotelName,
+    this.roomTypeName,
   });
+
+  String get displayUsername {
+    if (memberName != null && memberName!.isNotEmpty) {
+      if (memberName!.length > 2) {
+        return '${memberName![0]}**${memberName![memberName!.length - 1]}';
+      }
+      return memberName!;
+    }
+    if (memberPhone != null && memberPhone!.isNotEmpty) {
+      if (memberPhone!.length >= 7) {
+        return '${memberPhone!.substring(0, 3)}****${memberPhone!.substring(7)}';
+      }
+      return memberPhone!;
+    }
+    return '匿名用户';
+  }
 
   factory Review.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
 
-    List<String>? parseImages(dynamic val) {
+    List<String> parsePhotos(dynamic val) {
       if (val is List) return List<String>.from(val);
       if (val is String && val.isNotEmpty) {
-        return val.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        try {
+          if (val.startsWith('[')) {
+            return List<String>.from(const JsonDecoder().convert(val));
+          }
+          return val.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        } catch (_) {
+          return val.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        }
       }
-      return null;
+      return [];
     }
 
     return Review(
       id: normalized['id'] ?? 0,
-      userId: normalized['user_id'] ?? 0,
-      hotelId: normalized['hotel_id'] ?? 0,
-      bookingId: normalized['booking_id'],
-      rating: (normalized['rating'] ?? 5.0).toDouble(),
-      cleanlinessRating: normalized['cleanliness_rating'] != null
-          ? (normalized['cleanliness_rating']).toDouble()
-          : null,
-      serviceRating: normalized['service_rating'] != null
-          ? (normalized['service_rating']).toDouble()
-          : null,
-      locationRating: normalized['location_rating'] != null
-          ? (normalized['location_rating']).toDouble()
-          : null,
-      valueRating: normalized['value_rating'] != null
-          ? (normalized['value_rating']).toDouble()
-          : null,
-      content: normalized['content'] ?? normalized['comment'],
-      images: parseImages(normalized['images']),
-      reply: normalized['reply'] ?? normalized['hotel_reply'],
-      username: normalized['username'] ?? normalized['user_name'],
+      orderId: normalized['order_id'] ?? 0,
+      hotelId: normalized['hotel_id'],
+      roomTypeId: normalized['room_type_id'],
+      userId: normalized['user_id'],
+      memberId: normalized['member_id'],
+      score: (normalized['score'] ?? 5.0).toDouble(),
+      environmentRating: normalized['environment_rating'] ?? 5,
+      facilityRating: normalized['facility_rating'] ?? 5,
+      comfortRating: normalized['comfort_rating'] ?? 5,
+      content: normalized['content'],
+      photos: parsePhotos(normalized['photos']),
+      reply: normalized['reply'],
+      repliedAt: normalized['replied_at'],
+      isDeleted: normalized['is_deleted'] ?? 0,
       createdAt: normalized['created_at'],
+      updatedAt: normalized['updated_at'],
+      memberName: normalized['member_name'],
+      memberPhone: normalized['member_phone'],
+      hotelName: normalized['hotel_name'],
+      roomTypeName: normalized['room_type_name'],
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'user_id': userId,
+        'order_id': orderId,
         'hotel_id': hotelId,
-        'booking_id': bookingId,
-        'rating': rating,
-        'cleanliness_rating': cleanlinessRating,
-        'service_rating': serviceRating,
-        'location_rating': locationRating,
-        'value_rating': valueRating,
+        'room_type_id': roomTypeId,
+        'user_id': userId,
+        'member_id': memberId,
+        'score': score,
+        'environment_rating': environmentRating,
+        'facility_rating': facilityRating,
+        'comfort_rating': comfortRating,
         'content': content,
-        'images': images,
+        'photos': photos,
         'reply': reply,
-        'username': username,
+        'replied_at': repliedAt,
+        'is_deleted': isDeleted,
         'created_at': createdAt,
+        'updated_at': updatedAt,
+        'member_name': memberName,
+        'member_phone': memberPhone,
+        'hotel_name': hotelName,
+        'room_type_name': roomTypeName,
       };
 }
