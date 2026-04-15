@@ -1,2 +1,4 @@
 dependencies:
   espressif/cjson: "*"
+  # 必须在工程可见的 manifest 中声明，否则 common_components 内子组件的依赖可能不参与解析
+  espressif/network_provisioning: "^1.1.0"

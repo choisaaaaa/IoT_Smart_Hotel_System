@@ -1,0 +1,16 @@
+{
+  "name": "mqtt_simulator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "smoke:floor-reset": "node smoke_test_floor_reset.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mqtt": "^5.15.1"
+  }
+}

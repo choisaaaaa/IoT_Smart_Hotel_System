@@ -13,14 +13,33 @@ extern "C" {
 // 开发环境: mqtt://192.168.1.100:1883
 // 云服务器: mqtt://your-domain.com:1883 或 mqtt://your-server-ip:1883
 // 生产环境(推荐): mqtts://your-domain.com:8883 (启用TLS加密)
-#define GLOBAL_MQTT_BROKER_URI "mqtt://192.168.1.100:1883"
+#define GLOBAL_MQTT_BROKER_URI "mqtt://172.20.10.3:1883"
 
 // 默认配网 AP 热点名称前缀
 #define GLOBAL_WIFI_DEFAULT_SSID "SmartHotel_AP"
 
 // ==========================================
+// 统一主题模板与预开发开关
+// ==========================================
+#define GLOBAL_TOPIC_DEVICE_STATUS_PREFIX        "hotel/device/status"
+#define GLOBAL_TOPIC_DEVICE_DATA_PREFIX          "hotel/device/data"
+#define GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX       "hotel/device/command"
+#define GLOBAL_TOPIC_DEVICE_COMMAND_RESULT       "hotel/device/command/result"
+#define GLOBAL_TOPIC_SECURITY_EVENT              "hotel/security/event"
+
+// 开发阶段默认允许无签名上报；联调后切换为 1
+#define GLOBAL_ENABLE_MESSAGE_SIGNATURE          0
+
+// 驱动分层预开发：允许 mock 兜底，后续可逐模块切换为 0
+#define GLOBAL_ENABLE_MOCK_NETWORK               1
+#define GLOBAL_ENABLE_MOCK_SENSORS               1
+#define GLOBAL_ENABLE_MOCK_AUDIO                 1
+#define GLOBAL_ENABLE_MOCK_INFRARED              1
+#define GLOBAL_ENABLE_MOCK_RC522                 1
+
+// ==========================================
 // 统一硬件引脚分配 (ESP32-S3 冻结引脚)
-// 根据文档《硬件架构与设计基线_v1.0.md》配置
+// 根据文档《01_硬件架构与设计基线_v1.0.md》配置
 // ==========================================
 
 // 音频主线 (I2S)
@@ -73,7 +92,7 @@ extern "C" {
 #define GLOBAL_BTN_ROOM_2_PIN      28 // 客房: 场景/睡眠
 #define GLOBAL_BTN_FRONT_1_PIN     29 // 前台: 消音
 #define GLOBAL_BTN_FRONT_2_PIN     30 // 前台: 广播
-#define GLOBAL_BTN_FLOOR_1_PIN     19 // 楼控: 复位
+#define GLOBAL_BTN_FLOOR_1_PIN     19 // 楼控: 报警
 
 // 其他输出
 #define GLOBAL_BUZZER_PIN          38 // 蜂鸣器 (高有效)

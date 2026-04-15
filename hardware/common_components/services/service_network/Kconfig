@@ -1,0 +1,78 @@
+menu "Service network (WiFi / NVS)"
+
+    config SERVICE_NETWORK_USE_MOCK
+        bool "Use mock WiFi and mock NVS (no real radio)"
+        default n
+        help
+            When enabled, skips esp_wifi and returns fake IP (will break real MQTT/LwIP).
+            Disable this to connect to your phone hotspot or router using SSID/password below.
+
+    config SERVICE_NETWORK_SOFTAP_PROVISIONING
+        bool "SoftAP + WiFi Provisioning Manager (手机 App 配网，ESP32-S3 等)"
+        depends on !SERVICE_NETWORK_USE_MOCK
+        default n
+        help
+            使用 network_provisioning（SoftAP + HTTP + Espressif App）。
+            未配网时板子开热点，用另一台设备连该热点后在 App 里填写「要连接的 WiFi」的 SSID/密码（写入 NVS）。
+            注意：若目标是「本机个人热点」，同一部手机往往不能同时开热点又连板子热点，需用电脑/平板/第二部手机完成配网。
+            已配网则直接 STA。关闭此项时用下方编译期 SSID/密码直连。
+
+    config SERVICE_NETWORK_PROV_SERVICE_PREFIX
+        string "SoftAP 配网热点 SSID 前缀"
+        depends on SERVICE_NETWORK_SOFTAP_PROVISIONING
+        default "PROV_"
+        help
+            完整 SSID 为前缀 + STA MAC 后三字节的十六进制，例如 PROV_AABBCC。
+
+    config SERVICE_NETWORK_PROV_AP_PASSWORD
+        string "SoftAP 热点密码（留空=开放热点，便于联调）"
+        depends on SERVICE_NETWORK_SOFTAP_PROVISIONING
+        default ""
+        help
+            若填写，长度须符合 WPA2（通常 8～63 字符），手机连热点时需输入此密码。
+
+    choice SERVICE_NETWORK_PROV_SECURITY
+        prompt "配网会话安全"
+        depends on SERVICE_NETWORK_SOFTAP_PROVISIONING
+        default SERVICE_NETWORK_PROV_SECURITY_0
+        help
+            Security 0：App 里关闭「Encrypted Communication / Secured」，配网为明文（仅建议开发环境）。
+            若 App 开启加密，须选 Security 1 或 2 并与 App 中 PoP/用户名密码一致。
+
+        config SERVICE_NETWORK_PROV_SECURITY_0
+            bool "Security 0（无加密）"
+
+        config SERVICE_NETWORK_PROV_SECURITY_1
+            bool "Security 1（PoP）"
+
+        config SERVICE_NETWORK_PROV_SECURITY_2
+            bool "Security 2（SRP6a；App 用户名 wifiprov、密码 abcd1234）"
+            help
+                与 ESP-IDF examples/network/sta2eth 内嵌 salt/verifier 一致（开发联调）。
+                App「Provisioning settings」：SoftAP + Encrypted Communication 开启，Set Username 填 wifiprov，
+                连接设备时的密码填 abcd1234。量产需每设备独立 verifier。
+    endchoice
+
+    config SERVICE_NETWORK_PROV_POP
+        string "Security 1 的 Proof of Possession (PoP)"
+        depends on SERVICE_NETWORK_SOFTAP_PROVISIONING && SERVICE_NETWORK_PROV_SECURITY_1
+        default "abcd1234"
+        help
+            须与手机 App 中 Security 1 的 PoP 一致。
+
+    config SERVICE_NETWORK_WIFI_SSID
+        string "WiFi STA SSID (e.g. phone hotspot name)"
+        depends on !SERVICE_NETWORK_USE_MOCK && !SERVICE_NETWORK_SOFTAP_PROVISIONING
+        default ""
+        help
+            Must match the exact SSID shown on the phone. Rebuild after changing.
+            启用 SoftAP 配网时此项隐藏，请通过 App 写入路由器 SSID。
+
+    config SERVICE_NETWORK_WIFI_PASSWORD
+        string "WiFi STA password"
+        depends on !SERVICE_NETWORK_USE_MOCK && !SERVICE_NETWORK_SOFTAP_PROVISIONING
+        default ""
+        help
+            Leave empty for open networks. Rebuild after changing.
+
+endmenu

@@ -5,12 +5,20 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 #include "cJSON.h"
+#ifndef CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
+#define CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE 1
+#endif
+#if CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
+#include "esp_timer.h"
+#endif
 
 // 引入所需的底层硬件抽象组件库
 #include "service_mqtt.h"
 #include "hal_actuators.h"
 #include "hal_sensors.h"
+#include "hal_interactive.h"
 #include "service_network.h"
 #include "global_config.h"
 
@@ -19,7 +27,9 @@ static char current_floor_id[16] = "UNKNOWN";
 static char device_id[32] = "floor_UNKNOWN";
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
+static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
 static volatile bool s_network_ready = false;
+static bool s_corridor_light_on = false;
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) return;
@@ -57,26 +67,97 @@ static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_s
     cJSON_AddStringToObject(reply, "timestamp", timestamp);
 
     char *reply_str = cJSON_PrintUnformatted(reply);
-    service_mqtt_publish("hotel/device/command/result", reply_str);
+    service_mqtt_publish(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, reply_str);
     free(reply_str);
     cJSON_Delete(reply);
+}
+
+static void publish_floor_runtime_status(void) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), "%s/floor/%s", GLOBAL_TOPIC_DEVICE_STATUS_PREFIX, device_id);
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "floor");
+    cJSON_AddStringToObject(root, "status", "online");
+    cJSON_AddBoolToObject(root, "corridor_light_on", s_corridor_light_on);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+static void publish_floor_event(const char *event_type, const char *detail) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "event_type", event_type);
+    cJSON_AddStringToObject(root, "detail", detail);
+    cJSON_AddStringToObject(root, "level", "info");
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
 }
 
 static bool execute_floor_command(const char *cmd_type, const char **out_result_msg) {
     if (strcmp(cmd_type, "light_on") == 0) {
         esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        if (err == ESP_OK) {
+            s_corridor_light_on = true;
+        }
         *out_result_msg = (err == ESP_OK) ? "执行成功" : "走廊灯控失败";
         return (err == ESP_OK);
     }
 
     if (strcmp(cmd_type, "light_off") == 0) {
         esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        if (err == ESP_OK) {
+            s_corridor_light_on = false;
+        }
         *out_result_msg = (err == ESP_OK) ? "执行成功" : "走廊灯控失败";
         return (err == ESP_OK);
     }
 
+    if (strcmp(cmd_type, "broadcast_start") == 0) {
+        *out_result_msg = "广播启动占位执行成功";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "broadcast_stop") == 0) {
+        *out_result_msg = "广播停止占位执行成功";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "floor_reset") == 0) {
+        *out_result_msg = "楼控复位占位执行成功";
+        return true;
+    }
+
     *out_result_msg = "未识别的楼控指令";
     return false;
+}
+
+static void run_floor_local_policy(const sensor_data_t *env_data) {
+    (void)env_data;
+    // 预留楼控本地策略入口（后续可挂光照阈值或时段联动）
 }
 
 // --- 辅助组包函数 ---
@@ -89,7 +170,7 @@ void publish_device_online_status() {
     }
 
     char topic[128];
-    snprintf(topic, sizeof(topic), "hotel/device/status/floor/%s", device_id);
+    snprintf(topic, sizeof(topic), "%s/floor/%s", GLOBAL_TOPIC_DEVICE_STATUS_PREFIX, device_id);
 
     char timestamp[32];
     service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
@@ -115,7 +196,7 @@ void publish_sensor_data(const char *sensor_type, double value, const char *unit
     }
 
     char topic[128];
-    snprintf(topic, sizeof(topic), "hotel/device/data/%s/%s", sensor_type, device_id);
+    snprintf(topic, sizeof(topic), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, sensor_type, device_id);
 
     char timestamp[32];
     service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
@@ -151,6 +232,7 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
         const char *result_msg = "未识别的楼控指令";
         bool exec_success = execute_floor_command(cmd_type, &result_msg);
         publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
+        publish_floor_runtime_status();
     }
     cJSON_Delete(root);
 }
@@ -166,7 +248,7 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         
         // 订阅本楼层的公共指令
         char sub_topic[128];
-        snprintf(sub_topic, sizeof(sub_topic), "hotel/device/command/floor/%s", device_id);
+        snprintf(sub_topic, sizeof(sub_topic), "%s/floor/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
         service_mqtt_subscribe(sub_topic, floor_mqtt_callback);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -189,13 +271,109 @@ void task_floor_sensor_report(void *pvParameters) {
         }
 
         hal_sensors_read_all(&env_data);
+        run_floor_local_policy(&env_data);
         publish_sensor_data("temperature", env_data.temperature, "℃");
         publish_sensor_data("light", 450.0, "lux"); // 模拟走廊光照
     }
 }
 
+void task_floor_button_events(void *pvParameters) {
+    (void)pvParameters;
+    bool prev_alarm_pressed = false;
+
+    while (1) {
+        bool alarm_pressed = hal_interactive_is_button_pressed(BTN_FLOOR_ALARM);
+        if (alarm_pressed && !prev_alarm_pressed) {
+            publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发");
+            hal_interactive_beep(2, 100);
+        }
+        prev_alarm_pressed = alarm_pressed;
+        vTaskDelay(FLOOR_BUTTON_TASK_PERIOD);
+    }
+}
+
+#if CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
+
+static void net_test_mqtt_cb(const char *topic, const char *data, int data_len)
+{
+    ESP_LOGI(TAG, "[NET-TEST] RX topic=%s len=%d", topic, data_len);
+    if (data != NULL && data_len > 0) {
+        size_t n = (size_t)data_len < 255u ? (size_t)data_len : 255u;
+        char buf[256];
+        memcpy(buf, data, n);
+        buf[n] = '\0';
+        ESP_LOGI(TAG, "[NET-TEST] payload: %s", buf);
+    }
+}
+
+static void net_test_on_network(bool connected, const char *ip_address)
+{
+    if (connected) {
+        ESP_LOGI(TAG, "[NET-TEST] WiFi OK, IP=%s", ip_address ? ip_address : "?");
+        esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[NET-TEST] MQTT start failed: %s", esp_err_to_name(err));
+            return;
+        }
+        const char *topic = "hotel/net_test/broadcast";
+        err = service_mqtt_subscribe(topic, net_test_mqtt_cb);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[NET-TEST] subscribe failed: %s", esp_err_to_name(err));
+        }
+        vTaskDelay(pdMS_TO_TICKS(800));
+        char pay[160];
+        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"msg\":\"online\"}", device_id);
+        service_mqtt_publish(topic, pay);
+    } else {
+        ESP_LOGW(TAG, "[NET-TEST] WiFi disconnected");
+    }
+}
+
+static void net_test_heartbeat_task(void *pvParameters)
+{
+    (void)pvParameters;
+    const char *topic = "hotel/net_test/broadcast";
+    char pay[192];
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(15000));
+        int64_t us = esp_timer_get_time();
+        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"uptime_s\":%lld}",
+                 device_id, (long long)(us / 1000000));
+        service_mqtt_publish(topic, pay);
+        ESP_LOGI(TAG, "[NET-TEST] heartbeat sent");
+    }
+}
+
+#endif /* CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE */
+
 // 主入口
 void app_main(void) {
+#if CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
+    ESP_LOGW(TAG, "========== NET TEST MODE（无外设：仅配网 + MQTT）==========");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
+    load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri),
+                                  GLOBAL_MQTT_BROKER_URI);
+    snprintf(device_id, sizeof(device_id), "floor_%s", current_floor_id);
+
+    ESP_LOGI(TAG, "[NET-TEST] client_id=%s", device_id);
+    ESP_LOGI(TAG, "[NET-TEST] broker=%s", mqtt_broker_uri);
+    ESP_LOGI(TAG, "[NET-TEST] topic: hotel/net_test/broadcast");
+
+    ESP_ERROR_CHECK(service_network_provisioning_start(net_test_on_network));
+    xTaskCreate(net_test_heartbeat_task, "net_hb", 4096, NULL, 5, NULL);
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(60000));
+        ESP_LOGI(TAG, "[NET-TEST] main alive");
+    }
+#else
     ESP_LOGI(TAG, "========== 🏢 智慧走廊楼控端 启动 ==========");
 
     // 1. 初始化系统非易失性存储 (NVS)
@@ -208,6 +386,7 @@ void app_main(void) {
     // 2. 初始化底层硬件驱动
     hal_actuators_init();
     hal_sensors_init();
+    hal_interactive_init();
 
     // 3. 读取并拼接规范的 Client ID
     load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
@@ -219,7 +398,9 @@ void app_main(void) {
 
     // 5. 创建环境采样上报任务；main 仅保留守护
     xTaskCreate(task_floor_sensor_report, "floor_sensor_task", 4096, NULL, 5, NULL);
+    xTaskCreate(task_floor_button_events, "floor_button_task", 3072, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }
+#endif /* CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE */
 }

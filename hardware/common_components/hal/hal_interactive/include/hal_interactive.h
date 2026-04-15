@@ -15,7 +15,7 @@ typedef enum {
     BTN_ROOM_SCENE,      // 客房: 场景切换
     BTN_FRONT_CLEAR,     // 前台: 警报解除
     BTN_FRONT_BROADCAST, // 前台: 全楼广播
-    BTN_FLOOR_RESET      // 楼控: 强制复位
+    BTN_FLOOR_ALARM      // 楼控: 楼道报警按钮
 } interactive_button_id_t;
 
 /**

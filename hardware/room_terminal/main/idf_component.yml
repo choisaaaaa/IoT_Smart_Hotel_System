@@ -1,2 +1,4 @@
 dependencies:
   espressif/cjson: "*"
+  # 必须在工程可见的 manifest 中声明，否则仅 common_components 里子组件的 idf_component.yml 可能不参与依赖解析，导致未拉取 espressif__network_provisioning、编译找不到头文件
+  espressif/network_provisioning: "^1.1.0"

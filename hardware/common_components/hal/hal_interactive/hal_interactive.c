@@ -15,7 +15,7 @@ static const int button_pins[] = {
     GLOBAL_BTN_ROOM_2_PIN,   // 2: 客房场景
     GLOBAL_BTN_FRONT_1_PIN,  // 3: 前台消音
     GLOBAL_BTN_FRONT_2_PIN,  // 4: 前台广播
-    GLOBAL_BTN_FLOOR_1_PIN   // 5: 楼控复位
+    GLOBAL_BTN_FLOOR_1_PIN   // 5: 楼道报警
 };
 #define NUM_BUTTONS (sizeof(button_pins) / sizeof(button_pins[0]))
 static bool s_debounced_pressed[NUM_BUTTONS] = {0};

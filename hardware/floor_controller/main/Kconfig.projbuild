@@ -1,0 +1,11 @@
+menu "Floor controller (main)"
+
+    config FLOOR_CONTROLLER_NET_TEST_MODE
+        bool "仅配网 + MQTT 联调（跳过全部外设初始化）"
+        default y
+        help
+            启用后 app_main 只执行：NVS、WiFi 配网、MQTT 连接，
+            并在 hotel/net_test/broadcast 上订阅/心跳，便于多块板互通验证。
+            关闭后恢复完整楼控业务（继电器/传感器/按键等）。
+
+endmenu
