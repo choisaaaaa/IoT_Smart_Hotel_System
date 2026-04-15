@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isSystemAdmin, isCustomer, isStaff, isHotelAdmin, CANONICAL_ROLES } from '../utils/role';
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 import { orderTimeoutService } from '../services/order-timeout.service';
+import { systemConfigService } from '../services/system-config.service';
 
 // 辅助函数：退房后更新会员成长值、积分与等级
 async function updateMemberExperienceAfterCheckout(connection: PoolConnection, guestPhone: string, totalPrice: number, guestName?: string) {
@@ -55,12 +56,22 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
     }
     
     // 3. 计算奖励
+    // 从系统配置获取动态会员方案
+    const memberScheme = await systemConfigService.getMemberScheme();
+
     // 成长值: 10元 = 1点 (固定)
     const expGain = Math.floor(totalPrice / 10);
     const newExp = (member.experience || 0) + expGain;
     
     // 积分: 1元 = pointsRate点 * 会员等级倍率
-    const multiplier = LEVEL_POINTS_MULTIPLIER[member.member_level] || 1;
+    let multiplier = 1;
+    const levelConfig = memberScheme.find(s => s.key === member.member_level);
+    if (levelConfig) {
+      multiplier = Number(levelConfig.points_multiplier || 1);
+    } else {
+      multiplier = LEVEL_POINTS_MULTIPLIER[member.member_level] || 1;
+    }
+
     const pointsGain = Math.floor(totalPrice * pointsRate * multiplier);
     const newPoints = (member.points || 0) + pointsGain;
     
@@ -69,11 +80,21 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
 
     // 4. 自动升级逻辑 (基于成长值)
     let newLevel = member.member_level;
-    if (newExp >= 5000) newLevel = 'diamond';
-    else if (newExp >= 2000) newLevel = 'platinum';
-    else if (newExp >= 500) newLevel = 'gold';
-    else if (newExp >= 100) newLevel = 'silver';
-    else newLevel = 'standard';
+    if (memberScheme.length > 0) {
+      // 按门槛从高到低排序，找到符合条件的最高等级
+      const sortedScheme = [...memberScheme].sort((a, b) => (b.min_experience || 0) - (a.min_experience || 0));
+      const match = sortedScheme.find(s => newExp >= (s.min_experience || 0));
+      if (match) {
+        newLevel = match.key;
+      }
+    } else {
+      // 降级使用硬编码逻辑
+      if (newExp >= 5000) newLevel = 'diamond';
+      else if (newExp >= 2000) newLevel = 'platinum';
+      else if (newExp >= 500) newLevel = 'gold';
+      else if (newExp >= 100) newLevel = 'silver';
+      else newLevel = 'standard';
+    }
 
     // 5. 更新数据库
     await connection.query(
@@ -159,24 +180,19 @@ async function calculateBookingPrice(
     const [memberRows] = await connection.query<RowDataPacket[]>('SELECT id, member_level, points FROM members WHERE phone = ?', [memberPhone]);
     if (memberRows.length > 0) {
       memberId = memberRows[0].id;
-      // 关键修复：确保等级名称小写并去除可能的空格，匹配 constants.ts 中的键名
       memberLevel = String(memberRows[0].member_level || 'standard').toLowerCase().trim();
       availablePoints = memberRows[0].points || 0;
       
-      // 调试：打印当前所有的折扣配置和匹配到的等级
-      logger.info(`价格计算 - 当前 LEVEL_DISCOUNTS: ${JSON.stringify(LEVEL_DISCOUNTS)}`);
-      logger.info(`价格计算 - 尝试匹配等级: [${memberLevel}]`);
-      
-      // 增加冗余匹配逻辑：处理可能的中文字符或大小写
-      let rate = LEVEL_DISCOUNTS[memberLevel];
-      if (rate === undefined) {
-        if (memberLevel.includes('银') || memberLevel === 'silver') rate = LEVEL_DISCOUNTS['silver'];
-        else if (memberLevel.includes('金') || memberLevel === 'gold') rate = LEVEL_DISCOUNTS['gold'];
-        else if (memberLevel.includes('铂') || memberLevel === 'platinum') rate = LEVEL_DISCOUNTS['platinum'];
-        else if (memberLevel.includes('钻') || memberLevel === 'diamond') rate = LEVEL_DISCOUNTS['diamond'];
+      // 使用 SystemConfigService 获取动态折扣
+      const levelConfig = await systemConfigService.getLevelConfig(memberLevel);
+      if (levelConfig) {
+        discountRate = Number(levelConfig.discount || 1.0);
+        logger.info(`价格计算 - 动态方案匹配成功: 等级=${memberLevel}, 折扣=${discountRate}`);
+      } else {
+        // 降级处理：使用静态配置或默认1.0
+        discountRate = Number(LEVEL_DISCOUNTS[memberLevel] || 1.0);
       }
       
-      discountRate = Number(rate || 1.0);
       logger.info(`价格计算 - 识别到会员: 手机号=${memberPhone}, 等级=${memberLevel}, 最终采用折扣率=${discountRate}`);
     } else {
       logger.warn(`价格计算 - 未找到手机号为 ${memberPhone} 的会员`);
@@ -306,6 +322,11 @@ export const get = async (req: AuthRequest, res: Response) => {
     if (status) {
       whereClause += ' AND b.status = ?';
       params.push(status);
+      
+      // 预入住信息过滤过往日期：只显示今日及以后的
+      if (status === 'pre_checked_in') {
+        whereClause += ' AND DATE(b.check_out_date) >= CURDATE()';
+      }
     }
 
     if (guest_name) {
@@ -634,6 +655,7 @@ export const lookupForGuest = async (req: Request, res: Response) => {
        LEFT JOIN rooms r ON b.room_id = r.id
        WHERE (b.booking_number = ? OR b.guest_phone = ?) 
        AND b.status IN ('confirmed', 'pending')
+       AND DATE(b.check_out_date) >= CURDATE()
        ORDER BY CASE WHEN b.status = 'confirmed' THEN 1 ELSE 2 END ASC, b.id DESC
        LIMIT 1`,
       [normalizedKeyword, normalizedKeyword]
@@ -676,7 +698,7 @@ export const checkinOnline = async (req: Request, res: Response) => {
     }
 
     const [bookingRows] = await connection.query<RowDataPacket[]>(
-      `SELECT b.id, b.booking_number, b.guest_phone, b.status, b.room_id,
+      `SELECT b.id, b.booking_number, b.guest_phone, b.status, b.room_id, b.check_in_date, b.check_out_date,
               r.room_number, r.room_name
        FROM bookings b
        LEFT JOIN rooms r ON b.room_id = r.id
@@ -692,6 +714,14 @@ export const checkinOnline = async (req: Request, res: Response) => {
     }
 
     const booking = bookingRows[0] as any;
+    
+    // 检查日期：如果退房日期已过，不能办理入住
+    if (dayjs(booking.check_out_date).isBefore(dayjs(), 'day')) {
+      await connection.rollback();
+      res.status(400).json(errorResponse('该预订已超过退房日期，无法办理入住'));
+      return;
+    }
+
     if (String(booking.guest_phone) !== String(guest_phone)) {
       await connection.rollback();
       res.status(403).json(errorResponse('手机号与预订信息不匹配'));

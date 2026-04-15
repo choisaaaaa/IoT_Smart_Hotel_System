@@ -53,6 +53,11 @@ export class BookingService {
       if (status) {
         whereClause += ' AND b.status = ?';
         paramsArray.push(status);
+        
+        // 预入住信息过滤过往日期：只显示今日及以后的
+        if (status === 'pre_checked_in') {
+          whereClause += ' AND DATE(b.check_out_date) >= CURDATE()';
+        }
       }
 
       if (guest_name) {

@@ -8,9 +8,9 @@
       accept="image/*"
       @change="onAvatarChange"
     />
-    <div class="profile-content">
+    <div class="profile-content" :class="{ 'no-member': !isCustomer }">
       <!-- 左侧：会员卡与资产概览 -->
-      <div class="profile-left">
+      <div class="profile-left" v-if="isCustomer">
         <div class="member-card-new" :class="`card-level-${memberInfo.member_level || 'standard'}`">
           <div class="card-inner">
             <div class="card-top">
@@ -131,11 +131,24 @@
       </div>
 
       <!-- 右侧：个人资料与常用入住人 -->
-      <div class="profile-right">
+      <div class="profile-right" :style="!isCustomer ? { width: '100%' } : {}">
         <a-tabs v-model:activeKey="activeTab" class="profile-tabs">
           <!-- 账号管理 -->
           <a-tab-pane key="account" tab="账号管理">
             <div class="account-info-list">
+              <!-- 头像 (非普通用户显示在列表中) -->
+              <div class="info-item" v-if="!isCustomer">
+                <div class="info-label">个人头像</div>
+                <div class="info-content">
+                  <div class="display-row">
+                    <a-avatar :size="64" :src="appStore.resolveImageUrl(userInfo.avatar)" @click="handleAvatarClick" style="cursor: pointer">
+                      <template #icon><UserOutlined /></template>
+                    </a-avatar>
+                    <a-button type="link" class="edit-link" @click="handleAvatarClick">修改头像</a-button>
+                  </div>
+                </div>
+              </div>
+
               <!-- 用户ID (不可修改) -->
               <div class="info-item">
                 <div class="info-label">用户ID</div>
@@ -239,7 +252,7 @@
           </a-tab-pane>
 
           <!-- 优惠券 -->
-          <a-tab-pane key="coupons">
+          <a-tab-pane key="coupons" v-if="isCustomer">
             <template #tab>
               <span><TagOutlined /> 优惠券</span>
             </template>
@@ -279,7 +292,7 @@
           </a-tab-pane>
 
           <!-- 常用入住人管理 -->
-          <a-tab-pane key="guests" tab="常用入住人">
+          <a-tab-pane key="guests" tab="常用入住人" v-if="isCustomer">
             <div class="frequent-guests-section">
               <div class="section-header">
                 <p>管理您的实名入住人信息，预订时可一键导入。</p>
@@ -323,7 +336,7 @@
           </a-tab-pane>
 
           <!-- 我的钱包 -->
-          <a-tab-pane key="wallet" tab="我的钱包">
+          <a-tab-pane key="wallet" tab="我的钱包" v-if="isCustomer">
             <div class="wallet-card-ctrip">
               <div class="wallet-header">
                 <h3>账户余额</h3>
@@ -508,6 +521,10 @@ import dayjs from 'dayjs'
 const router = useRouter()
 const appStore = useAppStore()
 const userInfo = computed(() => appStore.userInfo || {})
+const isCustomer = computed(() => {
+  const role = appStore.userInfo?.role
+  return role === 'customer' || role === 'user' || !role
+})
 const avatarInput = ref<HTMLInputElement | null>(null)
 const activeTab = ref('account')
 const editingField = ref<string | null>(null)
@@ -775,12 +792,13 @@ const fetchData = async () => {
 
   try {
     loading.value = true
-    // 获取会员资产信息
-    const res = await request.get('/members/me')
-    console.log('Member Info Response:', res.data)
-    memberInfo.value = res.data
+    
+    // 基础个人资料表单初始化 (始终执行)
+    profileForm.username = appStore.userInfo.username
+    profileForm.phone = appStore.userInfo.phone
+    profileForm.email = appStore.userInfo.email || ''
 
-    // 获取系统配置
+    // 获取系统配置 (获取会员计划名称)
     try {
       const configRes = await systemConfigApi.getConfig('member_program_name')
       if (configRes.data) {
@@ -790,17 +808,24 @@ const fetchData = async () => {
       console.error('获取会员计划名称失败:', e)
     }
 
-    // 获取我的优惠券
-    const couponRes = await request.get('/coupons/me')
-    myCoupons.value = couponRes.data || []
+    // 仅普通用户需要获取会员资产、优惠券和常用入住人
+    if (isCustomer.value) {
+      try {
+        const res = await request.get('/members/me')
+        memberInfo.value = res.data
+      } catch (e) {
+        console.error('获取会员资产信息失败:', e)
+      }
 
-    // 初始化个人资料表单
-    profileForm.username = appStore.userInfo.username
-    profileForm.phone = appStore.userInfo.phone
-    profileForm.email = appStore.userInfo.email || ''
+      try {
+        const couponRes = await request.get('/coupons/me')
+        myCoupons.value = couponRes.data || []
+      } catch (e) {
+        console.error('获取我的优惠券失败:', e)
+      }
 
-    // 获取常用入住人
-    fetchFrequentGuests()
+      fetchFrequentGuests()
+    }
   } catch (error) {
     console.error('获取个人信息失败:', error)
   } finally {
@@ -949,6 +974,13 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 450px 1fr;
   gap: 40px;
+}
+
+/* 非会员模式下的布局调整 */
+.profile-content.no-member {
+  display: block;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 /* 统一配色适配 */

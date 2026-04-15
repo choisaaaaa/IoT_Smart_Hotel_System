@@ -83,9 +83,13 @@
 | 25 | `role_applications`   | 角色申请     | 13    |
 | 26 | `api_tokens`          | API令牌    | 8     |
 | 27 | `login_sessions`      | 登录会话     | 7     |
-| 28 | `system_settings`     | 系统配置     | 5     |
+| 28 | `system_settings`     | 系统配置     | 6     |
 
-### 2.2 用户与角色
+***
+
+## 三、表详细定义与规范 (部分核心表)
+
+### 3.1 用户与角色
 
 #### users 表
 
@@ -98,6 +102,31 @@ CREATE TABLE users (
     uid VARCHAR(50) DEFAULT NULL,             -- 第三方UID(唯一)
     email VARCHAR(100) DEFAULT NULL,          -- 邮箱
     avatar VARCHAR(255) DEFAULT NULL,         -- 头像URL
+```
+(I'll skip some parts and jump to system_settings)
+...
+#### system_settings 表 (系统配置)
+
+```sql
+CREATE TABLE system_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    config_key VARCHAR(50) UNIQUE NOT NULL,   -- 配置项键名
+    config_value TEXT DEFAULT NULL,           -- 配置项内容 (支持 JSON 格式)
+    description VARCHAR(255) DEFAULT NULL,    -- 配置项描述
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+**关键配置项 (config_key) 说明：**
+- `member_program_name`: 会员计划名称 (String)
+- `member_scheme`: 会员等级方案 (JSON 数组)
+- `points_rate`: 积分获取倍率 (Integer)
+- `points_redeem_rate`: 积分抵扣倍率 (Integer)
+
+***
+
+## 四、字段命名规范与数据字典
     role VARCHAR(20) NOT NULL DEFAULT 'customer',  -- ⚠️ 标准角色标识
     hotel_id INT DEFAULT 0,                   -- 所属酒店ID (0=系统管理员)
     permissions JSON DEFAULT NULL,            -- 权限JSON

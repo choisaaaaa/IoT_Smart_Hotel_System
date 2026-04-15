@@ -8,9 +8,9 @@ export const systemConfigApi = {
 
   // 获取所有配置 (仅 System)
   getAllConfigs: () => 
-    request.get<any, ApiResponse<Record<string, string>>>('/system-config'),
+    request.get<any, ApiResponse<Record<string, any>>>('/system-config'),
 
   // 更新配置 (仅 System)
-  updateConfigs: (configs: Record<string, string>) => 
+  updateConfigs: (configs: Record<string, any>) => 
     request.post<any, ApiResponse<null>>('/system-config', configs)
 };

@@ -50,7 +50,7 @@ const routes: RouteRecordRaw[] = [
         path: 'settings',
         name: 'SystemSettings',
         component: () => import('@/views/system/SystemSettings.vue'),
-        meta: { title: '系统配置', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
+        meta: { title: '会员方案配置', icon: 'SettingOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       }
     ]
   },

@@ -59,8 +59,12 @@
 
 ### 4. 业务订单系统 (`/bookings`, `/payments`)
 - `POST /bookings`: 创建客房预订（自动关联用户账号，通过手机号匹配 user_id；自动设置 auto_checkout_at 为退房日期中午12:00）。
+- `GET /bookings/lookup`: 顾客查询预订（用于在线入住前验证）。
+  - **业务逻辑**：仅返回状态为 `pending` 或 `confirmed` 且 **退房日期未过期** 的订单。
 - `GET /bookings/calculate-price`: 预计算订单总价 (考虑优惠券及会员折扣)。
 - `PUT /bookings/:id/checkin`: 办理入住，激活房卡（自动通过手机号关联用户账号，设置 auto_checkout_at）。
+- `POST /bookings/:id/checkin-online`: 顾客在线办理入住。
+  - **业务逻辑**：将状态改为 `pre_checked_in`（预入住），需校验退房日期未过期。
 - `PUT /bookings/:id/checkout`: 办理退房，结清账单。
 - `PUT /bookings/:id/cancel`: 取消预订。
 - `POST /bookings/:id/extend-price`: 计算续住价格（需登录，支持优惠券和积分抵扣参数）。
@@ -186,6 +190,23 @@
     "data": { "count": 8 }
   }
   ```
+
+### 8. 系统全局配置 (`/system-config`)
+> **权限要求**：`system_admin` (部分接口公开)
+
+#### 8.1 获取所有系统配置
+- **接口**：`GET /system-config`
+- **说明**：获取所有系统全局配置项，包括会员方案、积分率等。
+- **返回数据**：`{ member_program_name, member_scheme: [...], points_rate, points_redeem_rate }`
+
+#### 8.2 获取单个配置项
+- **接口**：`GET /system-config/:key`
+- **说明**：获取指定键名的配置值（公开接口）。
+
+#### 8.3 批量更新配置
+- **接口**：`POST /system-config`
+- **权限**：仅 `system_admin`
+- **请求体**：`{ key: value, ... }` (支持嵌套 JSON 对象作为 value)
 
 ---
 

@@ -86,15 +86,18 @@
             {{ appStore.connected ? '系统正常' : '连接异常' }}
           </a-tag>
           <a-dropdown>
-            <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <a-avatar :src="appStore.userInfo?.avatar" style="background-color: #722ed1;">
+            <span class="user-trigger">
+              <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #722ed1;">
                 <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
-                {{ !appStore.userInfo?.avatar ? '管' : '' }}
               </a-avatar>
               <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
             </span>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="profile" @click="$router.push('/guest/profile')">
+                  <UserOutlined /> 个人资料
+                </a-menu-item>
+                <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
                 </a-menu-item>

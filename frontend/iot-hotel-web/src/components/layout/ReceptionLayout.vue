@@ -127,14 +127,17 @@
           <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
           <a-dropdown>
             <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <a-avatar :src="appStore.userInfo?.avatar" style="background-color: #1890ff;">
+              <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #1890ff;">
                 <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
-                {{ !appStore.userInfo?.avatar ? appStore.userInfo?.username?.charAt(0) : '' }}
               </a-avatar>
               <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
             </span>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="profile" @click="$router.push('/guest/profile')">
+                  <UserOutlined /> 个人资料
+                </a-menu-item>
+                <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
                 </a-menu-item>

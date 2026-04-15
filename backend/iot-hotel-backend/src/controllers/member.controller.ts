@@ -4,6 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { hashPassword, comparePassword } from '../utils/password';
 import { isCustomer } from '../utils/role';
+import { systemConfigService } from '../services/system-config.service';
 
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 
@@ -46,7 +47,10 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
     }
 
     const member = memberRows[0];
-    const discountRate = LEVEL_DISCOUNTS[member.member_level] || 1.0;
+    
+    // 获取动态会员方案配置
+    const levelConfig = await systemConfigService.getLevelConfig(member.member_level);
+    const discountRate = levelConfig ? Number(levelConfig.discount || 1.0) : (LEVEL_DISCOUNTS[member.member_level] || 1.0);
     
     const bonusRate = 1 - discountRate;
     const bonusAmount = Math.floor((amount * bonusRate) * 100) / 100;
@@ -75,7 +79,10 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
 /**
  * 获取等级标签
  */
-function getLevelLabel(memberLevel: string): string {
+async function getLevelLabel(memberLevel: string): Promise<string> {
+  const levelConfig = await systemConfigService.getLevelConfig(memberLevel);
+  if (levelConfig) return levelConfig.name;
+
   const labels: Record<string, string> = {
     'diamond': '钻石会员',
     'platinum': '铂金会员',
@@ -338,7 +345,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
       memberInfo = {
         ...memberInfo,
         level: getLevelNumber(memberInfo.member_level),
-        level_label: getLevelLabel(memberInfo.member_level)
+        level_label: await getLevelLabel(memberInfo.member_level)
       };
     }
 
@@ -348,7 +355,10 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
        FROM guests g
        LEFT JOIN rooms r ON g.room_id = r.id
        LEFT JOIN bookings b ON g.booking_id = b.id
-       WHERE (b.user_id = ? OR g.guest_phone = ?) AND g.check_out_time IS NULL AND b.status IN ('checked_in', 'pre_checked_in')
+       WHERE (b.user_id = ? OR g.guest_phone = ?) 
+       AND g.check_out_time IS NULL 
+       AND b.status IN ('checked_in', 'pre_checked_in')
+       AND DATE(b.check_out_date) >= CURDATE()
        ORDER BY g.check_in_time DESC
        LIMIT 1`,
       [userId, phone]
