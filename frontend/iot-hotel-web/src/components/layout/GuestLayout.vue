@@ -4,7 +4,7 @@
       <a-layout-header class="guest-header">
         <div class="header-left">
           <MobileOutlined class="header-logo" />
-          <h3 @click="$router.push('/guest/booking')">智联酒店</h3>
+          <h3 @click="$router.push('/guest/booking')">慧宿智联</h3>
         </div>
         <div class="header-nav">
           <a-button
@@ -95,7 +95,7 @@
       </a-layout-content>
 
       <a-layout-footer class="guest-footer">
-        <p>©2026 智联酒店 - 智慧酒店物联网控制系统</p>
+        <p>©2026 慧宿智联·云边端一体化智能酒店物联网设备管理与服务全栈解决方案</p>
       </a-layout-footer>
     </a-layout>
 
@@ -109,7 +109,7 @@
     >
       <template #title>
         <div style="text-align: center; font-size: 18px; font-weight: 600;">
-          欢迎登录智联酒店
+          欢迎登录慧宿智联
         </div>
       </template>
 
@@ -168,7 +168,7 @@
         <a-tab-pane key="scan" tab="扫码登录">
           <div class="scan-login-container">
             <div v-if="!scanToken" class="scan-intro">
-              <p class="scan-tip">请使用智联酒店 APP 扫码登录</p>
+              <p class="scan-tip">请使用慧宿智联 APP 扫码登录</p>
               <a-button
                 type="primary"
                 @click="handleGenerateToken"

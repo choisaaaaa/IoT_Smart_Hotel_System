@@ -10,7 +10,7 @@
     >
       <div class="logo" @click="$router.push('/hotel-admin/dashboard')">
         <SettingOutlined style="font-size: 24px;" />
-        <span v-show="!collapsed" class="logo-text">智联酒店 · 管理端</span>
+        <span v-show="!collapsed" class="logo-text">慧宿智联 · 管理端</span>
       </div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
@@ -214,7 +214,7 @@ async function returnToSystem() {
         appStore.setUserInfo({
           ...appStore.userInfo,
           hotel_id: 0,
-          hotel_name: '智联酒店集团总部'
+          hotel_name: '慧宿智联集团总部'
         })
       }
       

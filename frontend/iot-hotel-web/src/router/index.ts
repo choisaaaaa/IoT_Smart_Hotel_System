@@ -299,7 +299,7 @@ const whiteList = ['/login']
 
 router.beforeEach((to, from, next) => {
   const title = to.meta.title as string
-  document.title = title ? `${title} - 智联酒店` : '智联酒店 - 智慧酒店物联网控制系统'
+  document.title = title ? `${title} - 慧宿智联` : '慧宿智联·云边端一体化智能酒店物联网设备管理与服务全栈解决方案'
 
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const token = localStorage.getItem('auth_token')

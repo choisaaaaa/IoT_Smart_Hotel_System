@@ -12,7 +12,7 @@
         <CustomerServiceOutlined style="font-size: 24px; color: #1890ff;" />
         <div v-show="!collapsed" class="logo-wrapper">
           <span class="logo-text">前台端</span>
-          <span class="hotel-tag">{{ hotelStore.hotelInfo?.hotel_name || '智联酒店' }}</span>
+          <span class="hotel-tag">{{ hotelStore.hotelInfo?.hotel_name || '慧宿智联' }}</span>
         </div>
       </div>
       <a-menu
@@ -216,7 +216,7 @@ async function returnToSystem() {
         appStore.setUserInfo({
           ...appStore.userInfo,
           hotel_id: 0,
-          hotel_name: '智联酒店集团总部'
+          hotel_name: '慧宿智联集团总部'
         })
       }
       

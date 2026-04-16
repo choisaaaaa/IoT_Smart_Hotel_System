@@ -47,9 +47,9 @@ app.use(apiLimiter);
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     code: 200,
-    message: '智慧酒店物联网控制系统API',
+    message: '慧宿智联·云边端一体化智能酒店物联网设备管理与服务全栈解决方案 API',
     timestamp: Date.now(),
-    version: '2.0.0',
+    version: '2.2.0',
     endpoints: {
       health: '/health',
       docs: '/api/v1/docs'
