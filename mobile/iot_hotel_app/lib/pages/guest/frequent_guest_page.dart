@@ -28,9 +28,11 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
       final dio = DioClient();
       final response = await dio.get(ApiConstants.frequentGuests);
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
-        if (data is List) {
-          setState(() => _guests = data.map((g) => FrequentGuest.fromJson(g as Map<String, dynamic>)).toList());
+        final responseData = response.data['data'];
+        // 后端返回格式: { guests: [...] }
+        final guestsList = responseData is Map ? responseData['guests'] : responseData;
+        if (guestsList is List) {
+          setState(() => _guests = guestsList.map((g) => FrequentGuest.fromJson(g as Map<String, dynamic>)).toList());
         }
       }
     } catch (e) {
@@ -111,7 +113,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: idType,
+                      value: idType,
                       decoration: InputDecoration(
                         labelText: '证件类型',
                         prefixIcon: const Icon(Icons.badge_outlined, size: 20),
@@ -147,7 +149,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: relationship,
+                      value: relationship,
                       decoration: InputDecoration(
                         labelText: '与您的关系',
                         prefixIcon: const Icon(Icons.people_outline, size: 20),

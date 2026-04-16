@@ -24,7 +24,16 @@ class MessageService {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(List<dynamic>.from(response.data['data']['list'] ?? []));
+        final data = response.data['data'];
+        List<dynamic> list;
+        if (data is Map) {
+          list = List<dynamic>.from(data['list'] ?? []);
+        } else if (data is List) {
+          list = List<dynamic>.from(data);
+        } else {
+          list = [];
+        }
+        return ApiResult.success(list);
       }
       return ApiResult.failure(response.data['message'] ?? '获取消息列表失败');
     } catch (e) {

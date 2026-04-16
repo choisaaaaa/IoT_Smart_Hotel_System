@@ -147,7 +147,11 @@ class Booking {
       if (value is DateTime) return value;
       if (value is String) {
         try {
-          return DateTime.parse(value);
+          final parsed = DateTime.parse(value);
+          if (value.contains('T') && value.endsWith('Z')) {
+            return parsed.toLocal();
+          }
+          return parsed;
         } catch (_) {
           return fallback;
         }

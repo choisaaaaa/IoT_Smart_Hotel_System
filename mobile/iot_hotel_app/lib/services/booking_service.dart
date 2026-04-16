@@ -14,17 +14,21 @@ class BookingService {
     String? status,
     String? guestName,
     String? checkInDate,
+    int? hotelId,
   }) async {
     try {
+      final queryParams = {
+        'page': page,
+        'pageSize': pageSize,
+        'status': status,
+        'guest_name': guestName,
+        'check_in_date': checkInDate,
+        'hotel_id': hotelId,
+      }..removeWhere((key, value) => value == null);
+      debugPrint('DEBUG: getBookings - queryParams=$queryParams');
       final response = await _dioClient.get(
         ApiConstants.bookings,
-        queryParameters: {
-          'page': page,
-          'pageSize': pageSize,
-          'status': status,
-          'guest_name': guestName,
-          'check_in_date': checkInDate,
-        }..removeWhere((key, value) => value == null),
+        queryParameters: queryParams,
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {

@@ -120,7 +120,10 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
     if (bottomIndex >= 0) {
       setState(() => _currentIndex = bottomIndex);
     } else {
-      Navigator.pop(context);
+      // 先关闭抽屉，再显示页面
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
       _showPageAsSheet(pageKey);
     }
   }
@@ -440,10 +443,16 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
+      // 获取当前用户的酒店ID
+      final hotelId = await ref.read(authServiceProvider).getCurrentHotelId();
+      
       final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
       final workOrdersResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 5);
       final arrivalsResult = await ref.read(hotelServiceProvider).getTodayArrivals();
-      final bookingsResult = await ref.read(bookingServiceProvider).getBookings(pageSize: 100);
+      final bookingsResult = await ref.read(bookingServiceProvider).getBookings(
+        pageSize: 100,
+        hotelId: hotelId,
+      );
 
       if (mounted) {
         final allBookingsRaw = bookingsResult.success ? (bookingsResult.data ?? []) : [];

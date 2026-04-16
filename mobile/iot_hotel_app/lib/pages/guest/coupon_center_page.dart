@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
 import '../../services/member_service.dart';
 import '../../models/coupon.dart';
@@ -75,7 +76,7 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
     setState(() => _isRedeeming = true);
     try {
       final dioClient = DioClient();
-      final response = await dioClient.post('/coupons/redeem', data: {'code': code});
+      final response = await dioClient.post('${ApiConstants.coupons}/redeem', data: {'code': code});
       if (mounted) {
         if (response.statusCode == 200 && response.data['code'] == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +104,7 @@ class _CouponCenterPageState extends ConsumerState<CouponCenterPage>
   List<Coupon> get _filteredCoupons {
     switch (_currentFilter) {
       case 'unused':
-        return _myCoupons.where((c) => c.status == 'active' && !c.isExpired).toList();
+        return _myCoupons.where((c) => (c.status == 'active' || c.status == 'unused') && !c.isExpired).toList();
       case 'used':
         return _myCoupons.where((c) => c.status == 'used').toList();
       case 'expired':

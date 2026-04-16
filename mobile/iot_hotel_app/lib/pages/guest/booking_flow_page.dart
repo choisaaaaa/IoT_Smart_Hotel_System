@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
+import '../../core/network/dio_client.dart';
+import '../../core/constants/api_constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/booking_service.dart';
 import '../../services/hotel_service.dart';
@@ -11,6 +13,7 @@ import '../../services/member_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/room_service.dart';
 import '../../models/coupon.dart';
+import '../../models/frequent_guest.dart';
 import '../../models/member.dart';
 import '../../models/room.dart';
 
@@ -57,6 +60,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   bool _usePoints = false;
   int _pointsToUse = 0;
   Member? _member;
+  List<FrequentGuest> _frequentGuests = [];
 
   @override
   void initState() {
@@ -65,6 +69,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     _loadMemberInfo();
     _loadCoupons();
     _loadAvailableRooms();
+    _loadFrequentGuests();
     _calculatePrice();
     _phoneController.addListener(_onPhoneChanged);
   }
@@ -174,6 +179,225 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     );
   }
 
+  double _safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
+
+  Future<void> _loadFrequentGuests() async {
+    try {
+      final dio = DioClient();
+      final response = await dio.get(ApiConstants.frequentGuests);
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final responseData = response.data['data'];
+        final guestsList = responseData is Map ? responseData['guests'] : responseData;
+        if (guestsList is List && mounted) {
+          setState(() => _frequentGuests = guestsList.map((g) => FrequentGuest.fromJson(g as Map<String, dynamic>)).toList());
+        }
+      }
+    } catch (e) {
+      debugPrint('加载常住人失败: $e');
+    }
+  }
+
+  void _fillFrequentGuest(FrequentGuest guest) {
+    setState(() {
+      _nameController.text = guest.name;
+      _phoneController.text = guest.phone ?? '';
+      _idNumberController.text = guest.idNumber;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已选择：${guest.name}')),
+    );
+  }
+
+  Widget _buildPointsInputSection() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.stars, color: Colors.orange, size: 18),
+              const SizedBox(width: 8),
+              const Text('使用积分', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              const Spacer(),
+              Container(
+                width: 120,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _pointsToUse = (_pointsToUse - 100).clamp(0, _member?.points ?? 0);
+                        });
+                        _calculatePrice();
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.remove, size: 18, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          hintText: '0',
+                        ),
+                        controller: TextEditingController(text: _pointsToUse.toString()),
+                        onChanged: (value) {
+                          final points = int.tryParse(value) ?? 0;
+                          setState(() {
+                            _pointsToUse = points.clamp(0, _member?.points ?? 0);
+                          });
+                        },
+                        onSubmitted: (_) => _calculatePrice(),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _pointsToUse = (_pointsToUse + 100).clamp(0, _member?.points ?? 0);
+                        });
+                        _calculatePrice();
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.add, size: 18, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              ActionChip(
+                label: const Text('全部', style: TextStyle(fontSize: 12)),
+                backgroundColor: Colors.white,
+                side: BorderSide(color: AppColors.divider),
+                onPressed: () {
+                  setState(() => _pointsToUse = _member?.points ?? 0);
+                  _calculatePrice();
+                },
+              ),
+              ActionChip(
+                label: const Text('1000', style: TextStyle(fontSize: 12)),
+                backgroundColor: Colors.white,
+                side: BorderSide(color: AppColors.divider),
+                onPressed: () {
+                  setState(() => _pointsToUse = 1000.clamp(0, _member?.points ?? 0));
+                  _calculatePrice();
+                },
+              ),
+              ActionChip(
+                label: const Text('5000', style: TextStyle(fontSize: 12)),
+                backgroundColor: Colors.white,
+                side: BorderSide(color: AppColors.divider),
+                onPressed: () {
+                  setState(() => _pointsToUse = 5000.clamp(0, _member?.points ?? 0));
+                  _calculatePrice();
+                },
+              ),
+              ActionChip(
+                label: const Text('10000', style: TextStyle(fontSize: 12)),
+                backgroundColor: Colors.white,
+                side: BorderSide(color: AppColors.divider),
+                onPressed: () {
+                  setState(() => _pointsToUse = 10000.clamp(0, _member?.points ?? 0));
+                  _calculatePrice();
+                },
+              ),
+            ],
+          ),
+          if (_pointsToUse > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '可抵扣 ¥${(_pointsToUse / 10).toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w500),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showPriceDetails() {
+    final basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
+    final memberDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['member_discount']) : 0.0;
+    final couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;
+    final pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0.0;
+    final totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : basePrice;
+    final usedPoints = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : 0;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('价格明细', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            _buildPriceDetailRow('房费总计', '¥${basePrice.toStringAsFixed(2)}'),
+            if (memberDiscount > 0)
+              _buildPriceDetailRow('会员优惠', '-¥${memberDiscount.toStringAsFixed(2)}', isDiscount: true),
+            if (couponDiscount > 0)
+              _buildPriceDetailRow('优惠券', '-¥${couponDiscount.toStringAsFixed(2)}', isDiscount: true),
+            if (pointsDiscount > 0)
+              _buildPriceDetailRow('积分抵扣', '-¥${pointsDiscount.toStringAsFixed(2)} ($usedPoints积分)', isDiscount: true),
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('应付总额', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('¥${totalPrice.toStringAsFixed(2)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.secondary)),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriceDetailRow(String label, String value, {bool isDiscount = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 14, color: isDiscount ? Colors.red : AppColors.textSecondary)),
+          Text(value, style: TextStyle(fontSize: 14, color: isDiscount ? Colors.red : AppColors.textPrimary, fontWeight: isDiscount ? FontWeight.w500 : FontWeight.normal)),
+        ],
+      ),
+    );
+  }
+
   Future<void> _calculatePrice() async {
     final phone = _phoneController.text.trim().isNotEmpty
         ? _phoneController.text.trim()
@@ -192,11 +416,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         );
 
     if (result.success && mounted) {
+      debugPrint('价格计算结果: ${result.data}');
       setState(() {
         _priceDetails = result.data;
-        if (_usePoints && result.data?['used_points'] != null) {
-          _pointsToUse = result.data!['used_points'];
-        }
       });
     } else if (mounted) {
       if (result.message?.contains('房间不存在') == true) {
@@ -437,6 +659,77 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
             ]),
             const SizedBox(height: 12),
             _buildSectionCard('入住人信息', [
+              if (_frequentGuests.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('常用入住人', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          TextButton.icon(
+                            onPressed: () {
+                              showModalBottomSheet(
+                                context: context,
+                                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                                builder: (ctx) => Container(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('选择常住人', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 16),
+                                      ..._frequentGuests.map((guest) => ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                          child: Text(guest.name.substring(0, 1), style: TextStyle(color: AppColors.primary)),
+                                        ),
+                                        title: Text(guest.name),
+                                        subtitle: Text('${guest.idTypeLabel} ${guest.maskedIdNumber}'),
+                                        trailing: const Icon(Icons.chevron_right),
+                                        onTap: () {
+                                          Navigator.pop(ctx);
+                                          _fillFrequentGuest(guest);
+                                        },
+                                      )),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.people_outline, size: 16),
+                            label: const Text('选择', style: TextStyle(fontSize: 12)),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: _frequentGuests.take(3).map((guest) => ActionChip(
+                          avatar: CircleAvatar(
+                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                            radius: 10,
+                            child: Text(guest.name.substring(0, 1), style: TextStyle(fontSize: 10, color: AppColors.primary)),
+                          ),
+                          label: Text(guest.name, style: const TextStyle(fontSize: 12)),
+                          backgroundColor: Colors.white,
+                          side: BorderSide(color: AppColors.divider),
+                          padding: EdgeInsets.zero,
+                          onPressed: () => _fillFrequentGuest(guest),
+                        )).toList(),
+                      ),
+                    ],
+                  ),
+                ),
               _InfoInputRow(label: '姓名', controller: _nameController, hint: '请填写真实姓名'),
               _InfoInputRow(label: '手机号', controller: _phoneController, hint: '接收确认短信', keyboardType: TextInputType.phone),
               _InfoInputRow(label: '证件号码', controller: _idNumberController, hint: '请输入有效证件号'),
@@ -517,25 +810,35 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        '${memberLevel.label} ${(_member?.points ?? 0) ~/ 100}元可抵',
+                        '${memberLevel.label} ${(_member?.points ?? 0) ~/ 10}元可抵',
                         style: TextStyle(color: memberLevel.color, fontSize: 10),
                       ),
                     ),
                   ],
                 ),
-                subtitle: Text('可用 ${_member?.points ?? 0} 积分 (100积分=1元)', style: const TextStyle(fontSize: 12)),
+                subtitle: Text('可用 ${_member?.points ?? 0} 积分 (10积分=1元)', style: const TextStyle(fontSize: 12)),
                 value: _usePoints,
                 activeThumbColor: AppColors.primary,
                 onChanged: (val) {
                   setState(() {
                     _usePoints = val;
                     if (val) {
-                      _pointsToUse = _member?.points ?? 0;
+                      final double basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
+                      final double memberDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['member_discount']) : 0.0;
+                      final double couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;
+                      final double priceAfterDiscount = basePrice - memberDiscount - couponDiscount;
+                      final int pointsNeeded = (priceAfterDiscount * 10).ceil();
+                      final int availablePoints = _member?.points ?? 0;
+                      _pointsToUse = pointsNeeded.clamp(0, availablePoints);
+                    } else {
+                      _pointsToUse = 0;
                     }
                   });
                   _calculatePrice();
                 },
               ),
+              if (_usePoints)
+                _buildPointsInputSection(),
               if (memberLevel.discount < 1.0)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -638,15 +941,13 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Widget _buildBottomPayBar() {
-    final double basePrice = widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
-    double _safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
-    double totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : basePrice;
-    if (totalPrice == 0.0) totalPrice = basePrice;
-    double discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
-    if (discountRate == 0.0) discountRate = 1.0;
-    int pointsUsed = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : (int.tryParse(_priceDetails?['used_points']?.toString() ?? '0') ?? 0);
-    double pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0.0;
-    double couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;
+    final basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
+    final totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : basePrice;
+    final discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
+    final pointsUsed = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : 0;
+    final pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0.0;
+    final couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;
+    final memberLevel = MemberLevel.fromKey(_member?.memberLevel ?? 'standard');
 
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
@@ -664,24 +965,39 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('总计', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text('¥', style: TextStyle(color: AppColors.secondary, fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text(
-                      totalPrice.toStringAsFixed(2),
-                      style: const TextStyle(color: AppColors.secondary, fontSize: 26, fontWeight: FontWeight.bold),
+                    const Text('总计', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _showPriceDetails,
+                      child: Row(
+                        children: [
+                          Text(
+                            '¥${totalPrice.toStringAsFixed(2)}',
+                            style: const TextStyle(color: AppColors.secondary, fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('明细', style: TextStyle(fontSize: 10, color: AppColors.primary)),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      if (discountRate < 1.0)
-                        _buildPriceTag('会员${(discountRate * 10).toStringAsFixed(1)}折', AppColors.gold),
+                      if (memberLevel.discount < 1.0)
+                        _buildPriceTag('${memberLevel.label}${(memberLevel.discount * 10).toStringAsFixed(1)}折', AppColors.gold),
                       if (couponDiscount > 0)
                         _buildPriceTag('优惠券-¥${couponDiscount.toStringAsFixed(0)}', Colors.redAccent),
                       if (pointsUsed > 0)

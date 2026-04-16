@@ -122,8 +122,10 @@ class HotelService {
 
   Future<ApiResult<List<Room>>> getHotelRooms(int hotelId) async {
     try {
+      // 使用 /api/v1/rooms 接口并传递 hotel_id 参数
       final response = await _dioClient.get(
-        '${ApiConstants.hotels}/$hotelId/rooms',
+        ApiConstants.rooms,
+        queryParameters: {'hotel_id': hotelId},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];

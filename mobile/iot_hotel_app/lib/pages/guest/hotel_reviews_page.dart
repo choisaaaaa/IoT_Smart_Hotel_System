@@ -16,6 +16,11 @@ class HotelReviewsPage extends ConsumerStatefulWidget {
 }
 
 class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
+  double _safeToDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
   List<Review> _reviews = [];
   int _total = 0;
   int _page = 1;
@@ -135,12 +140,12 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
               Column(
                 children: [
                   Text(
-                    stats['avg_score'] ?? '0.0',
+                    _safeToDouble(stats['avg_score']).toStringAsFixed(1),
                     style: GoogleFonts.notoSansSc(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                   Row(
                     children: List.generate(5, (i) => Icon(
-                      i < (double.tryParse(stats['avg_score'] ?? '0')?.round() ?? 0)
+                      i < _safeToDouble(stats['avg_score']).round()
                           ? Icons.star_rounded : Icons.star_outline_rounded,
                       size: 16, color: AppColors.secondary,
                     )),
@@ -153,11 +158,11 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
               Expanded(
                 child: Column(
                   children: [
-                    _buildDimensionBar('环境', stats['avg_environment'] ?? '0.0'),
+                    _buildDimensionBar('环境', stats['avg_environment']),
                     const SizedBox(height: 8),
-                    _buildDimensionBar('设施', stats['avg_facility'] ?? '0.0'),
+                    _buildDimensionBar('设施', stats['avg_facility']),
                     const SizedBox(height: 8),
-                    _buildDimensionBar('舒适', stats['avg_comfort'] ?? '0.0'),
+                    _buildDimensionBar('舒适', stats['avg_comfort']),
                   ],
                 ),
               ),
@@ -168,8 +173,8 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
     );
   }
 
-  Widget _buildDimensionBar(String label, String avgStr) {
-    final avg = double.tryParse(avgStr) ?? 0.0;
+  Widget _buildDimensionBar(String label, dynamic avgValue) {
+    final avg = _safeToDouble(avgValue);
     return Row(
       children: [
         SizedBox(width: 28, child: Text(label, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary))),
@@ -185,7 +190,7 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
           ),
         ),
         const SizedBox(width: 8),
-        SizedBox(width: 28, child: Text(avgStr, style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary))),
+        SizedBox(width: 28, child: Text(avg.toStringAsFixed(1), style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary))),
       ],
     );
   }

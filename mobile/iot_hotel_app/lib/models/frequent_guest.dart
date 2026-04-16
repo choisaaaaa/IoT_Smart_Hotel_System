@@ -69,7 +69,10 @@ class FrequentGuest {
   String get maskedIdNumber {
     if (idNumber.isEmpty) return '-';
     if (idNumber.length <= 10) return idNumber;
-    return '${idNumber.substring(0, 6)}********${idNumber.substring(14)}';
+    if (idNumber.length >= 15) {
+      return '${idNumber.substring(0, 6)}********${idNumber.substring(idNumber.length - 4)}';
+    }
+    return '${idNumber.substring(0, 3)}****${idNumber.substring(idNumber.length - 2)}';
   }
 
   FrequentGuest copyWith({int? id, String? name, String? idType, String? idNumber, String? phone, String? relationship}) {

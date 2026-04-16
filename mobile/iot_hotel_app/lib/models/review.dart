@@ -114,6 +114,13 @@ class Review {
       return 5.0;
     }
 
+    int _parseInt(dynamic v, [int defaultValue = 5]) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? defaultValue;
+      return defaultValue;
+    }
+
     return Review(
       id: normalized['id'] ?? 0,
       orderId: normalized['order_id'] ?? 0,
@@ -122,9 +129,9 @@ class Review {
       userId: normalized['user_id'],
       memberId: normalized['member_id'],
       score: parseScore(normalized['score']),
-      environmentRating: normalized['environment_rating'] ?? 5,
-      facilityRating: normalized['facility_rating'] ?? 5,
-      comfortRating: normalized['comfort_rating'] ?? 5,
+      environmentRating: _parseInt(normalized['environment_rating']),
+      facilityRating: _parseInt(normalized['facility_rating']),
+      comfortRating: _parseInt(normalized['comfort_rating']),
       content: normalized['content'],
       photos: parsePhotos(normalized['photos']),
       reply: normalized['reply'],

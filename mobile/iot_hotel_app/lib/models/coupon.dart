@@ -90,7 +90,7 @@ class Coupon {
     }
   }
 
-  bool get isAvailable => status == 'active' && !isExpired;
+  bool get isAvailable => (status == 'active' || status == 'unused') && !isExpired;
 
   static double _toDouble(dynamic v) {
     if (v is num) return v.toDouble();
@@ -105,7 +105,7 @@ class Coupon {
 
     return Coupon(
       id: normalized['id'] ?? 0,
-      name: normalized['name'] ?? '优惠券',
+      name: normalized['name']?.toString() ?? normalized['coupon_name']?.toString() ?? '优惠券',
       couponType: normalized['coupon_type']?.toString() ?? 'fixed',
       discountValue: _toDouble(normalized['discount_value']),
       discountAmount: normalized['discount_amount'] != null
@@ -114,7 +114,7 @@ class Coupon {
       minSpend: normalized['min_spend'] != null || normalized['min_amount'] != null
           ? _toDouble(normalized['min_spend'] ?? normalized['min_amount'])
           : null,
-      expireDate: normalized['expire_date']?.toString() ?? normalized['valid_until']?.toString() ?? normalized['expires_at']?.toString(),
+      expireDate: normalized['expire_date']?.toString() ?? normalized['valid_to']?.toString() ?? normalized['valid_until']?.toString() ?? normalized['expires_at']?.toString(),
       status: normalized['status']?.toString() ?? 'active',
       hotelId: normalized['hotel_id'] is num ? (normalized['hotel_id'] as num).toInt() : null,
       code: normalized['code']?.toString() ?? normalized['coupon_code']?.toString(),

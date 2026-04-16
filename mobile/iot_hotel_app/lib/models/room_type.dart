@@ -73,6 +73,7 @@ class RoomType {
     normalized['code'] ??= normalized['type_code'] ?? normalized['room_type'] ?? '';
     normalized['name'] ??= normalized['type_name'] ?? normalized['room_name'] ?? '';
     normalized['base_price'] ??= normalized['price'] ?? normalized['room_price'] ?? 0;
+    normalized['id'] ??= normalized['room_type_id'];
 
     List<String>? parseList(dynamic val) {
       if (val is List) return List<String>.from(val);

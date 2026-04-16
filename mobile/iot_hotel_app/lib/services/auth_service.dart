@@ -160,6 +160,24 @@ class AuthService {
     }
     return result;
   }
+
+  /// 获取当前用户的酒店ID
+  Future<int?> getCurrentHotelId() async {
+    final hotelIdStr = await _localStorage.read('hotel_id');
+    if (hotelIdStr != null && hotelIdStr.isNotEmpty) {
+      return int.tryParse(hotelIdStr);
+    }
+    // 如果没有缓存，尝试从用户信息中获取
+    final userInfoStr = await _localStorage.read(AppConstants.userInfoKey);
+    if (userInfoStr != null) {
+      final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
+      final hotelId = userMap['hotel_id'];
+      if (hotelId != null) {
+        return hotelId is int ? hotelId : int.tryParse(hotelId.toString());
+      }
+    }
+    return null;
+  }
 }
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());

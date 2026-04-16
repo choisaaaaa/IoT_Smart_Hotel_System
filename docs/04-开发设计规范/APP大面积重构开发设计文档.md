@@ -1117,3 +1117,70 @@ IconButton(
   onPressed: viewModel.toggleFavorite,
 )
 ```
+
+---
+
+## 附录D：顾客端测试记录（2026-04-16）
+
+### D.1 测试概览
+
+| 测试类型 | 测试结果 | 详情 |
+|---------|---------|------|
+| API接口测试 | 23/23 通过 | 覆盖15个核心API |
+| 端到端测试 | 通过 | 登录→浏览→预订→支付→入住→退房 |
+| 数据流转测试 | 通过 | 前后端数据一致性验证 |
+| 功能测试 | 10/10 模块通过 | 覆盖所有顾客端功能模块 |
+
+### D.2 修复记录
+
+#### 模型层修复
+
+| 文件 | 修复内容 |
+|------|---------|
+| room.dart | 添加 `_toDouble()`/`_toInt()` 安全类型转换，修复 `room_price`/`hotel_id`/`floor`/`max_guests` 等字段类型不安全问题 |
+| room_type.dart | 添加 `_toDouble()`/`_toInt()` 安全类型转换，添加 `normalized['id'] ??= normalized['room_type_id']` 映射，修复 `base_price`/`hotel_id`/`total_count`/`available_count` 类型问题 |
+| coupon.dart | 添加 `_toDouble()` 安全类型转换，修复 `name` 字段添加 `coupon_name` 回退，`expireDate` 添加 `valid_to` 回退，`isAvailable` 状态检查添加 `unused` |
+| booking.dart | 修复 `parseDate()` 处理UTC时区偏移，`DateTime.parse` 含 `T` 和 `Z` 时自动 `toLocal()` |
+| review.dart | 添加 `_parseInt()` 安全类型转换，修复 `environment_rating`/`facility_rating`/`comfort_rating` 字段 |
+| frequent_guest.dart | 修复 `maskedIdNumber` 的 `substring(14)` 越界崩溃 |
+
+#### 服务层修复
+
+| 文件 | 修复内容 |
+|------|---------|
+| room_service.dart | `getRooms()` 添加 `hotelId` 和 `type` 参数 |
+| booking_service.dart | `calculatePrice()` 从 POST 改为 GET + queryParameters |
+| hotel_service.dart | 添加 `getRoomAvailabilityRaw()` 方法返回原始 Map 数据 |
+| message_service.dart | 修复 `data` 为 null 时安全访问 `['list']` |
+
+#### 页面层修复
+
+| 文件 | 修复内容 |
+|------|---------|
+| booking_flow_page.dart | 重写 `_loadAvailableRooms()`：优先 `getRoomAvailabilityRaw` + fallback `getRooms(hotelId, type)`；修复 `_calculatePrice()` 不使用 `widget.roomId`；修复 `_buildBottomPayBar()` 价格显示安全类型转换；修复提交预订添加 `user_id` |
+| home_page.dart | 修复 `Expanded` 在无界高度约束中的 RenderFlex 错误，改为 `mainAxisSize: MainAxisSize.min` |
+| hotel_detail_page.dart | 修复 `_reviewStats` 中 num 值传入 String 参数的类型转换 |
+| hotel_reviews_page.dart | 添加 `_safeToDouble()` 辅助方法，修复 `double.tryParse()` 接收非 String 类型崩溃，修复 `_buildDimensionBar` 参数类型不匹配 |
+| online_checkin_page.dart | 修复 `DropdownButtonFormField` 的 `initialValue` 改为 `value` |
+| extend_stay_page.dart | 修复 `_buildPriceSummary()` 价格显示安全类型转换 |
+| order_list_page.dart | 修复 `paymentId` 空指针安全，添加类型转换 |
+| coupon_center_page.dart | 修复 API 路径 `/coupons/redeem` → `${ApiConstants.coupons}/redeem`；修复未使用过滤条件 `status == 'active'` → `status == 'active' || status == 'unused'`；添加 `ApiConstants` 导入 |
+| frequent_guest_page.dart | 修复 `DropdownButtonFormField` 的 `initialValue` 改为 `value`（2处） |
+| personal_info_page.dart | 修复 `DropdownButtonFormField` 的 `initialValue` 改为 `value`；修复 `substring(0, 10)` 可能越界（2处） |
+
+### D.3 后端问题记录（需后端修复）
+
+| 编号 | 严重程度 | 问题描述 | 影响 |
+|------|---------|---------|------|
+| BUG-07 | Critical | `GET /rooms` 的 `room_status=available` 筛选无效，返回所有状态房间 | 顾客可能预订到不可用房间 |
+| BUG-14 | Critical | `POST /bookings` 创建预订后 `user_id` 为 null | 订单未关联用户，可能无法查看 |
+| BUG-16 | Critical | `GET /bookings` 返回其他用户的隐私数据（手机号、身份证号） | 安全漏洞 |
+| BUG-04 | High | `GET /hotels/{id}/rooms/availability` 返回 `total_price` 格式异常（"0529.00"） | 前端显示错误 |
+| BUG-18 | High | 日期时区偏移，返回 `"2026-04-16T16:00:00.000Z"` 而非 `"2026-04-17"` | 显示日期偏移一天 |
+| BUG-01 | Medium | 多个接口数值字段返回字符串（rating/price/balance/score等） | 前端需额外类型转换 |
+| BUG-15 | Medium | 中文编码乱码，总统套房显示为"????" | 编码处理错误 |
+| BUG-12 | Medium | 生产环境暴露 debug 信息 | 安全风险 |
+| BUG-08 | Low | 房间关键字段为 null（bed_type/max_guests/facilities/images） | 数据不完整 |
+| BUG-03 | Low | 酒店详情缺少 price/availableRooms/description 字段 | 信息不完整 |
+| BUG-06 | Low | 房型图片数组为空 | 无法展示房型图片 |
+| BUG-20 | Low | 评价缺少 room_type_name 字段 | 无法关联房型 |
