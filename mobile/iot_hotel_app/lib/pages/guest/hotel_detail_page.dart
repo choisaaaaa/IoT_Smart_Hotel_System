@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../services/favorite_service.dart';
 import '../../services/review_service.dart';
@@ -81,11 +83,35 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       final result = await ref.read(hotelServiceProvider).getHotelById(widget.hotelId ?? 1);
       if (result.success && mounted) {
         setState(() => _hotelInfo = result.data);
+        _saveBrowsingHistory(result.data);
       }
     } catch (e) {
       debugPrint('hotelDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoadingHotel = false);
+    }
+  }
+
+  Future<void> _saveBrowsingHistory(dynamic hotel) async {
+    if (hotel == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyStr = prefs.getString('browsing_history') ?? '[]';
+      final List<dynamic> historyList = json.decode(historyStr);
+      final hotelId = hotel.id ?? widget.hotelId ?? 0;
+      historyList.removeWhere((item) => item['hotel_id'] == hotelId);
+      historyList.insert(0, {
+        'hotel_id': hotelId,
+        'name': hotel.name ?? '',
+        'address': hotel.address ?? '',
+        'image': hotel.images is List && hotel.images.isNotEmpty ? hotel.images[0] : null,
+        'price': hotel.minPrice?.toStringAsFixed(0),
+        'browsed_at': DateFormat('MM/dd HH:mm').format(DateTime.now()),
+      });
+      if (historyList.length > 50) historyList.removeRange(50, historyList.length);
+      await prefs.setString('browsing_history', json.encode(historyList));
+    } catch (e) {
+      debugPrint('保存浏览记录失败: $e');
     }
   }
 

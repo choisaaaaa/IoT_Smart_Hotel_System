@@ -9,11 +9,11 @@ class ApiConstants {
     if (_baseUrlOverride.isNotEmpty) {
       return _baseUrlOverride;
     }
-    return 'http://8.134.166.69:9000/api/v1/';
+    return 'http://10.0.2.2:3000/api/v1/';
   }
 
   static String get serverHost {
-    final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : 'http://8.134.166.69:9000';
+    final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : 'http://10.0.2.2:3000';
     final uri = Uri.parse(url);
     return '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
   }
@@ -53,4 +53,8 @@ class ApiConstants {
   static const String priceCalendar = 'price-calendar';
   static const String aiButler = 'ai-butler';
   static const String systemConfig = 'system-config';
+  static const String knowledgeBase = 'knowledge-base';
+  static const String ratePlans = 'rate-plans';
+  static const String rfid = 'rfid';
+  static const String mqtt = 'mqtt';
 }

@@ -471,9 +471,9 @@ class ProfilePage extends ConsumerWidget {
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.rate_review_outlined, size: 18, color: AppColors.textSecondary),
+                  Icon(Icons.history_outlined, size: 18, color: AppColors.textSecondary),
                   SizedBox(width: 4),
-                  Text('我的评价 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Text('最近浏览 >', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -517,7 +517,7 @@ class ProfilePage extends ConsumerWidget {
               _buildToolItem(Icons.person_outline_rounded, '账号管理', onTap: () => context.push('/personal-info')),
               _buildToolItem(Icons.people_outline_rounded, '常旅客', onTap: () => context.push('/frequent-guests')),
               _buildToolItem(Icons.receipt_long_outlined, '我的订单', onTap: () => context.push('/orders')),
-              _buildToolItem(Icons.rate_review_outlined, '我的评价', onTap: () => context.push('/my-reviews')),
+              _buildToolItem(Icons.history_outlined, '最近浏览', onTap: () => context.push('/recent-browsing')),
               _buildToolItem(Icons.headset_mic_outlined, '在线客服', onTap: () => context.push('/ai-butler')),
               _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
               _buildToolItem(Icons.card_travel_outlined, '自助退房', onTap: () => context.push('/orders')),

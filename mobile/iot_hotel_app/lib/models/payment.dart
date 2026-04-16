@@ -3,6 +3,9 @@ import 'package:json_annotation/json_annotation.dart';
 class Payment {
   final int id;
 
+  @JsonKey(name: 'payment_no')
+  final String? paymentNo;
+
   @JsonKey(name: 'order_type')
   final String orderType;
 
@@ -29,6 +32,7 @@ class Payment {
 
   Payment({
     required this.id,
+    this.paymentNo,
     required this.orderType,
     required this.orderId,
     required this.amount,
@@ -38,6 +42,19 @@ class Payment {
     this.createdAt,
     this.paidAt,
   });
+
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
 
   bool get isPaid => status == 'paid' || status == 'completed';
 
@@ -64,20 +81,22 @@ class Payment {
   factory Payment.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
     return Payment(
-      id: normalized['id'] ?? 0,
-      orderType: normalized['order_type'] ?? 'booking',
-      orderId: normalized['order_id'] ?? 0,
-      amount: (normalized['amount'] ?? 0).toDouble(),
-      paymentMethod: normalized['payment_method'] ?? 'balance',
-      status: normalized['status'] ?? 'pending',
-      transactionNo: normalized['transaction_no'],
-      createdAt: normalized['created_at'],
-      paidAt: normalized['paid_at'],
+      id: _toInt(normalized['id']) ?? 0,
+      paymentNo: normalized['payment_no']?.toString(),
+      orderType: normalized['order_type']?.toString() ?? 'booking',
+      orderId: _toInt(normalized['order_id']) ?? 0,
+      amount: _toDouble(normalized['amount'] ?? 0),
+      paymentMethod: normalized['payment_method']?.toString() ?? 'balance',
+      status: normalized['status']?.toString() ?? 'pending',
+      transactionNo: normalized['transaction_no']?.toString(),
+      createdAt: normalized['created_at']?.toString(),
+      paidAt: normalized['paid_at']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'payment_no': paymentNo,
         'order_type': orderType,
         'order_id': orderId,
         'amount': amount,

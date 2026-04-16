@@ -134,9 +134,12 @@ class MemberService {
 
   Future<ApiResult<Map<String, dynamic>>> getMemberConfig() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.systemConfig}/member_tiers');
+      final response = await _dioClient.get(ApiConstants.systemConfig);
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        _cachedMemberConfig = response.data['data'] as Map<String, dynamic>;
+        final data = response.data['data'] as Map<String, dynamic>;
+        _cachedMemberConfig = data['member_scheme'] != null
+            ? {'tiers': data['member_scheme']}
+            : data;
         return ApiResult.success(_cachedMemberConfig!);
       }
       return ApiResult.failure(response.data['message'] ?? '获取会员配置失败');

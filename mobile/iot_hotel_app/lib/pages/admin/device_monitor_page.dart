@@ -164,7 +164,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
                       Navigator.pop(context);
                       final newStatus = device.deviceStatus == 'on' ? 'off' : 'on';
                       try {
-                        final result = await ref.read(deviceServiceProvider).controlDevice(device.id, 'toggle', newStatus);
+                        final result = await ref.read(deviceServiceProvider).controlDevice(device.id, commandType: 'toggle', commandValue: newStatus);
                         if (result.success) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('指令发送成功')));

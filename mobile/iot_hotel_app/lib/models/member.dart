@@ -51,29 +51,35 @@ class Member {
     this.createdAt,
   });
 
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   factory Member.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
-    
-    double parseDouble(dynamic value) {
-      if (value == null) return 0.0;
-      if (value is num) return value.toDouble();
-      if (value is String) return double.tryParse(value) ?? 0.0;
-      return 0.0;
-    }
-    
+
     return Member(
-      id: normalized['id'] ?? 0,
-      phone: normalized['phone'] ?? '',
-      name: normalized['name'] ?? normalized['username'],
-      memberLevel: normalized['member_level'] ?? 'standard',
-      points: normalized['points'] ?? 0,
-      experience: parseDouble(normalized['experience'] ?? normalized['total_spent'] ?? 0),
-      totalSpent: parseDouble(normalized['total_spent'] ?? 0),
-      balance: parseDouble(normalized['balance'] ?? 0),
-      totalStays: normalized['total_stays'] ?? normalized['checkin_days'] ?? 0,
-      lastCheckinDate: normalized['last_checkin_date'],
-      couponCount: normalized['coupon_count'] ?? normalized['coupons_count'],
-      createdAt: normalized['created_at'],
+      id: _toInt(normalized['id']) ?? 0,
+      phone: normalized['phone']?.toString() ?? '',
+      name: normalized['name']?.toString() ?? normalized['username']?.toString(),
+      memberLevel: normalized['member_level']?.toString() ?? 'standard',
+      points: _toInt(normalized['points']) ?? 0,
+      experience: _toDouble(normalized['experience'] ?? normalized['total_spent'] ?? 0),
+      totalSpent: _toDouble(normalized['total_spent'] ?? 0),
+      balance: _toDouble(normalized['balance'] ?? 0),
+      totalStays: _toInt(normalized['total_stays'] ?? normalized['checkin_days'] ?? 0) ?? 0,
+      lastCheckinDate: normalized['last_checkin_date']?.toString(),
+      couponCount: _toInt(normalized['coupon_count'] ?? normalized['coupons_count']),
+      createdAt: normalized['created_at']?.toString(),
     );
   }
 

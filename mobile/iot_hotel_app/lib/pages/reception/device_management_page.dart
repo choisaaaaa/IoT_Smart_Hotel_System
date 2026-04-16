@@ -76,8 +76,8 @@ class _DeviceManagementPageState extends ConsumerState<DeviceManagementPage> {
 
     final result = await ref.read(deviceServiceProvider).controlDevice(
           device['id'],
-          'toggle',
-          newStatus,
+          commandType: 'toggle',
+          commandValue: newStatus,
         );
 
     if (result.success) {
@@ -93,8 +93,8 @@ class _DeviceManagementPageState extends ConsumerState<DeviceManagementPage> {
   Future<void> _sendCommand(dynamic device, String command, dynamic value) async {
     final result = await ref.read(deviceServiceProvider).controlDevice(
           device['id'],
-          command,
-          value,
+          commandType: command,
+          commandValue: value?.toString() ?? '',
         );
 
     if (result.success) {

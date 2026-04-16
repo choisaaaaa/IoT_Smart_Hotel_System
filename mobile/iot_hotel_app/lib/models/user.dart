@@ -30,17 +30,24 @@ class User {
     this.createdAt,
   });
 
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: json['id'] ?? 0,
-        username: json['username'] ?? '',
-        email: json['email'],
-        hotelId: json['hotel_id'],
-        role: json['role'] ?? AppRoles.customer,
-        phone: json['phone'],
-        uid: json['uid'],
-        avatar: json['avatar'],
+        id: _toInt(json['id']) ?? 0,
+        username: json['username']?.toString() ?? '',
+        email: json['email']?.toString(),
+        hotelId: _toInt(json['hotel_id']),
+        role: json['role']?.toString() ?? AppRoles.customer,
+        phone: json['phone']?.toString(),
+        uid: json['uid']?.toString(),
+        avatar: json['avatar']?.toString(),
         permissions: json['permissions'] != null ? List<String>.from(json['permissions']) : null,
-        createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+        createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
       );
 
   Map<String, dynamic> toJson() => {

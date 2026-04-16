@@ -66,6 +66,48 @@ export const get = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const redeemByCode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.body;
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
+    if (!code) {return res.status(400).json(errorResponse('请输入券码'));}
+
+    const user = req.user as any;
+
+    const [couponRows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM coupons WHERE LOWER(coupon_code) = LOWER(?)',
+      [code.trim()]
+    );
+    if (couponRows.length === 0) {
+      return res.status(404).json(errorResponse('优惠券码不存在'));
+    }
+    const coupon = couponRows[0] as any;
+
+    if (coupon.valid_to && new Date(coupon.valid_to) < new Date()) {
+      return res.status(400).json(errorResponse('该优惠券已过期'));
+    }
+
+    if (isStaff(user.role) && coupon.hotel_id !== user.hotel_id && coupon.hotel_id !== 0) {
+      return res.status(403).json(errorResponse('您只能核销本酒店的优惠券'));
+    }
+
+    const [mcRows] = await pool.query<RowDataPacket[]>(
+      `SELECT mc.* FROM member_coupons mc WHERE mc.coupon_id = ? AND mc.status = 'unused' LIMIT 1`,
+      [coupon.id]
+    );
+    if (mcRows.length === 0) {
+      return res.status(404).json(errorResponse('没有可核销的优惠券记录'));
+    }
+
+    const mcId = (mcRows[0] as any).id;
+    await pool.query('UPDATE member_coupons SET status = "used", used_at = NOW() WHERE id = ?', [mcId]);
+
+    res.json(successResponse(null, '核销成功'));
+  } catch (error) {
+    logger.error('按码核销优惠券失败:', error.message);
+    res.status(500).json(errorResponse('核销失败'));
+  }
+};
 export const getHotels = async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user as any;

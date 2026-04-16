@@ -19,7 +19,7 @@ class RoomService {
         'page': page,
         'pageSize': pageSize,
       };
-      if (status != null) queryParams['room_status'] = status;
+      if (status != null) queryParams['status'] = status;
       if (floor != null) queryParams['floor'] = floor;
       if (hotelId != null) queryParams['hotel_id'] = hotelId;
       if (type != null) queryParams['type'] = type;

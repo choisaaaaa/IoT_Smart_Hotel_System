@@ -129,3 +129,71 @@ export const pay = async (req: AuthRequest, res: Response) => {
     }
   }
 };
+
+export const getRevenueStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const hotelId = req.user?.hotel_id || 1;
+
+    const [todayRows]: any = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as today_revenue
+       FROM payments
+       WHERE hotel_id = ? AND status = 'paid'
+       AND DATE(paid_at) = CURDATE()`,
+      [hotelId]
+    );
+
+    const [monthRows]: any = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as month_revenue
+       FROM payments
+       WHERE hotel_id = ? AND status = 'paid'
+       AND YEAR(paid_at) = YEAR(CURDATE()) AND MONTH(paid_at) = MONTH(CURDATE())`,
+      [hotelId]
+    );
+
+    const [pendingRows]: any = await pool.query(
+      `SELECT COUNT(*) as pending_bills
+       FROM payments
+       WHERE hotel_id = ? AND status = 'pending'`,
+      [hotelId]
+    );
+
+    const [trendRows]: any = await pool.query(
+      `SELECT DATE(paid_at) as date, COALESCE(SUM(amount), 0) as revenue
+       FROM payments
+       WHERE hotel_id = ? AND status = 'paid'
+       AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+       GROUP BY DATE(paid_at)
+       ORDER BY date ASC`,
+      [hotelId]
+    );
+
+    const [breakdownRows]: any = await pool.query(
+      `SELECT order_type, COALESCE(SUM(amount), 0) as amount
+       FROM payments
+       WHERE hotel_id = ? AND status = 'paid'
+       AND YEAR(paid_at) = YEAR(CURDATE()) AND MONTH(paid_at) = MONTH(CURDATE())
+       GROUP BY order_type`,
+      [hotelId]
+    );
+
+    const incomeBreakdown: Record<string, number> = {};
+    for (const row of breakdownRows) {
+      incomeBreakdown[row.order_type || 'other'] = Number(row.amount);
+    }
+
+    const revenueTrend = Array.isArray(trendRows)
+      ? trendRows.map((row: any) => ({ date: row.date, revenue: Number(row.revenue) }))
+      : [];
+
+    res.json(successResponse({
+      today_revenue: Number(todayRows[0]?.today_revenue || 0),
+      month_revenue: Number(monthRows[0]?.month_revenue || 0),
+      pending_bills: Number(pendingRows[0]?.pending_bills || 0),
+      revenue_trend: revenueTrend,
+      income_breakdown: incomeBreakdown,
+    }, '获取营收统计成功'));
+  } catch (error) {
+    logger.error('获取营收统计失败:', error.message);
+    res.status(500).json(errorResponse('获取营收统计失败'));
+  }
+};

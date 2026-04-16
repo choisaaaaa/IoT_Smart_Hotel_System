@@ -54,10 +54,15 @@ class VoiceCallService {
   };
 
   void init(String userId, {String clientType = 'front_desk'}) {
-    if (_isInitialized) return;
-
     _clientId = userId;
     _clientType = clientType;
+
+    if (_isInitialized) {
+      if (_socket?.connected == true) {
+        registerClient(_clientId!);
+      }
+      return;
+    }
 
     _socket = io.io(ApiConstants.serverHost, <String, dynamic>{
       'transports': ['websocket', 'polling'],

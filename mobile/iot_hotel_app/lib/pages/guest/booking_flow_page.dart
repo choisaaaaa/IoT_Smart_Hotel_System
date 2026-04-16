@@ -499,9 +499,12 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     setState(() => _isLoading = true);
 
     try {
+      final currentUser = await ref.read(authServiceProvider).getCurrentUser();
       final result = await ref.read(bookingServiceProvider).createBooking({
         'hotel_id': widget.hotelId,
         'room_id': targetRoomId,
+        'room_type_id': widget.roomTypeId,
+        'user_id': currentUser?.id,
         'guest_name': _nameController.text.trim(),
         'guest_phone': _phoneController.text.trim(),
         'guest_id_number': _idNumberController.text.trim(),
@@ -512,6 +515,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         'special_requests': _specialRequestController.text.trim(),
         'coupon_id': _selectedCoupon?.id,
         'used_points': _usePoints ? _pointsToUse : 0,
+        'status': 'pending',
       });
 
       if (!mounted) return;

@@ -55,14 +55,28 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
   Future<void> _loadFireAlarms() async {
     final result = await ref.read(environmentServiceProvider).getFireAlarms();
     if (result.success && mounted) {
-      setState(() => _fireAlarms = result.data ?? []);
+      final data = result.data;
+      if (data != null && data is Map && data.containsKey('alarms')) {
+        setState(() => _fireAlarms = List<dynamic>.from(data['alarms'] ?? []));
+      } else if (data is List) {
+        setState(() => _fireAlarms = List<dynamic>.from(data as List));
+      } else {
+        setState(() => _fireAlarms = []);
+      }
     }
   }
 
   Future<void> _loadEventLogs() async {
     final result = await ref.read(environmentServiceProvider).getEventLogs(limit: 30);
     if (result.success && mounted) {
-      setState(() => _eventLogs = result.data ?? []);
+      final data = result.data;
+      if (data != null && data is Map && data.containsKey('logs')) {
+        setState(() => _eventLogs = List<dynamic>.from(data['logs'] ?? []));
+      } else if (data is List) {
+        setState(() => _eventLogs = List<dynamic>.from(data as List));
+      } else {
+        setState(() => _eventLogs = []);
+      }
     }
   }
 

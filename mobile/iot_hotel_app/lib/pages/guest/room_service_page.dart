@@ -213,7 +213,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     try {
       final result = await ref
           .read(deviceServiceProvider)
-          .controlDevice(device['id'], 'toggle', newStatus);
+          .controlDevice(device['id'], commandType: 'toggle', commandValue: newStatus);
       if (result.success) _fetchDevices();
     } catch (e) {
       debugPrint('鉁?toggleDevice: $e');
@@ -393,9 +393,9 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
       child: GestureDetector(
         onTap: () async {
           final result = await ref.read(deviceServiceProvider).controlDevice(
-            _devices.isNotEmpty ? _devices[0]['id'] : 0, // 假设房间有一个主控设备或后台处理场景
-            'scene',
-            scene
+            _devices.isNotEmpty ? _devices[0]['id'] : 0,
+            commandType: 'scene',
+            commandValue: scene
           );
           if (result.success && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已激活 $title'), backgroundColor: color));

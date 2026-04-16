@@ -186,6 +186,27 @@ class BookingService {
     }
   }
 
+  Future<ApiResult<Booking>> updateBookingStatus(int id, String status, {int? hotelId}) async {
+    try {
+      final data = <String, dynamic>{'status': status};
+      if (hotelId != null) data['hotel_id'] = hotelId;
+      final response = await _dioClient.patch(
+        '${ApiConstants.bookings}/$id/status',
+        data: data,
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final responseData = response.data['data'];
+        if (responseData is Map<String, dynamic>) {
+          return ApiResult.success(Booking.fromJson(responseData));
+        }
+        return ApiResult.success(await getBookingById(id).then((r) => r.data ?? Booking(id: id, roomId: 0, checkInDate: DateTime.now(), checkOutDate: DateTime.now().add(const Duration(days: 1)))));
+      }
+      return ApiResult.failure(response.data['message'] ?? '更新状态失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<Booking>> checkinOnline(
       int bookingId, Map<String, dynamic> data) async {
     try {

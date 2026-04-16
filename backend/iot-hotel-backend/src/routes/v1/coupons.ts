@@ -8,6 +8,7 @@ const router = Router();
 router.get('/', authenticate as any, couponController.get);
 router.get('/me', authenticate as any, couponController.getMe);
 router.post('/import', authenticate as any, couponController.importCoupon);
+router.post('/redeem', authenticate as any, authorize([CANONICAL_ROLES.STAFF, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.redeemByCode);
 
 router.post('/issue-to-user', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.issueToUser);
 router.get('/hotels', authenticate as any, couponController.getHotels);
