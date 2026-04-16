@@ -29,6 +29,34 @@ export interface HotelInfo {
   rooms: RoomInfo[]
 }
 
+export interface HotelImage {
+  id: number
+  image_url: string
+  image_type: 'cover' | 'gallery' | 'room'
+  sort_order: number
+  is_active: number
+  created_at: string
+}
+
+export interface HotelDetail {
+  id: number
+  hotel_name: string
+  hotel_address: string
+  hotel_phone: string
+  hotel_star: number
+  star_rating: number
+  rating: number
+  review_count: number
+  description: string
+  city: string
+  location: string
+  logo: string
+  image_url: string
+  promotion: string
+  created_at: string
+  updated_at: string
+}
+
 export interface SearchParams {
   destination?: string
   check_in: string
@@ -50,6 +78,42 @@ class HotelApi {
     const response: any = await request.get<ApiResponse<{ hotel: HotelInfo }>>(`/hotels/${hotelId}`)
     const payload = response?.data
     return payload?.hotel || payload
+  }
+
+  // 获取酒店详情（带图片列表）
+  async getHotelDetailWithImages(hotelId: number): Promise<{ hotel: HotelDetail; images: HotelImage[] }> {
+    const response: any = await request.get<ApiResponse<{ hotel: HotelDetail; images: HotelImage[] }>>(`/hotels/${hotelId}/detail`)
+    return response?.data || { hotel: {} as HotelDetail, images: [] }
+  }
+
+  // 更新酒店信息
+  async updateHotel(hotelId: number, data: Partial<HotelDetail>): Promise<any> {
+    const response: any = await request.put<ApiResponse<any>>(`/hotels/${hotelId}`, data)
+    return response?.data
+  }
+
+  // 获取酒店图片列表
+  async getHotelImages(hotelId: number): Promise<HotelImage[]> {
+    const response: any = await request.get<ApiResponse<{ images: HotelImage[] }>>(`/hotels/${hotelId}/images`)
+    return response?.data?.images || []
+  }
+
+  // 添加酒店图片
+  async addHotelImage(hotelId: number, data: { image_url: string; image_type?: string; sort_order?: number }): Promise<any> {
+    const response: any = await request.post<ApiResponse<any>>(`/hotels/${hotelId}/images`, data)
+    return response?.data
+  }
+
+  // 更新酒店图片
+  async updateHotelImage(hotelId: number, imageId: number, data: Partial<HotelImage>): Promise<any> {
+    const response: any = await request.put<ApiResponse<any>>(`/hotels/${hotelId}/images/${imageId}`, data)
+    return response?.data
+  }
+
+  // 删除酒店图片
+  async deleteHotelImage(hotelId: number, imageId: number): Promise<any> {
+    const response: any = await request.delete<ApiResponse<any>>(`/hotels/${hotelId}/images/${imageId}`)
+    return response?.data
   }
 
   async getRoomAvailability(hotelId: number, checkIn: string, checkOut: string): Promise<any> {

@@ -3,6 +3,8 @@ import { AuthRequest, successResponse, errorResponse, sendSuccess, sendError } f
 import dayjs from 'dayjs';
 import db from '../config/database';
 import { LEVEL_DISCOUNTS } from '../config/constants';
+import { isHotelAdmin, isSystemAdmin } from '../utils/role';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -259,5 +261,293 @@ export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
     sendError(res, errorResponse('服务器错误', 500));
   }
 }
+
+// ==================== 酒店图片管理接口 ====================
+
+// 获取酒店图片列表
+export const getHotelImages = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId } = req.params;
+
+    const [images]: any = await db.execute(
+      `SELECT id, image_url, image_type, sort_order, is_active, created_at
+       FROM hotel_images
+       WHERE hotel_id = ? AND is_active = 1
+       ORDER BY sort_order ASC, id DESC`,
+      [hotelId]
+    );
+
+    sendSuccess(res, { images });
+  } catch (error) {
+    logger.error('获取酒店图片失败:', error);
+    sendError(res, errorResponse('获取酒店图片失败', 500));
+  }
+};
+
+// 上传酒店图片
+export const addHotelImage = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId } = req.params;
+    const { image_url, image_type = 'gallery', sort_order = 0 } = req.body;
+
+    if (!image_url) {
+      return sendError(res, errorResponse('图片URL不能为空', 400));
+    }
+
+    // 权限检查：酒店管理员只能管理自己酒店的图片
+    const userRole = req.user?.role;
+    const userHotelId = req.user?.hotel_id;
+
+    if (!isSystemAdmin(userRole) && !isHotelAdmin(userRole)) {
+      return sendError(res, errorResponse('无权操作', 403));
+    }
+
+    if (isHotelAdmin(userRole) && userHotelId !== Number(hotelId)) {
+      return sendError(res, errorResponse('只能管理自己酒店的图片', 403));
+    }
+
+    const [result]: any = await db.execute(
+      `INSERT INTO hotel_images (hotel_id, image_url, image_type, sort_order)
+       VALUES (?, ?, ?, ?)`,
+      [hotelId, image_url, image_type, sort_order]
+    );
+
+    logger.info(`酒店 ${hotelId} 添加图片成功: ${image_url}`);
+    sendSuccess(res, { id: result.insertId }, '图片添加成功');
+  } catch (error) {
+    logger.error('添加酒店图片失败:', error);
+    sendError(res, errorResponse('添加图片失败', 500));
+  }
+};
+
+// 删除酒店图片
+export const deleteHotelImage = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId, imageId } = req.params;
+
+    // 权限检查
+    const userRole = req.user?.role;
+    const userHotelId = req.user?.hotel_id;
+
+    if (!isSystemAdmin(userRole) && !isHotelAdmin(userRole)) {
+      return sendError(res, errorResponse('无权操作', 403));
+    }
+
+    if (isHotelAdmin(userRole) && userHotelId !== Number(hotelId)) {
+      return sendError(res, errorResponse('只能管理自己酒店的图片', 403));
+    }
+
+    await db.execute(
+      'DELETE FROM hotel_images WHERE id = ? AND hotel_id = ?',
+      [imageId, hotelId]
+    );
+
+    logger.info(`酒店 ${hotelId} 删除图片 ${imageId} 成功`);
+    sendSuccess(res, null, '图片删除成功');
+  } catch (error) {
+    logger.error('删除酒店图片失败:', error);
+    sendError(res, errorResponse('删除图片失败', 500));
+  }
+};
+
+// 更新酒店图片信息
+export const updateHotelImage = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId, imageId } = req.params;
+    const { image_type, sort_order, is_active } = req.body;
+
+    // 权限检查
+    const userRole = req.user?.role;
+    const userHotelId = req.user?.hotel_id;
+
+    if (!isSystemAdmin(userRole) && !isHotelAdmin(userRole)) {
+      return sendError(res, errorResponse('无权操作', 403));
+    }
+
+    if (isHotelAdmin(userRole) && userHotelId !== Number(hotelId)) {
+      return sendError(res, errorResponse('只能管理自己酒店的图片', 403));
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (image_type !== undefined) {
+      updates.push('image_type = ?');
+      values.push(image_type);
+    }
+    if (sort_order !== undefined) {
+      updates.push('sort_order = ?');
+      values.push(sort_order);
+    }
+    if (is_active !== undefined) {
+      updates.push('is_active = ?');
+      values.push(is_active);
+    }
+
+    if (updates.length === 0) {
+      return sendError(res, errorResponse('没有要更新的字段', 400));
+    }
+
+    values.push(imageId, hotelId);
+
+    await db.execute(
+      `UPDATE hotel_images SET ${updates.join(', ')} WHERE id = ? AND hotel_id = ?`,
+      values
+    );
+
+    logger.info(`酒店 ${hotelId} 更新图片 ${imageId} 成功`);
+    sendSuccess(res, null, '图片更新成功');
+  } catch (error) {
+    logger.error('更新酒店图片失败:', error);
+    sendError(res, errorResponse('更新图片失败', 500));
+  }
+};
+
+// ==================== 酒店信息管理接口 ====================
+
+// 更新酒店信息
+export const updateHotel = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId } = req.params;
+    const {
+      hotel_name,
+      hotel_address,
+      hotel_phone,
+      hotel_star,
+      description,
+      city,
+      location,
+      logo,
+      image_url,
+      promotion
+    } = req.body;
+
+    // 权限检查
+    const userRole = req.user?.role;
+    const userHotelId = req.user?.hotel_id;
+
+    if (!isSystemAdmin(userRole) && !isHotelAdmin(userRole)) {
+      return sendError(res, errorResponse('无权操作', 403));
+    }
+
+    if (isHotelAdmin(userRole) && userHotelId !== Number(hotelId)) {
+      return sendError(res, errorResponse('只能管理自己酒店的信息', 403));
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (hotel_name !== undefined) {
+      updates.push('hotel_name = ?');
+      values.push(hotel_name);
+    }
+    if (hotel_address !== undefined) {
+      updates.push('hotel_address = ?');
+      values.push(hotel_address);
+    }
+    if (hotel_phone !== undefined) {
+      updates.push('hotel_phone = ?');
+      values.push(hotel_phone);
+    }
+    if (hotel_star !== undefined) {
+      updates.push('hotel_star = ?');
+      values.push(hotel_star);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
+    }
+    if (city !== undefined) {
+      updates.push('city = ?');
+      values.push(city);
+    }
+    if (location !== undefined) {
+      updates.push('location = ?');
+      values.push(location);
+    }
+    if (logo !== undefined) {
+      updates.push('logo = ?');
+      values.push(logo);
+    }
+    if (image_url !== undefined) {
+      updates.push('image_url = ?');
+      values.push(image_url);
+    }
+    if (promotion !== undefined) {
+      updates.push('promotion = ?');
+      values.push(promotion);
+    }
+
+    if (updates.length === 0) {
+      return sendError(res, errorResponse('没有要更新的字段', 400));
+    }
+
+    values.push(hotelId);
+
+    await db.execute(
+      `UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    logger.info(`酒店 ${hotelId} 信息更新成功`);
+    sendSuccess(res, null, '酒店信息更新成功');
+  } catch (error) {
+    logger.error('更新酒店信息失败:', error);
+    sendError(res, errorResponse('更新酒店信息失败', 500));
+  }
+};
+
+// 获取酒店详情（带图片列表）
+export const getHotelDetailWithImages = async (req: AuthRequest, res: Response) => {
+  try {
+    const { hotelId } = req.params;
+
+    // 获取酒店基本信息
+    const [hotels]: any = await db.execute(
+      'SELECT * FROM hotels WHERE id = ?',
+      [hotelId]
+    );
+
+    if (hotels.length === 0) {
+      return sendError(res, errorResponse('酒店不存在', 404));
+    }
+
+    const hotel = hotels[0];
+
+    // 获取酒店图片列表
+    const [images]: any = await db.execute(
+      `SELECT id, image_url, image_type, sort_order
+       FROM hotel_images
+       WHERE hotel_id = ? AND is_active = 1
+       ORDER BY sort_order ASC, id DESC`,
+      [hotelId]
+    );
+
+    sendSuccess(res, {
+      hotel: {
+        id: hotel.id,
+        hotel_name: hotel.hotel_name,
+        hotel_address: hotel.hotel_address,
+        hotel_phone: hotel.hotel_phone,
+        hotel_star: hotel.hotel_star,
+        star_rating: hotel.star_rating,
+        rating: hotel.rating,
+        review_count: hotel.review_count,
+        description: hotel.description,
+        city: hotel.city,
+        location: hotel.location,
+        logo: hotel.logo,
+        image_url: hotel.image_url,
+        promotion: hotel.promotion,
+        created_at: hotel.created_at,
+        updated_at: hotel.updated_at
+      },
+      images: images || []
+    });
+  } catch (error) {
+    logger.error('获取酒店详情失败:', error);
+    sendError(res, errorResponse('获取酒店详情失败', 500));
+  }
+};
 
 export default router;
