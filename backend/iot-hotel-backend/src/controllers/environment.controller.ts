@@ -123,11 +123,11 @@ class EnvironmentController {
       }
 
       let score = 100;
-      if (temperature > 30 || temperature < 18) {score -= 20;}
-      if (humidity > 75 || humidity < 30) {score -= 15;}
-      if (smoke_level > 40) {score -= 25;}
-      if (pm25 > 50) {score -= 20;}
-      if (noise_level > 60) {score -= 10;}
+      if (temperature > 30 || temperature < 18) score -= 20;
+      if (humidity > 75 || humidity < 30) score -= 15;
+      if (smoke_level > 40) score -= 25;
+      if (pm25 > 50) score -= 20;
+      if (noise_level > 60) score -= 10;
       score = Math.max(0, Math.min(100, score));
 
       return {

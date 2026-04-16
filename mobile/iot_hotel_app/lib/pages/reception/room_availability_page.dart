@@ -192,7 +192,94 @@ class _RoomAvailabilityPageState extends ConsumerState<RoomAvailabilityPage> {
       color: Colors.white,
       child: Column(
         children: [
-          // Floor filter and Status filter removed as per requirement
+          // Floor filter
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: '全部楼层',
+                  isSelected: _filterFloor.isEmpty,
+                  onTap: () {
+                    setState(() => _filterFloor = '');
+                    _loadRooms();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ..._floors.map((floor) {
+                  final floorNum = floor['floor']?.toString() ?? '';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _FilterChip(
+                      label: '$floorNum层',
+                      isSelected: _filterFloor == floorNum,
+                      onTap: () {
+                        setState(() => _filterFloor = floorNum);
+                        _loadRooms();
+                      },
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Status filter
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: '全部状态',
+                  isSelected: _filterStatus.isEmpty,
+                  onTap: () {
+                    setState(() => _filterStatus = '');
+                    _loadRooms();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: '空闲',
+                  isSelected: _filterStatus == 'available',
+                  color: AppColors.roomAvailable,
+                  onTap: () {
+                    setState(() => _filterStatus = _filterStatus == 'available' ? '' : 'available');
+                    _loadRooms();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: '已住',
+                  isSelected: _filterStatus == 'occupied',
+                  color: AppColors.roomOccupied,
+                  onTap: () {
+                    setState(() => _filterStatus = _filterStatus == 'occupied' ? '' : 'occupied');
+                    _loadRooms();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: '清洁中',
+                  isSelected: _filterStatus == 'cleaning',
+                  color: AppColors.roomCleaning,
+                  onTap: () {
+                    setState(() => _filterStatus = _filterStatus == 'cleaning' ? '' : 'cleaning');
+                    _loadRooms();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: '维修中',
+                  isSelected: _filterStatus == 'maintenance',
+                  color: AppColors.roomMaintenance,
+                  onTap: () {
+                    setState(() => _filterStatus = _filterStatus == 'maintenance' ? '' : 'maintenance');
+                    _loadRooms();
+                  },
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -5,6 +5,7 @@ import logger from './logger';
 class RedisClient {
   private client: RedisClientType | null = null;
   private isConnected = false;
+  private connectAttempted = false;
 
   async connect(): Promise<void> {
     if (!config.redis.enabled) {
@@ -16,19 +17,31 @@ class RedisClient {
       return;
     }
 
+    if (this.connectAttempted && !this.isConnected) {
+      return;
+    }
+
+    this.connectAttempted = true;
+
     try {
       this.client = createClient({
         socket: {
           host: config.redis.host,
           port: config.redis.port,
+          reconnectStrategy: false,
         },
         password: config.redis.password,
         database: config.redis.db,
       });
 
       this.client.on('error', (err) => {
-        logger.error('Redis客户端错误:', err.message);
-        this.isConnected = false;
+        if (!this.isConnected) {
+          logger.error('Redis连接失败，已禁用缓存功能:', err.message);
+          this.client = null;
+        } else {
+          logger.error('Redis客户端错误:', err.message);
+          this.isConnected = false;
+        }
       });
 
       this.client.on('connect', () => {
@@ -43,7 +56,7 @@ class RedisClient {
 
       await this.client.connect();
     } catch (error) {
-      logger.error('Redis连接失败:', error.message);
+      logger.error('Redis连接失败，已禁用缓存功能:', error.message);
       this.client = null;
       this.isConnected = false;
     }

@@ -146,7 +146,7 @@
         <template #tab><span><TeamOutlined /> 前台/员工</span></template>
         <div class="call-grid">
           <div
-            v-for="target in callableTargets.filter(t => t.type === 'front_desk' || t.type === 'app')"
+            v-for="target in callableTargets.filter(t => t.type === 'front_desk')"
             :key="target.id"
             class="call-card staff"
             @click="handleCardClick(target)"
@@ -307,15 +307,13 @@ const callableTargets = computed(() => {
 
   // 1. 添加房间
   hotelStore.rooms.forEach(room => {
-    // 隔离：只能看到本店房间
     if (appStore.userInfo?.role !== 'system' && room.hotel_id !== appStore.userInfo?.hotel_id) {
       return
     }
-    // 改用数据库ID判断在线状态，避免多门店同房间号冲突
     const isOnline = onlineStatus.value.rooms.some((r: any) => String(r.id) === String(room.id))
     list.push({
       id: room.id,
-      clientId: String(room.id), // 使用唯一ID呼叫
+      clientId: String(room.id),
       name: `房间 ${room.room_number}`,
       desc: room.room_name,
       type: 'room',
@@ -329,7 +327,6 @@ const callableTargets = computed(() => {
   console.log('[VoiceCalls] 用户列表:', users.value)
   users.value.forEach(user => {
     console.log('[VoiceCalls] 检查用户:', user.username, '角色:', user.role)
-    // 隔离：只能看到本店员工 (除非是系统管理员)，且不能看到角色为 user 的用户
     const isSameHotel = appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || user.hotel_id === appStore.userInfo?.hotel_id
     const isNotSelf = user.username !== appStore.userInfo?.username
     const isNotUserRole = user.role !== CANONICAL_ROLES.CUSTOMER

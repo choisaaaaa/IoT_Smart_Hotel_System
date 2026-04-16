@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/voice_call_service.dart';
 import '../../services/room_service.dart';
 
@@ -42,7 +43,8 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   }
 
   void _initCallService() {
-    _callService.init('reception_app');
+    final userId = ref.read(authStateProvider).userId ?? 'reception_app';
+    _callService.init(userId, clientType: 'front_desk');
     _callEventSubscription = _callService.callEvents.listen((event) {
       if (!mounted) return;
 
@@ -212,7 +214,10 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
         actions: [
           TextButton(
             onPressed: () {
-              _callService.hangup('current');
+              final callId = _callService.currentCallId;
+              if (callId != null) {
+                _callService.hangup(callId);
+              }
               Navigator.pop(ctx);
             },
             child: const Text('取消呼叫', style: TextStyle(color: AppColors.error)),

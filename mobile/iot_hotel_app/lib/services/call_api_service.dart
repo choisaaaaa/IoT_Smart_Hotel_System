@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -29,6 +30,9 @@ class CallApiService {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '发起呼叫失败');
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? '网络错误';
+      return ApiResult.failure(msg);
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

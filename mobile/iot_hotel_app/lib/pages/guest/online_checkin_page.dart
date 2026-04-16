@@ -416,16 +416,17 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String>(
                         value: _idType,
+                        isExpanded: true,
                         decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         items: const [
-                          DropdownMenuItem(value: 'idcard', child: Text('身份证/永居证/居住证')),
-                          DropdownMenuItem(value: 'hkm_pass', child: Text('港澳居民来往内地通行证')),
-                          DropdownMenuItem(value: 'taiwan_pass', child: Text('台湾居民来往大陆通行证')),
-                          DropdownMenuItem(value: 'passport', child: Text('外国护照')),
-                          DropdownMenuItem(value: 'other', child: Text('其他')),
+                          DropdownMenuItem(value: 'idcard', child: Text('身份证', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: 'hkm_pass', child: Text('港澳通行证', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: 'taiwan_pass', child: Text('台湾通行证', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: 'passport', child: Text('外国护照', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: 'other', child: Text('其他', overflow: TextOverflow.ellipsis)),
                         ],
                         onChanged: (v) => setState(() => _idType = v ?? 'idcard'),
                       ),

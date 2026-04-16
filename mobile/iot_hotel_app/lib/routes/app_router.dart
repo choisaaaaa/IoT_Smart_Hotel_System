@@ -312,7 +312,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'ai-butler',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          return AiButlerPage(bookingId: extra?['bookingId'] as int?);
+          return AiButlerPage(bookingId: extra?['bookingId'] as int?, roomId: extra?['roomId'] as int?);
         },
       ),
       // Admin routes

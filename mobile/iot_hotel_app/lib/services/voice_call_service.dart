@@ -47,7 +47,7 @@ class VoiceCallService {
   Map<String, dynamic>? get onlineStatus => _onlineStatus;
   String? get currentCallId => _currentCallId;
 
-  final Map<String, dynamic> _iceServers = {
+  Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
     ]
@@ -89,6 +89,10 @@ class VoiceCallService {
       debugPrint('[VoiceCallService] 注册成功: $data');
       _isRegistered = true;
       _clientName = data['clientName'];
+      if (data['webrtcConfig'] != null) {
+        _iceServers = data['webrtcConfig'] as Map<String, dynamic>;
+        debugPrint('[VoiceCallService] 使用服务端WebRTC配置: $_iceServers');
+      }
       _callEventController.add({'type': 'registered', 'data': data});
     });
 
@@ -206,6 +210,14 @@ class VoiceCallService {
       return;
     }
 
+    if (_currentCallId != null) {
+      _callEventController.add({
+        'type': 'call_error',
+        'data': {'message': '当前已有进行中的通话，请先挂断'}
+      });
+      return;
+    }
+
     debugPrint('[VoiceCallService] 发起呼叫: callee_type=$calleeType, callee_id=$calleeId');
 
     final result = await _callApi.outbound(
@@ -216,6 +228,36 @@ class VoiceCallService {
     );
 
     if (!result.success) {
+      if ((result.message ?? '').contains('已在进行中')) {
+        debugPrint('[VoiceCallService] 检测到残留通话，尝试清理后重试');
+        final activeResult = await _callApi.getActive();
+        if (activeResult.success && activeResult.data != null) {
+          for (final call in activeResult.data!) {
+            final callId = call['call_id'];
+            if (callId != null) {
+              await _callApi.hangup(callId.toString());
+              debugPrint('[VoiceCallService] 已清理残留通话: $callId');
+            }
+          }
+        }
+        final retryResult = await _callApi.outbound(
+          callerId: _clientId ?? 'unknown',
+          calleeType: calleeType,
+          calleeId: calleeId,
+          callerType: _clientType ?? 'front_desk',
+        );
+        if (retryResult.success) {
+          final callData = retryResult.data!;
+          _currentCallId = callData['call_id'];
+          _currentTargetId = calleeId;
+          _currentTargetType = calleeType;
+          _callEventController.add({
+            'type': 'call_initiated',
+            'data': callData,
+          });
+          return;
+        }
+      }
       _callEventController.add({
         'type': 'call_error',
         'data': {'message': result.message ?? '发起呼叫失败'}

@@ -6,17 +6,23 @@ import '../core/constants/api_constants.dart';
 class AiButlerService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<Map<String, dynamic>>> sendMessage(String message, {String? context}) async {
+  Future<ApiResult<Map<String, dynamic>>> sendMessage(String message, {int? roomId, String? context}) async {
     try {
+      final data = <String, dynamic>{
+        'room_id': roomId ?? 0,
+        'text': message,
+        'session_id': '${roomId ?? 'app'}_${DateTime.now().millisecondsSinceEpoch}',
+      };
+      if (context != null) data['context'] = context;
+
       final response = await _dioClient.post(
         '${ApiConstants.aiButler}/chat',
-        data: {
-          'message': message,
-          if (context != null) 'context': context,
-        },
+        data: data,
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        final rawData = response.data['data'] as Map<String, dynamic>;
+        final normalized = _normalizeBackendResponse(rawData);
+        return ApiResult.success(normalized);
       }
       return ApiResult.failure(response.data['message'] ?? 'AI服务暂不可用');
     } catch (e) {
@@ -24,30 +30,49 @@ class AiButlerService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> getSmartSuggestions({String? roomNumber}) async {
-    try {
-      final response = await _dioClient.get(
-        '${ApiConstants.aiButler}/suggestions',
-        queryParameters: {
-          if (roomNumber != null) 'room_number': roomNumber,
-        },
-      );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
-      }
-      return ApiResult.failure(response.data['message'] ?? '获取建议失败');
-    } catch (e) {
-      return ApiResult.success({
-        'suggestions': [
-          {'icon': '💡', 'text': '调节灯光亮度', 'action': 'device_control'},
-          {'icon': '🌡️', 'text': '调整空调温度', 'action': 'device_control'},
-          {'icon': '🛎️', 'text': '呼叫前台服务', 'action': 'call_front_desk'},
-          {'icon': '🍽️', 'text': '客房送餐服务', 'action': 'room_service'},
-          {'icon': '🧹', 'text': '预约清洁服务', 'action': 'housekeeping'},
-          {'icon': '🔑', 'text': '自助退房', 'action': 'checkout'},
-        ],
-      });
+  Map<String, dynamic> _normalizeBackendResponse(Map<String, dynamic> raw) {
+    final text = raw['text'] ?? raw['response'] ?? '';
+    final action = raw['action'] ?? 'reply';
+    final target = raw['target'];
+    final audioUrl = raw['audioUrl'];
+    final ticketData = raw['ticketData'];
+    final frontDeskCount = raw['frontDeskCount'];
+    final callId = raw['callId'];
+
+    List<Map<String, String>>? quickActions;
+    if (action == 'transfer' && target == 'front_desk') {
+      quickActions = [
+        {'label': '转接前台', 'action': 'transfer'},
+      ];
+    } else if (ticketData != null) {
+      quickActions = [
+        {'label': '查看工单', 'action': 'view_ticket'},
+      ];
     }
+
+    return {
+      'reply': text,
+      'action': action,
+      if (target != null) 'target': target,
+      if (audioUrl != null) 'audioUrl': audioUrl,
+      if (ticketData != null) 'ticketData': ticketData,
+      if (frontDeskCount != null) 'frontDeskCount': frontDeskCount,
+      if (callId != null) 'callId': callId,
+      if (quickActions != null) 'quick_actions': quickActions,
+    };
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> getSmartSuggestions({String? roomNumber}) async {
+    return ApiResult.success({
+      'suggestions': [
+        {'icon': '💡', 'text': '调节灯光亮度', 'action': 'device_control'},
+        {'icon': '🌡️', 'text': '调整空调温度', 'action': 'device_control'},
+        {'icon': '🛎️', 'text': '呼叫前台服务', 'action': 'call_front_desk'},
+        {'icon': '🍽️', 'text': '客房送餐服务', 'action': 'room_service'},
+        {'icon': '🧹', 'text': '预约清洁服务', 'action': 'housekeeping'},
+        {'icon': '🔑', 'text': '自助退房', 'action': 'checkout'},
+      ],
+    });
   }
 
   Future<ApiResult<Map<String, dynamic>>> transferToFrontDesk({String? message}) async {

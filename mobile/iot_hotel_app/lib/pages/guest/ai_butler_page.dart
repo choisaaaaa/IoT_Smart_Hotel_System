@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/ai_butler_service.dart';
+import '../../services/voice_call_service.dart';
 
 class AiButlerPage extends ConsumerStatefulWidget {
   final int? bookingId;
-  const AiButlerPage({super.key, this.bookingId});
+  final int? roomId;
+  const AiButlerPage({super.key, this.bookingId, this.roomId});
 
   @override
   ConsumerState<AiButlerPage> createState() => _AiButlerPageState();
@@ -24,6 +26,8 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
   int _typewriterIndex = 0;
   late AnimationController _pulseController;
   List<Map<String, String>> _smartSuggestions = [];
+  final VoiceCallService _callService = VoiceCallService();
+  StreamSubscription? _callEventSubscription;
 
   @override
   void initState() {
@@ -34,6 +38,36 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     )..repeat(reverse: true);
     _loadSmartSuggestions();
     _addWelcomeMessage();
+    _initCallService();
+  }
+
+  void _initCallService() {
+    if (widget.roomId == null) return;
+    _callService.init('${widget.roomId}', clientType: 'room');
+    _callEventSubscription = _callService.callEvents.listen((event) {
+      if (!mounted) return;
+      switch (event['type']) {
+        case 'call_answered':
+          Navigator.of(context).maybePop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('前台已接听'), backgroundColor: AppColors.success),
+          );
+          break;
+        case 'call_rejected':
+        case 'call_hungup':
+          Navigator.of(context).maybePop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('通话已结束')),
+          );
+          break;
+        case 'call_error':
+          final message = event['data']?['message'] ?? '呼叫失败';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: AppColors.error),
+          );
+          break;
+      }
+    });
   }
 
   void _addWelcomeMessage() {
@@ -68,6 +102,7 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     _scrollController.dispose();
     _pulseController.dispose();
     _typewriterTimer?.cancel();
+    _callEventSubscription?.cancel();
     super.dispose();
   }
 
@@ -103,6 +138,7 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     try {
       final result = await ref.read(aiButlerServiceProvider).sendMessage(
             text.trim(),
+            roomId: widget.roomId,
             context: widget.bookingId != null ? 'booking_${widget.bookingId}' : null,
           );
 
@@ -110,9 +146,13 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
 
       String reply;
       List<Map<String, String>>? quickActions;
+      String? action;
+      String? target;
 
       if (result.success && result.data != null) {
         reply = result.data!['reply']?.toString() ?? result.data!['message']?.toString() ?? '抱歉，我暂时无法理解您的问题。';
+        action = result.data!['action']?.toString();
+        target = result.data!['target']?.toString();
         final actions = result.data!['quick_actions'] ?? result.data!['actions'];
         if (actions is List) {
           quickActions = actions.map((a) => {
@@ -126,11 +166,55 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
 
       setState(() => _isLoading = false);
       _startTypewriterEffect(reply, quickActions: quickActions);
+
+      if (action == 'transfer' && target == 'front_desk') {
+        _handleTransferToFrontDesk();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         _startTypewriterEffect('抱歉，服务暂时不可用。您可以尝试联系前台获取帮助。');
       }
+    }
+  }
+
+  void _handleTransferToFrontDesk() {
+    if (widget.roomId == null) {
+      context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 3});
+      return;
+    }
+
+    _callService.startCall('all', 'front_desk');
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('正在转接前台...', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 8),
+              const Text('AI管家正在为您呼叫前台', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final callId = _callService.currentCallId;
+                if (callId != null) _callService.hangup(callId);
+                Navigator.pop(ctx);
+              },
+              child: const Text('取消', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
     }
   }
 

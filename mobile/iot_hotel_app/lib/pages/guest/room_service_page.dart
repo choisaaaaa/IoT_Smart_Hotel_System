@@ -469,7 +469,7 @@ class _AiButlerTab extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed: () => context.push('/ai-butler', extra: {'bookingId': bookingId}),
+              onPressed: () => context.push('/ai-butler', extra: {'bookingId': bookingId, 'roomId': roomId}),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
@@ -731,6 +731,11 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   String? _clientName;
   Map<String, dynamic>? _onlineStatus;
   StreamSubscription? _callEventSubscription;
+  bool _inCall = false;
+  String? _activeCallId;
+  String _callDuration = '00:00';
+  Timer? _callTimer;
+  DateTime? _callStartTime;
 
   @override
   void initState() {
@@ -739,7 +744,8 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   }
 
   void _initCallService() {
-    _callService.init('guest_app');
+    if (widget.roomId == null) return;
+    _callService.init('${widget.roomId}', clientType: 'room');
     _callEventSubscription = _callService.callEvents.listen((event) {
       if (!mounted) return;
       
@@ -755,7 +761,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
               backgroundColor: AppColors.success,
             ),
           );
-          // 获取在线状态
           _callService.requestOnlineStatus();
           break;
         case 'online_status':
@@ -764,34 +769,63 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           });
           break;
         case 'incoming_call':
-          _showIncomingCallDialog(event['data']);
+          if (!_inCall) {
+            _showIncomingCallDialog(event['data']);
+          }
           break;
         case 'call_answered':
           Navigator.of(context).maybePop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('前台已接听'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          setState(() {
+            _inCall = true;
+            _activeCallId = event['data']?['call_id'] ?? _callService.currentCallId;
+            _callStartTime = DateTime.now();
+          });
+          _startCallTimer();
           break;
         case 'call_rejected':
+          Navigator.of(context).maybePop();
+          _endCall();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('对方已拒接'), backgroundColor: AppColors.warning),
+          );
+          break;
         case 'call_hungup':
           Navigator.of(context).maybePop();
+          _endCall();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('通话已结束')),
           );
           break;
         case 'call_error':
           final message = event['data']?['message'] ?? '呼叫失败';
+          Navigator.of(context).maybePop();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: AppColors.error,
-            ),
+            SnackBar(content: Text(message), backgroundColor: AppColors.error),
           );
           break;
       }
+    });
+  }
+
+  void _startCallTimer() {
+    _callTimer?.cancel();
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_callStartTime != null && mounted) {
+        final diff = DateTime.now().difference(_callStartTime!);
+        setState(() {
+          _callDuration = '${diff.inMinutes.toString().padLeft(2, '0')}:${(diff.inSeconds % 60).toString().padLeft(2, '0')}';
+        });
+      }
+    });
+  }
+
+  void _endCall() {
+    _callTimer?.cancel();
+    setState(() {
+      _inCall = false;
+      _activeCallId = null;
+      _callDuration = '00:00';
+      _callStartTime = null;
     });
   }
 
@@ -891,8 +925,8 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       );
     } else {
       // 上线
-      final userId = 'guest_${widget.roomId ?? 'app'}';
-      _callService.registerClient(userId);
+      final clientId = widget.roomId != null ? 'guest_${widget.roomId}' : 'guest_app';
+      _callService.registerClient(clientId);
     }
   }
 
@@ -900,6 +934,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   void dispose() {
     _messageController.dispose();
     _callEventSubscription?.cancel();
+    _callTimer?.cancel();
     super.dispose();
   }
 
@@ -941,7 +976,10 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           actions: [
             TextButton(
               onPressed: () {
-                _callService.hangup('current');
+                final callId = _callService.currentCallId;
+                if (callId != null) {
+                  _callService.hangup(callId);
+                }
                 Navigator.pop(ctx);
               },
               child: const Text('取消呼叫',
@@ -975,19 +1013,19 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (_inCall) return _buildInCallView();
+
     final hotlines = [
       {'name': '前台', 'number': '0', 'icon': Icons.support_agent_rounded, 'color': AppColors.primary},
       {'name': '客房服务', 'number': '1', 'icon': Icons.room_service_rounded, 'color': AppColors.secondary},
       {'name': '紧急电话', 'number': '911', 'icon': Icons.emergency_rounded, 'color': AppColors.error},
     ];
 
-    // 计算在线前台数量
     final onlineFrontDesk = _onlineStatus?['web']?.where((c) => c['type'] == 'front_desk')?.toList() ?? [];
     final onlineCount = onlineFrontDesk.length;
 
     return Column(
       children: [
-        // 上线状态卡片
         Container(
           padding: const EdgeInsets.all(16),
           color: Colors.white,
@@ -1022,10 +1060,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
                         const SizedBox(height: 4),
                         Text(
                           '在线前台: $onlineCount人',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
                       ],
                     ],
@@ -1053,9 +1088,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('服务热线',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('服务热线', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               const SizedBox(height: 12),
               Row(
                 children: hotlines
@@ -1063,31 +1096,18 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
                           child: GestureDetector(
                             onTap: () => _makeCall(),
                             child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 4),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color:
-                                    (h['color'] as Color)
-                                        .withValues(alpha: 0.05),
-                                borderRadius:
-                                    BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: (h['color'] as Color)
-                                        .withValues(alpha: 0.2)),
+                                color: (h['color'] as Color).withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: (h['color'] as Color).withValues(alpha: 0.2)),
                               ),
                               child: Column(
                                 children: [
-                                  Icon(h['icon'] as IconData,
-                                      color: h['color'] as Color,
-                                      size: 24),
+                                  Icon(h['icon'] as IconData, color: h['color'] as Color, size: 24),
                                   const SizedBox(height: 6),
-                                  Text(h['name'] as String,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight:
-                                              FontWeight.w500)),
+                                  Text(h['name'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
@@ -1108,26 +1128,16 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
-                  mainAxisAlignment: msg['isMe']
-                      ? MainAxisAlignment.end
-                      : MainAxisAlignment.start,
+                  mainAxisAlignment: msg['isMe'] ? MainAxisAlignment.end : MainAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: msg['isMe']
-                            ? AppColors.primary
-                            : Colors.white,
+                        color: msg['isMe'] ? AppColors.primary : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(msg['text'],
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: msg['isMe']
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                          )),
+                          style: TextStyle(fontSize: 13, color: msg['isMe'] ? Colors.white : AppColors.textPrimary)),
                     ),
                   ],
                 ),
@@ -1145,10 +1155,8 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
                   controller: _messageController,
                   decoration: InputDecoration(
                     hintText: '输入消息...',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     isDense: true,
                   ),
                   onSubmitted: (_) => _sendMessage(),
@@ -1158,13 +1166,92 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
               IconButton.filled(
                 onPressed: _sendMessage,
                 icon: const Icon(Icons.send, size: 18),
-                style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary),
+                style: IconButton.styleFrom(backgroundColor: AppColors.primary),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInCallView() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.primary.withValues(alpha: 0.05), AppColors.primary.withValues(alpha: 0.15)],
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 60),
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.phone_in_talk_rounded, size: 50, color: AppColors.primary),
+          ),
+          const SizedBox(height: 24),
+          const Text('通话中', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text(_callDuration, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: AppColors.primary, fontFeatures: [FontFeature.tabularFigures()])),
+          const SizedBox(height: 8),
+          const Text('前台', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildCallActionButton(
+                icon: _callService.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                label: _callService.isMuted ? '取消静音' : '静音',
+                color: _callService.isMuted ? AppColors.error : AppColors.textSecondary,
+                onTap: () {
+                  _callService.toggleMute();
+                  setState(() {});
+                },
+              ),
+              const SizedBox(width: 40),
+              _buildCallActionButton(
+                icon: Icons.call_end_rounded,
+                label: '挂断',
+                color: AppColors.error,
+                onTap: () {
+                  final callId = _activeCallId ?? _callService.currentCallId;
+                  if (callId != null) _callService.hangup(callId);
+                  _endCall();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 60),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCallActionButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
+        ],
+      ),
     );
   }
 }

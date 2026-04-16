@@ -142,13 +142,30 @@ class WebSocketService {
               info.dutyRole = user.role === 'staff' ? 'reception' : user.role;
             }
           } else if (data.clientType === 'app') {
-            // App端（顾客）不需要验证数据库，直接使用clientId作为显示名
-            // 格式通常为 guest_{roomId} 或用户自定义ID
             if (data.clientId.startsWith('guest_')) {
               const roomId = data.clientId.replace('guest_', '');
               displayName = `顾客${roomId}`;
+              const [roomRows] = await pool.query<RowDataPacket[]>(
+                'SELECT hotel_id FROM rooms WHERE id = ?',
+                [roomId]
+              );
+              if (roomRows.length > 0) {
+                hotelId = roomRows[0].hotel_id;
+              }
             } else {
-              displayName = data.clientId;
+              const [bookings] = await pool.query<RowDataPacket[]>(
+                `SELECT r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id
+                 WHERE b.user_id = ? AND b.status = 'checked_in' LIMIT 1`,
+                [data.clientId]
+              );
+              if (bookings.length > 0) {
+                hotelId = bookings[0].hotel_id;
+              }
+              const [userRows] = await pool.query<RowDataPacket[]>(
+                'SELECT username FROM users WHERE id = ? OR username = ?',
+                [data.clientId, data.clientId]
+              );
+              displayName = userRows.length > 0 ? userRows[0].username : data.clientId;
             }
           } else if (data.clientType === 'room') {
             const [rows] = await pool.query<RowDataPacket[]>(
@@ -996,6 +1013,9 @@ class WebSocketService {
         list.push({
           id: info.clientId,
           name: info.clientName,
+          type: info.clientType,
+          isOnDuty: info.isOnDuty,
+          dutyRole: info.dutyRole,
           connectedAt: info.connectedAt
         });
       }

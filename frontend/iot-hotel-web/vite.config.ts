@@ -51,15 +51,15 @@ server: {
   host: '0.0.0.0',  // 改为监听所有地址
   proxy: {
     '/api': {
-      target: 'http://localhost:3000',
+      target: 'http://localhost:9000',
       changeOrigin: true
     },
     '/uploads': {
-      target: 'http://localhost:3000',
+      target: 'http://localhost:9000',
       changeOrigin: true
     },
     '/socket.io': {
-      target: 'http://localhost:3000',
+      target: 'http://localhost:9000',
       ws: true,
       changeOrigin: true
     }
