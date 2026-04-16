@@ -1711,7 +1711,7 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
   int _appealTotal = 0;
   bool _isLoading = true;
   int? _selectedHotelId;
-  List<dynamic> _hotels = [];
+  List<Hotel> _hotels = [];
 
   @override
   void initState() {
@@ -1731,10 +1731,9 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
       final result = await ref.read(hotelServiceProvider).getHotels();
       if (result.success && result.data != null) {
         setState(() {
-          _hotels = result.data is List ? List<dynamic>.from(result.data as List) : List<dynamic>.from((result.data as Map<String, dynamic>?)?['list'] ?? []);
+          _hotels = result.data ?? [];
           if (_hotels.isNotEmpty && _selectedHotelId == null) {
-            final firstId = _hotels[0]['id'];
-            if (firstId is int) _selectedHotelId = firstId;
+            _selectedHotelId = _hotels[0].id;
           }
         });
       }
@@ -1891,8 +1890,8 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
                   value: _selectedHotelId,
                   isExpanded: true,
                   items: _hotels.map<DropdownMenuItem<int>>((h) => DropdownMenuItem(
-                    value: h['id'] as int,
-                    child: Text(h['hotel_name'] ?? h['name'] ?? '酒店${h['id']}', overflow: TextOverflow.ellipsis),
+                    value: h.id,
+                    child: Text(h.hotelName, overflow: TextOverflow.ellipsis),
                   )).toList(),
                   onChanged: (v) {
                     if (v != null) {

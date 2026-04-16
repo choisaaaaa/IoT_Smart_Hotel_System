@@ -403,7 +403,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                       const Text('证件类型', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String>(
-                        initialValue: _idType,
+                        value: _idType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

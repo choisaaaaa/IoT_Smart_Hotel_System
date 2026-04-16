@@ -244,18 +244,15 @@
                 </div>
               </div>
               <div class="header-right">
-                <div class="score-card-new clickable" @click="openReviewDrawer">
+                <div class="score-card-new">
                   <div class="score-main">
-                    <span class="num">{{ Number(reviewStats?.avg_score || 0).toFixed(1) || selectedHotel.rating }}</span>
+                    <span class="num">{{ selectedHotel.rating }}</span>
                     <span class="total">/5</span>
                   </div>
                   <div class="score-info">
-                    <div class="desc">{{ getRatingDesc(Number(reviewStats?.avg_score || selectedHotel.rating)) }}</div>
-                    <div class="count">{{ reviewStats?.total_reviews || selectedHotel.reviewCount || 0 }} 条真实评价</div>
+                    <div class="desc">“超赞”</div>
+                    <div class="count">{{ selectedHotel.reviewCount }} 条真实评价</div>
                   </div>
-                </div>
-                <div class="view-all-reviews" @click="openReviewDrawer">
-                  查看全部评价 →
                 </div>
               </div>
             </div>
@@ -513,7 +510,7 @@
                 <div class="offer-row-ctrip">
                   <div class="label-group">
                     <span class="label">积分抵扣</span>
-                    <span class="sub-label">可用 {{ memberInfo?.points || 0 }} 积分 ({{ appStore.systemConfigs.points_redeem_rate }}积分=1元)</span>
+                    <span class="sub-label">可用 {{ memberInfo?.points || 0 }} 积分 (10积分=1元)</span>
                   </div>
                   <div class="action-group">
                     <a-checkbox v-model:checked="usePoints" @change="handlePointsToggle">使用积分</a-checkbox>
@@ -677,86 +674,6 @@
       </div>
     </div>
 
-
-    <!-- Review Drawer -->
-    <a-drawer
-      v-model:open="reviewDrawerVisible"
-      title="酒店评价"
-      placement="right"
-      :width="640"
-      :destroyOnClose="true"
-    >
-      <div v-if="reviewLoading" style="text-align: center; padding: 40px;">
-        <a-spin size="large" />
-      </div>
-      <div v-else class="review-drawer-content">
-        <div class="review-stats-header" v-if="reviewStats">
-          <div class="stats-score-box">
-            <div class="big-score">{{ Number(reviewStats.avg_score || 0).toFixed(1) }}</div>
-            <div class="score-label">{{ getRatingDesc(Number(reviewStats.avg_score || 0)) }}</div>
-            <div class="review-total">{{ reviewStats.total_reviews }} 条评价</div>
-          </div>
-          <div class="stats-dimensions">
-            <div class="dim-row">
-              <span class="dim-label">环境</span>
-              <a-progress :percent="(Number(reviewStats.avg_environment || 0) / 5) * 100" :show-info="false" :stroke-color="'#008cff'" size="small" style="flex:1" />
-              <span class="dim-val">{{ Number(reviewStats.avg_environment || 0)?.toFixed(1) }}</span>
-            </div>
-            <div class="dim-row">
-              <span class="dim-label">设施</span>
-              <a-progress :percent="(Number(reviewStats.avg_facility || 0) / 5) * 100" :show-info="false" :stroke-color="'#008cff'" size="small" style="flex:1" />
-              <span class="dim-val">{{ Number(reviewStats.avg_facility || 0)?.toFixed(1) }}</span>
-            </div>
-            <div class="dim-row">
-              <span class="dim-label">舒适</span>
-              <a-progress :percent="(Number(reviewStats.avg_comfort || 0) / 5) * 100" :show-info="false" :stroke-color="'#008cff'" size="small" style="flex:1" />
-              <span class="dim-val">{{ Number(reviewStats.avg_comfort || 0)?.toFixed(1) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <a-divider />
-
-        <div class="review-list-section">
-          <div v-if="reviewList.length === 0" style="text-align: center; padding: 40px; color: #999;">
-            暂无评价
-          </div>
-          <div v-for="review in reviewList" :key="review.id" class="review-item">
-            <div class="review-header">
-              <div class="reviewer-info">
-                <a-avatar
-                  :size="32"
-                  :src="review.user_avatar ? appStore.resolveImageUrl(review.user_avatar) : undefined"
-                  style="background: #008cff"
-                >
-                  {{ review.member_name?.charAt(0) || '?' }}
-                </a-avatar>
-                <span class="reviewer-name">{{ review.member_name || '匿名用户' }}</span>
-              </div>
-              <span class="review-date">{{ review.created_at?.substring(0, 10) }}</span>
-            </div>
-            <div class="review-ratings">
-              <span class="rating-tag">环境 {{ review.environment_rating }}⭐</span>
-              <span class="rating-tag">设施 {{ review.facility_rating }}⭐</span>
-              <span class="rating-tag">舒适 {{ review.comfort_rating }}⭐</span>
-            </div>
-            <div class="review-content">{{ review.content }}</div>
-            <div v-if="review.photos?.length" class="review-photos">
-              <img v-for="(photo, i) in review.photos" :key="i" :src="photo" class="review-photo" />
-            </div>
-            <div v-if="review.reply" class="hotel-reply">
-              <div class="reply-label">酒店回复：</div>
-              <div class="reply-content">{{ review.reply }}</div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="reviewList.length < reviewTotal" style="text-align: center; padding: 16px;">
-          <a-button @click="loadMoreReviews" :loading="reviewLoading">加载更多</a-button>
-        </div>
-      </div>
-    </a-drawer>
-
     <!-- Frequent Guest Management Modal -->
     <a-modal
       v-model:open="showGuestModal"
@@ -796,8 +713,6 @@ import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
 import { hotelApi } from '@/api/hotel'
 import { paymentApi } from '@/api/payment'
-import { systemConfigApi } from '@/api/system-config'
-import { getReviews, getReviewStats } from '@/api/review'
 import request from '@/api/request'
 import { useAppStore } from '@/stores/app'
 import {
@@ -829,12 +744,6 @@ const pointsDiscount = ref(0)
 
 const paymentModalVisible = ref(false)
 const paymentLoading = ref(false)
-const reviewDrawerVisible = ref(false)
-const reviewStats = ref<any>(null)
-const reviewList = ref<any[]>([])
-const reviewLoading = ref(false)
-const reviewPage = ref(1)
-const reviewTotal = ref(0)
 
 const handlePreSubmit = () => {
   if (paymentMethod.value === 'balance') {
@@ -939,40 +848,22 @@ const nights = computed(() => {
 
 const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
 
-const memberLevelInfo = computed(() => {
-  if (!memberInfo.value) return null
-  // 添加对系统配置的依赖，确保配置更新时重新计算
-  const scheme = appStore.systemConfigs.member_scheme
-
-  // 如果后端返回了 level_label，优先使用后端数据
-  if (memberInfo.value?.level_label) {
-    const levelDiscounts = memberInfo.value?.level_discounts || {}
-    const levelMultipliers = memberInfo.value?.level_multipliers || {}
-    const discount = levelDiscounts[memberInfo.value.member_level] ?? 1.0
-    const multiplier = levelMultipliers[memberInfo.value.member_level] ?? 1
-
-    return {
-      label: memberInfo.value.level_label,
-      key: memberInfo.value.member_level,
-      discount: Number(discount),
-      multiplier: Number(multiplier),
-      color: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).color,
-      nextExp: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).nextExp,
-      percent: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).percent,
-      level: memberInfo.value?.level || 1
-    }
-  }
-
-  // 否则使用前端计算
-  return appStore.getLevelInfo(memberInfo.value?.member_level, memberInfo.value?.experience)
-})
-
 const memberDiscount = computed(() => {
-  return memberLevelInfo.value?.discount || 1.0
+  if (!memberInfo.value) return 1.0
+  const mLevel = memberInfo.value.member_level || 'standard'
+  const discounts: Record<string, number> = {
+    'diamond': 0.80,
+    'platinum': 0.85,
+    'gold': 0.88,
+    'silver': 0.95,
+    'standard': 1.0
+  }
+  return discounts[mLevel] || 1.0
 })
 
 const memberLevelLabel = computed(() => {
-  return memberLevelInfo.value?.label || ''
+  if (!memberInfo.value) return ''
+  return memberInfo.value.level_label || `LEVEL ${memberInfo.value.level || 1}`
 })
 
 const availableCoupons = computed(() => {
@@ -1136,7 +1027,6 @@ const selectHotel = async (hotel: any) => {
     selectedHotel.value = hotel
     roomTypes.value = res.roomTypes || []
     currentStep.value = 2
-    fetchReviewStats()
   } catch (error) {
     message.error('加载房态失败，请稍后重试')
   }
@@ -1325,60 +1215,6 @@ const submitBooking = async () => {
   } finally {
     submitting.value = false
   }
-}
-
-
-const getRatingDesc = (score: number) => {
-  if (!score) return '暂无评分'
-  if (score >= 4.5) return '超赞'
-  if (score >= 4.0) return '很好'
-  if (score >= 3.5) return '不错'
-  if (score >= 3.0) return '一般'
-  return '较差'
-}
-
-const openReviewDrawer = () => {
-  if (!selectedHotel.value) return
-  reviewDrawerVisible.value = true
-  fetchReviewStats()
-  fetchReviewList()
-}
-
-const fetchReviewStats = async () => {
-  if (!selectedHotel.value) return
-  try {
-    const res = await getReviewStats(Number(selectedHotel.value.id))
-    reviewStats.value = res.data
-  } catch (error) {
-    console.error('获取评价统计失败:', error)
-  }
-}
-
-const fetchReviewList = async () => {
-  if (!selectedHotel.value) return
-  try {
-    reviewLoading.value = true
-    const res = await getReviews({
-      hotel_id: Number(selectedHotel.value.id),
-      page: reviewPage.value,
-      pageSize: 10
-    })
-    if (reviewPage.value === 1) {
-      reviewList.value = res.data?.list || []
-    } else {
-      reviewList.value = [...reviewList.value, ...(res.data?.list || [])]
-    }
-    reviewTotal.value = res.data?.total || 0
-  } catch (error) {
-    console.error('获取评价列表失败:', error)
-  } finally {
-    reviewLoading.value = false
-  }
-}
-
-const loadMoreReviews = () => {
-  reviewPage.value++
-  fetchReviewList()
 }
 
 const resetAll = () => {
@@ -2560,152 +2396,6 @@ watch(() => appStore.userInfo, (newVal) => {
 .points-action { display: flex; align-items: center; }
 .points-result { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #f0f0f0; font-size: 14px; color: #8c8c8c; }
 .discount-val { color: #ff4d4f; font-weight: 700; margin-left: 4px; }
-
-/* Review Drawer Styles */
-.score-card-new.clickable {
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.score-card-new.clickable:hover {
-  box-shadow: 0 6px 20px rgba(0, 140, 255, 0.2);
-  border-color: #008cff;
-}
-.view-all-reviews {
-  text-align: center;
-  color: #008cff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 8px;
-  transition: opacity 0.2s;
-}
-.view-all-reviews:hover {
-  opacity: 0.7;
-}
-.review-drawer-content {
-  padding: 0 4px;
-}
-.review-stats-header {
-  display: flex;
-  gap: 32px;
-  align-items: center;
-}
-.stats-score-box {
-  text-align: center;
-  min-width: 120px;
-}
-.big-score {
-  font-size: 48px;
-  font-weight: 900;
-  color: #008cff;
-  line-height: 1;
-}
-.score-label {
-  font-size: 16px;
-  font-weight: 700;
-  color: #008cff;
-  margin-top: 4px;
-}
-.review-total {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-top: 4px;
-}
-.stats-dimensions {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.dim-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.dim-label {
-  font-size: 13px;
-  color: #595959;
-  width: 32px;
-}
-.dim-val {
-  font-size: 13px;
-  font-weight: 600;
-  color: #008cff;
-  width: 28px;
-  text-align: right;
-}
-.review-item {
-  padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-.review-item:last-child {
-  border-bottom: none;
-}
-.review-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.reviewer-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.reviewer-name {
-  font-weight: 600;
-  font-size: 14px;
-}
-.review-date {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-.review-ratings {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.rating-tag {
-  font-size: 12px;
-  color: #008cff;
-  background: #f0f5ff;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-.review-content {
-  font-size: 14px;
-  color: #333;
-  line-height: 1.6;
-  margin-bottom: 8px;
-}
-.review-photos {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.review-photo {
-  width: 80px;
-  height: 80px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-.hotel-reply {
-  background: #f5f5f5;
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-top: 8px;
-}
-.reply-label {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-bottom: 4px;
-}
-.reply-content {
-  font-size: 13px;
-  color: #595959;
-}
-
 /* Animation helpers */
 .animate__animated { animation-duration: 0.8s; }
 @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }

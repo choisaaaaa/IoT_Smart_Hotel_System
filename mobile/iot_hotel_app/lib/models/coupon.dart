@@ -92,6 +92,12 @@ class Coupon {
 
   bool get isAvailable => status == 'active' && !isExpired;
 
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
   factory Coupon.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
     normalized['discount_value'] ??= normalized['discount_amount'] ?? normalized['value'] ?? 0;
@@ -100,21 +106,21 @@ class Coupon {
     return Coupon(
       id: normalized['id'] ?? 0,
       name: normalized['name'] ?? '优惠券',
-      couponType: normalized['coupon_type'],
-      discountValue: (normalized['discount_value'] ?? 0).toDouble(),
+      couponType: normalized['coupon_type']?.toString() ?? 'fixed',
+      discountValue: _toDouble(normalized['discount_value']),
       discountAmount: normalized['discount_amount'] != null
-          ? (normalized['discount_amount']).toDouble()
+          ? _toDouble(normalized['discount_amount'])
           : null,
-      minSpend: normalized['min_spend'] != null
-          ? (normalized['min_spend']).toDouble()
+      minSpend: normalized['min_spend'] != null || normalized['min_amount'] != null
+          ? _toDouble(normalized['min_spend'] ?? normalized['min_amount'])
           : null,
-      expireDate: normalized['expire_date'] ?? normalized['valid_until'] ?? normalized['expires_at'],
-      status: normalized['status'] ?? 'active',
-      hotelId: normalized['hotel_id'],
-      code: normalized['code'] ?? normalized['coupon_code'],
-      totalCount: normalized['total_count'],
-      usedCount: normalized['used_count'],
-      createdAt: normalized['created_at'],
+      expireDate: normalized['expire_date']?.toString() ?? normalized['valid_until']?.toString() ?? normalized['expires_at']?.toString(),
+      status: normalized['status']?.toString() ?? 'active',
+      hotelId: normalized['hotel_id'] is num ? (normalized['hotel_id'] as num).toInt() : null,
+      code: normalized['code']?.toString() ?? normalized['coupon_code']?.toString(),
+      totalCount: normalized['total_count'] is num ? (normalized['total_count'] as num).toInt() : null,
+      usedCount: normalized['used_count'] is num ? (normalized['used_count'] as num).toInt() : null,
+      createdAt: normalized['created_at']?.toString(),
     );
   }
 

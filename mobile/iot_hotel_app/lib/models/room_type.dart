@@ -55,6 +55,19 @@ class RoomType {
     this.availableCount,
   });
 
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   factory RoomType.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
     normalized['code'] ??= normalized['type_code'] ?? normalized['room_type'] ?? '';
@@ -70,19 +83,19 @@ class RoomType {
     }
 
     return RoomType(
-      id: normalized['id'] ?? 0,
-      code: normalized['code'] ?? '',
-      name: normalized['name'] ?? '',
-      basePrice: (normalized['base_price'] ?? 0).toDouble(),
-      maxGuests: normalized['max_guests'] ?? 1,
-      bedType: normalized['bed_type'],
-      area: normalized['area'] != null ? (normalized['area']).toDouble() : null,
-      description: normalized['description'],
+      id: _toInt(normalized['id']) ?? 0,
+      code: normalized['code']?.toString() ?? '',
+      name: normalized['name']?.toString() ?? '',
+      basePrice: _toDouble(normalized['base_price']),
+      maxGuests: _toInt(normalized['max_guests']) ?? 1,
+      bedType: normalized['bed_type']?.toString(),
+      area: normalized['area'] != null ? _toDouble(normalized['area']) : null,
+      description: normalized['description']?.toString(),
       facilities: parseList(normalized['facilities']),
       images: parseList(normalized['images']),
-      hotelId: normalized['hotel_id'],
-      totalCount: normalized['total_count'],
-      availableCount: normalized['available_count'],
+      hotelId: _toInt(normalized['hotel_id']),
+      totalCount: _toInt(normalized['total_count']),
+      availableCount: _toInt(normalized['available_count']),
     );
   }
 

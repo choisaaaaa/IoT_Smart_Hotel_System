@@ -57,15 +57,14 @@ export async function search(req: AuthRequest, res: Response) {
     sendSuccess(res, {
       hotels: hotels.map((h: any) => ({
         id: h.id,
-        hotel_name: h.hotel_name || h.name || '智联酒店',
-        hotel_address: h.hotel_address || h.location || '酒店地址',
-        hotel_star: h.hotel_star || h.star_rating || 5,
+        name: h.hotel_name || h.name || '智联酒店',
+        location: h.hotel_address || h.location || '酒店地址',
+        star: h.hotel_star || h.star_rating || 5,
         rating: h.rating || 4.5,
-        review_count: h.review_count || 100,
+        reviewCount: h.review_count || 100,
         price: h.min_price || 299,
-        logo: h.logo || h.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-        available_rooms: h.available_rooms,
-        location: h.location || h.hotel_address || '酒店地址'
+        image: h.logo || h.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+        availableRooms: h.available_rooms
       }))
     });
   } catch (error) {

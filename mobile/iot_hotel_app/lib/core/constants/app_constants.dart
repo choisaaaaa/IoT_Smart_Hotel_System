@@ -29,7 +29,7 @@ class AppConstants {
 
   static Map<String, String> bookingStatusMap = {
     'pending': '待确认',
-    'confirmed': '已确认',
+    'confirmed': '已支付',
     'checked_in': '已入住',
     'checked_out': '已退房',
     'cancelled': '已取消',

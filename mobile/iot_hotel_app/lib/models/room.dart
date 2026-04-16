@@ -52,23 +52,36 @@ class Room {
     this.imageUrl,
   });
 
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   factory Room.fromJson(Map<String, dynamic> json) => Room(
-        id: json['id'] ?? 0,
-        hotelId: json['hotel_id'] ?? 1,
+        id: _toInt(json['id']) ?? 0,
+        hotelId: _toInt(json['hotel_id']) ?? 1,
         roomNumber: json['room_number'] ?? '',
         roomType: json['room_type'] ?? 'standard',
-        roomTypeId: json['room_type_id'],
-        roomName: json['room_name'],
-        roomPrice: (json['room_price'] ?? 0).toDouble(),
+        roomTypeId: _toInt(json['room_type_id']),
+        roomName: json['room_name']?.toString(),
+        roomPrice: _toDouble(json['room_price']),
         roomStatus: json['room_status'] ?? json['status'] ?? 'available',
-        floor: json['floor'],
-        area: json['area'] != null ? (json['area']).toDouble() : null,
-        bedType: json['bed_type'],
-        maxGuests: json['max_guests'] ?? 1,
-        description: json['description'],
+        floor: _toInt(json['floor']),
+        area: json['area'] != null ? _toDouble(json['area']) : null,
+        bedType: json['bed_type']?.toString(),
+        maxGuests: _toInt(json['max_guests']) ?? 1,
+        description: json['description']?.toString(),
         facilities: json['facilities'],
         images: json['images'],
-        imageUrl: json['image_url'],
+        imageUrl: json['image_url']?.toString(),
       );
 
   Map<String, dynamic> toJson() => {

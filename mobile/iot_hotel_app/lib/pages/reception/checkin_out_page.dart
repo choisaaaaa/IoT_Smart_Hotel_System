@@ -576,7 +576,12 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
     if (confirm != true) return;
 
     try {
-      final result = await ref.read(bookingServiceProvider).checkin(booking.id);
+      final result = await ref.read(bookingServiceProvider).checkin(
+        booking.id,
+        guestName: booking.guestName,
+        guestPhone: booking.guestPhone,
+        guestIdNumber: booking.guestIdNumber,
+      );
       if (result.success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('入住办理成功'), backgroundColor: AppColors.success));
         _loadData();
@@ -611,7 +616,12 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
 
       if (createResult.success && createResult.data != null) {
         final bookingId = createResult.data!.id;
-        final checkinResult = await ref.read(bookingServiceProvider).checkin(bookingId);
+        final checkinResult = await ref.read(bookingServiceProvider).checkin(
+          bookingId,
+          guestName: _guestNameController.text,
+          guestPhone: _guestPhoneController.text,
+          guestIdNumber: _guestIdController.text.isNotEmpty ? _guestIdController.text : null,
+        );
         if (checkinResult.success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('入住办理成功'), backgroundColor: AppColors.success));
           _resetForm();
@@ -735,7 +745,12 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
 
     try {
       if (approved) {
-        final result = await ref.read(bookingServiceProvider).checkin(booking.id);
+        final result = await ref.read(bookingServiceProvider).checkin(
+          booking.id,
+          guestName: booking.guestName,
+          guestPhone: booking.guestPhone,
+          guestIdNumber: booking.guestIdNumber,
+        );
         if (result.success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('审核通过，入住办理成功'), backgroundColor: AppColors.success));
           _loadData();

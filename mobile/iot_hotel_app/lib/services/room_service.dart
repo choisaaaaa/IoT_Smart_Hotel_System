@@ -11,6 +11,8 @@ class RoomService {
     int pageSize = 20,
     String? status,
     String? floor,
+    int? hotelId,
+    String? type,
   }) async {
     try {
       final queryParams = <String, dynamic>{
@@ -19,6 +21,8 @@ class RoomService {
       };
       if (status != null) queryParams['room_status'] = status;
       if (floor != null) queryParams['floor'] = floor;
+      if (hotelId != null) queryParams['hotel_id'] = hotelId;
+      if (type != null) queryParams['type'] = type;
 
       final response = await _dioClient.get(
         ApiConstants.rooms,

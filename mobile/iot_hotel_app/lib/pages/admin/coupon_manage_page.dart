@@ -275,8 +275,8 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                                 ),
                                 ..._hotels.map<DropdownMenuItem<int>>((hotel) {
                                   return DropdownMenuItem<int>(
-                                    value: hotel['id'] as int,
-                                    child: Text(hotel['hotel_name']?.toString() ?? ''),
+                                    value: hotel.id,
+                                    child: Text(hotel.hotelName),
                                   );
                                 }),
                               ],

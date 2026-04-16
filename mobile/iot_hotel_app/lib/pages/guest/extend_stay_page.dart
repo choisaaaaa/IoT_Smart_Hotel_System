@@ -508,13 +508,15 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
   }
 
   Widget _buildPriceSummary() {
-    final double basePrice = _priceDetails?['base_price']?.toDouble() ?? 0;
-    final double discountRate = _priceDetails?['discount_rate']?.toDouble() ?? 1.0;
-    final double memberDiscount = _priceDetails?['member_discount']?.toDouble() ?? 0;
-    final double couponDiscount = _priceDetails?['coupon_discount']?.toDouble() ?? 0;
-    final double pointsDiscount = _priceDetails?['points_discount']?.toDouble() ?? 0;
-    final int usedPoints = _priceDetails?['used_points'] ?? 0;
-    final double totalPrice = _priceDetails?['total_price']?.toDouble() ?? 0;
+    double _safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
+    final double basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : 0;
+    double discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
+    if (discountRate == 0.0 && _priceDetails != null) discountRate = 1.0;
+    final double memberDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['member_discount']) : 0;
+    final double couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0;
+    final double pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0;
+    final int usedPoints = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : (int.tryParse(_priceDetails?['used_points']?.toString() ?? '0') ?? 0);
+    final double totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : 0;
 
     return Container(
       padding: const EdgeInsets.all(16),

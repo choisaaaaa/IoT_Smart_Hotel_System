@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
 import '../../services/auth_service.dart';
 import '../../services/booking_service.dart';
+import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/room_service.dart';
@@ -77,29 +78,46 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   Future<void> _loadAvailableRooms() async {
     setState(() => _isLoadingRooms = true);
     try {
-      final result = await ref.read(roomServiceProvider).getRooms(
-            status: 'available',
-            pageSize: 100,
-          );
-      if (result.success && mounted) {
-        final rawRooms = result.data ?? [];
-        final rooms = rawRooms.map((r) {
-          if (r is Room) return r;
-          return Room.fromJson(Map<String, dynamic>.from(r as Map));
+      List<Room> availableRooms = [];
+
+      debugPrint('DEBUG: _loadAvailableRooms - hotelId=${widget.hotelId}, roomType=${widget.roomType}, roomTypeId=${widget.roomTypeId}');
+
+      // 直接使用 getHotelRooms 获取酒店的所有房间
+      final roomsResult = await ref.read(hotelServiceProvider).getHotelRooms(widget.hotelId);
+      debugPrint('DEBUG: _loadAvailableRooms - roomsResult.success=${roomsResult.success}, data.length=${roomsResult.data?.length ?? 0}');
+      
+      if (roomsResult.success && roomsResult.data != null) {
+        final allRooms = roomsResult.data!;
+        debugPrint('DEBUG: _loadAvailableRooms - allRooms.length=${allRooms.length}');
+        
+        // 打印所有房间信息用于调试
+        for (final r in allRooms) {
+          debugPrint('DEBUG: Room - id=${r.id}, number=${r.roomNumber}, type=${r.roomType}, status=${r.roomStatus}, roomTypeId=${r.roomTypeId}');
+        }
+        
+        // 过滤出可用状态且匹配当前房型的房间
+        availableRooms = allRooms.where((r) {
+          // 只显示可用房间
+          final isAvailable = r.roomStatus == 'available' || r.roomStatus == 'clean' || r.roomStatus == null || r.roomStatus!.isEmpty;
+          // 匹配房型
+          final typeMatch = widget.roomTypeId != null && r.roomTypeId == widget.roomTypeId;
+          final typeName = r.roomName ?? r.roomType ?? '';
+          final nameMatch = typeName == widget.roomType || typeName.contains(widget.roomType);
+          
+          debugPrint('DEBUG: Filter - roomId=${r.id}, isAvailable=$isAvailable, typeMatch=$typeMatch, nameMatch=$nameMatch, typeName=$typeName');
+          
+          return isAvailable && (typeMatch || nameMatch);
         }).toList();
-        final filtered = rooms.where((r) {
-          if (widget.roomTypeId != null && r.roomTypeId == widget.roomTypeId) {
-            return true;
-          }
-          final typeName = r.roomName ?? r.roomType;
-          return typeName == widget.roomType ||
-              typeName.contains(widget.roomType);
-        }).toList();
+        
+        debugPrint('DEBUG: _loadAvailableRooms - availableRooms.length=${availableRooms.length}');
+      }
+
+      if (mounted) {
         setState(() {
-          _availableRooms = filtered;
-          if (filtered.isNotEmpty) {
-            final initial = filtered.where((r) => r.id == widget.roomId).toList();
-            _selectedRoom = initial.isNotEmpty ? initial.first : filtered.first;
+          _availableRooms = availableRooms;
+          if (availableRooms.isNotEmpty) {
+            final initial = availableRooms.where((r) => r.id == widget.roomId).toList();
+            _selectedRoom = initial.isNotEmpty ? initial.first : availableRooms.first;
           }
         });
         _calculatePrice();
@@ -161,7 +179,8 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         ? _phoneController.text.trim()
         : (await ref.read(authServiceProvider).getCurrentUser())?.phone;
 
-    final targetRoomId = _selectedRoom?.id ?? widget.roomId;
+    final targetRoomId = _selectedRoom?.id;
+    if (targetRoomId == null || targetRoomId == 0) return;
 
     final result = await ref.read(bookingServiceProvider).calculatePrice(
           roomId: targetRoomId,
@@ -247,10 +266,11 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       return;
     }
 
-    final targetRoomId = _selectedRoom?.id ?? widget.roomId;
+    final targetRoomId = _selectedRoom?.id;
 
-    if (targetRoomId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('房间信息异常，请返回重新选择房型'), backgroundColor: AppColors.error));
+    if (targetRoomId == null || targetRoomId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先选择具体房间'), backgroundColor: AppColors.error));
+      _showRoomSelector();
       return;
     }
 
@@ -619,11 +639,14 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
 
   Widget _buildBottomPayBar() {
     final double basePrice = widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
-    double totalPrice = _priceDetails?['total_price']?.toDouble() ?? basePrice;
-    double discountRate = _priceDetails?['discount_rate']?.toDouble() ?? 1.0;
-    int pointsUsed = _priceDetails?['used_points'] ?? 0;
-    double pointsDiscount = _priceDetails?['points_discount']?.toDouble() ?? 0.0;
-    double couponDiscount = _priceDetails?['coupon_discount']?.toDouble() ?? 0.0;
+    double _safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
+    double totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : basePrice;
+    if (totalPrice == 0.0) totalPrice = basePrice;
+    double discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
+    if (discountRate == 0.0) discountRate = 1.0;
+    int pointsUsed = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : (int.tryParse(_priceDetails?['used_points']?.toString() ?? '0') ?? 0);
+    double pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0.0;
+    double couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;
 
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),

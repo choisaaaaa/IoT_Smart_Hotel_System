@@ -137,9 +137,18 @@ class BookingService {
     }
   }
 
-  Future<ApiResult<void>> checkin(int id) async {
+  Future<ApiResult<void>> checkin(int id, {String? guestName, String? guestPhone, String? guestIdNumber}) async {
     try {
-      final response = await _dioClient.put('${ApiConstants.bookings}/$id/checkin');
+      // 确保总是发送一个对象，避免后端接收不到 body
+      final data = <String, dynamic>{};
+      if (guestName != null && guestName.isNotEmpty) data['guest_name'] = guestName;
+      if (guestPhone != null && guestPhone.isNotEmpty) data['guest_phone'] = guestPhone;
+      if (guestIdNumber != null && guestIdNumber.isNotEmpty) data['guest_id_number'] = guestIdNumber;
+      
+      final response = await _dioClient.put(
+        '${ApiConstants.bookings}/$id/checkin',
+        data: data,
+      );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(null);
       }
@@ -286,17 +295,19 @@ class BookingService {
     int? ratePlanId,
   }) async {
     try {
-      final response = await _dioClient.post(
+      final queryParams = <String, dynamic>{
+        'room_id': roomId,
+        'check_in_date': checkInDate.toIso8601String().split('T')[0],
+        'check_out_date': checkOutDate.toIso8601String().split('T')[0],
+      };
+      if (guestPhone != null) queryParams['guest_phone'] = guestPhone;
+      if (couponId != null) queryParams['coupon_id'] = couponId;
+      if (usedPoints != null) queryParams['used_points'] = usedPoints;
+      if (ratePlanId != null) queryParams['rate_plan_id'] = ratePlanId;
+
+      final response = await _dioClient.get(
         '${ApiConstants.bookings}/calculate-price',
-        data: {
-          'room_id': roomId,
-          'check_in_date': checkInDate.toIso8601String().split('T')[0],
-          'check_out_date': checkOutDate.toIso8601String().split('T')[0],
-          if (guestPhone != null) 'guest_phone': guestPhone,
-          if (couponId != null) 'coupon_id': couponId,
-          if (usedPoints != null) 'used_points': usedPoints,
-          if (ratePlanId != null) 'rate_plan_id': ratePlanId,
-        },
+        queryParameters: queryParams,
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {

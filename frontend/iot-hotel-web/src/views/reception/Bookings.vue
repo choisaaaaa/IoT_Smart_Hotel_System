@@ -5,7 +5,7 @@
         <a-input-search v-model:value="searchKey" placeholder="搜索预订号/客人名" style="width: 240px;" allow-clear @search="fetchBookings" />
         <a-select v-model:value="filterStatus" placeholder="状态筛选" allow-clear style="width: 140px;" @change="fetchBookings">
           <a-select-option value="pending">待确认</a-select-option>
-          <a-select-option value="confirmed">已确认</a-select-option>
+          <a-select-option value="confirmed">已支付</a-select-option>
           <a-select-option value="pre_checked_in">预入住</a-select-option>
           <a-select-option value="checked_in">已入住</a-select-option>
           <a-select-option value="checked_out">已退房</a-select-option>
@@ -204,7 +204,7 @@ function statusColor(s: string): string {
   return ({ pending: 'warning', confirmed: 'processing', pre_checked_in: 'cyan', checked_in: 'success', checked_out: 'default', cancelled: 'error' } as Record<string, string>)[s] || 'default'
 }
 function statusText(s: string): string {
-  return ({ pending: '待确认', confirmed: '已确认', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
+  return ({ pending: '待确认', confirmed: '已支付', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
 }
 
 function formatDateTime(val: string | null | undefined): string {

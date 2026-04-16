@@ -405,7 +405,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
       });
 
       if (createPayResult.success && createPayResult.data != null) {
-        final paymentId = createPayResult.data!['id'];
+        final paymentIdRaw = createPayResult.data!['id'];
+        final int paymentId = paymentIdRaw is int ? paymentIdRaw : (int.tryParse(paymentIdRaw?.toString() ?? '0') ?? 0);
+        if (paymentId == 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('支付订单创建异常')),
+            );
+          }
+          return;
+        }
         final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
         if (payResult.success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

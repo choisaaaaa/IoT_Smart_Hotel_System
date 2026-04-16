@@ -104,6 +104,22 @@ class HotelService {
     }
   }
 
+  Future<ApiResult<Map<String, dynamic>>> getRoomAvailabilityRaw(
+      int hotelId, String checkIn, String checkOut) async {
+    try {
+      final response = await _dioClient.get(
+        '${ApiConstants.hotels}/$hotelId/rooms/availability',
+        queryParameters: {'check_in': checkIn, 'check_out': checkOut},
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取房型余量失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<List<Room>>> getHotelRooms(int hotelId) async {
     try {
       final response = await _dioClient.get(
@@ -222,9 +238,17 @@ class HotelService {
 
   Future<ApiResult<List<dynamic>>> getTodayArrivals() async {
     try {
+      // 获取今日日期
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      
       final response = await _dioClient.get(
         ApiConstants.bookings,
-        queryParameters: {'status': 'confirmed', 'pageSize': 50},
+        queryParameters: {
+          'status': 'confirmed',
+          'check_in_date': todayStr,
+          'pageSize': 50,
+        },
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
@@ -237,13 +261,12 @@ class HotelService {
     }
   }
 
-  Future<ApiResult<Hotel>> updateHotelInfo(Map<String, dynamic> data) async {
+  Future<ApiResult<void>> updateHotelInfo(Map<String, dynamic> data) async {
     try {
       final response = await _dioClient.put(ApiConstants.hotel, data: data);
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(
-            Hotel.fromJson(response.data['data'] as Map<String, dynamic>));
+        return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '更新酒店信息失败');
     } catch (e) {

@@ -579,11 +579,11 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _buildMiniStat('环境', _reviewStats!['avg_environment'] ?? '0.0'),
+                _buildMiniStat('环境', (_reviewStats!['avg_environment'] ?? 0).toString()),
                 const SizedBox(width: 12),
-                _buildMiniStat('设施', _reviewStats!['avg_facility'] ?? '0.0'),
+                _buildMiniStat('设施', (_reviewStats!['avg_facility'] ?? 0).toString()),
                 const SizedBox(width: 12),
-                _buildMiniStat('舒适', _reviewStats!['avg_comfort'] ?? '0.0'),
+                _buildMiniStat('舒适', (_reviewStats!['avg_comfort'] ?? 0).toString()),
               ],
             ),
           ],
