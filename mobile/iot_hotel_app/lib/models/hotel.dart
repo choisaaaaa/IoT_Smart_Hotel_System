@@ -120,6 +120,13 @@ class Hotel {
       normalized['facilities'] = List<String>.from(normalized['facilities']);
     }
 
+    double parseDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+
     return Hotel(
       id: normalized['id'] ?? 0,
       hotelName: normalized['hotel_name'] ?? '',
@@ -128,19 +135,19 @@ class Hotel {
       hotelStar: normalized['hotel_star'] ?? 3,
       totalRooms: normalized['total_rooms'] ?? 0,
       occupiedRooms: normalized['occupied_rooms'] ?? 0,
-      occupancyRate: (normalized['occupancy_rate'] ?? 0).toDouble(),
+      occupancyRate: parseDouble(normalized['occupancy_rate'] ?? 0),
       logo: normalized['logo'],
       description: normalized['description'],
       city: normalized['city'],
       location: normalized['location'],
       starRating: normalized['star_rating'],
-      rating: normalized['rating'] != null ? (normalized['rating']).toDouble() : null,
+      rating: normalized['rating'] != null ? parseDouble(normalized['rating']) : null,
       reviewCount: normalized['review_count'],
       imageUrl: normalized['image_url'],
       hotelCode: normalized['hotel_code'],
       images: normalized['images'],
       facilities: normalized['facilities'],
-      price: normalized['price'] != null ? (normalized['price']).toDouble() : null,
+      price: normalized['price'] != null ? parseDouble(normalized['price']) : null,
       availableRooms: normalized['available_rooms'] ?? normalized['availableRooms'],
     );
   }

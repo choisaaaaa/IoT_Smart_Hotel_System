@@ -796,10 +796,18 @@ class _CouponCard extends StatelessWidget {
     final isGeneral = (coupon['hotel_id'] ?? 0) == 0;
 
     String discountText;
-    if (type == 'discount') {
-      discountText = '${discountValue.toStringAsFixed(0)}% OFF';
+    double discountNum;
+    if (discountValue is num) {
+      discountNum = discountValue.toDouble();
+    } else if (discountValue is String) {
+      discountNum = double.tryParse(discountValue) ?? 0;
     } else {
-      discountText = '\u00a5${discountValue.toStringAsFixed(0)}';
+      discountNum = 0;
+    }
+    if (type == 'discount') {
+      discountText = '${discountNum.toStringAsFixed(0)}% OFF';
+    } else {
+      discountText = '\u00a5${discountNum.toStringAsFixed(0)}';
     }
 
     Color statusColor;
@@ -916,11 +924,23 @@ class _CouponCard extends StatelessWidget {
                         text: remaining >= 0 ? '剩余 $remaining/$totalQuantity' : '不限量',
                       ),
                       const SizedBox(width: 16),
-                      if (coupon['min_amount'] != null && coupon['min_amount'] > 0)
-                        _InfoChip(
-                          icon: Icons.shopping_cart,
-                          text: '\u00a5${coupon['min_amount']}起',
-                        ),
+                      if (coupon['min_amount'] != null)
+                        Builder(builder: (context) {
+                          final minAmount = coupon['min_amount'];
+                          double minAmountValue = 0;
+                          if (minAmount is num) {
+                            minAmountValue = minAmount.toDouble();
+                          } else if (minAmount is String) {
+                            minAmountValue = double.tryParse(minAmount) ?? 0;
+                          }
+                          if (minAmountValue > 0) {
+                            return _InfoChip(
+                              icon: Icons.shopping_cart,
+                              text: '\u00a5${minAmountValue.toStringAsFixed(0)}起',
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        }),
                     ],
                   ),
                   if (coupon['valid_from'] != null || coupon['valid_to'] != null) ...[

@@ -206,10 +206,15 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: Text(
-                  review.displayUsername.isNotEmpty ? review.displayUsername[0] : '?',
-                  style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
-                ),
+                backgroundImage: review.userAvatar != null && review.userAvatar!.isNotEmpty
+                    ? NetworkImage(review.userAvatar!) as ImageProvider
+                    : null,
+                child: review.userAvatar == null || review.userAvatar!.isEmpty
+                    ? Text(
+                        review.displayUsername.isNotEmpty ? review.displayUsername[0] : '?',
+                        style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -12,6 +12,7 @@ class UserService {
     String? role,
     String? keyword,
     String? status,
+    int? hotelId,
   }) async {
     try {
       final response = await _dioClient.get(
@@ -22,11 +23,15 @@ class UserService {
           'role': role,
           'keyword': keyword,
           'status': status,
+          'hotel_id': hotelId,
         }..removeWhere((key, value) => value == null),
       );
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(List<dynamic>.from(response.data['data']['list'] ?? []));
+        final data = response.data['data'];
+        // 后端返回的是 'users' 而不是 'list'
+        final users = data['users'] ?? data['list'] ?? [];
+        return ApiResult.success(List<dynamic>.from(users));
       }
       return ApiResult.failure(response.data['message'] ?? '获取用户列表失败');
     } catch (e) {

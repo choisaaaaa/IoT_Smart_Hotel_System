@@ -814,8 +814,9 @@ const fetchSystemConfigs = async () => {
 
 onMounted(() => {
   appStore.initUserInfo() // 确保 userInfo 加载
-  fetchSystemConfigs() // 获取系统全局配置
+  // 只有已登录用户才获取系统配置
   if (localStorage.getItem('auth_token')) {
+    fetchSystemConfigs() // 获取系统全局配置
     setupGlobalWebSocket()
   }
 })

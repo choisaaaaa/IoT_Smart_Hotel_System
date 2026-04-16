@@ -155,6 +155,13 @@ class Booking {
       return fallback;
     }
 
+    double parseDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+
     return Booking(
       id: normalized['id'] ?? 0,
       bookingNumber: normalized['booking_number']?.toString(),
@@ -171,7 +178,7 @@ class Booking {
       specialRequests: normalized['special_requests'],
       paymentMethod: normalized['payment_method'],
       status: normalized['status'] ?? 'pending',
-      totalPrice: (normalized['total_price'] ?? normalized['total_amount'] ?? 0).toDouble(),
+      totalPrice: parseDouble(normalized['total_price'] ?? normalized['total_amount'] ?? 0),
       createdAt: normalized['created_at'] != null
           ? parseDate(normalized['created_at'], DateTime.now())
           : null,

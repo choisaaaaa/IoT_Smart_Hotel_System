@@ -511,7 +511,7 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.6,
+              childAspectRatio: 1.4,
               children: [
                 _QuickStatCard(title: '今日入住', value: todayCheckIn, icon: Icons.login_rounded, color: AppColors.success, onTap: () => _navigateToPage('checkin_out')),
                 _QuickStatCard(title: '今日退房', value: todayCheckOut, icon: Icons.logout_rounded, color: AppColors.warning, onTap: () => _navigateToPage('checkin_out')),

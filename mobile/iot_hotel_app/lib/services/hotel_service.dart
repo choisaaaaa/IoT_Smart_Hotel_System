@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -34,10 +35,18 @@ class HotelService {
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final rawList = response.data['data']['hotels'] ?? [];
-        final hotels = List<Map<String, dynamic>>.from(rawList)
-            .map((h) => Hotel.fromJson(h))
-            .toList();
-        return ApiResult.success(hotels);
+        debugPrint('DEBUG: getHotels - rawList.length=${rawList.length}');
+        debugPrint('DEBUG: getHotels - rawList=$rawList');
+        try {
+          final hotels = List<Map<String, dynamic>>.from(rawList)
+              .map((h) => Hotel.fromJson(h))
+              .toList();
+          return ApiResult.success(hotels);
+        } catch (e, stackTrace) {
+          debugPrint('DEBUG: getHotels - parse error=$e');
+          debugPrint('DEBUG: getHotels - stackTrace=$stackTrace');
+          return ApiResult.failure('解析酒店数据失败: $e');
+        }
       }
       return ApiResult.failure(response.data['message'] ?? '获取酒店列表失败');
     } catch (e) {
@@ -146,6 +155,18 @@ class HotelService {
     }
   }
 
+  Future<ApiResult<Map<String, dynamic>>> getGlobalStatistics() async {
+    try {
+      final response = await _dioClient.get('${ApiConstants.hotel}/statistics');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取全局统计数据失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
   Future<ApiResult<Map<String, dynamic>>> getDashboardStats() async {
     try {
       final response = await _dioClient.get('${ApiConstants.hotel}/statistics');
@@ -174,6 +195,7 @@ class HotelService {
           final status = b['status']?.toString() ?? '';
           if (status == 'confirmed') todayCheckin = count;
           if (status == 'checked_in') currentGuests = count;
+          if (status == 'checked_out') todayCheckout = count;
         }
 
         stats['total_rooms'] = totalRooms;
@@ -186,6 +208,9 @@ class HotelService {
         stats['pending_tasks'] = raw['pending_maintenance'] ?? 0;
         stats['today_bookings'] = todayCheckin;
         stats['online_devices'] = 0;
+        stats['total_revenue'] = raw['total_revenue'] ?? 0;
+        stats['total_orders'] = raw['total_orders'] ?? 0;
+        stats['monthly_revenue'] = raw['monthly_revenue'] ?? [];
 
         return ApiResult.success(stats);
       }
@@ -202,7 +227,9 @@ class HotelService {
         queryParameters: {'status': 'confirmed', 'pageSize': 50},
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(List<dynamic>.from(response.data['data']['list'] ?? []));
+        final data = response.data['data'];
+        final list = data['list'] ?? data['bookings'] ?? [];
+        return ApiResult.success(List<dynamic>.from(list));
       }
       return ApiResult.failure(response.data['message'] ?? '获取今日到店列表失败');
     } catch (e) {
@@ -237,6 +264,73 @@ class HotelService {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取报表数据失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> getReports({int? hotelId}) async {
+    try {
+      final queryParams = <String, dynamic>{};
+      if (hotelId != null) queryParams['hotel_id'] = hotelId;
+      
+      final response = await _dioClient.get('${ApiConstants.hotel}/reports', queryParameters: queryParams);
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取报表数据失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<List<Map<String, dynamic>>>> getHotelImages(int hotelId) async {
+    try {
+      final response = await _dioClient.get('${ApiConstants.hotels}/$hotelId/images');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        List<dynamic> rawList;
+        if (data is List) {
+          rawList = List<dynamic>.from(data);
+        } else if (data is Map && data.containsKey('list')) {
+          rawList = List<dynamic>.from(data['list'] ?? []);
+        } else {
+          rawList = [];
+        }
+        return ApiResult.success(List<Map<String, dynamic>>.from(rawList.cast<Map<String, dynamic>>()));
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取酒店图片失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> addHotelImage(int hotelId, String imageUrl, {String? category, int? sortOrder}) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.hotels}/$hotelId/images',
+        data: {
+          'image_url': imageUrl,
+          if (category != null) 'category': category,
+          if (sortOrder != null) 'sort_order': sortOrder,
+        },
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '添加酒店图片失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<void>> deleteHotelImage(int hotelId, int imageId) async {
+    try {
+      final response = await _dioClient.delete('${ApiConstants.hotels}/$hotelId/images/$imageId');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '删除酒店图片失败');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

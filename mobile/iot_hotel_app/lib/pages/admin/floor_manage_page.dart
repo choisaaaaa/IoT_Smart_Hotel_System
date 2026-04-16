@@ -52,11 +52,14 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
     if (_selectedFloorId == null) return [];
     final selectedFloor = _floors.firstWhere(
       (f) => f['id'] == _selectedFloorId,
-      orElse: () => {'floor': null},
+      orElse: () => {'floor_number': null},
     );
-    final floorNumber = selectedFloor['floor']?.toString();
+    final floorNumber = selectedFloor['floor_number']?.toString() ?? selectedFloor['floor']?.toString();
     if (floorNumber == null) return [];
-    return _rooms.where((r) => r['floor']?.toString() == floorNumber).toList();
+    return _rooms.where((r) {
+      final roomFloor = r['floor']?.toString() ?? r['floor_number']?.toString();
+      return roomFloor == floorNumber;
+    }).toList();
   }
 
   Future<void> _deleteFloor(int id) async {
@@ -95,9 +98,9 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
   void _showEditDialog(Map<String, dynamic>? floor) {
     final isEdit = floor != null;
     final floorController = TextEditingController(
-      text: floor?['floor']?.toString() ?? '',
+      text: floor?['floor_number']?.toString() ?? floor?['floor']?.toString() ?? '',
     );
-    final nameController = TextEditingController(text: floor?['name'] ?? '');
+    final nameController = TextEditingController(text: floor?['floor_name'] ?? floor?['name'] ?? '');
     final descriptionController = TextEditingController(
       text: floor?['description'] ?? '',
     );
@@ -170,8 +173,8 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                 ElevatedButton(
                   onPressed: () async {
                     final data = {
-                      'floor': int.tryParse(floorController.text) ?? 1,
-                      'name': nameController.text.isEmpty ? null : nameController.text,
+                      'floor_number': int.tryParse(floorController.text) ?? 1,
+                      'floor_name': nameController.text.isEmpty ? null : nameController.text,
                       'description': descriptionController.text.isEmpty
                           ? null
                           : descriptionController.text,
@@ -241,6 +244,8 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                     itemBuilder: (context, index) {
                       final floor = _floors[index];
                       final isSelected = _selectedFloorId == floor['id'];
+                      final floorNum = floor['floor_number'] ?? floor['floor'];
+                      final floorName = floor['floor_name'] ?? floor['name'];
                       return GestureDetector(
                         onTap: () => setState(() => _selectedFloorId = floor['id']),
                         child: Container(
@@ -253,16 +258,16 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                           child: Column(
                             children: [
                               Text(
-                                '${floor['floor']}层',
+                                '${floorNum}层',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isSelected ? Colors.white : Colors.black87,
                                 ),
                               ),
-                              if (floor['name'] != null) ...[
+                              if (floorName != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  floor['name'],
+                                  floorName,
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: isSelected ? Colors.white70 : Colors.grey[600],
@@ -310,6 +315,8 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
       orElse: () => {},
     );
     final rooms = _roomsOnSelectedFloor;
+    final floorNum = floor['floor_number'] ?? floor['floor'];
+    final floorName = floor['floor_name'] ?? floor['name'];
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -342,16 +349,16 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${floor['floor']}层',
+                            '${floorNum}层',
                             style: GoogleFonts.notoSansSc(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (floor['name'] != null) ...[
+                          if (floorName != null) ...[
                             const SizedBox(height: 4),
                             Text(
-                              floor['name'],
+                              floorName,
                               style: TextStyle(
                                 color: Colors.grey[600],
                                 fontSize: 14,

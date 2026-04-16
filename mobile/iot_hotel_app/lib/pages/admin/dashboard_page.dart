@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/storage/local_storage.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/room_service.dart';
@@ -285,7 +286,9 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   Map<String, dynamic> _revenueStats = {};
   Map<String, dynamic> _deviceStats = {};
   List<dynamic> _todayActivities = [];
+  List<dynamic> _weeklyRevenue = []; // 周营收数据
   bool _isLoading = true;
+  bool _isMonthlyView = true; // true = 月视图, false = 周视图
 
   @override
   void initState() {
@@ -296,8 +299,29 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // 获取当前酒店ID
+      final hotelIdStr = await LocalStorage().read('hotel_id');
+      final hotelId = hotelIdStr != null ? int.tryParse(hotelIdStr) : null;
+      
+      // 并行加载统计数据和报表数据（包含周营收）
       final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
       final distResult = await ref.read(roomServiceProvider).getRoomStatusDistribution();
+      final reportsRes = await ref.read(hotelServiceProvider).getReports(hotelId: hotelId);
+      
+      if (reportsRes.success && reportsRes.data != null) {
+        final reportData = reportsRes.data!;
+        final trendData = reportData['revenue_trend'] as List<dynamic>? ?? [];
+        debugPrint('DEBUG: trendData = $trendData');
+        _weeklyRevenue = trendData.map((e) {
+          if (e is Map) {
+            final rev = e['revenue'];
+            if (rev is num) return rev.toDouble();
+            if (rev is String) return double.tryParse(rev) ?? 0;
+          }
+          return 0.0;
+        }).toList();
+        debugPrint('DEBUG: _weeklyRevenue = $_weeklyRevenue');
+      }
       final revenueResult = await ref.read(paymentServiceProvider).getRevenueStats();
       final deviceResult = await ref.read(deviceServiceProvider).getAllDevices();
 
@@ -385,8 +409,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     final occupancyRate = '${(rateDouble * 100).toStringAsFixed(0)}%';
     final onlineDevices = _stats?['online_devices']?.toString() ?? '0';
     final todayBookings = _stats?['today_bookings']?.toString() ?? '0';
-    final todayRevenue = double.tryParse(_revenueStats['today_revenue']?.toString() ?? '0') ?? 0;
-    final monthRevenue = double.tryParse(_revenueStats['month_revenue']?.toString() ?? '0') ?? 0;
+    final todayRevenue = double.tryParse(_stats?['total_revenue']?.toString() ?? '0') ?? 0;
+    final monthRevenue = double.tryParse(_stats?['total_revenue']?.toString() ?? '0') ?? 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -403,7 +427,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.5,
+              childAspectRatio: 1.3,
               children: [
                 _buildStatCard(context, '总房间数', totalRooms, Icons.door_back_door, Colors.blue, onTap: () => _navigateToTab(2)),
                 _buildStatCard(context, '入住率', occupancyRate, Icons.trending_up, Colors.green, onTap: () => _navigateToTab(2)),
@@ -464,11 +488,19 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   }
 
   Widget _buildRevenueTrendSection() {
-    final trend = _revenueStats['revenue_trend'] as List<dynamic>? ?? [];
+    final monthlyTrend = _stats?['monthly_revenue'] as List<dynamic>? ?? [];
+    final displayTrend = _isMonthlyView ? monthlyTrend : _getWeeklyData(monthlyTrend);
     final spots = <FlSpot>[];
-    if (trend.isNotEmpty) {
-      for (int i = 0; i < trend.length; i++) {
-        spots.add(FlSpot(i.toDouble(), (trend[i] as num?)?.toDouble() ?? 0));
+    if (displayTrend.isNotEmpty) {
+      for (int i = 0; i < displayTrend.length; i++) {
+        final value = displayTrend[i];
+        double numValue = 0;
+        if (value is num) {
+          numValue = value.toDouble();
+        } else if (value is String) {
+          numValue = double.tryParse(value) ?? 0;
+        }
+        spots.add(FlSpot(i.toDouble(), numValue));
       }
     } else {
       for (int i = 0; i < 7; i++) {
@@ -486,10 +518,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('营收趋势', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Row(children: [
-                Text('今日 ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                Text('¥${(double.tryParse(_revenueStats['today_revenue']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
-              ]),
+              _buildToggleButton(),
             ],
           ),
           const SizedBox(height: 20),
@@ -500,7 +529,9 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                 gridData: FlGridData(show: true, drawVerticalLine: false),
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
-                    final labels = trend.isNotEmpty ? List.generate(trend.length, (i) => '${i + 1}') : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                    final labels = _isMonthlyView 
+                        ? (displayTrend.isNotEmpty ? List.generate(displayTrend.length, (i) => '${i + 1}日') : ['1日', '5日', '10日', '15日', '20日', '25日', '30日'])
+                        : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
                     final idx = v.toInt();
                     if (idx < 0 || idx >= labels.length) return const SizedBox();
                     return Text(labels[idx], style: const TextStyle(fontSize: 10));
@@ -524,6 +555,61 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<dynamic> _getWeeklyData(List<dynamic> monthlyData) {
+    // 优先使用从报表接口获取的真实周数据
+    if (_weeklyRevenue.isNotEmpty) {
+      return _weeklyRevenue;
+    }
+    // 如果没有周数据，则使用月数据的最后7个作为降级方案
+    if (monthlyData.isEmpty) return [];
+    if (monthlyData.length >= 7) {
+      return monthlyData.sublist(monthlyData.length - 7);
+    }
+    return monthlyData;
+  }
+
+  Widget _buildToggleButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleOption('月', true),
+          _buildToggleOption('周', false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleOption(String label, bool isMonthly) {
+    final isSelected = _isMonthlyView == isMonthly;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isMonthlyView = isMonthly;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansSc(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
       ),
     );
   }

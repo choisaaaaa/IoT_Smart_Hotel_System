@@ -12,6 +12,9 @@ class MemberService {
   Member? _cachedMember;
   Member? get cachedMember => _cachedMember;
 
+  Map<String, dynamic>? _cachedMemberConfig;
+  Map<String, dynamic>? get cachedMemberConfig => _cachedMemberConfig;
+
   Future<ApiResult<List<dynamic>>> getMemberList({String? search}) async {
     try {
       final response = await _dioClient.get(
@@ -127,6 +130,19 @@ class MemberService {
     if (lastCheckinDate == null || lastCheckinDate.isEmpty) return false;
     final today = DateTime.now().toIso8601String().split('T')[0];
     return lastCheckinDate == today;
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> getMemberConfig() async {
+    try {
+      final response = await _dioClient.get('${ApiConstants.systemConfig}/member_tiers');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        _cachedMemberConfig = response.data['data'] as Map<String, dynamic>;
+        return ApiResult.success(_cachedMemberConfig!);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取会员配置失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
   }
 }
 

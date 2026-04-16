@@ -379,7 +379,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
         final levelKey = member?.memberLevel ?? 'standard';
         final level = MemberLevel.fromKey(levelKey);
 
-        final allLevels = MemberLevel.values;
+        final allLevels = MemberLevel.allLevels;
 
         return Container(
           padding: const EdgeInsets.all(20),

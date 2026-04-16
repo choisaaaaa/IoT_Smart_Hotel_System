@@ -53,15 +53,23 @@ class Member {
 
   factory Member.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
+    
+    double parseDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+    
     return Member(
       id: normalized['id'] ?? 0,
       phone: normalized['phone'] ?? '',
       name: normalized['name'] ?? normalized['username'],
       memberLevel: normalized['member_level'] ?? 'standard',
       points: normalized['points'] ?? 0,
-      experience: (normalized['experience'] ?? normalized['total_spent'] ?? 0).toDouble(),
-      totalSpent: (normalized['total_spent'] ?? 0).toDouble(),
-      balance: (normalized['balance'] ?? 0).toDouble(),
+      experience: parseDouble(normalized['experience'] ?? normalized['total_spent'] ?? 0),
+      totalSpent: parseDouble(normalized['total_spent'] ?? 0),
+      balance: parseDouble(normalized['balance'] ?? 0),
       totalStays: normalized['total_stays'] ?? normalized['checkin_days'] ?? 0,
       lastCheckinDate: normalized['last_checkin_date'],
       couponCount: normalized['coupon_count'] ?? normalized['coupons_count'],

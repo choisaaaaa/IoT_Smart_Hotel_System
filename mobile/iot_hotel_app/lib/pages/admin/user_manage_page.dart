@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/api_result.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../core/storage/local_storage.dart';
+import '../../core/constants/app_constants.dart';
 import '../../services/user_service.dart';
 
 class UserManagePage extends ConsumerStatefulWidget {
@@ -27,10 +30,31 @@ class _UserManagePageState extends ConsumerState<UserManagePage> {
 
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
+    // 获取当前酒店ID，用于筛选本店用户
+    // 先尝试从 hotel_id 读取，如果没有则从 userInfo 中读取
+    String? hotelIdStr = await LocalStorage().read('hotel_id');
+    if (hotelIdStr == null) {
+      final userInfoStr = await LocalStorage().read(AppConstants.userInfoKey);
+      if (userInfoStr != null) {
+        try {
+          final userInfo = jsonDecode(userInfoStr) as Map<String, dynamic>;
+          hotelIdStr = userInfo['hotel_id']?.toString();
+          // 保存到 hotel_id 键，方便下次使用
+          if (hotelIdStr != null) {
+            await LocalStorage().save('hotel_id', hotelIdStr);
+          }
+        } catch (_) {}
+      }
+    }
+    final hotelId = hotelIdStr != null ? int.tryParse(hotelIdStr) : null;
+    debugPrint('DEBUG: hotelId = $hotelId');
+
     final result = await ref.read(userServiceProvider).getUsers(
-          role: _roleFilter,
-          pageSize: 100,
-        );
+      role: _roleFilter,
+      pageSize: 100,
+      hotelId: hotelId,
+    );
+    debugPrint('DEBUG: result.success = ${result.success}, data = ${result.data}');
     if (result.success && mounted) {
       setState(() => _users = result.data ?? []);
     }

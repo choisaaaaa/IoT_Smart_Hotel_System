@@ -29,6 +29,7 @@ class BookingService {
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
+        debugPrint('DEBUG: getBookings - data=$data');
         List<dynamic> rawList;
         if (data is Map && data.containsKey('list')) {
           rawList = List<dynamic>.from(data['list'] ?? []);
@@ -39,10 +40,17 @@ class BookingService {
         } else {
           rawList = [];
         }
-        final bookings = rawList
-            .map((b) => Booking.fromJson(b as Map<String, dynamic>))
-            .toList();
-        return ApiResult.success(bookings);
+        debugPrint('DEBUG: getBookings - rawList.length=${rawList.length}');
+        try {
+          final bookings = rawList
+              .map((b) => Booking.fromJson(b as Map<String, dynamic>))
+              .toList();
+          return ApiResult.success(bookings);
+        } catch (e, stackTrace) {
+          debugPrint('DEBUG: getBookings - parse error=$e');
+          debugPrint('DEBUG: getBookings - stackTrace=$stackTrace');
+          return ApiResult.failure('解析订单数据失败: $e');
+        }
       }
       return ApiResult.failure(response.data['message'] ?? '获取订单失败');
     } catch (e) {
