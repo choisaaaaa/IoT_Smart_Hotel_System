@@ -84,7 +84,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                FutureBuilder(
+                Expanded(
+                  child: FutureBuilder(
                   future: Future.wait([
                     authService.getCurrentUser(),
                     ref.read(memberServiceProvider).getMyAssets(),
@@ -132,6 +133,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ],
                     );
                   },
+                ),
                 ),
                 Row(
                   children: [

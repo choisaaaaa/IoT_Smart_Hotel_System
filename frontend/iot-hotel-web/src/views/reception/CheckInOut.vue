@@ -944,15 +944,18 @@ async function fetchTodayBookings(force = false) {
   todayBookingLoading.value = true
   try {
     const res: any = await bookingApi.getBookingList({
-      pageSize: 200,
-      check_in_date: 'today'
+      pageSize: 200
     } as any)
     const allList = res.data?.list || []
     console.log('[今日预定清单] 原始数据:', allList.length, '条')
 
-    const list = allList.filter((item: any) =>
-      ['pending', 'confirmed', 'pre_checked_in'].includes(item.status)
-    )
+    const today = dayjs().format('YYYY-MM-DD')
+    const list = allList.filter((item: any) => {
+      const isTodayCheckin = dayjs(item.check_in_date).isSame(today, 'day')
+      const isTodayCheckout = dayjs(item.check_out_date).isSame(today, 'day')
+      const isActive = ['pending', 'confirmed', 'pre_checked_in', 'checked_in'].includes(item.status)
+      return isActive && (isTodayCheckin || isTodayCheckout)
+    })
     console.log('[今日预定清单] 过滤后:', list.length, '条, 状态分布:',
       allList.reduce((acc: any, item: any) => {
         acc[item.status] = (acc[item.status] || 0) + 1

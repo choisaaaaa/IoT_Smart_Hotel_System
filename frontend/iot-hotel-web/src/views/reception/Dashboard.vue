@@ -79,6 +79,7 @@ import { useHotelStore } from '@/stores/hotel'
 
 import axios from '@/api/request'
 import { bookingApi } from '@/api/booking'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 const hotelStore = useHotelStore()
@@ -115,12 +116,12 @@ async function fetchDashboardData() {
     if (statAvailable) statAvailable.value = availableCount
 
     // 2. 获取今日预订/入住/退房数据
-    const today = new Date().toISOString().split('T')[0]
     const resBookings: any = await bookingApi.getBookingList({ pageSize: 100 })
     const allBookings = resBookings.data?.list || []
     
-    const checkins = allBookings.filter((b: any) => b.check_in_date?.startsWith(today))
-    const checkouts = allBookings.filter((b: any) => b.check_out_date?.startsWith(today))
+    const todayStr = dayjs().format('YYYY-MM-DD')
+    const checkins = allBookings.filter((b: any) => dayjs(b.check_in_date).isSame(todayStr, 'day'))
+    const checkouts = allBookings.filter((b: any) => dayjs(b.check_out_date).isSame(todayStr, 'day'))
     
     stats.value.find(s => s.key === 'today_checkin')!.value = checkins.length
     stats.value.find(s => s.key === 'today_checkout')!.value = checkouts.length

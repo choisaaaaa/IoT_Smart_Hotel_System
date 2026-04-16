@@ -5,6 +5,7 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
+import '../../services/booking_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -118,7 +119,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
       if (result.success) {
         if (!context.mounted) return;
-        // 根据用户角色导航到对应页面
         final user = result.data?['user'] as Map<String, dynamic>?;
         final normalizedRole = AppRoles.normalize(user?['role'] as String?);
         switch (normalizedRole) {
@@ -133,11 +133,77 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             break;
           default:
             context.go('/');
+            _checkPendingBookings();
         }
       } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '登录失败'), behavior: SnackBarBehavior.floating)); }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('登录失败，请重试'), behavior: SnackBarBehavior.floating));
     } finally { if (mounted) setState(() => _isLoading = false); }
+  }
+
+  void _checkPendingBookings() async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    try {
+      final result = await ref.read(bookingServiceProvider).getBookings(status: 'confirmed', pageSize: 10);
+      if (!mounted) return;
+      final bookings = result.data ?? [];
+      if (bookings.isNotEmpty) {
+        _showFadeToast('您有${bookings.length}个已支付预订未办理入住');
+      }
+    } catch (_) {}
+  }
+
+  void _showFadeToast(String message) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    late AnimationController controller;
+
+    controller = AnimationController(
+      vsync: NavigatorState(),
+      duration: const Duration(milliseconds: 300),
+    );
+
+    entry = OverlayEntry(
+      builder: (_) {
+        return Positioned(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 20,
+          right: 20,
+          child: FadeTransition(
+            opacity: CurvedAnimation(parent: controller, curve: Curves.easeOut),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(entry);
+    controller.forward();
+
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) { entry.remove(); controller.dispose(); return; }
+      await controller.reverse();
+      entry.remove();
+      controller.dispose();
+    });
   }
 
   @override

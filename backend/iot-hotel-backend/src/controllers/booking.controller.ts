@@ -420,7 +420,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     const { 
       room_id, room_type_id, rate_plan_id, guest_name, guest_phone, guest_id_number, 
       check_in_date, check_out_date, guest_count, special_requests, 
-      payment_method, coupon_id, used_points, status,
+      payment_method, coupon_id, used_points, status, user_id,
       manual_discount, manual_reduce
     } = req.body;
 
@@ -531,7 +531,7 @@ export const create = async (req: AuthRequest, res: Response) => {
         locked_at, payment_deadline, auto_checkout_at, room_number
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        bookingNumber, hotelId, room_id || null, finalRoomTypeId, rate_plan_id || null, null, 
+        bookingNumber, hotelId, room_id || null, finalRoomTypeId, rate_plan_id || null, user_id || req.user?.id || null, 
         guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id || null, actualUsedPoints, 
         points_discount, total_price, 0, bookingStatus, checkInTime,

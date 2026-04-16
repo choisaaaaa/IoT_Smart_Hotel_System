@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../models/booking.dart';
+import '../../core/network/api_result.dart';
 
 class OnlineCheckinPage extends ConsumerStatefulWidget {
   final int? bookingId;
@@ -61,7 +62,18 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
 
     setState(() => _isSearching = true);
     try {
-      final result = await ref.read(bookingServiceProvider).lookupBooking(keyword);
+      final bookingService = ref.read(bookingServiceProvider);
+      ApiResult<Booking>? result;
+
+      final maybeId = int.tryParse(keyword);
+      if (maybeId != null) {
+        result = await bookingService.getBookingById(maybeId);
+      }
+
+      if (result == null || !result.success) {
+        result = await bookingService.lookupBooking(keyword);
+      }
+
       if (result.success && mounted) {
         final booking = result.data;
         if (booking != null) {
@@ -71,7 +83,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
           });
         }
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未找到匹配的预订')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未找到匹配的预订，可能已过期或取消')));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('查询失败，请重试')));
@@ -367,7 +379,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
           const SizedBox(width: 8),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

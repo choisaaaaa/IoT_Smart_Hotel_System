@@ -95,33 +95,6 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         }
       }
 
-      // 检查是否有已确认（已支付）的预订，需要办理入住
-      final bookingsResult = await ref.read(bookingServiceProvider).getBookings(
-        status: 'confirmed',
-        pageSize: 10,
-      );
-      if (bookingsResult.success && mounted) {
-        final bookings = bookingsResult.data ?? [];
-        if (bookings.isNotEmpty) {
-          final booking = bookings.first;
-          final bookingId = booking.id;
-          if (bookingId > 0 && mounted) {
-            // 显示提示后跳转
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('检测到您的预订，正在跳转至在线办理入住...'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-            await Future.delayed(const Duration(seconds: 1));
-            if (mounted) {
-              context.push('/online-checkin/$bookingId', extra: {'bookingId': bookingId});
-            }
-            return;
-          }
-        }
-      }
-
       // 检查是否有预入住状态的预订
       final preCheckinResult = await ref.read(bookingServiceProvider).getBookings(
         status: 'pre_checked_in',
