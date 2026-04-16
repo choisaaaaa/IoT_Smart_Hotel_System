@@ -18,10 +18,13 @@ DROP TABLE IF EXISTS login_sessions;
 DROP TABLE IF EXISTS api_tokens;
 DROP TABLE IF EXISTS sensor_data;
 DROP TABLE IF EXISTS control_commands;
+DROP TABLE IF EXISTS rfid_cards;
+DROP TABLE IF EXISTS scene_configs;
 DROP TABLE IF EXISTS devices;
 DROP TABLE IF EXISTS maintenance_tickets;
 DROP TABLE IF EXISTS delivery_orders;
 DROP TABLE IF EXISTS calls;
+DROP TABLE IF EXISTS mqtt_communication_logs;
 DROP TABLE IF EXISTS review_appeals;
 DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS payments;
@@ -371,6 +374,82 @@ CREATE TABLE sensor_data (
     sensor_value VARCHAR(50) NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_device_time (device_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 13.1 房卡管理表 (RFID Cards)
+-- -----------------------------------------------------------------------------
+CREATE TABLE rfid_cards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    card_uid VARCHAR(50) NOT NULL,
+    hotel_id INT NOT NULL,
+    booking_id INT DEFAULT NULL,
+    room_id INT DEFAULT NULL,
+    member_id INT DEFAULT NULL,
+    status ENUM('active', 'inactive', 'lost') DEFAULT 'active',
+    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_card_uid (card_uid),
+    INDEX idx_hotel_card (hotel_id),
+    INDEX idx_booking_card (booking_id),
+    CONSTRAINT fk_rfid_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 13.2 场景配置表 (Scene Configs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE scene_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    scene_name VARCHAR(50) NOT NULL,
+    scene_code VARCHAR(50) NOT NULL,
+    config_json JSON NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_hotel_scene (hotel_id, scene_code),
+    CONSTRAINT fk_scene_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 13.3 通话记录表 (Calls)
+-- -----------------------------------------------------------------------------
+CREATE TABLE calls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    call_id VARCHAR(50) NOT NULL,
+    caller_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
+    caller_id VARCHAR(50) NOT NULL,
+    callee_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
+    callee_id VARCHAR(50) NOT NULL,
+    status ENUM('calling', 'outgoing', 'ringing', 'connected', 'ended', 'rejected', 'missed', 'busy') DEFAULT 'calling',
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    answered_at DATETIME DEFAULT NULL,
+    ended_at DATETIME DEFAULT NULL,
+    duration_sec INT DEFAULT 0,
+    recording_url VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_call_id (call_id),
+    INDEX idx_hotel_call (hotel_id),
+    CONSTRAINT fk_call_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 13.4 MQTT 通信日志表 (MQTT Logs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE mqtt_communication_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT DEFAULT 0,
+    device_id VARCHAR(50) DEFAULT NULL,
+    topic VARCHAR(255) NOT NULL,
+    payload TEXT DEFAULT NULL,
+    direction ENUM('in', 'out') NOT NULL,
+    qos TINYINT DEFAULT 0,
+    retain TINYINT DEFAULT 0,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_topic (device_id, topic),
+    INDEX idx_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------

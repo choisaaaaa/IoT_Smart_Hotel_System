@@ -1,6 +1,7 @@
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import mqttService from './mqtt.service';
 
 export interface Booking extends RowDataPacket {
   id: number;
@@ -168,11 +169,36 @@ export class BookingService {
 
   static async checkIn(id: number, hotelId: number): Promise<boolean> {
     try {
+      // 1. 获取预订信息（包含 room_id）
+      const [bookings] = await pool.query<RowDataPacket[]>(
+        'SELECT room_id FROM bookings WHERE id = ? AND hotel_id = ?',
+        [id, hotelId]
+      );
+
+      if (bookings.length === 0) return false;
+      const roomId = bookings[0].room_id;
+
+      // 2. 更新预订状态
       const [result] = await pool.query<ResultSetHeader>(
         'UPDATE bookings SET status = ?, check_in_time = CURRENT_TIMESTAMP WHERE id = ? AND hotel_id = ?',
         ['checked_in', id, hotelId]
       );
-      return result.affectedRows > 0;
+
+      if (result.affectedRows > 0) {
+        // 3. 联动硬件：触发欢迎场景
+        // 查找房间对应的客房端设备
+        const [devices] = await pool.query<RowDataPacket[]>(
+          'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room_terminal" AND audit_status = "approved"',
+          [roomId]
+        );
+
+        for (const device of devices) {
+          await mqttService.sendDeviceCommand(device.device_id, 'scene', 'welcome', 'system_checkin');
+        }
+
+        return true;
+      }
+      return false;
     } catch (error) {
       logger.error('办理入住失败:', error.message);
       throw new Error('办理入住失败');

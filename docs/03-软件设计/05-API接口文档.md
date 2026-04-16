@@ -61,7 +61,9 @@
 - `GET /devices`: 获取设备列表及在线状态（支持 hotel_admin/staff/system_admin/customer 角色，顾客仅可查看自己入住房间的设备）。
 - `GET /devices/:id`: 获取设备详情（支持 hotel_admin/staff/system_admin/customer 角色，顾客仅可查看自己入住房间的设备）。
 - `POST /devices/:id/command`: 发送控制指令，指令通过 MQTT 转发至硬件（支持 hotel_admin/staff/system_admin/customer 角色，顾客仅可控制自己入住房间的设备）。
-- `POST /devices/room-card`: 发卡/房卡操作（支持 hotel_admin/staff/system_admin 角色）。
+- `POST /rfid/issue`: 发卡操作 (支持 hotel_admin/staff/system_admin 角色)。
+- `GET /rfid/list`: 获取房卡列表。
+- `PUT /rfid/status`: 更新房卡状态 (挂失/注销)。
 - `GET /devices/:id/history`: 查询设备的传感器历史数据。
 - `DELETE /devices/:id`: 移除设备。
 
