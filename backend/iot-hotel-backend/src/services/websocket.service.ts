@@ -49,7 +49,7 @@ class WebSocketService {
 
       socket.on('join_room', async (roomId: string) => {
         const room = String(roomId).trim();
-        if (!room) return;
+        if (!room) {return;}
 
         const oldRoom = this.clients.get(socket.id)?.roomId;
         if (oldRoom && oldRoom !== room) {
@@ -93,7 +93,7 @@ class WebSocketService {
       socket.on('leave_room', (roomId: string) => {
         socket.leave(roomId);
         const info = this.clients.get(socket.id);
-        if (info?.roomId === roomId) info.roomId = undefined;
+        if (info?.roomId === roomId) {info.roomId = undefined;}
         logger.info(`客户端 ${socket.id} 离开房间: ${roomId}`);
       });
 
@@ -220,7 +220,7 @@ class WebSocketService {
         const info = this.clients.get(socket.id);
         if (info && info.clientType === 'front_desk') {
           info.isOnDuty = data.isOnDuty;
-          if (data.dutyRole) info.dutyRole = data.dutyRole;
+          if (data.dutyRole) {info.dutyRole = data.dutyRole;}
           
           logger.info(`员工 ${info.clientName} 更新在岗状态: ${data.isOnDuty ? '在岗' : '离岗'} (${info.dutyRole})`);
           this.broadcastOnlineStatus();
@@ -933,7 +933,7 @@ class WebSocketService {
   getRoomClients(roomId: string): string[] {
     const clients: string[] = [];
     this.clients.forEach((info, socketId) => {
-      if (info.roomId === roomId) clients.push(socketId);
+      if (info.roomId === roomId) {clients.push(socketId);}
     });
     return clients;
   }
@@ -964,7 +964,7 @@ class WebSocketService {
     // 我们获取所有唯一的酒店ID
     const hotelIds = new Set<number>();
     for (const info of this.clients.values()) {
-      if (info.hotelId) hotelIds.add(info.hotelId);
+      if (info.hotelId) {hotelIds.add(info.hotelId);}
     }
 
     // 为每个酒店广播
@@ -1020,7 +1020,7 @@ class WebSocketService {
 
   // 通知前台有AI转接的来电（定向）
   notifyIncomingCall(callData: any) {
-    if (!this.io) return;
+    if (!this.io) {return;}
     
     // 确保定向通知也遵循酒店隔离（如果 callData 中有 hotel_id）
     const targetRoom = `${callData.callee_type}_${callData.callee_id}`;
@@ -1030,7 +1030,7 @@ class WebSocketService {
 
   // 广播AI转接来电给特定酒店的所有前台
   broadcastIncomingCall(callData: any, hotelId?: number) {
-    if (!this.io) return;
+    if (!this.io) {return;}
     
     const hId = hotelId || callData.hotel_id;
     if (hId) {

@@ -243,7 +243,7 @@ export class AIButlerService {
         [roomId, roomId]
       );
 
-      if (currentGuests.length === 0) return [];
+      if (currentGuests.length === 0) {return [];}
 
       const { guest_phone, user_id } = currentGuests[0];
 
@@ -693,20 +693,20 @@ export class AIButlerService {
    */
   async textToSpeech(text: string): Promise<string> {
     const cleanText = this.cleanTextForTTS(text);
-    if (!cleanText.trim()) return '';
+    if (!cleanText.trim()) {return '';}
 
     logger.info(`🎙️ [TTS] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
 
     try {
       const audio = await this.superHumanTTS(cleanText);
-      if (audio) return audio;
+      if (audio) {return audio;}
     } catch (e) {
       logger.warn('⚠️ 超拟人TTS失败，降级到TTS v2');
     }
 
     try {
       const audio = await this.ttsV2(cleanText);
-      if (audio) return audio;
+      if (audio) {return audio;}
     } catch (e) {
       logger.error('❌ TTS v2也失败:', e.message);
     }
@@ -738,7 +738,7 @@ export class AIButlerService {
         const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
 
         const ws = new WebSocket(wsUrl);
-        let audioChunks: Buffer[] = [];
+        const audioChunks: Buffer[] = [];
         let isResolved = false;
 
         ws.on('open', () => {
@@ -837,7 +837,7 @@ export class AIButlerService {
         const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
 
         const ws = new WebSocket(wsUrl);
-        let audioChunks: Buffer[] = [];
+        const audioChunks: Buffer[] = [];
         let isResolved = false;
 
         ws.on('open', () => {

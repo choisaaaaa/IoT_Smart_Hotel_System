@@ -72,7 +72,7 @@ export const create = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (!hotel_id) hotel_id = req.user?.hotel_id || 1;
+    if (!hotel_id) {hotel_id = req.user?.hotel_id || 1;}
 
     logger.info(`[Payment Create] Creating payment with hotel_id: ${hotel_id}, order_id: ${Number(order_id)}`);
     const result = await PaymentService.createPayment({
@@ -107,7 +107,7 @@ export const pay = async (req: AuthRequest, res: Response) => {
     if (Array.isArray(rows) && rows.length > 0) {
       hotelId = (rows[0] as any).hotel_id || 1;
     }
-    if (!hotelId) hotelId = req.user?.hotel_id || 1;
+    if (!hotelId) {hotelId = req.user?.hotel_id || 1;}
 
     logger.info(`[Payment Pay] Processing payment with id: ${numericId}, hotelId: ${hotelId}, payerPhone: ${req.user?.phone}`);
     // 传递当前登录用户的手机号作为支付者手机号

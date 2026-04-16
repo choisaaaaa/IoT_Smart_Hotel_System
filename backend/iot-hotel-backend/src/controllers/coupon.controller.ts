@@ -110,7 +110,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     let phone = req.query.phone as string;
     if (!phone) {
@@ -147,19 +147,19 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 export const receive = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     const user = req.user as any;
     const userRole = user.role;
     const phone = user.phone || (user.username && user.username.match(/^\d{11}$/) ? user.username : null);
-    if (!phone) return res.status(400).json(errorResponse('您的账户信息中没有手机号，无法领取优惠券'));
+    if (!phone) {return res.status(400).json(errorResponse('您的账户信息中没有手机号，无法领取优惠券'));}
 
     const [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE phone = ?', [phone]);
-    if (members.length === 0) return res.status(404).json(errorResponse('未找到会员记录'));
+    if (members.length === 0) {return res.status(404).json(errorResponse('未找到会员记录'));}
     const memberId = members[0].id;
 
     const [couponRows] = await pool.query<RowDataPacket[]>('SELECT * FROM coupons WHERE id = ? AND valid_to >= CURDATE()', [id]);
-    if (couponRows.length === 0) return res.status(404).json(errorResponse('优惠券不存在或已过期'));
+    if (couponRows.length === 0) {return res.status(404).json(errorResponse('优惠券不存在或已过期'));}
     const coupon = couponRows[0] as any;
 
     // 权限检查：私密优惠券只有管理员可以发放，顾客不能领取
@@ -209,7 +209,7 @@ export const receive = async (req: AuthRequest, res: Response) => {
 export const issueToUser = async (req: AuthRequest, res: Response) => {
   try {
     const { coupon_id, phone } = req.body;
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
     if (!coupon_id || !phone) {
       return res.status(400).json(errorResponse('缺少参数'));
     }
@@ -323,8 +323,8 @@ export const create = async (req: AuthRequest, res: Response) => {
 export const importCoupon = async (req: AuthRequest, res: Response) => {
   try {
     const { coupon_code } = req.body;
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
-    if (!coupon_code) return res.status(400).json(errorResponse('请输入券码'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
+    if (!coupon_code) {return res.status(400).json(errorResponse('请输入券码'));}
 
     const user = req.user as any;
     const phone = user.phone || (user.username && user.username.match(/^\d{11}$/) ? user.username : null);
@@ -333,7 +333,7 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('您的账户信息中没有手机号，无法导入优惠券'));
     }
 
-    let [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE phone = ?', [phone]);
+    const [members] = await pool.query<RowDataPacket[]>('SELECT id FROM members WHERE phone = ?', [phone]);
     let memberId: number;
 
     if (members.length === 0) {
@@ -457,7 +457,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 export const redeemCoupon = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     const user = req.user as any;
 
@@ -465,7 +465,7 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
       `SELECT mc.*, c.hotel_id FROM member_coupons mc JOIN coupons c ON mc.coupon_id = c.id WHERE mc.id = ?`,
       [id]
     );
-    if (mcRows.length === 0) return res.status(404).json(errorResponse('优惠券记录不存在'));
+    if (mcRows.length === 0) {return res.status(404).json(errorResponse('优惠券记录不存在'));}
 
     const mc = mcRows[0] as any;
 

@@ -1,6 +1,7 @@
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import crypto from 'crypto';
+import CacheService from './cache.service';
 
 export interface DeviceData {
   id?: number;
@@ -124,8 +125,8 @@ class DeviceService {
       const { room_id, area } = assignment || {};
 
       await pool.query<ResultSetHeader>(
-        `UPDATE devices SET 
-          audit_status = ?, 
+        `UPDATE devices SET
+          audit_status = ?,
           device_key = CASE WHEN ? = 'approved' THEN ? ELSE device_key END,
           room_id = ?,
           area = ?,
@@ -133,6 +134,11 @@ class DeviceService {
         WHERE id = ?`,
         [status, status, device_key, room_id || null, area || null, id]
       );
+
+      // 清除相关缓存
+      await CacheService.delete(CacheService.deviceKeys.info(id));
+      await CacheService.delete(CacheService.deviceKeys.pending());
+      await CacheService.deletePattern('device:list:*');
 
       return {
         id,
@@ -150,11 +156,17 @@ class DeviceService {
    */
   async getPendingDevices() {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT * FROM devices WHERE audit_status = ? ORDER BY created_at DESC',
-        ['pending']
+      return await CacheService.getOrSet(
+        CacheService.deviceKeys.pending(),
+        async () => {
+          const [rows] = await pool.query<RowDataPacket[]>(
+            'SELECT * FROM devices WHERE audit_status = ? ORDER BY created_at DESC',
+            ['pending']
+          );
+          return rows as DeviceData[];
+        },
+        { ttl: 60 }
       );
-      return rows as DeviceData[];
     } catch (error) {
       logger.error('Error getting pending devices:', error.message);
       throw error;
@@ -166,59 +178,70 @@ class DeviceService {
    */
   async getAllDevices(hotelId?: number, filters?: { status?: string; audit_status?: string; room_id?: number }) {
     try {
-      const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
-      const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
-      const hasDeviceAuditStatus = await this.hasColumn('devices', 'audit_status');
-      const selectFields = ['d.*'];
-      if (hasDeviceRoomId) {
-        selectFields.push('r.room_number');
-      }
-      selectFields.push('h.hotel_name');
-      let query = `SELECT ${selectFields.join(', ')} FROM devices d`;
-      if (hasDeviceRoomId) {
-        query += ' LEFT JOIN rooms r ON d.room_id = r.id';
-      }
-      if (hasDeviceHotelId) {
-        query += ' LEFT JOIN hotels h ON d.hotel_id = h.id';
-      } else if (hasDeviceRoomId) {
-        query += ' LEFT JOIN hotels h ON r.hotel_id = h.id';
-      } else {
-        query += ' LEFT JOIN hotels h ON 1 = 0';
-      }
-      query += ' WHERE 1=1';
-      const params: any[] = [];
+      const cacheKey = CacheService.generateKey(
+        CacheService.deviceKeys.list(hotelId || 0),
+        JSON.stringify(filters || {})
+      );
 
-      if (hotelId) {
-        if (hasDeviceHotelId) {
-          query += ' AND d.hotel_id = ?';
-          params.push(hotelId);
-        } else if (hasDeviceRoomId) {
-          query += ' AND r.hotel_id = ?';
-          params.push(hotelId);
-        }
-      }
+      return await CacheService.getOrSet(
+        cacheKey,
+        async () => {
+          const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
+          const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
+          const hasDeviceAuditStatus = await this.hasColumn('devices', 'audit_status');
+          const selectFields = ['d.*'];
+          if (hasDeviceRoomId) {
+            selectFields.push('r.room_number');
+          }
+          selectFields.push('h.hotel_name');
+          let query = `SELECT ${selectFields.join(', ')} FROM devices d`;
+          if (hasDeviceRoomId) {
+            query += ' LEFT JOIN rooms r ON d.room_id = r.id';
+          }
+          if (hasDeviceHotelId) {
+            query += ' LEFT JOIN hotels h ON d.hotel_id = h.id';
+          } else if (hasDeviceRoomId) {
+            query += ' LEFT JOIN hotels h ON r.hotel_id = h.id';
+          } else {
+            query += ' LEFT JOIN hotels h ON 1 = 0';
+          }
+          query += ' WHERE 1=1';
+          const params: unknown[] = [];
 
-      if (filters?.status) {
-        query += ' AND d.device_status = ?';
-        params.push(filters.status);
-      }
-      if (filters?.audit_status) {
-        if (hasDeviceAuditStatus) {
-          query += ' AND d.audit_status = ?';
-          params.push(filters.audit_status);
-        }
-      }
-      if (filters?.room_id) {
-        if (hasDeviceRoomId) {
-          query += ' AND d.room_id = ?';
-          params.push(filters.room_id);
-        }
-      }
+          if (hotelId) {
+            if (hasDeviceHotelId) {
+              query += ' AND d.hotel_id = ?';
+              params.push(hotelId);
+            } else if (hasDeviceRoomId) {
+              query += ' AND r.hotel_id = ?';
+              params.push(hotelId);
+            }
+          }
 
-      query += ' ORDER BY d.updated_at DESC';
+          if (filters?.status) {
+            query += ' AND d.device_status = ?';
+            params.push(filters.status);
+          }
+          if (filters?.audit_status) {
+            if (hasDeviceAuditStatus) {
+              query += ' AND d.audit_status = ?';
+              params.push(filters.audit_status);
+            }
+          }
+          if (filters?.room_id) {
+            if (hasDeviceRoomId) {
+              query += ' AND d.room_id = ?';
+              params.push(filters.room_id);
+            }
+          }
 
-      const [rows] = await pool.query<RowDataPacket[]>(query, params);
-      return rows;
+          query += ' ORDER BY d.updated_at DESC';
+
+          const [rows] = await pool.query<RowDataPacket[]>(query, params);
+          return rows;
+        },
+        { ttl: 300 }
+      );
     } catch (error) {
       logger.error('Error getting devices:', error.message);
       throw error;
@@ -230,27 +253,33 @@ class DeviceService {
    */
   async getDeviceById(id: number, hotelId: number) {
     try {
-      const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
-      const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
-      let query = 'SELECT d.*';
-      if (hasDeviceRoomId) {
-        query += ', r.room_number';
-      }
-      query += ' FROM devices d';
-      if (hasDeviceRoomId) {
-        query += ' LEFT JOIN rooms r ON d.room_id = r.id';
-      }
-      query += ' WHERE d.id = ?';
-      const params: any[] = [id];
-      if (hasDeviceHotelId) {
-        query += ' AND d.hotel_id = ?';
-        params.push(hotelId);
-      } else if (hasDeviceRoomId) {
-        query += ' AND r.hotel_id = ?';
-        params.push(hotelId);
-      }
-      const [rows] = await pool.query<RowDataPacket[]>(query, params);
-      return rows.length > 0 ? (rows[0] as DeviceData) : null;
+      return await CacheService.getOrSet(
+        CacheService.deviceKeys.info(id),
+        async () => {
+          const hasDeviceHotelId = await this.hasColumn('devices', 'hotel_id');
+          const hasDeviceRoomId = await this.hasColumn('devices', 'room_id');
+          let query = 'SELECT d.*';
+          if (hasDeviceRoomId) {
+            query += ', r.room_number';
+          }
+          query += ' FROM devices d';
+          if (hasDeviceRoomId) {
+            query += ' LEFT JOIN rooms r ON d.room_id = r.id';
+          }
+          query += ' WHERE d.id = ?';
+          const params: unknown[] = [id];
+          if (hasDeviceHotelId) {
+            query += ' AND d.hotel_id = ?';
+            params.push(hotelId);
+          } else if (hasDeviceRoomId) {
+            query += ' AND r.hotel_id = ?';
+            params.push(hotelId);
+          }
+          const [rows] = await pool.query<RowDataPacket[]>(query, params);
+          return rows.length > 0 ? (rows[0] as DeviceData) : null;
+        },
+        { ttl: 300 }
+      );
     } catch (error) {
       logger.error('Error getting device by id:', error.message);
       throw error;
@@ -276,6 +305,12 @@ class DeviceService {
       } else {
         await pool.query<ResultSetHeader>('DELETE FROM devices WHERE id = ?', [id]);
       }
+
+      // 清除相关缓存
+      await CacheService.delete(CacheService.deviceKeys.info(id));
+      await CacheService.delete(CacheService.deviceKeys.pending());
+      await CacheService.deletePattern('device:list:*');
+
       return true;
     } catch (error) {
       logger.error('Error deleting device:', error.message);

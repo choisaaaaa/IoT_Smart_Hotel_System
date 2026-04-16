@@ -1,43 +1,62 @@
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
-import { KnowledgeBase, KnowledgeBaseInput, CategoryType } from '../models/knowledge-base.model';
+import { KnowledgeBase, KnowledgeBaseInput } from '../models/knowledge-base.model';
 import { KNOWLEDGE_BASE_CONFIG } from '../config/knowledge-base.config';
+import CacheService from './cache.service';
 
 export class KnowledgeBaseService {
   static async getByHotelId(hotelId: number, filters?: { category?: string; is_active?: number }): Promise<KnowledgeBase[]> {
     try {
-      let sql = `SELECT * FROM ai_knowledge_base WHERE hotel_id = ?`;
-      const params: any[] = [hotelId];
+      const cacheKey = CacheService.generateKey(
+        CacheService.knowledgeBaseKeys.list(),
+        hotelId,
+        JSON.stringify(filters || {})
+      );
 
-      if (filters?.category) {
-        sql += ` AND category = ?`;
-        params.push(filters.category);
-      }
+      return await CacheService.getOrSet(
+        cacheKey,
+        async () => {
+          let sql = `SELECT * FROM ai_knowledge_base WHERE hotel_id = ?`;
+          const params: unknown[] = [hotelId];
 
-      if (filters?.is_active !== undefined) {
-        sql += ` AND is_active = ?`;
-        params.push(filters.is_active);
-      }
+          if (filters?.category) {
+            sql += ` AND category = ?`;
+            params.push(filters.category);
+          }
 
-      sql += ` ORDER BY sort_order DESC, created_at ASC`;
+          if (filters?.is_active !== undefined) {
+            sql += ` AND is_active = ?`;
+            params.push(filters.is_active);
+          }
 
-      const [rows] = await pool.query<RowDataPacket[]>(sql, params);
-      return rows as KnowledgeBase[];
+          sql += ` ORDER BY sort_order DESC, created_at ASC`;
+
+          const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+          return rows as KnowledgeBase[];
+        },
+        { ttl: 1800 } // 知识库缓存30分钟
+      );
     } catch (error) {
-      logger.error('查询知识库失败:', error.message);
+      logger.error('查询知识库失败:', (error as Error).message);
       throw error;
     }
   }
 
   static async getById(id: number): Promise<KnowledgeBase | null> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT * FROM ai_knowledge_base WHERE id = ?',
-        [id]
+      return await CacheService.getOrSet(
+        CacheService.knowledgeBaseKeys.article(id),
+        async () => {
+          const [rows] = await pool.query<RowDataPacket[]>(
+            'SELECT * FROM ai_knowledge_base WHERE id = ?',
+            [id]
+          );
+          return (rows as KnowledgeBase[])[0] || null;
+        },
+        { ttl: 1800 }
       );
-      return (rows as KnowledgeBase[])[0] || null;
     } catch (error) {
-      logger.error('查询知识条目失败:', error.message);
+      logger.error('查询知识条目失败:', (error as Error).message);
       throw error;
     }
   }
@@ -135,6 +154,14 @@ export class KnowledgeBaseService {
       }
 
       await connection.commit();
+
+      // 清除相关缓存
+      await CacheService.delete(CacheService.knowledgeBaseKeys.article(result.id));
+      await CacheService.deletePattern('kb:list:*');
+      if (hotelId) {
+        await CacheService.delete(`kb:active:${hotelId}`);
+      }
+
       return result;
     } catch (error) {
       await connection.rollback();
@@ -156,14 +183,19 @@ export class KnowledgeBaseService {
         throw new Error('知识条目不存在');
       }
 
+      // 清除相关缓存
+      await CacheService.delete(CacheService.knowledgeBaseKeys.article(id));
+      await CacheService.deletePattern('kb:list:*');
+      await CacheService.deletePattern('kb:active:*');
+
       const [updated] = await pool.query<RowDataPacket[]>(
         'SELECT is_active FROM ai_knowledge_base WHERE id = ?',
         [id]
       );
 
-      return { is_active: (updated[0] as any).is_active };
+      return { is_active: (updated[0] as { is_active: number }).is_active };
     } catch (error) {
-      logger.error('切换知识条目状态失败:', error.message);
+      logger.error('切换知识条目状态失败:', (error as Error).message);
       throw error;
     }
   }
@@ -174,10 +206,17 @@ export class KnowledgeBaseService {
         'DELETE FROM ai_knowledge_base WHERE id = ?',
         [id]
       );
-      
+
+      if ((result as ResultSetHeader).affectedRows > 0) {
+        // 清除相关缓存
+        await CacheService.delete(CacheService.knowledgeBaseKeys.article(id));
+        await CacheService.deletePattern('kb:list:*');
+        await CacheService.deletePattern('kb:active:*');
+      }
+
       return (result as ResultSetHeader).affectedRows > 0;
     } catch (error) {
-      logger.error('删除知识条目失败:', error.message);
+      logger.error('删除知识条目失败:', (error as Error).message);
       throw error;
     }
   }
@@ -221,15 +260,21 @@ export class KnowledgeBaseService {
 
   static async getActiveByHotel(hotelId: number): Promise<KnowledgeBase[]> {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT * FROM ai_knowledge_base 
-         WHERE hotel_id = ? AND is_active = 1 
-         ORDER BY sort_order DESC, created_at ASC`,
-        [hotelId]
+      return await CacheService.getOrSet(
+        `kb:active:${hotelId}`,
+        async () => {
+          const [rows] = await pool.query<RowDataPacket[]>(
+            `SELECT * FROM ai_knowledge_base 
+             WHERE hotel_id = ? AND is_active = 1 
+             ORDER BY sort_order DESC, created_at ASC`,
+            [hotelId]
+          );
+          return rows as KnowledgeBase[];
+        },
+        { ttl: 1800 }
       );
-      return rows as KnowledgeBase[];
     } catch (error) {
-      logger.error('查询活跃知识库失败:', error.message);
+      logger.error('查询活跃知识库失败:', (error as Error).message);
       throw error;
     }
   }

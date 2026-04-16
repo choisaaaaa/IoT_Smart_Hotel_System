@@ -7,7 +7,7 @@ class RFIDController {
   async issue(req: Request, res: Response) {
     try {
       const hotelId = (req as any).user?.hotel_id || req.body.hotel_id;
-      if (!hotelId) return res.status(401).json(errorResponse('Unauthorized'));
+      if (!hotelId) {return res.status(401).json(errorResponse('Unauthorized'));}
 
       const id = await rfidService.issueCard({ ...req.body, hotel_id: hotelId });
       res.json(successResponse({ id }, '发卡成功'));
@@ -20,7 +20,7 @@ class RFIDController {
   async getAll(req: Request, res: Response) {
     try {
       const hotelId = (req as any).user?.hotel_id;
-      if (!hotelId) return res.status(401).json(errorResponse('Unauthorized'));
+      if (!hotelId) {return res.status(401).json(errorResponse('Unauthorized'));}
 
       const cards = await rfidService.getAllCards(hotelId);
       res.json(successResponse(cards, '获取卡片列表成功'));
@@ -33,7 +33,7 @@ class RFIDController {
   async updateStatus(req: Request, res: Response) {
     try {
       const { card_uid, status } = req.body;
-      if (!card_uid || !status) return res.status(400).json(errorResponse('Missing parameters'));
+      if (!card_uid || !status) {return res.status(400).json(errorResponse('Missing parameters'));}
 
       const success = await rfidService.updateCardStatus(card_uid, status);
       if (success) {

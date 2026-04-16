@@ -16,7 +16,7 @@ import { systemConfigService } from '../services/system-config.service';
 async function updateMemberExperienceAfterCheckout(connection: PoolConnection, guestPhone: string, totalPrice: number, guestName?: string) {
   try {
     // 1. 获取会员当前信息，如果不存在则创建
-    let [memberRows] = await connection.query<RowDataPacket[]>(
+    const [memberRows] = await connection.query<RowDataPacket[]>(
       'SELECT id, experience, points, member_level, total_spent, total_stays FROM members WHERE phone = ?',
       [guestPhone]
     );
@@ -120,7 +120,7 @@ async function calculateBookingPrice(
     );
     if (roomRows.length > 0) {
       const room = roomRows[0];
-      if (!finalRoomTypeId) finalRoomTypeId = room.room_type_id;
+      if (!finalRoomTypeId) {finalRoomTypeId = room.room_type_id;}
       fallbackPrice = Number(room.room_price);
       hotelId = room.hotel_id;
     }
@@ -448,7 +448,7 @@ export const create = async (req: AuthRequest, res: Response) => {
       const room = roomRows[0] as any;
       hotelId = room.hotel_id;
       roomNumber = room.room_number;
-      if (!finalRoomTypeId) finalRoomTypeId = room.room_type_id;
+      if (!finalRoomTypeId) {finalRoomTypeId = room.room_type_id;}
     } else {
       const [rtRows] = await connection.query<RowDataPacket[]>('SELECT hotel_id FROM room_types WHERE id = ?', [room_type_id]);
       if (rtRows.length === 0) {
@@ -1141,7 +1141,7 @@ export const cancel = async (req: AuthRequest, res: Response) => {
 
     for (const pay of paidPayments) {
       const refundAmount = Number(pay.amount);
-      if (refundAmount <= 0) continue;
+      if (refundAmount <= 0) {continue;}
 
       if (pay.payment_method === 'balance') {
         // 余额支付：回退到会员余额
@@ -1313,7 +1313,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 
       for (const pay of paidPayments) {
         const refundAmount = Number(pay.amount);
-        if (refundAmount <= 0) continue;
+        if (refundAmount <= 0) {continue;}
 
         if (pay.payment_method === 'balance' && booking.guest_phone) {
           // 余额支付：回退到会员余额
@@ -1374,8 +1374,8 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (roomId) {
       let roomStatus: string | null = null;
       let clearLock = false;
-      if (status === 'checked_in') roomStatus = 'occupied';
-      else if (status === 'confirmed') roomStatus = 'reserved';
+      if (status === 'checked_in') {roomStatus = 'occupied';}
+      else if (status === 'confirmed') {roomStatus = 'reserved';}
       else if (status === 'checked_out') { roomStatus = 'cleaning'; clearLock = true; }
       else if (status === 'cancelled') { roomStatus = 'available'; clearLock = true; }
 

@@ -536,7 +536,7 @@ export const handleAppeal = async (req: AuthRequest, res: Response) => {
 // ==================== 内部工具函数 ====================
 
 async function updateHotelRating(hotelId: number | null) {
-  if (!hotelId) return;
+  if (!hotelId) {return;}
 
   try {
     const [stats] = await pool.query<RowDataPacket[]>(
