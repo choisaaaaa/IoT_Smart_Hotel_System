@@ -325,7 +325,7 @@ class MQTTService {
 
   async handleCallAudio(topic: string, message: Buffer) {
     const callId = topic.split('/').pop();
-    if (!callId) return;
+    if (!callId) {return;}
 
     // 硬件发送的是原始音频二进制流
     if (this.wsInstance) {
@@ -359,7 +359,7 @@ class MQTTService {
 
   async handleAIRequest(topic: string, data: any) {
     const roomId = topic.split('/').pop();
-    if (!roomId) return;
+    if (!roomId) {return;}
 
     logger.info(`收到硬件端 AI 请求 [房间 ${roomId}]: ${JSON.stringify(data)}`);
 

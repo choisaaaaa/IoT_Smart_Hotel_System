@@ -83,8 +83,8 @@ router.post('/scan-login', async (req, res) => {
     const tokenData = tokens[0];
 
     const parsePermissions = (p: any) => {
-      if (!p) return [];
-      if (Array.isArray(p)) return p;
+      if (!p) {return [];}
+      if (Array.isArray(p)) {return p;}
       if (typeof p === 'string') {
         try {
           return JSON.parse(p);
@@ -200,8 +200,8 @@ router.post('/login', async (req, res) => {
     );
 
     const parsePermissions = (p: any) => {
-      if (!p) return [];
-      if (Array.isArray(p)) return p;
+      if (!p) {return [];}
+      if (Array.isArray(p)) {return p;}
       if (typeof p === 'string') {
         try {
           return JSON.parse(p);
@@ -447,11 +447,11 @@ router.get('/me', async (req: AuthRequest, res) => {
 router.post('/role-application', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return sendError(res, errorResponse('未提供认证令牌', 401));
+    if (!authHeader) {return sendError(res, errorResponse('未提供认证令牌', 401));}
 
     const token = authHeader.replace(/Bearer /i, '').trim();
     const decoded = verifyToken(token);
-    if (!decoded) return sendError(res, errorResponse('令牌无效', 401));
+    if (!decoded) {return sendError(res, errorResponse('令牌无效', 401));}
 
     const { application_type, hotel_id, hotel_name, hotel_address, reason } = req.body;
 
@@ -503,11 +503,11 @@ router.post('/role-application', async (req: AuthRequest, res) => {
 router.get('/role-applications', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return sendError(res, errorResponse('未提供认证令牌', 401));
+    if (!authHeader) {return sendError(res, errorResponse('未提供认证令牌', 401));}
 
     const token = authHeader.replace(/Bearer /i, '').trim();
     const decoded = verifyToken(token);
-    if (!decoded) return sendError(res, errorResponse('令牌无效', 401));
+    if (!decoded) {return sendError(res, errorResponse('令牌无效', 401));}
 
     const role = normalizeRole(decoded.role);
     let whereClause = 'WHERE 1=1';

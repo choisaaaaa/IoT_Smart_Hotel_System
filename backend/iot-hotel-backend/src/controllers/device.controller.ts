@@ -35,7 +35,7 @@ class DeviceController {
       if (isSystemAdmin((req as any).user?.role)) {
         hotelId = req.body.hotel_id || hotelId || 1;
       }
-      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
 
       const id = parseInt(req.params.id);
       const { status, room_id, area } = req.body;
@@ -128,7 +128,7 @@ class DeviceController {
         }
         hotelId = bookings[0].hotel_id;
       } else {
-        if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
       }
 
       const id = parseInt(req.params.id);
@@ -155,7 +155,7 @@ class DeviceController {
       if (isSystemAdmin((req as any).user?.role)) {
         hotelId = req.query.hotel_id || hotelId || 1;
       }
-      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
 
       const id = parseInt(req.params.id);
       await deviceService.deleteDevice(id, hotelId);
@@ -203,7 +203,7 @@ class DeviceController {
           return res.status(403).json({ success: false, message: 'Cannot control devices outside your room' });
         }
       } else {
-        if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
       }
 
       const device = await deviceService.getDeviceById(id, hotelId);
@@ -244,8 +244,8 @@ class DeviceController {
   async handleRoomCard(req: Request, res: Response) {
     try {
       let hotelId = (req as any).user?.hotel_id;
-      if (isSystemAdmin((req as any).user?.role) && !hotelId) hotelId = 1;
-      if (hotelId === undefined || hotelId === null) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (isSystemAdmin((req as any).user?.role) && !hotelId) {hotelId = 1;}
+      if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
 
       const { action, booking_id, id_last_four } = req.body;
       const user = (req as any).user;

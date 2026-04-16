@@ -94,7 +94,7 @@ export class PaymentService {
   static async getPaymentById(id: number, hotelId: number, userId?: number): Promise<Payment | null> {
     try {
       let query = 'SELECT p.* FROM payments p';
-      let params: any[] = [id, hotelId];
+      const params: any[] = [id, hotelId];
       
       // 如果指定了userId，需要关联bookings表验证权限
       if (userId) {

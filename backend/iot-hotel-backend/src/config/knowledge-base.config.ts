@@ -354,7 +354,7 @@ export function getAllCategories(): { category: string; title: string; icon: str
 // 检查内容完成度
 export function checkCompletion(content: string, category: string): { isComplete: boolean; missingFields: string[] } {
   const config = getCategoryConfig(category);
-  if (!config) return { isComplete: false, missingFields: [] };
+  if (!config) {return { isComplete: false, missingFields: [] };}
 
   const missingFields: string[] = [];
   

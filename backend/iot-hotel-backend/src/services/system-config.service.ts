@@ -79,10 +79,10 @@ export class SystemConfigService {
     }
 
     // 降级硬编码逻辑
-    if (exp >= 5000) return 'diamond';
-    if (exp >= 2000) return 'platinum';
-    if (exp >= 500) return 'gold';
-    if (exp >= 100) return 'silver';
+    if (exp >= 5000) {return 'diamond';}
+    if (exp >= 2000) {return 'platinum';}
+    if (exp >= 500) {return 'gold';}
+    if (exp >= 100) {return 'silver';}
     return 'standard';
   }
 

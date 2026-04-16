@@ -19,7 +19,7 @@ export function calculateSignature(data: any, secret: string): string {
  * @returns 是否验证通过
  */
 export function verifySignature(data: any, signature: string, secret: string): boolean {
-  if (!signature || !secret) return false;
+  if (!signature || !secret) {return false;}
   const calculated = calculateSignature(data, secret);
   return calculated === signature;
 }

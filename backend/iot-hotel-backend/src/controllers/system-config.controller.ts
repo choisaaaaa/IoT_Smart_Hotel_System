@@ -72,14 +72,14 @@ export const getConfigByKey = async (req: Request, res: Response) => {
     
     if (rows.length === 0) {
       // 默认值
-      if (key === 'member_program_name') return res.json(successResponse('IOT', '获取默认配置成功'));
+      if (key === 'member_program_name') {return res.json(successResponse('IOT', '获取默认配置成功'));}
       return res.status(404).json(errorResponse('配置项不存在'));
     }
     
     res.json(successResponse(rows[0].config_value, '获取系统配置成功'));
   } catch (error) {
     // 降级处理
-    if (req.params.key === 'member_program_name') return res.json(successResponse('IOT', '获取默认配置成功'));
+    if (req.params.key === 'member_program_name') {return res.json(successResponse('IOT', '获取默认配置成功'));}
     res.status(500).json(errorResponse('获取系统配置失败'));
   }
 };

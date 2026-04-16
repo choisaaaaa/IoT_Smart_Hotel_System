@@ -27,7 +27,7 @@ class OrderTimeoutService {
   }
 
   async pollExpiredOrders() {
-    if (this.isPolling) return;
+    if (this.isPolling) {return;}
     this.isPolling = true;
     try {
       const [expiredBookings] = await pool.query<RowDataPacket[]>(
@@ -37,7 +37,7 @@ class OrderTimeoutService {
          AND payment_deadline < NOW()`
       );
 
-      if (expiredBookings.length === 0) return;
+      if (expiredBookings.length === 0) {return;}
 
       logger.info(`[OrderTimeout] 发现 ${expiredBookings.length} 个超时未支付订单`);
 

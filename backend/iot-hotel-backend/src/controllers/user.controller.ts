@@ -117,7 +117,7 @@ export async function create(req: AuthRequest, res: Response) {
     }
 
     let finalHotelId = hotel_id;
-    let finalRole = role || CANONICAL_ROLES.CUSTOMER;
+    const finalRole = role || CANONICAL_ROLES.CUSTOMER;
 
     if (isHotelAdmin(currentUser.role)) {
       finalHotelId = currentUser.hotel_id;
@@ -181,7 +181,7 @@ export async function update(req: AuthRequest, res: Response) {
 
     const targetUser = users[0];
 
-    let finalRole = role || targetUser.role;
+    const finalRole = role || targetUser.role;
     let finalHotelId = hotel_id || targetUser.hotel_id;
 
     if (isHotelAdmin(currentUser.role)) {
@@ -198,7 +198,7 @@ export async function update(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('权限不足', 403));
     }
 
-    let updateFields = ['email = ?', 'phone = ?', 'role = ?', 'hotel_id = ?', 'avatar = ?'];
+    const updateFields = ['email = ?', 'phone = ?', 'role = ?', 'hotel_id = ?', 'avatar = ?'];
     const params = [
       email || targetUser.email,
       phone || targetUser.phone,

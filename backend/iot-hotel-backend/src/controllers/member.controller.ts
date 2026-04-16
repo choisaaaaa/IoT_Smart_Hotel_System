@@ -11,7 +11,7 @@ import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 export const updateLevelDiscounts = async (req: AuthRequest, res: Response) => {
   try {
     const { discounts } = req.body;
-    if (!discounts) return res.status(400).json(errorResponse('缺少参数'));
+    if (!discounts) {return res.status(400).json(errorResponse('缺少参数'));}
     
     // 使用 Object.assign 更新对象属性，而不是对导入的常量进行重新赋值
     Object.assign(LEVEL_DISCOUNTS, discounts);
@@ -34,7 +34,7 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
     }
 
     const phone = req.user?.phone || req.user?.username;
-    if (!phone) return res.status(401).json(errorResponse('用户未登录'));
+    if (!phone) {return res.status(401).json(errorResponse('用户未登录'));}
 
     // 获取当前会员等级以计算优惠
     const [memberRows] = await pool.query<RowDataPacket[]>(
@@ -81,7 +81,7 @@ export const rechargeBalance = async (req: AuthRequest, res: Response) => {
  */
 async function getLevelLabel(memberLevel: string): Promise<string> {
   const levelConfig = await systemConfigService.getLevelConfig(memberLevel);
-  if (levelConfig) return levelConfig.name;
+  if (levelConfig) {return levelConfig.name;}
 
   const labels: Record<string, string> = {
     'diamond': '钻石会员',
@@ -265,7 +265,7 @@ export const fixDatabaseSchema = async (req: AuthRequest, res: Response) => {
 // 辅助函数：确保会员记录存在
 async function ensureMemberRecord(phone: string, name: string) {
   const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);
-  if (rows.length > 0) return rows[0];
+  if (rows.length > 0) {return rows[0];}
 
   // 创建会员记录
   const [result] = await pool.query<ResultSetHeader>(
@@ -279,7 +279,7 @@ async function ensureMemberRecord(phone: string, name: string) {
 
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     const user = req.user as any;
     const phone = user.phone || user.username;
@@ -337,7 +337,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 
 export const getStatus = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     const user = req.user as any;
     const phone = user.phone || user.username;
@@ -423,7 +423,7 @@ export const login = async (req: Request, res: Response) => {
 export const checkin = async (req: AuthRequest, res: Response) => {
   try {
     logger.info('收到会员签到请求:', req.user?.username);
-    if (!req.user) return res.status(401).json(errorResponse('未认证'));
+    if (!req.user) {return res.status(401).json(errorResponse('未认证'));}
 
     const user = req.user as any;
     const phone = user.phone || user.username;

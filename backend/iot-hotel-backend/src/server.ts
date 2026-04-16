@@ -77,30 +77,30 @@ async function startServer() {
         // 为 room_prices 增加 rate_plan_id
         try {
           await pool.query('ALTER TABLE room_prices ADD COLUMN rate_plan_id INT DEFAULT NULL AFTER room_type_id');
-        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
 
         // 为 bookings 增加 rate_plan_id
         try {
           await pool.query('ALTER TABLE bookings ADD COLUMN rate_plan_id INT DEFAULT NULL AFTER room_id');
-        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
 
         // 为 bookings 增加 id_type
         try {
           await pool.query('ALTER TABLE bookings ADD COLUMN id_type VARCHAR(20) DEFAULT "idcard" AFTER guest_phone');
           logger.info('数据库列 bookings.id_type 添加成功');
-        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
 
         // 为 guests 增加 id_type
         try {
           await pool.query('ALTER TABLE guests ADD COLUMN id_type VARCHAR(20) DEFAULT "idcard" AFTER guest_phone');
           logger.info('数据库列 guests.id_type 添加成功');
-        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
 
         // 为 calls 增加 hotel_id
         try {
           await pool.query('ALTER TABLE calls ADD COLUMN hotel_id INT DEFAULT NULL AFTER callee_id');
           logger.info('数据库列 calls.hotel_id 添加成功');
-        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) throw e; }
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
 
         // 修改 frequent_guests 的 id_type 枚举
         try {

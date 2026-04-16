@@ -9,10 +9,10 @@ import logger from '../utils/logger';
 const router = Router();
 
 function parseFacilities(raw: unknown): string[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map(item => String(item).trim()).filter(Boolean);
+  if (!raw) {return [];}
+  if (Array.isArray(raw)) {return raw.map(item => String(item).trim()).filter(Boolean);}
   const text = String(raw).trim();
-  if (!text) return [];
+  if (!text) {return [];}
   if (text.startsWith('[')) {
     try {
       const parsed = JSON.parse(text);
@@ -260,7 +260,7 @@ export const getRoomAvailability = async (req: AuthRequest, res: Response) => {
     console.error('查询客房可用性失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
-}
+};
 
 // ==================== 酒店图片管理接口 ====================
 

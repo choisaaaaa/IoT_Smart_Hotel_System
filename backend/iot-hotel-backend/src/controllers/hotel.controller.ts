@@ -7,7 +7,7 @@ import { isSystemAdmin, isHotelAdmin, isCustomer, normalizeRole, CANONICAL_ROLES
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    let hotelId = req.user?.hotel_id;
+    const hotelId = req.user?.hotel_id;
     const userRole = normalizeRole(req.user?.role);
 
     // 系统管理员和顾客可以从 query 指定 hotel_id
@@ -15,7 +15,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     if ((isSystemAdmin(userRole) || isCustomer(userRole)) && queryHotelId) {
       const id = parseInt(queryHotelId as string);
       const hotel = await HotelService.getHotelById(id);
-      if (!hotel) return res.status(404).json(errorResponse('酒店不存在'));
+      if (!hotel) {return res.status(404).json(errorResponse('酒店不存在'));}
       return res.json(successResponse(hotel, '获取指定酒店信息成功'));
     }
 

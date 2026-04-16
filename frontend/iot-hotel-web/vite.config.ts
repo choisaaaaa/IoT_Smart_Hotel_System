@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+const isLowMemory = process.env.LOW_MEMORY === 'true'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -15,6 +17,34 @@ export default defineConfig({
       '@types': resolve(__dirname, 'src/types'),
       '@assets': resolve(__dirname, 'src/assets')
     }
+  },
+  build: {
+    target: 'es2020',
+    chunkSizeWarningLimit: isLowMemory ? 2000 : 1000,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('vue') || id.includes('pinia') || id.includes('vue-router')) {
+              return 'vendor-vue'
+            }
+            if (id.includes('ant-design') || id.includes('@ant-design')) {
+              return 'vendor-antd'
+            }
+            if (id.includes('echarts')) {
+              return 'vendor-echarts'
+            }
+            if (id.includes('axios') || id.includes('dayjs') || id.includes('socket.io')) {
+              return 'vendor-utils'
+            }
+          }
+        }
+      }
+    },
+    reportCompressedSize: false,
+    cssCodeSplit: !isLowMemory,
+    ...(isLowMemory ? { minify: false } : {})
   },
 server: {
   port: 5173,

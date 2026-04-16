@@ -19,7 +19,13 @@ export default {
     database: process.env.DB_NAME || 'iot_hotel_system'
   },
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB || '0'),
+    keyPrefix: process.env.REDIS_KEY_PREFIX || 'iot_hotel:',
+    enabled: process.env.CACHE_ENABLED !== 'false',
+    defaultTTL: parseInt(process.env.CACHE_DEFAULT_TTL || '300')
   },
   mqtt: {
     host: process.env.MQTT_HOST || 'localhost',

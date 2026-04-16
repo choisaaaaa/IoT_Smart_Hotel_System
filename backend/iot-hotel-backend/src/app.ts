@@ -6,12 +6,18 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import expressWinston from 'express-winston';
 import logger from './utils/logger';
+import { redisClient } from './utils/redis';
 
 import appConfig from './config/app';
 import routes from './routes';
 import { notFoundHandler, errorHandler } from './middleware/error';
 
 const app: Application = express();
+
+// 初始化Redis连接
+redisClient.connect().catch(err => {
+  logger.warn('Redis初始化失败，应用将继续运行:', err.message);
+});
 
 // 启用信任代理（用于Nginx反向代理）
 app.set('trust proxy', true);

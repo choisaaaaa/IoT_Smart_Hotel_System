@@ -26,7 +26,7 @@ class AutoCheckoutService {
   }
 
   async pollAutoCheckout() {
-    if (this.isPolling) return;
+    if (this.isPolling) {return;}
     this.isPolling = true;
     try {
       const [expiredBookings] = await pool.query<RowDataPacket[]>(
@@ -39,7 +39,7 @@ class AutoCheckoutService {
          AND b.auto_checkout_at < NOW()`
       );
 
-      if (expiredBookings.length === 0) return;
+      if (expiredBookings.length === 0) {return;}
 
       logger.info(`[AutoCheckout] 发现 ${expiredBookings.length} 个需要自动退房的订单`);
 
