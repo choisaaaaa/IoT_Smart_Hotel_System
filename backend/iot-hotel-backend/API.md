@@ -13,7 +13,9 @@
 4. [评价管理接口](#评价管理接口)
 5. [AI知识库接口](#ai知识库接口)
 6. [会员管理接口](#会员管理接口)
-7. [其他接口](#其他接口)
+7. [房卡管理接口 (RFID)](#房卡管理接口-rfid)
+8. [物联网与硬件交互规范](#物联网与硬件交互规范)
+9. [其他接口](#其他接口)
 
 ---
 
@@ -437,6 +439,73 @@ GET /members/me
   }
 }
 ```
+
+---
+
+## 房卡管理接口 (RFID)
+
+### 发放/更新房卡
+
+```http
+POST /rfid/issue
+```
+
+**请求体**:
+```json
+{
+  "card_uid": "A1B2C3D4",
+  "hotel_id": 1,
+  "booking_id": 1001,
+  "room_id": 301,
+  "member_id": 1,
+  "expires_at": "2026-04-18T12:00:00Z"
+}
+```
+
+**权限**: 酒店管理员、员工、系统管理员
+
+### 获取房卡列表
+
+```http
+GET /rfid/list
+```
+
+**权限**: 酒店管理员、员工、系统管理员
+
+### 更新房卡状态 (注销/挂失)
+
+```http
+PUT /rfid/status
+```
+
+**请求体**:
+```json
+{
+  "card_uid": "A1B2C3D4",
+  "status": "lost"
+}
+```
+
+---
+
+## 物联网与硬件交互规范
+
+详细规范请参考：[硬件组接口规范](file:///d:/IoT_Smart_Hotel_System/hardware/docs/接口规范_面向硬件组_v1.0.md)
+
+### 核心 MQTT 主题
+
+| 主题 | 说明 |
+|------|------|
+| `hotel/device/status` | 设备上报在线状态、固件版本 |
+| `hotel/device/data/{type}` | 传感器数据上报 (temp, humi, light等) |
+| `hotel/device/command` | 服务器下发控制指令 (带签名) |
+| `hotel/security/event` | 安防告警事件 (SOS, 烟雾, 刷卡) |
+
+### 指令签名机制
+
+所有 `hotel/device/command` 指令必须包含 `signature`：
+- **待签名串**: `command_id + device_id + command_type + command_value + timestamp`
+- **算法**: HMAC-SHA256，密钥为设备审核后分配的 `device_key`。
 
 ---
 

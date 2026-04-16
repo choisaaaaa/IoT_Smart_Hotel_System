@@ -23,6 +23,7 @@ import priceCalendar from './price-calendar';
 import ratePlans from './rate-plans';
 import knowledgeBase from './knowledge-base';
 import mqtt from './mqtt';
+import rfid from './rfid';
 
 const router = Router();
 
@@ -49,6 +50,7 @@ router.use('/ai-butler', aiButler);
 router.use('/environment', environment);
 router.use('/knowledge-base', knowledgeBase);
 router.use('/mqtt', mqtt);
+router.use('/rfid', rfid);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({
