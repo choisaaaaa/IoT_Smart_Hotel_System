@@ -1,6 +1,6 @@
 -- 智慧酒店物联网控制系统 - 数据库初始化脚本
--- 数据库架构版本: v2.6.0
--- 适配多酒店隔离、AI管家、动态价格日历、会员系统
+-- 数据库架构版本: v3.4.0
+-- 适配多酒店隔离、AI管家、动态价格日历、会员系统、评价头像、酒店图片管理、AI知识库
 
 CREATE DATABASE IF NOT EXISTS iot_hotel_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE iot_hotel_system;
@@ -11,6 +11,9 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- -----------------------------------------------------------------------------
 -- 清理旧表 (按依赖顺序倒序)
 -- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS ai_conversations;
+DROP TABLE IF EXISTS ai_knowledge_entries;
+DROP TABLE IF EXISTS hotel_images;
 DROP TABLE IF EXISTS login_sessions;
 DROP TABLE IF EXISTS api_tokens;
 DROP TABLE IF EXISTS sensor_data;
@@ -442,5 +445,74 @@ VALUES ('member_program_name', '智联尊享会', '会员计划名称'),
        ('points_rate', '1', '消费1元获得积分数'),
        ('points_redeem_rate', '10', '多少积分抵扣1元'),
        ('checkin_points', '50', '每日签到获得积分数');
+
+-- -----------------------------------------------------------------------------
+-- 17. 酒店图片表 (Hotel Images)
+-- -----------------------------------------------------------------------------
+CREATE TABLE hotel_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL COMMENT '酒店ID',
+    image_url VARCHAR(500) NOT NULL COMMENT '图片URL',
+    image_type VARCHAR(20) DEFAULT 'gallery' COMMENT '图片类型: cover-封面, gallery-相册, room-房型',
+    sort_order INT DEFAULT 0 COMMENT '排序顺序',
+    is_active TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_image_type (image_type),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='酒店图片表';
+
+-- -----------------------------------------------------------------------------
+-- 18. AI知识库词条表 (AI Knowledge Entries)
+-- -----------------------------------------------------------------------------
+CREATE TABLE ai_knowledge_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL DEFAULT 0 COMMENT '酒店ID，0表示全局词条',
+    category VARCHAR(50) NOT NULL COMMENT '分类: hotel_info-酒店信息, service-服务设施, policy-政策规定, faq-常见问题, other-其他',
+    question TEXT NOT NULL COMMENT '问题/关键词',
+    answer TEXT NOT NULL COMMENT '答案内容',
+    keywords JSON COMMENT '关键词标签，用于匹配',
+    priority INT DEFAULT 0 COMMENT '优先级，数值越大越优先',
+    is_active TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+    usage_count INT DEFAULT 0 COMMENT '使用次数统计',
+    created_by INT COMMENT '创建者用户ID',
+    updated_by INT COMMENT '最后更新者用户ID',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_category (category),
+    INDEX idx_is_active (is_active),
+    INDEX idx_priority (priority),
+    FULLTEXT INDEX idx_question (question),
+    FULLTEXT INDEX idx_answer (answer)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI知识库词条表';
+
+-- -----------------------------------------------------------------------------
+-- 19. AI对话历史表 (AI Conversations)
+-- -----------------------------------------------------------------------------
+CREATE TABLE ai_conversations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL COMMENT '会话ID',
+    user_id INT COMMENT '用户ID（登录用户）',
+    user_type ENUM('guest', 'member', 'staff', 'admin') DEFAULT 'guest' COMMENT '用户类型',
+    hotel_id INT DEFAULT 0 COMMENT '关联酒店ID',
+    room_id INT COMMENT '关联房间ID',
+    message TEXT NOT NULL COMMENT '消息内容',
+    role ENUM('user', 'assistant', 'system') NOT NULL COMMENT '消息角色',
+    intent VARCHAR(50) COMMENT '识别到的意图',
+    matched_entry_id INT COMMENT '匹配到的知识库词条ID',
+    tokens_used INT COMMENT '使用的token数',
+    response_time_ms INT COMMENT '响应时间（毫秒）',
+    is_helpful TINYINT(1) COMMENT '是否有帮助（用户反馈）',
+    ip_address VARCHAR(45) COMMENT '用户IP地址',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session_id (session_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_created_at (created_at),
+    INDEX idx_intent (intent),
+    FOREIGN KEY (matched_entry_id) REFERENCES ai_knowledge_entries(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI对话历史表';
 
 SET FOREIGN_KEY_CHECKS = 1;
