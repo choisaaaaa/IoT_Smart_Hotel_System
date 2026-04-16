@@ -30,9 +30,11 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT r.*, m.name as member_name, m.phone as member_phone,
-        h.hotel_name, rt.name as room_type_name
+        h.hotel_name, rt.name as room_type_name,
+        u.avatar as user_avatar
       FROM reviews r
       LEFT JOIN members m ON r.member_id = m.id
+      LEFT JOIN users u ON r.user_id = u.id
       LEFT JOIN hotels h ON r.hotel_id = h.id
       LEFT JOIN room_types rt ON r.room_type_id = rt.id
       ${whereClause} ORDER BY r.id DESC LIMIT ? OFFSET ?`,
@@ -58,9 +60,11 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT r.*, m.name as member_name, m.phone as member_phone,
-        h.hotel_name, rt.name as room_type_name
+        h.hotel_name, rt.name as room_type_name,
+        u.avatar as user_avatar
       FROM reviews r
       LEFT JOIN members m ON r.member_id = m.id
+      LEFT JOIN users u ON r.user_id = u.id
       LEFT JOIN hotels h ON r.hotel_id = h.id
       LEFT JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.id = ? AND r.is_deleted = 0`,

@@ -19,6 +19,7 @@ export interface Review {
   updated_at: string;
   member_name?: string;
   member_phone?: string;
+  user_avatar?: string;
   hotel_name?: string;
   room_type_name?: string;
 }

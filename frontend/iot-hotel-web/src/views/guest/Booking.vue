@@ -724,7 +724,13 @@
           <div v-for="review in reviewList" :key="review.id" class="review-item">
             <div class="review-header">
               <div class="reviewer-info">
-                <a-avatar :size="32" style="background: #008cff">{{ review.member_name?.charAt(0) || '?' }}</a-avatar>
+                <a-avatar
+                  :size="32"
+                  :src="review.user_avatar ? appStore.resolveImageUrl(review.user_avatar) : undefined"
+                  style="background: #008cff"
+                >
+                  {{ review.member_name?.charAt(0) || '?' }}
+                </a-avatar>
                 <span class="reviewer-name">{{ review.member_name || '匿名用户' }}</span>
               </div>
               <span class="review-date">{{ review.created_at?.substring(0, 10) }}</span>
