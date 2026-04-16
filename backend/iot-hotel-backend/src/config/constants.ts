@@ -12,6 +12,6 @@ export const LEVEL_POINTS_MULTIPLIER: Record<string, number> = {
   'diamond': 15,
   'platinum': 12,
   'gold': 9,
-  'silver': 3,
+  'silver': 5,
   'standard': 1
 };

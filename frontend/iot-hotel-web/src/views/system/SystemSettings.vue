@@ -5,6 +5,28 @@
         <a-form-item label="会员计划名称" extra="此名称将显示在用户的会员卡顶部，支持自定义品牌名。">
           <a-input v-model:value="configs.member_program_name" placeholder="请输入会员计划名称，如 IOT, SMART HOTEL 等" />
         </a-form-item>
+
+        <a-divider>积分与成长值规则</a-divider>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+          <a-form-item label="积分获取倍率" extra="每消费1元获得的积分数 (基础值)" style="flex: 1; min-width: 200px;">
+            <a-input-number v-model:value="configs.points_rate" :min="0" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="积分抵扣倍率" extra="多少积分抵扣1元" style="flex: 1; min-width: 200px;">
+            <a-input-number v-model:value="configs.points_redeem_rate" :min="1" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="成长值获取倍率" extra="每消费1元获得的成长值" style="flex: 1; min-width: 200px;">
+            <a-input-number v-model:value="configs.exp_rate" :min="0" :step="0.01" style="width: 100%" />
+          </a-form-item>
+        </div>
+        
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+          <a-form-item label="签到赠送积分" extra="每日签到可获得的积分" style="flex: 1; min-width: 200px;">
+            <a-input-number v-model:value="configs.checkin_points" :min="0" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="签到赠送成长值" extra="每日签到可获得的成长值" style="flex: 1; min-width: 200px;">
+            <a-input-number v-model:value="configs.checkin_exp" :min="0" style="width: 100%" />
+          </a-form-item>
+        </div>
         
         <a-divider>会员等级方案</a-divider>
         <p class="section-desc">配置不同等级会员的折扣率、积分倍率及升级门槛。企业用户可完全自定义各等级名称与权益。</p>
@@ -48,11 +70,19 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { systemConfigApi } from '@/api/system-config'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const saving = ref(false)
 const configs = ref<Record<string, any>>({
   member_program_name: '',
-  member_scheme: []
+  member_scheme: [],
+  points_rate: 10,
+  points_redeem_rate: 10,
+  exp_rate: 0.1,
+  checkin_points: 50,
+  checkin_exp: 10
 })
 
 const columns = [
@@ -90,6 +120,8 @@ const handleSave = async () => {
   try {
     saving.value = true
     await systemConfigApi.updateConfigs(configs.value)
+    // 更新全局状态，使用深拷贝确保响应式数据纯净同步
+    appStore.setSystemConfigs(JSON.parse(JSON.stringify(configs.value)))
     message.success('会员方案配置更新成功')
   } catch (error) {
     message.error('更新配置失败')

@@ -15,7 +15,7 @@ enum MemberLevel {
     label: '银会员',
     color: Color(0xFF90A4AE),
     discount: 0.95,
-    pointsMultiplier: 3,
+    pointsMultiplier: 5,
     levelNumber: 2,
     nextExp: 500,
     gradientColors: [Color(0xFFBDC3C7), Color(0xFF2C3E50)],

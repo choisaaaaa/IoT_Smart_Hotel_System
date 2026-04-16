@@ -225,7 +225,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
   }
 
   Widget _buildQuickFilters() {
-    final filters = ['我的酒店', '服务设施', '官网特惠', '金/铂金10倍积分'];
+    final filters = ['我的酒店', '服务设施', '官网特惠', '会员权益'];
     return Container(
       height: 50,
       color: Colors.white,
@@ -362,7 +362,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      _buildTag('2.5倍积分', AppColors.gold.withValues(alpha: 0.1), AppColors.gold),
                       _buildTag('智慧客控', Colors.blue.withValues(alpha: 0.1), Colors.blue),
                       _buildTag('免费停车', AppColors.background, AppColors.textSecondary),
                     ],

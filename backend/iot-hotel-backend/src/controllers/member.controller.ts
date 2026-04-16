@@ -109,15 +109,10 @@ function getLevelNumber(memberLevel: string): number {
 
 /**
  * 根据经验值计算会员等级关键字
- * 保持原有阈值逻辑不变
+ * 使用系统配置的会员方案
  */
-function calculateMemberLevel(experience: number): string {
-  const exp = Number(experience || 0);
-  if (exp >= 5000) return 'diamond';
-  if (exp >= 2000) return 'platinum';
-  if (exp >= 500) return 'gold';
-  if (exp >= 100) return 'silver';
-  return 'standard';
+async function calculateMemberLevel(experience: number): Promise<string> {
+  return systemConfigService.calculateLevel(experience);
 }
 
 export const get = async (req: AuthRequest, res: Response) => {
@@ -287,8 +282,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json(errorResponse('未认证'));
 
     const user = req.user as any;
-    const phone = user.phone || user.username; 
-    
+    const phone = user.phone || user.username;
+
     // 确保会员记录存在
     const member = await ensureMemberRecord(phone, user.username);
 
@@ -297,7 +292,18 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       'SELECT COUNT(*) as count FROM member_coupons WHERE member_id = ? AND status = "unused"',
       [member.id]
     );
-    
+
+    // 获取系统配置的会员方案
+    const memberScheme = await systemConfigService.getMemberScheme();
+
+    // 构建动态的 level_discounts 和 level_multipliers
+    const levelDiscounts: Record<string, number> = {};
+    const levelMultipliers: Record<string, number> = {};
+    memberScheme.forEach((level: any) => {
+      levelDiscounts[level.key] = Number(level.discount || 1.0);
+      levelMultipliers[level.key] = Number(level.points_multiplier || 1);
+    });
+
     // 计算等级 (以数据库存储的 member_level 为准，映射数字等级和标签)
     const levelNum = getLevelNumber(member.member_level);
     const levelLabel = await getLevelLabel(member.member_level);
@@ -317,7 +323,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       total_stays: member.total_stays,
       last_checkin_date: member.last_checkin_date,
       coupons_count: Number(couponRows[0]?.count || 0),
-      level_discounts: LEVEL_DISCOUNTS
+      level_discounts: levelDiscounts,   // 使用系统配置的折扣
+      level_multipliers: levelMultipliers // 使用系统配置的积分倍率
     };
 
     logger.info(`获取会员资产成功: 手机号 ${phone}, 成长值 ${result.experience}, 等级 ${result.member_level}`);
@@ -441,27 +448,16 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     }
 
     // 计算获得的奖励
-    // 1. 成长值 (固定 10 点)
-    const expGain = 10;
+    // 1. 成长值 (从配置获取，默认 10 点)
+    const expGain = await systemConfigService.getCheckinExp();
     const newExp = (member.experience || 0) + expGain;
     
     // 2. 积分 (从配置获取，默认 50 点)
-    let pointsGain = 50;
-    try {
-      const [configRows] = await pool.query<RowDataPacket[]>(
-        'SELECT config_value FROM system_settings WHERE config_key = ?',
-        ['checkin_points']
-      );
-      if (configRows.length > 0) {
-        pointsGain = Number(configRows[0].config_value);
-      }
-    } catch (e) {
-      logger.warn('获取签到积分配置失败，使用默认值 50');
-    }
+    const pointsGain = await systemConfigService.getCheckinPoints();
     const newPoints = (member.points || 0) + pointsGain;
     
-    // 自动升级逻辑 (保持原有阈值)
-    const newLevelKey = calculateMemberLevel(newExp);
+    // 自动升级逻辑
+    const newLevelKey = await calculateMemberLevel(newExp);
     const newLevelNum = getLevelNumber(newLevelKey);
     const newLevelLabel = await getLevelLabel(newLevelKey);
 

@@ -15,21 +15,7 @@ import { systemConfigService } from '../services/system-config.service';
 // 辅助函数：退房后更新会员成长值、积分与等级
 async function updateMemberExperienceAfterCheckout(connection: PoolConnection, guestPhone: string, totalPrice: number, guestName?: string) {
   try {
-    // 1. 获取系统积分配置 (默认 1元 = 10积分)
-    let pointsRate = 10;
-    try {
-      const [configRows] = await connection.query<RowDataPacket[]>(
-        'SELECT config_value FROM system_settings WHERE config_key = ?',
-        ['points_rate']
-      );
-      if (configRows.length > 0) {
-        pointsRate = Number(configRows[0].config_value);
-      }
-    } catch (e) {
-      logger.warn('获取积分倍率配置失败，使用默认值 10');
-    }
-
-    // 2. 获取会员当前信息，如果不存在则创建
+    // 1. 获取会员当前信息，如果不存在则创建
     let [memberRows] = await connection.query<RowDataPacket[]>(
       'SELECT id, experience, points, member_level, total_spent, total_stays FROM members WHERE phone = ?',
       [guestPhone]
@@ -55,12 +41,14 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
       member = memberRows[0];
     }
     
-    // 3. 计算奖励
+    // 2. 计算奖励
     // 从系统配置获取动态会员方案
     const memberScheme = await systemConfigService.getMemberScheme();
+    const expRate = await systemConfigService.getExpRate();
+    const pointsRate = await systemConfigService.getPointsRate();
 
-    // 成长值: 10元 = 1点 (固定)
-    const expGain = Math.floor(totalPrice / 10);
+    // 成长值: 使用配置的倍率 (默认 1元 = 0.1点)
+    const expGain = Math.floor(totalPrice * expRate);
     const newExp = (member.experience || 0) + expGain;
     
     // 积分: 1元 = pointsRate点 * 会员等级倍率
@@ -78,25 +66,10 @@ async function updateMemberExperienceAfterCheckout(connection: PoolConnection, g
     const newSpent = Number(member.total_spent || 0) + Number(totalPrice);
     const newStays = (member.total_stays || 0) + 1;
 
-    // 4. 自动升级逻辑 (基于成长值)
-    let newLevel = member.member_level;
-    if (memberScheme.length > 0) {
-      // 按门槛从高到低排序，找到符合条件的最高等级
-      const sortedScheme = [...memberScheme].sort((a, b) => (b.min_experience || 0) - (a.min_experience || 0));
-      const match = sortedScheme.find(s => newExp >= (s.min_experience || 0));
-      if (match) {
-        newLevel = match.key;
-      }
-    } else {
-      // 降级使用硬编码逻辑
-      if (newExp >= 5000) newLevel = 'diamond';
-      else if (newExp >= 2000) newLevel = 'platinum';
-      else if (newExp >= 500) newLevel = 'gold';
-      else if (newExp >= 100) newLevel = 'silver';
-      else newLevel = 'standard';
-    }
+    // 3. 自动升级逻辑 (基于成长值)
+    const newLevel = await systemConfigService.calculateLevel(newExp);
 
-    // 5. 更新数据库
+    // 4. 更新数据库
     await connection.query(
       'UPDATE members SET experience = ?, points = ?, member_level = ?, total_spent = ?, total_stays = ? WHERE id = ?',
       [newExp, newPoints, newLevel, newSpent, newStays, member.id]
@@ -261,16 +234,8 @@ async function calculateBookingPrice(
   if (usedPoints && usedPoints > 0 && memberId) {
     actualUsedPoints = Math.min(usedPoints, availablePoints);
 
-    let redeemRate = 10;
-    try {
-      const [configRows] = await connection.query<RowDataPacket[]>(
-        'SELECT config_value FROM system_settings WHERE config_key = ?',
-        ['points_redeem_rate']
-      );
-      if (configRows.length > 0) redeemRate = Number(configRows[0].config_value);
-    } catch (e) {}
+    const redeemRate = await systemConfigService.getPointsRedeemRate();
 
-    if (!redeemRate || redeemRate <= 0) redeemRate = 10;
     pointsDiscount = floor2(actualUsedPoints / redeemRate);
     if (pointsDiscount > totalPrice) {
       pointsDiscount = totalPrice;

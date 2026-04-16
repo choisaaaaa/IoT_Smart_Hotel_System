@@ -534,24 +534,6 @@ const rechargeModalVisible = ref(false)
 const rechargeVendor = ref('wechat')
 const rechargeLoading = ref(false)
 
-const discountRate = computed(() => {
-  const level = memberInfo.value?.member_level || 'standard'
-  const rates: Record<string, number> = {
-    'diamond': 0.80,
-    'platinum': 0.85,
-    'gold': 0.88,
-    'silver': 0.95,
-    'standard': 1.0
-  }
-  return rates[level] || 1.0
-})
-
-const getBonusAmount = (amount: number) => {
-  if (discountRate.value >= 1) return 0
-  const bonusRate = 1 - discountRate.value
-  return Math.floor((amount * bonusRate) * 100) / 100
-}
-
 const handleOpenRechargePayment = () => {
   rechargeModalVisible.value = true
 }
@@ -623,27 +605,47 @@ const onAvatarChange = async (e: Event) => {
   }
 }
 
-// 会员等级逻辑
+// 会员等级逻辑 - 优先使用后端返回的数据，同时监听系统配置变化
 const memberLevelInfo = computed(() => {
-  const mLevel = String(memberInfo.value.member_level || 'standard').toLowerCase().trim()
-  const exp = Number(memberInfo.value.experience || 0)
-  
-  const levelConfig: any = {
-    'diamond': { label: '钻石会员', level: 5, discount: 0.80, multiplier: 15, nextExp: 5000, percent: 100 },
-    'platinum': { label: '铂金会员', level: 4, discount: 0.85, multiplier: 12, nextExp: 5000, percent: Math.floor(Math.max(0, exp - 2000) / 3000 * 100) },
-    'gold': { label: '金会员', level: 3, discount: 0.88, multiplier: 9, nextExp: 2000, percent: Math.floor(Math.max(0, exp - 500) / 1500 * 100) },
-    'silver': { label: '银会员', level: 2, discount: 0.95, multiplier: 3, nextExp: 500, percent: Math.floor(Math.max(0, exp - 100) / 400 * 100) },
-    'standard': { label: '普通会员', level: 1, discount: 1.0, multiplier: 1, nextExp: 100, percent: Math.floor(Math.min(100, exp / 100 * 100)) }
+  // 添加对系统配置的依赖，确保配置更新时重新计算
+  const scheme = appStore.systemConfigs.member_scheme
+
+  // 如果后端返回了 level_label，优先使用后端数据
+  if (memberInfo.value?.level_label) {
+    const levelDiscounts = memberInfo.value?.level_discounts || {}
+    const levelMultipliers = memberInfo.value?.level_multipliers || {}
+    const discount = levelDiscounts[memberInfo.value.member_level] ?? 1.0
+    const multiplier = levelMultipliers[memberInfo.value.member_level] ?? 1
+
+    return {
+      label: memberInfo.value.level_label,
+      key: memberInfo.value.member_level,
+      discount: Number(discount),
+      multiplier: Number(multiplier),
+      color: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).color,
+      nextExp: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).nextExp,
+      percent: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).percent,
+      level: memberInfo.value?.level || 1
+    }
   }
-  
-  const config = levelConfig[mLevel] || levelConfig['standard']
-  console.log('[Profile] 会员等级信息:', { mLevel, exp, config })
-  return config
+
+  // 否则使用前端计算
+  return appStore.getLevelInfo(memberInfo.value?.member_level, memberInfo.value?.experience)
 })
+
+const discountRate = computed(() => {
+  return memberLevelInfo.value.discount
+})
+
+const getBonusAmount = (amount: number) => {
+  if (discountRate.value >= 1) return 0
+  const bonusRate = 1 - discountRate.value
+  return Math.floor((amount * bonusRate) * 100) / 100
+}
 
 // 会员与资产信息
 const memberInfo = ref<any>({})
-const memberProgramName = ref('IOT')
+const memberProgramName = computed(() => appStore.systemConfigs.member_program_name || 'IOT')
 const loading = ref(false)
 const myCoupons = ref<any[]>([])
 const checkinLoading = ref(false)
@@ -799,16 +801,6 @@ const fetchData = async () => {
     profileForm.username = appStore.userInfo.username
     profileForm.phone = appStore.userInfo.phone
     profileForm.email = appStore.userInfo.email || ''
-
-    // 获取系统配置 (获取会员计划名称)
-    try {
-      const configRes = await systemConfigApi.getConfig('member_program_name')
-      if (configRes.data) {
-        memberProgramName.value = configRes.data
-      }
-    } catch (e) {
-      console.error('获取会员计划名称失败:', e)
-    }
 
     // 仅普通用户需要获取会员资产、优惠券和常用入住人
     if (isCustomer.value) {

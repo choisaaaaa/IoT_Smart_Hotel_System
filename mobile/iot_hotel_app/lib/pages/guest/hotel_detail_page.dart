@@ -245,7 +245,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildTag('2.5倍积分', AppColors.gold.withValues(alpha: 0.1), AppColors.gold),
               _buildTag('智慧客控', Colors.blue.withValues(alpha: 0.1), Colors.blue),
               _buildTag('免费停车', AppColors.background, AppColors.textSecondary),
               // 如果有设施列表，安全地处理

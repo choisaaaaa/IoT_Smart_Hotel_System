@@ -317,18 +317,26 @@ const memberLevelInfo = computed(() => {
   if (!appStore.userStatus?.is_member || !appStore.userStatus?.member_info) {
     return null
   }
+  // 添加对系统配置的依赖，确保配置更新时重新计算
+  const scheme = appStore.systemConfigs.member_scheme
   const member = appStore.userStatus.member_info
-  const mLevel = String(member.member_level || 'standard').toLowerCase().trim()
-  
-  const levelConfig: any = {
-    'diamond': { label: '钻石会员', color: '#330867', textColor: '#fff' },
-    'platinum': { label: '铂金会员', color: '#434343', textColor: '#fff' },
-    'gold': { label: '金会员', color: '#d4af37', textColor: '#1a1a1a' },
-    'silver': { label: '银会员', color: '#2c3e50', textColor: '#fff' },
-    'standard': { label: '普通会员', color: '#4b6cb7', textColor: '#fff' }
+
+  // 如果后端返回了 level_label，优先使用后端数据
+  if (member?.level_label) {
+    return {
+      label: member.level_label,
+      color: appStore.getLevelInfo(member.member_level, member.experience).color || '#4b6cb7',
+      textColor: '#fff' // 默认白色
+    }
   }
-  
-  return levelConfig[mLevel] || levelConfig['standard']
+
+  // 否则使用前端计算
+  const info = appStore.getLevelInfo(member.member_level, member.experience)
+  return {
+    label: info.label,
+    color: info.color || '#4b6cb7',
+    textColor: '#fff' // 默认白色
+  }
 })
 
 // 初始化

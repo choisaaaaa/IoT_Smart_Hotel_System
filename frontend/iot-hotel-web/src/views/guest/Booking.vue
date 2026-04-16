@@ -513,7 +513,7 @@
                 <div class="offer-row-ctrip">
                   <div class="label-group">
                     <span class="label">积分抵扣</span>
-                    <span class="sub-label">可用 {{ memberInfo?.points || 0 }} 积分 (10积分=1元)</span>
+                    <span class="sub-label">可用 {{ memberInfo?.points || 0 }} 积分 ({{ appStore.systemConfigs.points_redeem_rate }}积分=1元)</span>
                   </div>
                   <div class="action-group">
                     <a-checkbox v-model:checked="usePoints" @change="handlePointsToggle">使用积分</a-checkbox>
@@ -790,6 +790,7 @@ import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
 import { hotelApi } from '@/api/hotel'
 import { paymentApi } from '@/api/payment'
+import { systemConfigApi } from '@/api/system-config'
 import { getReviews, getReviewStats } from '@/api/review'
 import request from '@/api/request'
 import { useAppStore } from '@/stores/app'
@@ -932,22 +933,40 @@ const nights = computed(() => {
 
 const originalPrice = computed(() => (selectedRoom.value?.price || 0) * nights.value)
 
-const memberDiscount = computed(() => {
-  if (!memberInfo.value) return 1.0
-  const mLevel = memberInfo.value.member_level || 'standard'
-  const discounts: Record<string, number> = {
-    'diamond': 0.80,
-    'platinum': 0.85,
-    'gold': 0.88,
-    'silver': 0.95,
-    'standard': 1.0
+const memberLevelInfo = computed(() => {
+  if (!memberInfo.value) return null
+  // 添加对系统配置的依赖，确保配置更新时重新计算
+  const scheme = appStore.systemConfigs.member_scheme
+
+  // 如果后端返回了 level_label，优先使用后端数据
+  if (memberInfo.value?.level_label) {
+    const levelDiscounts = memberInfo.value?.level_discounts || {}
+    const levelMultipliers = memberInfo.value?.level_multipliers || {}
+    const discount = levelDiscounts[memberInfo.value.member_level] ?? 1.0
+    const multiplier = levelMultipliers[memberInfo.value.member_level] ?? 1
+
+    return {
+      label: memberInfo.value.level_label,
+      key: memberInfo.value.member_level,
+      discount: Number(discount),
+      multiplier: Number(multiplier),
+      color: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).color,
+      nextExp: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).nextExp,
+      percent: appStore.getLevelInfo(memberInfo.value.member_level, memberInfo.value.experience).percent,
+      level: memberInfo.value?.level || 1
+    }
   }
-  return discounts[mLevel] || 1.0
+
+  // 否则使用前端计算
+  return appStore.getLevelInfo(memberInfo.value?.member_level, memberInfo.value?.experience)
+})
+
+const memberDiscount = computed(() => {
+  return memberLevelInfo.value?.discount || 1.0
 })
 
 const memberLevelLabel = computed(() => {
-  if (!memberInfo.value) return ''
-  return memberInfo.value.level_label || `LEVEL ${memberInfo.value.level || 1}`
+  return memberLevelInfo.value?.label || ''
 })
 
 const availableCoupons = computed(() => {

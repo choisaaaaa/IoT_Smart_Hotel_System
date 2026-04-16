@@ -28,10 +28,10 @@ export const getAllConfigs = async (req: Request, res: Response) => {
     if (!configs.member_scheme) {
       const defaultScheme = [
         { key: 'standard', name: '普通会员', discount: 1.0, points_multiplier: 1, min_experience: 0, color: '#4b6cb7', benefits: '基础入住权益' },
-        { key: 'silver', name: '银卡会员', discount: 0.95, points_multiplier: 1.2, min_experience: 100, color: '#bdc3c7', benefits: '延迟退房1小时, 免费饮品' },
-        { key: 'gold', name: '金卡会员', discount: 0.88, points_multiplier: 1.5, min_experience: 500, color: '#d4af37', benefits: '延迟退房2小时, 欢迎水果, 早餐8折' },
-        { key: 'platinum', name: '铂金会员', discount: 0.85, points_multiplier: 1.8, min_experience: 2000, color: '#e5e4e2', benefits: '客房升级, 免费早餐, 延迟退房4小时' },
-        { key: 'diamond', name: '钻石会员', discount: 0.80, points_multiplier: 2.0, min_experience: 5000, color: '#30cfd0', benefits: '行政酒廊待遇, 全免早餐, 极速退房' }
+        { key: 'silver', name: '银卡会员', discount: 0.95, points_multiplier: 5, min_experience: 100, color: '#bdc3c7', benefits: '延迟退房1小时, 免费饮品' },
+        { key: 'gold', name: '金卡会员', discount: 0.88, points_multiplier: 9, min_experience: 500, color: '#d4af37', benefits: '延迟退房2小时, 欢迎水果, 早餐8折' },
+        { key: 'platinum', name: '铂金会员', discount: 0.85, points_multiplier: 12, min_experience: 2000, color: '#e5e4e2', benefits: '客房升级, 免费早餐, 延迟退房4小时' },
+        { key: 'diamond', name: '钻石会员', discount: 0.80, points_multiplier: 15, min_experience: 5000, color: '#30cfd0', benefits: '行政酒廊待遇, 全免早餐, 极速退房' }
       ];
       configs.member_scheme = defaultScheme;
       // 异步保存到数据库，不影响本次返回

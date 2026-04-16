@@ -122,6 +122,7 @@ import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
 import { useAppStore } from '@/stores/app'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { callApi } from '@/api/call'
+import { systemConfigApi } from '@/api/system-config'
 
 const route = useRoute()
 const router = useRouter()
@@ -800,8 +801,20 @@ function setupGlobalWebSocket() {
   socket.on('call_rejected', handleCallRejected)
 }
 
+const fetchSystemConfigs = async () => {
+  try {
+    const res = await systemConfigApi.getAllConfigs()
+    if (res.data) {
+      appStore.setSystemConfigs(res.data)
+    }
+  } catch (error) {
+    console.error('[App] 获取系统配置失败:', error)
+  }
+}
+
 onMounted(() => {
   appStore.initUserInfo() // 确保 userInfo 加载
+  fetchSystemConfigs() // 获取系统全局配置
   if (localStorage.getItem('auth_token')) {
     setupGlobalWebSocket()
   }

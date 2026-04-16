@@ -7,6 +7,65 @@ export const useAppStore = defineStore('app', () => {
   const connected = ref(false)
   const userInfo = ref<any>(null)
   const userStatus = ref<any>(null)
+  const systemConfigs = ref<any>({
+    member_program_name: 'IOT',
+    member_scheme: [],
+    points_rate: 10,
+    points_redeem_rate: 10,
+    exp_rate: 0.1,
+    checkin_points: 50,
+    checkin_exp: 10
+  })
+
+  // 默认会员方案 (当后台未配置时使用)
+  const defaultMemberScheme = [
+    { key: 'standard', name: '普通会员', discount: 1.0, points_multiplier: 1, min_experience: 0, color: '#4b6cb7' },
+    { key: 'silver', name: '银会员', discount: 0.95, points_multiplier: 5, min_experience: 100, color: '#2c3e50' },
+    { key: 'gold', name: '金会员', discount: 0.88, points_multiplier: 9, min_experience: 500, color: '#d4af37' },
+    { key: 'platinum', name: '铂金会员', discount: 0.85, points_multiplier: 12, min_experience: 2000, color: '#434343' },
+    { key: 'diamond', name: '钻石会员', discount: 0.80, points_multiplier: 15, min_experience: 5000, color: '#330867' }
+  ]
+
+  // 获取有效的会员方案 (合并后台配置与默认值)
+  const effectiveMemberScheme = computed(() => {
+    const scheme = systemConfigs.value.member_scheme
+    if (scheme && Array.isArray(scheme) && scheme.length > 0) {
+      return scheme
+    }
+    return defaultMemberScheme
+  })
+
+  /**
+   * 获取特定等级的配置信息
+   */
+  const getLevelInfo = (levelKey: string, experience: number = 0) => {
+    const key = String(levelKey || 'standard').toLowerCase().trim()
+    const scheme = [...effectiveMemberScheme.value].sort((a, b) => (a.min_experience || 0) - (b.min_experience || 0))
+    
+    const config = scheme.find(s => s.key === key) || scheme[0]
+    const currentIndex = scheme.findIndex(s => s.key === key)
+    const nextLevel = scheme[currentIndex + 1]
+    
+    const currentMin = config.min_experience || 0
+    const nextExp = nextLevel ? nextLevel.min_experience : config.min_experience
+    
+    let percent = 100
+    if (nextLevel) {
+      percent = Math.floor(Math.min(100, Math.max(0, experience - currentMin) / (nextExp - currentMin) * 100))
+    }
+
+    return {
+      label: config.name,
+      key: config.key,
+      discount: Number(config.discount || 1.0),
+      multiplier: Number(config.points_multiplier || 1),
+      color: config.color,
+      nextExp,
+      percent,
+      level: currentIndex + 1
+    }
+  }
+
   const showLoginModal = ref(false)
   const notifications = ref<{ id: string; type: string; message: string; time: string }[]>([])
 
@@ -67,6 +126,25 @@ export const useAppStore = defineStore('app', () => {
 
   const setUserStatus = (status: any) => {
     userStatus.value = status
+  }
+
+  const setSystemConfigs = (newConfigs: any) => {
+    if (newConfigs) {
+      // 深度合并或确保关键字段更新
+      const updated = { ...systemConfigs.value, ...newConfigs }
+      
+      // 确保 member_scheme 是数组格式
+      if (typeof updated.member_scheme === 'string') {
+        try {
+          updated.member_scheme = JSON.parse(updated.member_scheme)
+        } catch (e) {
+          updated.member_scheme = []
+        }
+      }
+      
+      systemConfigs.value = updated
+      console.log('[Store] 系统配置已更新:', systemConfigs.value)
+    }
   }
 
   // --- 语音通话全局状态 ---
@@ -165,6 +243,10 @@ export const useAppStore = defineStore('app', () => {
     setUserInfo,
     userStatus,
     setUserStatus,
+    systemConfigs,
+    setSystemConfigs,
+    effectiveMemberScheme,
+    getLevelInfo,
     setIncomingCall,
     clearIncomingCall,
     setCurrentCall,
