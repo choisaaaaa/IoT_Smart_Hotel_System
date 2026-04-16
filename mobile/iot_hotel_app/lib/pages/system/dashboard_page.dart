@@ -167,8 +167,10 @@ class _OverviewTab extends ConsumerStatefulWidget {
 class _OverviewTabState extends ConsumerState<_OverviewTab> {
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> _revenueStats = {};
+  List<dynamic> _weeklyRevenue = []; // 周营收数据
   List<Hotel> _topHotels = [];
   bool _isLoading = true;
+  bool _isMonthlyView = true; // true = 月视图, false = 周视图
 
   @override
   void initState() {
@@ -179,66 +181,59 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
     try {
-      final dio = DioClient();
-      final hotelRes = await dio.get('${ApiConstants.hotels}/search');
-      int hotelCount = 0;
-      List<Hotel> hotels = [];
-      if (hotelRes.statusCode == 200 && hotelRes.data['code'] == 200) {
-        final rawList = hotelRes.data['data']?['hotels'] ?? [];
-        hotelCount = (rawList as List?)?.length ?? 0;
-        hotels = List<Map<String, dynamic>>.from(rawList is List ? rawList : <dynamic>[]).map((h) => Hotel.fromJson(h)).toList();
+      // 并行加载统计数据和报表数据（包含周营收）
+      final statsRes = await ref.read(hotelServiceProvider).getGlobalStatistics();
+      final reportsRes = await ref.read(hotelServiceProvider).getReports();
+      
+      if (reportsRes.success && reportsRes.data != null) {
+        final reportData = reportsRes.data!;
+        final trendData = reportData['revenue_trend'] as List<dynamic>? ?? [];
+        _weeklyRevenue = trendData.map((e) => (e['revenue'] as num?)?.toDouble() ?? 0).toList();
       }
-      final userRes = await dio.get(ApiConstants.users);
-      int userCount = 0;
-      if (userRes.statusCode == 200 && userRes.data['code'] == 200) {
-        final data = userRes.data['data'];
-        userCount = (data is List) ? data.length : (data?['list'] as List?)?.length ?? 0;
-      }
-      final deviceRes = await dio.get(ApiConstants.devices);
-      int deviceCount = 0;
-      int onlineDevices = 0;
-      if (deviceRes.statusCode == 200 && deviceRes.data['code'] == 200) {
-        final data = deviceRes.data['data'];
-        final devices = data is List ? data : (data?['list'] ?? []);
-        deviceCount = (devices is List ? devices : <dynamic>[]).length;
-        onlineDevices = (devices is List ? devices : <dynamic>[]).where((d) => d['status'] == 'online' || d['device_status'] == 'online').length;
-      }
-
-      final revenueResult = await ref.read(paymentServiceProvider).getRevenueStats();
-      Map<String, dynamic> revenueData = {};
-      if (revenueResult.success) {
-        revenueData = revenueResult.data ?? {};
-      }
-
-      final bookingResult = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
-      int pendingBookings = 0;
-      int confirmedBookings = 0;
-      int checkedInBookings = 0;
-      if (bookingResult.success) {
-        final bookings = bookingResult.data ?? [];
-        for (final b in bookings) {
-          switch (b.status) {
-            case 'pending': pendingBookings++; break;
-            case 'confirmed': confirmedBookings++; break;
-            case 'checked_in': checkedInBookings++; break;
-          }
+      
+      if (statsRes.success && statsRes.data != null) {
+        final data = statsRes.data!;
+        
+        if (mounted) {
+          setState(() {
+            _stats = {
+              'hotels': data['hotel_count'] ?? 0,
+              'users': data['member_count'] ?? 0,
+              'devices': data['device_count'] ?? 0,
+              'online_devices': data['online_devices'] ?? 0, // Backend might need to provide this
+              'pending_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'pending', orElse: () => {'count': 0})['count'] ?? 0,
+              'confirmed_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'confirmed', orElse: () => {'count': 0})['count'] ?? 0,
+              'checked_in_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'checked_in', orElse: () => {'count': 0})['count'] ?? 0,
+            };
+            
+            double parseRevenue(dynamic value) {
+              if (value == null) return 0;
+              if (value is double) return value;
+              if (value is int) return value.toDouble();
+              if (value is String) return double.tryParse(value) ?? 0;
+              return 0;
+            }
+            
+            _revenueStats = {
+              'today_revenue': parseRevenue(data['total_revenue']),
+              'month_revenue': parseRevenue(data['total_revenue']), // Backend could provide monthly separate
+              'revenue_trend': (data['monthly_revenue'] as List?)?.map((e) => parseRevenue(e)).toList() ?? [],
+            };
+            
+            final topHotelsData = data['top_hotels'] as List?;
+            _topHotels = topHotelsData?.map((h) => Hotel(
+              id: h['id'] ?? 0,
+              hotelName: h['hotel_name'] ?? '未知酒店',
+              hotelAddress: '',
+              hotelPhone: '',
+              description: '',
+              rating: 5.0,
+            )).toList() ?? [];
+          });
         }
-      }
-
-      if (mounted) {
-        setState(() {
-          _stats = {
-            'hotels': hotelCount,
-            'users': userCount,
-            'devices': deviceCount,
-            'online_devices': onlineDevices,
-            'pending_bookings': pendingBookings,
-            'confirmed_bookings': confirmedBookings,
-            'checked_in_bookings': checkedInBookings,
-          };
-          _revenueStats = revenueData;
-          _topHotels = hotels;
-        });
+      } else {
+        // Fallback or error handling
+        debugPrint('Failed to load global stats: ${statsRes.message}');
       }
     } catch (e) {
       debugPrint('systemStats: $e');
@@ -268,7 +263,7 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
+            childAspectRatio: 3.0,
             children: [
               _buildStatCard('酒店总数', '${_stats['hotels'] ?? 0}', Icons.hotel, AppColors.primary),
               _buildStatCard('用户总数', '${_stats['users'] ?? 0}', Icons.people, AppColors.secondary),
@@ -298,29 +293,30 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
         border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, size: 20, color: color)),
-            ],
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 18, color: color),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: GoogleFonts.notoSansSc(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              Text(title, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
-            ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(value, style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                Text(title, style: GoogleFonts.notoSansSc(fontSize: 9, color: AppColors.textSecondary)),
+              ],
+            ),
           ),
         ],
       ),
@@ -329,9 +325,11 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
 
   Widget _buildRevenueTrendChart(List<dynamic> trend) {
     final spots = <FlSpot>[];
-    if (trend.isNotEmpty) {
-      for (int i = 0; i < trend.length; i++) {
-        final val = (trend[i] as num?)?.toDouble() ?? 0;
+    final displayTrend = _isMonthlyView ? trend : _getWeeklyData(trend);
+    
+    if (displayTrend.isNotEmpty) {
+      for (int i = 0; i < displayTrend.length; i++) {
+        final val = (displayTrend[i] as num?)?.toDouble() ?? 0;
         spots.add(FlSpot(i.toDouble(), val));
       }
     } else {
@@ -351,7 +349,7 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('营收趋势', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              const Icon(Icons.show_chart, size: 20, color: AppColors.primary),
+              _buildToggleButton(),
             ],
           ),
           const SizedBox(height: 20),
@@ -362,7 +360,9 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
                 gridData: FlGridData(show: true, drawVerticalLine: false),
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
-                    final labels = trend.isNotEmpty ? List.generate(trend.length, (i) => '${i + 1}') : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                    final labels = _isMonthlyView 
+                        ? (displayTrend.isNotEmpty ? List.generate(displayTrend.length, (i) => '${i + 1}日') : ['1日', '5日', '10日', '15日', '20日', '25日', '30日'])
+                        : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
                     final idx = v.toInt();
                     if (idx < 0 || idx >= labels.length) return const SizedBox();
                     return Text(labels[idx], style: const TextStyle(fontSize: 10));
@@ -386,6 +386,61 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<dynamic> _getWeeklyData(List<dynamic> monthlyData) {
+    // 优先使用从报表接口获取的真实周数据
+    if (_weeklyRevenue.isNotEmpty) {
+      return _weeklyRevenue;
+    }
+    // 如果没有周数据，则使用月数据的最后7个作为降级方案
+    if (monthlyData.isEmpty) return [];
+    if (monthlyData.length >= 7) {
+      return monthlyData.sublist(monthlyData.length - 7);
+    }
+    return monthlyData;
+  }
+
+  Widget _buildToggleButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleOption('月', true),
+          _buildToggleOption('周', false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleOption(String label, bool isMonthly) {
+    final isSelected = _isMonthlyView == isMonthly;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isMonthlyView = isMonthly;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansSc(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -1899,7 +1954,17 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
         itemCount: _reviews.length,
         itemBuilder: (ctx, index) {
           final review = _reviews[index];
-          final score = (review['score'] ?? 5).toDouble();
+          final scoreValue = review['score'];
+          double score;
+          if (scoreValue is double) {
+            score = scoreValue;
+          } else if (scoreValue is int) {
+            score = scoreValue.toDouble();
+          } else if (scoreValue is String) {
+            score = double.tryParse(scoreValue) ?? 5.0;
+          } else {
+            score = 5.0;
+          }
           final memberName = review['member_name'] ?? review['member_phone'] ?? '匿名';
           final content = review['content'] ?? '';
           final envRating = review['environment_rating'] ?? 5;

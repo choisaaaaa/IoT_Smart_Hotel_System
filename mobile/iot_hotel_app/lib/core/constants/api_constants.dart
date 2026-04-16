@@ -52,4 +52,5 @@ class ApiConstants {
   static const String environment = 'environment';
   static const String priceCalendar = 'price-calendar';
   static const String aiButler = 'ai-butler';
+  static const String systemConfig = 'system-config';
 }

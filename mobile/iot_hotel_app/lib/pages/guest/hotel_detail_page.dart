@@ -27,6 +27,8 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   bool _isLoadingReviews = false;
   int _reviewPage = 1;
   Map<String, dynamic>? _reviewStats;
+  final PageController _imagePageController = PageController();
+  int _currentImageIndex = 0;
   
   Hotel? _hotelInfo;
   List<RoomType> _rooms = [];
@@ -196,10 +198,15 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Widget _buildSliverAppBar(BuildContext context) {
-    String imageUrl = _hotelInfo?.displayImage ?? '';
-    if (imageUrl.isEmpty) {
-      imageUrl = 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80';
+    final List<String> images = _hotelInfo?.images ?? [];
+    String displayImage = _hotelInfo?.displayImage ?? '';
+    if (displayImage.isEmpty) {
+      displayImage = 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80';
     }
+    if (images.isEmpty) {
+      images.add(displayImage);
+    }
+
     return SliverAppBar(
       expandedHeight: 240,
       pinned: true,
@@ -222,10 +229,51 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Image.network(
-          imageUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, _, e) => Container(color: AppColors.divider, child: const Icon(Icons.hotel, size: 64, color: AppColors.textHint))),
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _imagePageController,
+              onPageChanged: (index) {
+                setState(() => _currentImageIndex = index);
+              },
+              itemCount: images.length,
+              itemBuilder: (context, index) {
+                return Image.network(
+                  images[index],
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, _, e) => Container(
+                    color: AppColors.divider,
+                    child: const Icon(Icons.hotel, size: 64, color: AppColors.textHint),
+                  ),
+                );
+              },
+            ),
+            if (images.length > 1)
+              Positioned(
+                bottom: 16,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    images.length,
+                    (index) => Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: index == _currentImageIndex
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -600,7 +648,17 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Widget _buildReviewItem(dynamic review) {
-    final rating = (review['score'] ?? 5.0).toDouble();
+    final scoreValue = review['score'];
+    double rating;
+    if (scoreValue is double) {
+      rating = scoreValue;
+    } else if (scoreValue is int) {
+      rating = scoreValue.toDouble();
+    } else if (scoreValue is String) {
+      rating = double.tryParse(scoreValue) ?? 5.0;
+    } else {
+      rating = 5.0;
+    }
     final userName = review['member_name'] ?? review['member_phone'] ?? '匿名用户';
     final content = review['content'] ?? '';
     final createdAt = review['created_at'] ?? '';
@@ -608,6 +666,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     final facRating = review['facility_rating'];
     final comRating = review['comfort_rating'];
     final reply = review['reply'];
+    final userAvatar = review['user_avatar'];
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -616,7 +675,16 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         children: [
           Row(
             children: [
-              CircleAvatar(radius: 16, backgroundColor: AppColors.background, child: Icon(Icons.person, size: 16, color: AppColors.textSecondary)),
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppColors.background,
+                backgroundImage: userAvatar != null && userAvatar.toString().isNotEmpty
+                    ? NetworkImage(userAvatar.toString()) as ImageProvider
+                    : null,
+                child: userAvatar == null || userAvatar.toString().isEmpty
+                    ? Icon(Icons.person, size: 16, color: AppColors.textSecondary)
+                    : null,
+              ),
               const SizedBox(width: 8),
               Expanded(child: Text(userName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
               Row(

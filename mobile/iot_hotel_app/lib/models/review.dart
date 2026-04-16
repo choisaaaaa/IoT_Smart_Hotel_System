@@ -1,4 +1,5 @@
 import 'dart:convert' show JsonDecoder;
+import 'package:json_annotation/json_annotation.dart';
 
 class Review {
   final int id;
@@ -43,6 +44,9 @@ class Review {
 
   final String? roomTypeName;
 
+  @JsonKey(name: 'user_avatar')
+  final String? userAvatar;
+
   Review({
     required this.id,
     this.orderId = 0,
@@ -65,6 +69,7 @@ class Review {
     this.memberPhone,
     this.hotelName,
     this.roomTypeName,
+    this.userAvatar,
   });
 
   String get displayUsername {
@@ -101,6 +106,14 @@ class Review {
       return [];
     }
 
+    double parseScore(dynamic value) {
+      if (value == null) return 5.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 5.0;
+      return 5.0;
+    }
+
     return Review(
       id: normalized['id'] ?? 0,
       orderId: normalized['order_id'] ?? 0,
@@ -108,7 +121,7 @@ class Review {
       roomTypeId: normalized['room_type_id'],
       userId: normalized['user_id'],
       memberId: normalized['member_id'],
-      score: (normalized['score'] ?? 5.0).toDouble(),
+      score: parseScore(normalized['score']),
       environmentRating: normalized['environment_rating'] ?? 5,
       facilityRating: normalized['facility_rating'] ?? 5,
       comfortRating: normalized['comfort_rating'] ?? 5,
@@ -123,6 +136,7 @@ class Review {
       memberPhone: normalized['member_phone'],
       hotelName: normalized['hotel_name'],
       roomTypeName: normalized['room_type_name'],
+      userAvatar: normalized['user_avatar'],
     );
   }
 
@@ -148,5 +162,6 @@ class Review {
         'member_phone': memberPhone,
         'hotel_name': hotelName,
         'room_type_name': roomTypeName,
+        'user_avatar': userAvatar,
       };
 }

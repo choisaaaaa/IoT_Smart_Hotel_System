@@ -329,39 +329,65 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
                 ],
               ),
             )
+          else if (_availableRooms.isEmpty)
+            Center(child: Text('暂无可用房间', style: TextStyle(color: AppColors.textSecondary)))
           else
-            SizedBox(
-              height: 120,
-              child: _availableRooms.isEmpty
-                  ? Center(child: Text('暂无可用房间', style: TextStyle(color: AppColors.textSecondary)))
-                  : GridView.builder(
-                      scrollDirection: Axis.horizontal,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.4),
-                      itemCount: _availableRooms.length,
-                      itemBuilder: (context, index) {
-                        final room = _availableRooms[index];
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            _selectedRoomId = room['id'] as int;
-                            _selectedRoomName = '${room['room_number']}号房 · ${room['room_name'] ?? '标准间'}';
-                            _selectedRoomPrice = double.tryParse(room['room_price']?.toString() ?? room['base_price']?.toString() ?? '0') ?? 0;
-                          }),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text('${room['room_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                Text('${room['room_name'] ?? '标准间'}', style: TextStyle(color: AppColors.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
-                                Text('¥${room['room_price'] ?? room['base_price'] ?? '-'}/晚', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                              ],
-                            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _availableRooms.length > 5 ? 5 : _availableRooms.length,
+                    itemBuilder: (context, index) {
+                      final room = _availableRooms[index];
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedRoomId = room['id'] as int;
+                          _selectedRoomName = '${room['room_number']}号房 · ${room['room_name'] ?? '标准间'}';
+                          _selectedRoomPrice = double.tryParse(room['room_price']?.toString() ?? room['base_price']?.toString() ?? '0') ?? 0;
+                        }),
+                        child: Container(
+                          width: 100,
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('${room['room_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              const SizedBox(height: 4),
+                              Text('${room['room_name'] ?? '标准间'}', style: TextStyle(color: AppColors.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis, maxLines: 1),
+                              const SizedBox(height: 4),
+                              Text('¥${room['room_price'] ?? room['base_price'] ?? '-'}/晚', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (_availableRooms.length > 5) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _showRoomSelectionDialog(),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('滑动查看更多 (${_availableRooms.length - 5}间)', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          const Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
+                        ],
+                      ),
                     ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),
@@ -752,5 +778,72 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
     }
+  }
+
+  void _showRoomSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('选择房间', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('共${_availableRooms.length}间可售', style: TextStyle(color: AppColors.success, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: GridView.builder(
+                  controller: scrollController,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.2, crossAxisSpacing: 8, mainAxisSpacing: 8),
+                  itemCount: _availableRooms.length,
+                  itemBuilder: (context, index) {
+                    final room = _availableRooms[index];
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedRoomId = room['id'] as int;
+                          _selectedRoomName = '${room['room_number']}号房 · ${room['room_name'] ?? '标准间'}';
+                          _selectedRoomPrice = double.tryParse(room['room_price']?.toString() ?? room['base_price']?.toString() ?? '0') ?? 0;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('${room['room_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(height: 4),
+                            Text('${room['room_name'] ?? '标准间'}', style: TextStyle(color: AppColors.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis, maxLines: 1),
+                            const SizedBox(height: 4),
+                            Text('¥${room['room_price'] ?? room['base_price'] ?? '-'}/晚', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

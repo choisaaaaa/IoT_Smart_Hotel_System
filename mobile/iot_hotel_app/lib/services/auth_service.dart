@@ -29,6 +29,10 @@ class AuthService {
         }
         await _localStorage.save(AppConstants.userInfoKey, jsonEncode(data['user']));
         final user = data['user'] as Map<String, dynamic>?;
+        // 保存 hotel_id 到本地存储
+        if (user?['hotel_id'] != null) {
+          await _localStorage.save('hotel_id', user!['hotel_id'].toString());
+        }
         authStateNotifier.setAuth(
           token: data['token'] as String? ?? '',
           userId: user?['id']?.toString() ?? '',
@@ -125,6 +129,10 @@ class AuthService {
         final data = response.data['data'] as Map<String, dynamic>;
         final userData = data['user'] as Map<String, dynamic>? ?? data;
         await _localStorage.save(AppConstants.userInfoKey, jsonEncode(userData));
+        // 保存 hotel_id 到本地存储
+        if (userData['hotel_id'] != null) {
+          await _localStorage.save('hotel_id', userData['hotel_id'].toString());
+        }
         return ApiResult.success(data);
       }
       return ApiResult.failure(response.data['message'] ?? '获取用户信息失败');

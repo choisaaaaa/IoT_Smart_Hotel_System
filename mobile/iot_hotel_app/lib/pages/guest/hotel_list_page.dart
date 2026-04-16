@@ -42,10 +42,12 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
     try {
       final city = _selectedCity == '全部' ? null : _selectedCity;
       final keyword = _searchController.text.isNotEmpty ? _searchController.text : null;
+      debugPrint('DEBUG: _fetchHotels - city=$city, keyword=$keyword');
       final result = await ref.read(hotelServiceProvider).getHotels(
             city: city,
             keyword: keyword,
           );
+      debugPrint('DEBUG: _fetchHotels - result.success=${result.success}, data.length=${result.data?.length}');
       if (result.success && mounted) {
         setState(() => _hotels = result.data ?? []);
       } else if (mounted) {
@@ -53,10 +55,12 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
           SnackBar(content: Text(result.message ?? '获取酒店列表失败')),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('DEBUG: _fetchHotels - error=$e');
+      debugPrint('DEBUG: _fetchHotels - stackTrace=$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('网络异常，请重试')),
+          SnackBar(content: Text('网络异常: $e')),
         );
       }
     } finally {

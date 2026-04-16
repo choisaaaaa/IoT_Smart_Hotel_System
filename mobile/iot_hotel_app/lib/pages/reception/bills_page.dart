@@ -142,8 +142,15 @@ class _BillsPageState extends ConsumerState<BillsPage> {
     );
   }
 
+  double _parseAmount(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   Widget _buildRevenueChart(List<dynamic> trend) {
-    final spots = trend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), (e.value['amount'] ?? 0).toDouble())).toList();
+    final spots = trend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), _parseAmount(e.value['amount']))).toList();
     final maxY = spots.isEmpty ? 100.0 : spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.2;
 
     return Container(
@@ -187,8 +194,8 @@ class _BillsPageState extends ConsumerState<BillsPage> {
     final sections = breakdown.entries.toList().asMap().entries.map((e) {
       final index = e.key;
       final entry = e.value;
-      final value = (entry.value as num).toDouble();
-      final total = breakdown.values.fold<double>(0, (sum, v) => sum + (v as num));
+      final value = _parseAmount(entry.value);
+      final total = breakdown.values.fold<double>(0, (sum, v) => sum + _parseAmount(v));
       final percentage = total > 0 ? (value / total * 100) : 0;
       return PieChartSectionData(color: colors[index % colors.length], value: value, title: '${percentage.toStringAsFixed(0)}%', radius: 60, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white));
     }).toList();
@@ -423,7 +430,15 @@ class _BillItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amount = (bill['amount'] ?? 0).toDouble();
+    final amountValue = bill['amount'];
+    double amount;
+    if (amountValue is num) {
+      amount = amountValue.toDouble();
+    } else if (amountValue is String) {
+      amount = double.tryParse(amountValue) ?? 0.0;
+    } else {
+      amount = 0.0;
+    }
     final status = bill['status'] ?? 'pending';
     final type = bill['type'] ?? bill['order_type'] ?? 'room';
     final createdAt = bill['created_at']?.toString() ?? '';

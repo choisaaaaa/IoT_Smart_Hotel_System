@@ -248,8 +248,18 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
               if (_memberDiscounts != null) ...[
                 const Divider(height: 16),
                 ...(_memberDiscounts!.entries.map((e) {
-                  final levelPrice = finalPrice * (e.value as num);
-                  return _buildPreviewRow(_getLevelLabel(e.key), levelPrice.toDouble());
+                  double discountValue;
+                  if (e.value is double) {
+                    discountValue = e.value as double;
+                  } else if (e.value is int) {
+                    discountValue = (e.value as int).toDouble();
+                  } else if (e.value is String) {
+                    discountValue = double.tryParse(e.value as String) ?? 1.0;
+                  } else {
+                    discountValue = 1.0;
+                  }
+                  final levelPrice = finalPrice * discountValue;
+                  return _buildPreviewRow(_getLevelLabel(e.key), levelPrice);
                 })),
               ],
             ],
@@ -291,7 +301,11 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
       (t) => t['id'] == _selectedRoomTypeId,
       orElse: () => {'base_price': 0},
     );
-    return (selectedType['base_price'] ?? 0).toDouble();
+    final basePrice = selectedType['base_price'];
+    if (basePrice is double) return basePrice;
+    if (basePrice is int) return basePrice.toDouble();
+    if (basePrice is String) return double.tryParse(basePrice) ?? 0;
+    return 0;
   }
 
   @override
@@ -470,14 +484,22 @@ class _CalendarDayCell extends StatelessWidget {
     required this.onTap,
   });
 
+  double _parseDouble(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasCustomPrice = priceData != null;
     final basePrice = hasCustomPrice
-        ? (priceData!['base_price'] ?? 0).toDouble()
+        ? _parseDouble(priceData!['base_price'], 0)
         : defaultPrice;
     final discountRate = hasCustomPrice
-        ? (priceData!['discount_rate'] ?? 1.0).toDouble()
+        ? _parseDouble(priceData!['discount_rate'], 1.0)
         : 1.0;
     final finalPrice = basePrice * discountRate;
     final hasDiscount = discountRate < 1.0;

@@ -431,6 +431,7 @@ export const getAppeals = async (req: AuthRequest, res: Response) => {
     const { page = 1, pageSize = 10, hotel_id, status } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
     const userRole = req.user?.role;
+    const userHotelId = req.user?.hotel_id;
 
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
@@ -438,9 +439,9 @@ export const getAppeals = async (req: AuthRequest, res: Response) => {
     if (hotel_id) {
       whereClause += ' AND a.hotel_id = ?';
       params.push(Number(hotel_id));
-    } else if (isHotelAdmin(userRole) || isStaff(userRole)) {
+    } else if ((isHotelAdmin(userRole) || isStaff(userRole)) && userHotelId) {
       whereClause += ' AND a.hotel_id = ?';
-      params.push(req.user?.hotel_id);
+      params.push(userHotelId);
     }
 
     if (status) {

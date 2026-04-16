@@ -232,7 +232,17 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
   }
 
   Widget _buildReviewCard(dynamic review) {
-    final score = (review['score'] ?? 5).toDouble();
+    final scoreValue = review['score'];
+    double score;
+    if (scoreValue is double) {
+      score = scoreValue;
+    } else if (scoreValue is int) {
+      score = scoreValue.toDouble();
+    } else if (scoreValue is String) {
+      score = double.tryParse(scoreValue) ?? 5.0;
+    } else {
+      score = 5.0;
+    }
     final memberName = review['member_name'] ?? review['member_phone'] ?? '匿名';
     final content = review['content'] ?? '';
     final envRating = review['environment_rating'] ?? 5;
