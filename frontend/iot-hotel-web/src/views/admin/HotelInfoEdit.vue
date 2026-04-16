@@ -61,7 +61,7 @@
                   :show-upload-list="false"
                   :action="uploadUrl"
                   :headers="uploadHeaders"
-                  @change="(info) => handleImageUpload(info, 'logo')"
+                  @change="(info: { file: { status: string; response?: { data: { url: string } } } }) => handleImageUpload(info, 'logo')"
                 >
                   <img v-if="formData.logo" :src="getFullUrl(formData.logo)" alt="logo" style="width: 100%; height: 100%; object-fit: cover;" />
                   <div v-else>
@@ -78,7 +78,7 @@
                   :show-upload-list="false"
                   :action="uploadUrl"
                   :headers="uploadHeaders"
-                  @change="(info) => handleImageUpload(info, 'cover')"
+                  @change="(info: { file: { status: string; response?: { data: { url: string } } } }) => handleImageUpload(info, 'cover')"
                 >
                   <img v-if="formData.image_url" :src="getFullUrl(formData.image_url)" alt="cover" style="width: 100%; height: 100%; object-fit: cover;" />
                   <div v-else>
@@ -97,7 +97,7 @@
                     :show-upload-list="false"
                     :action="uploadUrl"
                     :headers="uploadHeaders"
-                    @change="(info) => handleGalleryUpload(info)"
+                    @change="(info: { file: { status: string; response?: { data: { url: string } } } }) => handleGalleryUpload(info)"
                   >
                     <a-button type="primary">
                       <PlusOutlined /> 添加照片
@@ -196,19 +196,23 @@ const getFullUrl = (url: string) => {
 }
 
 // 处理Logo和封面图上传
-const handleImageUpload = (info: any, type: 'logo' | 'cover') => {
+const handleImageUpload = (info: { file: { status: string; response?: { data: { url: string } } } }, type: 'logo' | 'cover') => {
   if (info.file.status === 'uploading') {
     loading.value = true
     return
   }
   if (info.file.status === 'done') {
-    const url = info.file.response.data.url
-    if (type === 'logo') {
-      formData.logo = url
+    const url = info.file.response?.data.url
+    if (url) {
+      if (type === 'logo') {
+        formData.logo = url
+      } else {
+        formData.image_url = url
+      }
+      message.success('图片上传成功')
     } else {
-      formData.image_url = url
+      message.error('图片上传失败：无效的响应数据')
     }
-    message.success('图片上传成功')
     loading.value = false
   } else if (info.file.status === 'error') {
     message.error('图片上传失败')
@@ -217,22 +221,26 @@ const handleImageUpload = (info: any, type: 'logo' | 'cover') => {
 }
 
 // 处理相册照片上传
-const handleGalleryUpload = async (info: any) => {
+const handleGalleryUpload = async (info: { file: { status: string; response?: { data: { url: string } } } }) => {
   if (info.file.status === 'uploading') {
     return
   }
   if (info.file.status === 'done') {
-    const url = info.file.response.data.url
-    try {
-      await hotelApi.addHotelImage(hotelId.value, {
-        image_url: url,
-        image_type: 'gallery',
-        sort_order: hotelImages.value.length
-      })
-      message.success('照片添加成功')
-      loadHotelImages()
-    } catch (err) {
-      message.error('照片添加失败')
+    const url = info.file.response?.data.url
+    if (url) {
+      try {
+        await hotelApi.addHotelImage(hotelId.value, {
+          image_url: url,
+          image_type: 'gallery',
+          sort_order: hotelImages.value.length
+        })
+        message.success('照片添加成功')
+        loadHotelImages()
+      } catch (err) {
+        message.error('照片添加失败')
+      }
+    } else {
+      message.error('图片上传失败：无效的响应数据')
     }
   } else if (info.file.status === 'error') {
     message.error('图片上传失败')

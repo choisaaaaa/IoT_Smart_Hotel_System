@@ -314,6 +314,74 @@ CREATE TABLE IF NOT EXISTS network_config (
     INDEX idx_config_time (config_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 19. 房卡管理表（rfid_cards）
+CREATE TABLE IF NOT EXISTS rfid_cards (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    card_uid VARCHAR(50) NOT NULL UNIQUE,
+    hotel_id INT NOT NULL,
+    booking_id INT,
+    room_id INT,
+    member_id INT,
+    status ENUM('active', 'inactive', 'lost') DEFAULT 'active',
+    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_card_uid (card_uid),
+    INDEX idx_booking_id (booking_id),
+    INDEX idx_room_id (room_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 20. 场景配置表（scene_configs）
+CREATE TABLE IF NOT EXISTS scene_configs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    hotel_id INT NOT NULL,
+    scene_name VARCHAR(50) NOT NULL,
+    scene_code VARCHAR(50) NOT NULL,
+    config_json JSON NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_hotel_scene (hotel_id, scene_code),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 21. 通话记录表（calls）
+CREATE TABLE IF NOT EXISTS calls (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    hotel_id INT NOT NULL,
+    call_id VARCHAR(50) NOT NULL UNIQUE,
+    caller_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
+    caller_id VARCHAR(50) NOT NULL,
+    callee_type ENUM('room', 'front_desk', 'ai', 'app') NOT NULL,
+    callee_id VARCHAR(50) NOT NULL,
+    status ENUM('calling', 'outgoing', 'ringing', 'connected', 'ended', 'rejected', 'missed', 'busy') DEFAULT 'calling',
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    answered_at DATETIME,
+    ended_at DATETIME,
+    duration_sec INT DEFAULT 0,
+    recording_url VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_call_id (call_id),
+    INDEX idx_hotel_id (hotel_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 22. MQTT 通信日志表（mqtt_communication_logs）
+CREATE TABLE IF NOT EXISTS mqtt_communication_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    hotel_id INT DEFAULT 0,
+    device_id VARCHAR(50),
+    topic VARCHAR(255) NOT NULL,
+    payload TEXT,
+    direction ENUM('in', 'out') NOT NULL,
+    qos TINYINT DEFAULT 0,
+    retain TINYINT DEFAULT 0,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_topic (device_id, topic),
+    INDEX idx_timestamp (timestamp)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 插入初始数据
 
 -- 插入默认酒店信息

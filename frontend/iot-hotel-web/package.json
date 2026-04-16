@@ -1,7 +1,8 @@
 {
-  "name": "iot-hotel-web",
+  "name": "huisu-zhilian-web",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.2.0",
+  "description": "慧宿智联·云边端一体化智能酒店物联网设备管理与服务全栈解决方案 - 前端应用",
   "type": "module",
   "scripts": {
     "dev": "vite",
