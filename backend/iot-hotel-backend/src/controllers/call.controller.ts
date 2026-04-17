@@ -483,9 +483,13 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
     }
 
     const endedAt = new Date();
-    const durationSec = callData.answered_at
-      ? Math.floor((endedAt.getTime() - new Date(callData.answered_at).getTime()) / 1000)
-      : 0;
+    let durationSec = 0;
+    if (callData.answered_at) {
+      const answeredAt = new Date(callData.answered_at);
+      if (!isNaN(answeredAt.getTime())) {
+        durationSec = Math.max(0, Math.floor((endedAt.getTime() - answeredAt.getTime()) / 1000));
+      }
+    }
 
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE calls SET status = ?, ended_at = ?, duration_sec = ? WHERE call_id = ?`,
