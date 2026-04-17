@@ -38,7 +38,6 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
     super.initState();
     _loadBookingDetail();
     _loadMemberInfo();
-    _loadCoupons();
   }
 
   Future<void> _loadBookingDetail() async {
@@ -52,6 +51,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
             _newCheckOutDate = _booking!.checkOutDate.add(Duration(days: _extendNights));
           }
         });
+        _loadCoupons(); // 在详情加载后加载优惠券
         _calculatePrice();
       }
     } catch (e) {
@@ -69,8 +69,11 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
   }
 
   Future<void> _loadCoupons() async {
+    if (_booking == null) return;
     try {
-      final result = await ref.read(memberServiceProvider).getMyCoupons();
+      final result = await ref.read(memberServiceProvider).getMyCoupons(
+        hotelId: _booking!.hotelId,
+      );
       if (result.success && mounted) {
         setState(() => _coupons = result.data ?? []);
       }

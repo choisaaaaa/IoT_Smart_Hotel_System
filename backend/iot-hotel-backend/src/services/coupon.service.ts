@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 export interface Coupon extends RowDataPacket {
   id: number;
+  hotel_id: number;
+  hotel_ids?: string; // 适用门店ID列表，逗号分隔，如 "1,2,3"
   coupon_name: string;
   coupon_type: string;
   discount_value: number;

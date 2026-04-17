@@ -25,24 +25,25 @@ export const get = async (req: AuthRequest, res: Response) => {
     }
 
     // 权限过滤
+    const targetHotelId = hotel_id || user.hotel_id || 0;
     if (isSystemAdmin(userRole)) {
       // 系统管理员可以查看所有优惠券
       if (hotel_id) {
-        whereClause += ' AND c.hotel_id = ?';
-        params.push(hotel_id);
+        whereClause += ' AND (c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids))';
+        params.push(hotel_id, hotel_id);
       }
     } else if (isHotelAdmin(userRole)) {
       // 酒店管理员只能查看全局优惠券和本店优惠券
-      whereClause += ' AND (c.scope_type = "global" OR c.hotel_id = ?)';
-      params.push(user.hotel_id || 0);
+      whereClause += ' AND (c.scope_type = "global" OR c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids))';
+      params.push(user.hotel_id || 0, user.hotel_id || 0);
     } else if (isStaff(userRole)) {
       // 前台员工只能查看本店可用的优惠券（用于发放）
-      whereClause += ' AND (c.scope_type = "global" OR (c.hotel_id = ? AND c.is_public = 1))';
-      params.push(user.hotel_id || 0);
+      whereClause += ' AND (c.scope_type = "global" OR ((c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids)) AND c.is_public = 1))';
+      params.push(user.hotel_id || 0, user.hotel_id || 0);
     } else {
       // 顾客只能查看公开的优惠券
-      whereClause += ' AND c.is_public = 1 AND (c.scope_type = "global" OR c.hotel_id = ?)';
-      params.push(user.hotel_id || 0);
+      whereClause += ' AND c.is_public = 1 AND (c.scope_type = "global" OR c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids))';
+      params.push(targetHotelId, targetHotelId);
     }
 
     const [totalRows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM coupons c ${whereClause}`, params);
@@ -87,7 +88,7 @@ export const redeemByCode = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('该优惠券已过期'));
     }
 
-    if (isStaff(user.role) && coupon.hotel_id !== user.hotel_id && coupon.hotel_id !== 0) {
+    if (isStaff(user.role) && coupon.hotel_id !== user.hotel_id && coupon.hotel_id !== 0 && (!coupon.hotel_ids || !coupon.hotel_ids.split(',').includes(String(user.hotel_id)))) {
       return res.status(403).json(errorResponse('您只能核销本酒店的优惠券'));
     }
 
@@ -171,13 +172,23 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     }
 
     const memberId = members[0].id;
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT mc.id as id, c.id as coupon_id, c.coupon_name, c.coupon_code, c.coupon_type, c.discount_value, c.min_amount, c.valid_from, c.valid_to, mc.status as my_status, mc.created_at as received_at
+    const { hotel_id } = req.query;
+    let query = `
+       SELECT mc.id as id, c.id as coupon_id, c.coupon_name, c.coupon_code, c.coupon_type, 
+              c.discount_value, c.min_amount, c.valid_from, c.valid_to, c.hotel_id, c.hotel_ids,
+              mc.status as my_status, mc.created_at as received_at
        FROM member_coupons mc
        JOIN coupons c ON mc.coupon_id = c.id
-       WHERE mc.member_id = ? AND mc.status = 'unused' AND (c.valid_to >= CURDATE() OR c.valid_to IS NULL)`,
-      [memberId]
-    );
+       WHERE mc.member_id = ? AND mc.status = 'unused' AND (c.valid_to >= CURDATE() OR c.valid_to IS NULL)
+    `;
+    const params: any[] = [memberId];
+
+    if (hotel_id) {
+      query += ' AND (c.scope_type = "global" OR c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids))';
+      params.push(hotel_id, hotel_id);
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
     res.json(successResponse(rows, '获取优惠券成功'));
   } catch (error) {
@@ -210,17 +221,22 @@ export const receive = async (req: AuthRequest, res: Response) => {
     }
 
     // 酒店专属优惠券检查
-    if (coupon.scope_type === 'hotel' && coupon.hotel_id !== 0) {
-      // 检查用户是否有该酒店的预订或入住记录
+    if (coupon.scope_type === 'hotel' && (coupon.hotel_id !== 0 || coupon.hotel_ids)) {
+      const allowedHotelIds = [coupon.hotel_id];
+      if (coupon.hotel_ids) {
+        coupon.hotel_ids.split(',').forEach((id: string) => allowedHotelIds.push(Number(id.trim())));
+      }
+      
+      // 检查用户是否有其中一个酒店的预订或入住记录
       const [bookingRows] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM bookings 
-         WHERE guest_phone = ? AND hotel_id = ? 
+         WHERE guest_phone = ? AND hotel_id IN (?) 
          AND status IN ('confirmed', 'checked_in', 'pre_checked_in')
          LIMIT 1`,
-        [phone, coupon.hotel_id]
+        [phone, allowedHotelIds]
       );
       if (bookingRows.length === 0 && !isSystemAdmin(userRole) && !isHotelAdmin(userRole) && !isStaff(userRole)) {
-        return res.status(403).json(errorResponse('该优惠券仅限本店顾客领取'));
+        return res.status(403).json(errorResponse('该优惠券仅限适用门店顾客领取'));
       }
     }
 
@@ -280,8 +296,11 @@ export const issueToUser = async (req: AuthRequest, res: Response) => {
     // 权限检查：检查是否有权限发放该优惠券
     if (isHotelAdmin(userRole) || isStaff(userRole)) {
       // 酒店管理员和前台只能发放本店的优惠券或全局优惠券
-      if (coupon.scope_type === 'hotel' && coupon.hotel_id !== userHotelId) {
-        return res.status(403).json(errorResponse('您只能发放本店的优惠券'));
+      const isApplicableToMyHotel = coupon.hotel_id === userHotelId || 
+        (coupon.hotel_ids && coupon.hotel_ids.split(',').includes(String(userHotelId)));
+      
+      if (coupon.scope_type !== 'global' && !isApplicableToMyHotel) {
+        return res.status(403).json(errorResponse('您只能发放适用本酒店的优惠券'));
       }
     }
     // 系统管理员可以发放任何优惠券
@@ -311,7 +330,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     const {
       coupon_name, coupon_type, discount_value, min_amount,
       total_count, valid_from, valid_to, coupon_code, is_multiple_use,
-      hotel_id, scope_type, is_public
+      hotel_id, hotel_ids, scope_type, is_public
     } = req.body;
 
     const user = req.user as any;
@@ -324,6 +343,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     // 确定最终hotel_id和scope_type
     let finalHotelId = hotel_id || user.hotel_id || 0;
+    let finalHotelIds = Array.isArray(hotel_ids) ? hotel_ids.join(',') : (hotel_ids || null);
     let finalScopeType = scope_type || 'hotel';
     let finalIsPublic = is_public !== undefined ? is_public : true;
 
@@ -331,10 +351,11 @@ export const create = async (req: AuthRequest, res: Response) => {
     if (isSystemAdmin(userRole)) {
       if (scope_type === 'global') {
         finalHotelId = 0;
+        finalHotelIds = null;
         finalIsPublic = true;
-      } else if (hotel_id) {
-        finalHotelId = Number(hotel_id);
-        finalScopeType = 'hotel';
+      } else {
+        finalHotelId = hotel_id ? Number(hotel_id) : (user.hotel_id || 0);
+        finalScopeType = scope_type || 'hotel';
       }
     } else if (isHotelAdmin(userRole)) {
       // 酒店管理员只能创建本店优惠券
@@ -342,16 +363,17 @@ export const create = async (req: AuthRequest, res: Response) => {
         return res.status(403).json(errorResponse('您没有权限创建全局优惠券'));
       }
       finalHotelId = user.hotel_id || 0;
+      finalHotelIds = null; // 门店管理员暂时只能创建单店券，或者根据需要支持多店
       finalScopeType = scope_type === 'private' ? 'private' : 'hotel';
     }
 
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO coupons (coupon_name, coupon_code, coupon_type, discount_value, min_amount, 
-        total_count, is_multiple_use, received_count, valid_from, valid_to, hotel_id, 
+        total_count, is_multiple_use, received_count, valid_from, valid_to, hotel_id, hotel_ids,
         scope_type, is_public, created_by_role) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [coupon_name, coupon_code || null, coupon_type, discount_value, min_amount, 
-       total_count, is_multiple_use || false, 0, valid_from, valid_to, finalHotelId,
+       total_count, is_multiple_use || false, 0, valid_from, valid_to, finalHotelId, finalHotelIds,
        finalScopeType, finalIsPublic, userRole]
     );
 
@@ -431,7 +453,11 @@ export const importCoupon = async (req: AuthRequest, res: Response) => {
 export const update = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { coupon_name, coupon_type, discount_value, min_amount, total_count, valid_from, valid_to, coupon_code, is_multiple_use } = req.body;
+    const { 
+      coupon_name, coupon_type, discount_value, min_amount, 
+      total_count, valid_from, valid_to, coupon_code, is_multiple_use,
+      hotel_id, hotel_ids, scope_type, is_public
+    } = req.body;
     const user = req.user as any;
 
     const [existingRows] = await pool.query<RowDataPacket[]>('SELECT * FROM coupons WHERE id = ?', [id]);
@@ -440,16 +466,29 @@ export const update = async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const coupon = existingRows[0] as any;
     if (!isSystemAdmin(user.role)) {
-      const coupon = existingRows[0] as any;
-      if (coupon.hotel_id !== (user.hotel_id || 0) && coupon.hotel_id !== 0) {
+      if (coupon.hotel_id !== (user.hotel_id || 0) && coupon.hotel_id !== 0 && (!coupon.hotel_ids || !coupon.hotel_ids.split(',').includes(String(user.hotel_id)))) {
         return res.status(403).json(errorResponse('无权操作其他门店的优惠券'));
       }
     }
 
+    const finalHotelIds = hotel_ids !== undefined 
+      ? (Array.isArray(hotel_ids) ? hotel_ids.join(',') : hotel_ids) 
+      : coupon.hotel_ids;
+
     const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE coupons SET coupon_name = ?, coupon_type = ?, discount_value = ?, min_amount = ?, total_count = ?, valid_from = ?, valid_to = ?, coupon_code = ?, is_multiple_use = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [coupon_name, coupon_type, discount_value, min_amount, total_count, valid_from, valid_to, coupon_code || null, is_multiple_use || false, id]
+      `UPDATE coupons SET 
+        coupon_name = ?, coupon_type = ?, discount_value = ?, min_amount = ?, 
+        total_count = ?, valid_from = ?, valid_to = ?, coupon_code = ?, 
+        is_multiple_use = ?, hotel_id = ?, hotel_ids = ?, scope_type = ?, is_public = ?,
+        updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [
+        coupon_name, coupon_type, discount_value, min_amount, 
+        total_count, valid_from, valid_to, coupon_code || null, 
+        is_multiple_use || false, hotel_id || coupon.hotel_id, finalHotelIds, 
+        scope_type || coupon.scope_type, is_public !== undefined ? is_public : coupon.is_public, id
+      ]
     );
 
     if (result.affectedRows === 0) {

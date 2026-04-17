@@ -1014,7 +1014,9 @@ const fetchMemberInfo = async () => {
 const fetchAvailableCoupons = async () => {
   if (!appStore.userInfo) return
   try {
-    const res = await request.get('/coupons/me')
+    const res = await request.get('/coupons/me', { 
+      params: { hotel_id: selectedHotel.value?.id } 
+    })
     myCoupons.value = res.data || []
   } catch (error) {
     console.error('获取优惠券失败:', error)

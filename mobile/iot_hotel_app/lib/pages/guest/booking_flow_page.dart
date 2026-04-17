@@ -436,7 +436,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
 
   Future<void> _loadCoupons() async {
     try {
-      final result = await ref.read(memberServiceProvider).getMyCoupons();
+      final result = await ref.read(memberServiceProvider).getMyCoupons(
+        hotelId: widget.hotelId,
+      );
       if (result.success && mounted) {
         setState(() => _coupons = result.data ?? []);
       }

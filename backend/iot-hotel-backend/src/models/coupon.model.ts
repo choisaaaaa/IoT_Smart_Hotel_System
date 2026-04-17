@@ -1,6 +1,7 @@
 export interface Coupon {
   id: number;
   hotel_id: number;
+  hotel_ids?: string; // 适用门店ID列表，逗号分隔，如 "1,2,3"
   coupon_name: string;
   coupon_type: string;
   discount_value: number;
@@ -15,6 +16,7 @@ export interface Coupon {
 
 export interface CouponInput {
   hotel_id: number;
+  hotel_ids?: string; // 适用门店ID列表，逗号分隔，如 "1,2,3"
   coupon_name: string;
   coupon_type: string;
   discount_value: number;

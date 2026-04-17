@@ -69,9 +69,14 @@ class MemberService {
     }
   }
 
-  Future<ApiResult<List<Coupon>>> getMyCoupons() async {
+  Future<ApiResult<List<Coupon>>> getMyCoupons({int? hotelId}) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.coupons}/me');
+      final response = await _dioClient.get(
+        '${ApiConstants.coupons}/me',
+        queryParameters: {
+          if (hotelId != null) 'hotel_id': hotelId,
+        },
+      );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         List<dynamic> rawList;

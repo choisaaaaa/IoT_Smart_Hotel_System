@@ -12,6 +12,7 @@ export interface RoomType extends RowDataPacket {
   facilities: string;
   description: string;
   images: string;
+  hotel_id: number;
   created_at: Date;
   updated_at: Date;
 }
