@@ -206,12 +206,19 @@ async function calculateBookingPrice(
   logger.info(`价格计算 - 基础总价: ${basePrice}, 会员价: ${totalPrice}, 优惠: ${memberDiscount}, 折扣率: ${discountRate}`);
 
   if (couponId && memberId) {
-    const [couponRows] = await connection.query<RowDataPacket[]>(
-      `SELECT c.* FROM member_coupons mc
+    let couponQuery = `
+       SELECT c.* FROM member_coupons mc
        JOIN coupons c ON mc.coupon_id = c.id
-       WHERE mc.id = ? AND mc.member_id = ? AND mc.status = 'unused' AND c.valid_to >= CURDATE()`,
-      [couponId, memberId]
-    );
+       WHERE mc.id = ? AND mc.member_id = ? AND mc.status = 'unused' AND (c.valid_to >= CURDATE() OR c.valid_to IS NULL)
+    `;
+    const couponParams: any[] = [couponId, memberId];
+
+    if (hotelId) {
+      couponQuery += ' AND (c.scope_type = "global" OR c.hotel_id = ? OR FIND_IN_SET(?, c.hotel_ids))';
+      couponParams.push(hotelId, hotelId);
+    }
+
+    const [couponRows] = await connection.query<RowDataPacket[]>(couponQuery, couponParams);
 
     if (couponRows.length > 0) {
       const coupon = couponRows[0];

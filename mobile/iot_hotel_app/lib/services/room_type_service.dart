@@ -6,9 +6,14 @@ import '../core/constants/api_constants.dart';
 class RoomTypeService {
   final DioClient _dioClient = DioClient();
 
-  Future<ApiResult<List<dynamic>>> getRoomTypes() async {
+  Future<ApiResult<List<dynamic>>> getRoomTypes({int? hotelId}) async {
     try {
-      final response = await _dioClient.get(ApiConstants.roomTypes);
+      final response = await _dioClient.get(
+        ApiConstants.roomTypes,
+        queryParameters: {
+          if (hotelId != null) 'hotel_id': hotelId,
+        },
+      );
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         if (data is List) return ApiResult.success(List<dynamic>.from(data));

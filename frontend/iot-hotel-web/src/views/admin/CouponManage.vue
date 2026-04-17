@@ -25,6 +25,19 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'hotel_id'">
             <a-tag v-if="record.scope_type === 'global'" color="blue">全局券</a-tag>
+            <template v-else-if="record.hotel_ids && record.hotel_ids.trim()">
+              <a-popover title="适用门店">
+                <template #content>
+                  <div v-for="hId in record.hotel_ids.split(',')" :key="hId">
+                    {{ hotels.find(h => h.id == hId)?.hotel_name || hId }}
+                  </div>
+                </template>
+                <a-tag color="purple">
+                  {{ record.hotel_name || '多门店' }}
+                  <span v-if="record.hotel_ids.split(',').length > 1">+{{ record.hotel_ids.split(',').length - 1 }}</span>
+                </a-tag>
+              </a-popover>
+            </template>
             <a-tag v-else-if="record.hotel_name" color="purple">{{ record.hotel_name }}</a-tag>
             <span v-else>-</span>
           </template>
@@ -141,10 +154,11 @@
           <a-switch v-model:checked="formState.is_public" :checked-children="'公开'" :un-checked-children="'私密'" />
           <div class="form-hint">公开：顾客可自行领取；私密：仅管理员可发放</div>
         </a-form-item>
-        <a-form-item v-if="isSystemAdmin && formState.scope_type !== 'global' && hotels.length > 0" label="选择门店">
-          <a-select v-model:value="formState.hotel_id" placeholder="请选择适用门店">
+        <a-form-item v-if="isSystemAdmin && formState.scope_type !== 'global' && hotels.length > 0" label="适用门店">
+          <a-select v-model:value="formState.hotel_ids" placeholder="请选择适用门店" mode="multiple" allow-clear>
             <a-select-option v-for="h in hotels" :key="h.id" :value="h.id">{{ h.hotel_name }}</a-select-option>
           </a-select>
+          <div class="form-hint">支持选择一个或多个门店</div>
         </a-form-item>
         <a-form-item label="有效期" required>
           <a-range-picker v-model:value="validRange" style="width: 100%" />
@@ -227,6 +241,7 @@ const formState = reactive({
   total_count: 0,
   is_multiple_use: false,
   hotel_id: null as number | null,
+  hotel_ids: [] as number[],
   scope_type: 'hotel',
   is_public: true
 })
@@ -234,7 +249,7 @@ const formState = reactive({
 const fetchHotels = async () => {
   try {
     const res = await request.get('/coupons/hotels')
-    hotels.value = res.data?.data || []
+    hotels.value = res.data || []
   } catch (e) {
     console.error('获取酒店列表失败:', e)
   }
@@ -320,6 +335,7 @@ const showAddModal = () => {
     total_count: 0,
     is_multiple_use: false,
     hotel_id: isSystemAdmin.value ? null : userStore.userInfo?.hotel_id,
+    hotel_ids: isSystemAdmin.value ? [] : (userStore.userInfo?.hotel_id ? [userStore.userInfo.hotel_id] : []),
     scope_type: isSystemAdmin.value ? 'global' : 'hotel',
     is_public: true
   })
@@ -329,6 +345,13 @@ const showAddModal = () => {
 
 const editCoupon = (record: any) => {
   editingId.value = record.id
+  let hIds: number[] = []
+  if (record.hotel_ids) {
+    hIds = record.hotel_ids.split(',').map((id: string) => Number(id.trim()))
+  } else if (record.hotel_id) {
+    hIds = [record.hotel_id]
+  }
+  
   Object.assign(formState, {
     coupon_name: record.coupon_name,
     coupon_code: record.coupon_code || '',
@@ -338,6 +361,7 @@ const editCoupon = (record: any) => {
     total_count: record.total_count,
     is_multiple_use: !!record.is_multiple_use,
     hotel_id: record.hotel_id ?? null,
+    hotel_ids: hIds,
     scope_type: record.scope_type || 'hotel',
     is_public: record.is_public !== undefined ? record.is_public : true
   })
@@ -361,9 +385,13 @@ const handleSave = async () => {
     // 全局券不需要hotel_id
     if (data.scope_type === 'global') {
       data.hotel_id = 0
-    } else if (!data.hotel_id && !isSystemAdmin.value) {
+      data.hotel_ids = []
+    } else if (!data.hotel_ids?.length && !isSystemAdmin.value) {
       // 非系统管理员必须设置本店ID
       data.hotel_id = userStore.userInfo?.hotel_id
+      data.hotel_ids = [userStore.userInfo?.hotel_id]
+    } else if (data.hotel_ids?.length) {
+      data.hotel_id = data.hotel_ids[0]
     }
 
     if (editingId.value) {

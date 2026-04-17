@@ -27,6 +27,9 @@ class Coupon {
   @JsonKey(name: 'hotel_id')
   final int? hotelId;
 
+  @JsonKey(name: 'hotel_ids')
+  final String? hotelIds;
+
   @JsonKey(name: 'code')
   final String? code;
 
@@ -49,6 +52,7 @@ class Coupon {
     this.expireDate,
     this.status = 'active',
     this.hotelId,
+    this.hotelIds,
     this.code,
     this.totalCount,
     this.usedCount,
@@ -92,6 +96,16 @@ class Coupon {
 
   bool get isAvailable => (status == 'active' || status == 'unused') && !isExpired;
 
+  bool isApplicableToHotel(int? targetHotelId) {
+    if (targetHotelId == null || hotelId == 0 || hotelId == null) return true;
+    if (hotelId == targetHotelId) return true;
+    if (hotelIds != null) {
+      final ids = hotelIds!.split(',').map((e) => e.trim());
+      return ids.contains(targetHotelId.toString());
+    }
+    return false;
+  }
+
   static double _toDouble(dynamic v) {
     if (v is num) return v.toDouble();
     if (v is String) return double.tryParse(v) ?? 0.0;
@@ -117,6 +131,7 @@ class Coupon {
       expireDate: normalized['expire_date']?.toString() ?? normalized['valid_to']?.toString() ?? normalized['valid_until']?.toString() ?? normalized['expires_at']?.toString(),
       status: normalized['status']?.toString() ?? 'active',
       hotelId: normalized['hotel_id'] is num ? (normalized['hotel_id'] as num).toInt() : null,
+      hotelIds: normalized['hotel_ids']?.toString(),
       code: normalized['code']?.toString() ?? normalized['coupon_code']?.toString(),
       totalCount: normalized['total_count'] is num ? (normalized['total_count'] as num).toInt() : null,
       usedCount: normalized['used_count'] is num ? (normalized['used_count'] as num).toInt() : null,
@@ -134,6 +149,7 @@ class Coupon {
         'expire_date': expireDate,
         'status': status,
         'hotel_id': hotelId,
+        'hotel_ids': hotelIds,
         'code': code,
         'total_count': totalCount,
         'used_count': usedCount,
