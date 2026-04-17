@@ -28,15 +28,7 @@
         </a-menu-item>
         <a-menu-item key="/system/settings">
           <template #icon><SettingOutlined /></template>
-          <span>会员方案配置</span>
-        </a-menu-item>
-        <a-menu-item key="/system/hotel-access">
-          <template #icon><EnterOutlined /></template>
-          <span>分店快速进入</span>
-        </a-menu-item>
-        <a-menu-item key="/system/mqtt">
-          <template #icon><ClusterOutlined /></template>
-          <span>MQTT 服务管理</span>
+          <span>系统配置</span>
         </a-menu-item>
       </a-menu>
     </a-layout-sider>
@@ -54,17 +46,13 @@
         <div class="header-right">
           <a-dropdown>
             <span class="user-action">
-              <a-avatar size="small" :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)">
+              <a-avatar size="small" :src="appStore.userInfo?.avatar">
                 <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
               </a-avatar>
               <span class="username">{{ appStore.userInfo?.username }}</span>
             </span>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="profile" @click="$router.push('/guest/profile')">
-                  <UserOutlined /> 个人资料
-                </a-menu-item>
-                <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <logout-outlined /> 退出登录
                 </a-menu-item>
@@ -93,8 +81,7 @@ import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
   UserOutlined, MenuFoldOutlined, GiftOutlined,
-  MenuUnfoldOutlined, LogoutOutlined, SettingOutlined,
-  ClusterOutlined, EnterOutlined
+  MenuUnfoldOutlined, LogoutOutlined, SettingOutlined
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
