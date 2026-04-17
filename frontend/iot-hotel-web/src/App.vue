@@ -391,6 +391,7 @@ const peerConnection = ref<RTCPeerConnection | null>(null)
 const localStream = ref<MediaStream | null>(null)
 const pendingOffer = ref<{ offer: any; from_type: string; from_id: string; call_id: string } | null>(null)
 const pendingIceCandidates = ref<any[]>([])
+const processedCallAnswered = ref(new Set<string>())
 
 const iceServers = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -571,6 +572,7 @@ function cleanupWebRTC() {
   }
   pendingIceCandidates.value = []
   pendingOffer.value = null
+  processedCallAnswered.value.clear()
   // 重置状态
   connectionState.value = 'new'
   iceConnectionState.value = 'new'
@@ -714,10 +716,11 @@ const handleCallRejected = (data: any) => {
 const handleCallAnswered = async (data: any) => {
   console.log('[App] 收到 call_answered 事件:', data)
 
-  if (appStore.currentCall?.call_id === data.call_id && peerConnection.value) {
-    console.log('[App] WebRTC已初始化，忽略重复的 call_answered 事件')
+  if (processedCallAnswered.value.has(data.call_id)) {
+    console.log('[App] 忽略重复的 call_answered 事件')
     return
   }
+  processedCallAnswered.value.add(data.call_id)
 
   // 发送信号确认
   const socket = getSocket()

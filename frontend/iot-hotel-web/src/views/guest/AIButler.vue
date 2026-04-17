@@ -472,16 +472,16 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (socket) {
-    socket.off('connect')
-    socket.off('disconnect')
-    socket.off('incoming_call')
-    socket.off('call_answered')
-    socket.off('call_rejected')
-    socket.off('call_hungup')
-    socket.off('webrtc_offer')
-    socket.off('webrtc_answer')
-    socket.off('webrtc_ice_candidate')
-    socket.off('online_status')
+    socket.off('connect', handleConnect)
+    socket.off('disconnect', handleDisconnect)
+    socket.off('incoming_call', handleIncomingCall)
+    socket.off('call_answered', handleCallAnswered)
+    socket.off('call_rejected', handleCallRejected)
+    socket.off('call_hungup', handleCallHungup)
+    socket.off('webrtc_offer', handleWebRTCOffer)
+    socket.off('webrtc_answer', handleWebRTCAnswer)
+    socket.off('webrtc_ice_candidate', handleWebRTCIceCandidate)
+    socket.off('online_status', handleOnlineStatus)
   }
 })
 
@@ -515,161 +515,160 @@ function initWebSocket() {
     registerAsRoom()
   }
 
-  socket.on('connect', () => {
-    console.log('[AIButler] WebSocket已连接')
-    isConnected.value = true
-    registerAsRoom()
-  })
+  socket.on('connect', handleConnect)
+  socket.on('disconnect', handleDisconnect)
+  socket.on('online_status', handleOnlineStatus)
+  socket.on('incoming_call', handleIncomingCall)
+  socket.on('call_answered', handleCallAnswered)
+  socket.on('webrtc_offer', handleWebRTCOffer)
+  socket.on('webrtc_answer', handleWebRTCAnswer)
+  socket.on('webrtc_ice_candidate', handleWebRTCIceCandidate)
+  socket.on('call_rejected', handleCallRejected)
+  socket.on('call_hungup', handleCallHungup)
+}
 
-  socket.on('disconnect', () => {
-    console.log('[AIButler] WebSocket已断开')
-    isConnected.value = false
-  })
+function handleConnect() {
+  console.log('[AIButler] WebSocket已连接')
+  isConnected.value = true
+  registerAsRoom()
+}
 
-  socket.on('online_status', (data: any) => {
-    if (data.rooms && Array.isArray(data.rooms)) {
-      const isOnline = data.rooms.some((r: any) => String(r.id) === String(roomId.value) || r.id === roomId.value)
-      if (isOnline && !isConnected.value && socket?.connected) {
-        isConnected.value = true
-      }
+function handleDisconnect() {
+  console.log('[AIButler] WebSocket已断开')
+  isConnected.value = false
+}
+
+function handleOnlineStatus(data: any) {
+  if (data.rooms && Array.isArray(data.rooms)) {
+    const isOnline = data.rooms.some((r: any) => String(r.id) === String(roomId.value) || r.id === roomId.value)
+    if (isOnline && !isConnected.value && socket?.connected) {
+      isConnected.value = true
     }
-    if (data.web && Array.isArray(data.web)) {
-      frontDeskCount.value = data.web.filter((w: any) => w.isOnDuty).length || data.web.length
-    }
-  })
+  }
+  if (data.web && Array.isArray(data.web)) {
+    frontDeskCount.value = data.web.filter((w: any) => w.isOnDuty).length || data.web.length
+  }
+}
 
-  socket.on('incoming_call', (data: any) => {
-    console.log('[AIButler] 收到来电:', data)
-    transferModal.value.visible = true
+function handleIncomingCall(data: any) {
+  console.log('[AIButler] 收到来电:', data)
+  transferModal.value.visible = true
+  transferModal.value.callId = data.call_id
+  if (!data.isTransfer) {
+    transferModal.value.statusText = '来电...'
+    transferModal.value.statusDesc = `来自${data.caller_type === 'front_desk' ? '前台' : data.caller_id}的呼叫`
+  }
+}
+
+function handleCallAnswered(data: any) {
+  console.log('[AIButler] 收到call_answered:', data)
+  console.log('[AIButler] 当前transferModal.callId:', transferModal.value.callId)
+  
+  if (!transferModal.value.callId && data.call_id) {
+    console.log('[AIButler] 恢复callId:', data.call_id)
     transferModal.value.callId = data.call_id
-    if (!data.isTransfer) {
-      transferModal.value.statusText = '来电...'
-      transferModal.value.statusDesc = `来自${data.caller_type === 'front_desk' ? '前台' : data.caller_id}的呼叫`
+  }
+  
+  if (data.call_id === transferModal.value.callId) {
+    console.log('[AIButler] callId匹配，更新UI')
+    transferModal.value.step = 'connecting'
+    transferModal.value.statusText = '前台已接听'
+    transferModal.value.statusDesc = '正在建立语音连接...'
+    message.success('前台已接听，正在连接...')
+    
+    setTimeout(() => {
+      transferModal.value.visible = false
+      showCallModal(data.call_id)
+      initWebRTC(data.call_id)
+    }, 1500)
+  } else {
+    console.log('[AIButler] callId不匹配，忽略')
+  }
+}
+
+async function handleWebRTCOffer(data: any) {
+  console.log('[AIButler] 收到webrtc_offer:', data)
+  console.log('[AIButler] 当前callModal.callId:', callModal.value.callId, 'transferModal.callId:', transferModal.value.callId)
+  
+  const currentCallId = callModal.value.callId || transferModal.value.callId
+  if (data.call_id !== currentCallId) {
+    console.log('[AIButler] call_id不匹配，忽略')
+    return
+  }
+  
+  if (!peerConnection) {
+    console.log('[AIButler] peerConnection不存在，无法处理offer')
+    return
+  }
+  
+  try {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+    console.log('[AIButler] 已设置remote description (offer)')
+    
+    const answer = await peerConnection.createAnswer()
+    await peerConnection.setLocalDescription(answer)
+    console.log('[AIButler] 已创建并设置local description (answer)')
+    
+    socket.emit('webrtc_answer', {
+      target_type: 'front_desk',
+      target_id: 'all',
+      answer: answer,
+      call_id: data.call_id
+    })
+    console.log('[AIButler] 已发送answer')
+    
+    processPendingIceCandidates()
+  } catch (e) {
+    console.error('[AIButler] 处理offer失败:', e)
+  }
+}
+
+async function handleWebRTCAnswer(data: any) {
+  console.log('[AIButler] 收到webrtc_answer:', data.call_id)
+  if (data.call_id === callModal.value.callId && peerConnection) {
+    try {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
+      console.log('[AIButler] 已设置remote description (answer)')
+      processPendingIceCandidates()
+    } catch (e) {
+      console.error('[AIButler] 处理answer失败:', e)
     }
-  })
+  }
+}
 
-  socket.on('call_answered', (data: any) => {
-      console.log('[AIButler] 收到call_answered:', data)
-      console.log('[AIButler] 当前transferModal.callId:', transferModal.value.callId)
-      
-      // 如果没有设置callId，尝试从data中恢复
-      if (!transferModal.value.callId && data.call_id) {
-        console.log('[AIButler] 恢复callId:', data.call_id)
-        transferModal.value.callId = data.call_id
-      }
-      
-      if (data.call_id === transferModal.value.callId) {
-        console.log('[AIButler] callId匹配，更新UI')
-        // 更新转接弹窗为连接中状态
-        transferModal.value.step = 'connecting'
-        transferModal.value.statusText = '前台已接听'
-        transferModal.value.statusDesc = '正在建立语音连接...'
-        message.success('前台已接听，正在连接...')
-        
-        // 2秒后切换到通话弹窗
-        setTimeout(() => {
-          transferModal.value.visible = false
-          // 显示通话中弹窗
-          showCallModal(data.call_id)
-          // 初始化WebRTC（主叫方等待被叫方的offer）
-          initWebRTC(data.call_id)
-        }, 1500)
+async function handleWebRTCIceCandidate(data: any) {
+  console.log('[AIButler] 收到ICE候选')
+  if (data.call_id === callModal.value.callId && peerConnection) {
+    try {
+      if (peerConnection.remoteDescription) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+        console.log('[AIButler] 已添加ICE候选')
       } else {
-        console.log('[AIButler] callId不匹配，忽略')
+        pendingIceCandidates.push(data.candidate)
+        console.log('[AIButler] ICE候选已缓存')
       }
-    })
-    
-    // 监听WebRTC信令事件
-    socket.on('webrtc_offer', async (data: any) => {
-      console.log('[AIButler] 收到webrtc_offer:', data)
-      console.log('[AIButler] 当前callModal.callId:', callModal.value.callId, 'transferModal.callId:', transferModal.value.callId)
-      
-      // 检查call_id是否匹配（可能是callModal或transferModal中的callId）
-      const currentCallId = callModal.value.callId || transferModal.value.callId
-      if (data.call_id !== currentCallId) {
-        console.log('[AIButler] call_id不匹配，忽略')
-        return
-      }
-      
-      if (!peerConnection) {
-        console.log('[AIButler] peerConnection不存在，无法处理offer')
-        return
-      }
-      
-      try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
-        console.log('[AIButler] 已设置remote description (offer)')
-        
-        // 创建answer
-        const answer = await peerConnection.createAnswer()
-        await peerConnection.setLocalDescription(answer)
-        console.log('[AIButler] 已创建并设置local description (answer)')
-        
-        // 发送answer
-        socket.emit('webrtc_answer', {
-          target_type: 'front_desk',
-          target_id: 'all',
-          answer: answer,
-          call_id: data.call_id
-        })
-        console.log('[AIButler] 已发送answer')
-        
-        // 处理挂起的ICE候选
-        processPendingIceCandidates()
-      } catch (e) {
-        console.error('[AIButler] 处理offer失败:', e)
-      }
-    })
-    
-    socket.on('webrtc_answer', async (data: any) => {
-      console.log('[AIButler] 收到webrtc_answer:', data.call_id)
-      if (data.call_id === callModal.value.callId && peerConnection) {
-        try {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
-          console.log('[AIButler] 已设置remote description (answer)')
-          processPendingIceCandidates()
-        } catch (e) {
-          console.error('[AIButler] 处理answer失败:', e)
-        }
-      }
-    })
-    
-    socket.on('webrtc_ice_candidate', async (data: any) => {
-      console.log('[AIButler] 收到ICE候选')
-      if (data.call_id === callModal.value.callId && peerConnection) {
-        try {
-          if (peerConnection.remoteDescription) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
-            console.log('[AIButler] 已添加ICE候选')
-          } else {
-            pendingIceCandidates.push(data.candidate)
-            console.log('[AIButler] ICE候选已缓存')
-          }
-        } catch (e) {
-          console.error('[AIButler] 添加ICE候选失败:', e)
-        }
-      }
-    })
+    } catch (e) {
+      console.error('[AIButler] 添加ICE候选失败:', e)
+    }
+  }
+}
 
-    socket.on('call_rejected', (data: any) => {
-      if (data.call_id === transferModal.value.callId) {
-        transferModal.value.statusText = '呼叫被拒绝'
-        transferModal.value.statusDesc = '前台暂时无法接听，请稍后再试'
-        message.warning('前台暂时无法接听')
-        setTimeout(() => {
-          transferModal.value.visible = false
-          resetTransferModal()
-        }, 3000)
-      }
-    })
+function handleCallRejected(data: any) {
+  if (data.call_id === transferModal.value.callId) {
+    transferModal.value.statusText = '呼叫被拒绝'
+    transferModal.value.statusDesc = '前台暂时无法接听，请稍后再试'
+    message.warning('前台暂时无法接听')
+    setTimeout(() => {
+      transferModal.value.visible = false
+      resetTransferModal()
+    }, 3000)
+  }
+}
 
-    // 监听通话挂断
-    socket.on('call_hungup', (data: any) => {
-      if (data.call_id === callModal.value.callId) {
-        message.info('通话已结束')
-        closeCallModal()
-      }
-    })
+function handleCallHungup(data: any) {
+  if (data.call_id === callModal.value.callId) {
+    message.info('通话已结束')
+    closeCallModal()
   }
 }
 

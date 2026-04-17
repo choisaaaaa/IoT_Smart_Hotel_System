@@ -412,47 +412,47 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (socket) {
-    socket.off('call_answered')
-    socket.off('call_hungup')
+    socket.off('call_answered', handleCallAnswered)
+    socket.off('call_hungup', handleCallHungup)
+    socket.off('connect', registerAsRoom)
   }
 })
 
+function registerAsRoom() {
+  const roomId = appStore.userStatus?.checkin_info?.room_id
+  if (socket && socket.connected && roomId) {
+    console.log(`[GuestRoom] 房间端追加注册: ${roomId}`)
+    socket.emit('register_client', { clientType: 'room', clientId: String(roomId) })
+  }
+}
+
+function handleCallAnswered(data: any) {
+  console.log('[GuestRoom] 收到call_answered:', data)
+  if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
+    transferModal.value.visible = false
+    message.success('前台已接听，正在建立连接...')
+  }
+}
+
+function handleCallHungup(data: any) {
+  if (data.call_id === transferModal.value.callId) {
+    transferModal.value.visible = false
+    message.info('通话已结束')
+  }
+}
+
 function initWebSocket() {
   socket = getSocket()
-  
-  // 基础身份注册已在 websocket.ts 的 connect 回调中自动处理（作为 app 或 front_desk）
-  // 房间端如果已入住，则额外以 room 身份注册以监听设备控制和房间通话
-  const registerAsRoom = () => {
-    const roomId = appStore.userStatus?.checkin_info?.room_id
-    if (socket && socket.connected && roomId) {
-      console.log(`[GuestRoom] 房间端追加注册: ${roomId}`)
-      socket.emit('register_client', { clientType: 'room', clientId: String(roomId) })
-    }
-  }
 
   if (socket) {
-    // 监听连接成功事件，确保重连后也能重新注册为 room
     socket.on('connect', registerAsRoom)
-    
-    // 如果当前已连接，立即注册
+
     if (socket.connected) {
       registerAsRoom()
     }
 
-    socket.on('call_answered', (data: any) => {
-      console.log('[GuestRoom] 收到call_answered:', data)
-      if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
-        transferModal.value.visible = false
-        message.success('前台已接听，正在建立连接...')
-      }
-    })
-    
-    socket.on('call_hungup', (data: any) => {
-      if (data.call_id === transferModal.value.callId) {
-        transferModal.value.visible = false
-        message.info('通话已结束')
-      }
-    })
+    socket.on('call_answered', handleCallAnswered)
+    socket.on('call_hungup', handleCallHungup)
   }
 }
 
