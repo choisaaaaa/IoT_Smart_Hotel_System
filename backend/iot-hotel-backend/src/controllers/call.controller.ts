@@ -452,6 +452,12 @@ export const rejectCall = async (req: AuthRequest, res: Response) => {
       io.to(callerRoom).emit('call_rejected', { call_id });
       io.to(calleeRoom).emit('call_rejected', { call_id });
       logger.info(`[HTTP API] 发送 call_rejected 到双方房间 (caller: ${callerRoom}, callee: ${calleeRoom})`);
+
+      if (callData.hotel_id) {
+        const hotelRoom = `front_desk_hotel_${callData.hotel_id}`;
+        io.to(hotelRoom).emit('call_rejected', { call_id });
+        logger.info(`[HTTP API] 发送 call_rejected 到酒店前台房间: ${hotelRoom}`);
+      }
     }
 
     res.json(successResponse({
@@ -528,6 +534,12 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
       io.to(callerRoom).emit('call_hungup', { call_id });
       io.to(calleeRoom).emit('call_hungup', { call_id });
       logger.info(`[HTTP API] 发送 call_hungup 到双方房间 (caller: ${callerRoom}, callee: ${calleeRoom})`);
+
+      if (callData.hotel_id) {
+        const hotelRoom = `front_desk_hotel_${callData.hotel_id}`;
+        io.to(hotelRoom).emit('call_hungup', { call_id });
+        logger.info(`[HTTP API] 发送 call_hungup 到酒店前台房间: ${hotelRoom}`);
+      }
     }
 
     res.json(successResponse({

@@ -681,6 +681,9 @@ const handleWebRTCIceCandidate = async (data: any) => {
 
 const handleCallHungup = (data: any) => {
   console.log('[App] 通话被挂断:', data)
+  if (!appStore.currentCall?.call_id && !appStore.incomingCall?.call_id) {
+    return
+  }
   if (appStore.incomingCall?.call_id === data.call_id) {
     appStore.clearIncomingCall()
   }
@@ -702,6 +705,11 @@ const handleCallRejected = (data: any) => {
 
 const handleCallAnswered = async (data: any) => {
   console.log('[App] 收到 call_answered 事件:', data)
+
+  if (appStore.currentCall?.call_id === data.call_id && appStore.currentCall?.status === 'connected') {
+    console.log('[App] 忽略重复的 call_answered 事件')
+    return
+  }
 
   // 发送信号确认
   const socket = getSocket()
