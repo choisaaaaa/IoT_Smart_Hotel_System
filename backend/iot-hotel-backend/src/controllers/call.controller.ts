@@ -107,7 +107,7 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
 
 export const outboundCall = async (req: AuthRequest, res: Response) => {
   try {
-    const { caller_type = 'front_desk', caller_id, callee_type, callee_id, type = 'voice' } = req.body;
+    let { caller_type = 'front_desk', caller_id, callee_type, callee_id, type = 'voice' } = req.body;
 
     if (!caller_id || !callee_type || !callee_id) {
       res.status(400).json(errorResponse('请求参数错误：缺少必要参数'));
@@ -124,6 +124,26 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
     if (!validCalleeTypes.includes(callee_type)) {
       res.status(400).json(errorResponse(`无效的callee_type参数，支持的值: ${validCalleeTypes.join(', ')}`));
       return;
+    }
+
+    if (caller_type === 'room') {
+      const [roomRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+        [caller_id, caller_id]
+      );
+      if (roomRows.length > 0) {
+        caller_id = String(roomRows[0].id);
+      }
+    }
+
+    if (callee_type === 'room') {
+      const [roomRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+        [callee_id, callee_id]
+      );
+      if (roomRows.length > 0) {
+        callee_id = String(roomRows[0].id);
+      }
     }
 
     const callId = `CALL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
@@ -314,6 +334,29 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
     const wsService = getWebSocketService();
     const io = wsService?.getIO();
     if (io) {
+      let normalizedCallerId = String(callData.caller_id);
+      let normalizedCalleeId = String(callData.callee_id);
+
+      if (callData.caller_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.caller_id, callData.caller_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCallerId = String(roomRows[0].id);
+        }
+      }
+
+      if (callData.callee_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.callee_id, callData.callee_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCalleeId = String(roomRows[0].id);
+        }
+      }
+
       const answeredData = {
         call_id,
         caller_type: callData.caller_type,
@@ -324,14 +367,14 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
         answered_at: new Date().toISOString()
       };
 
-      // 1. 通知主叫方
-      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
-      logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom}, call_id: ${call_id}`);
+      // 1. 通知主叫方（使用标准化ID）
+      const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
+      logger.info(`[HTTP API] 发送 call_answered 到主叫方房间: ${callerRoom} (原始caller_id: ${callData.caller_id}), call_id: ${call_id}`);
       io.to(callerRoom).emit('call_answered', answeredData);
 
-      // 2. 通知被叫方
-      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
-      logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom}, call_id: ${call_id}`);
+      // 2. 通知被叫方（使用标准化ID）
+      const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
+      logger.info(`[HTTP API] 发送 call_answered 到被叫方房间: ${calleeRoom} (原始callee_id: ${callData.callee_id}), call_id: ${call_id}`);
       io.to(calleeRoom).emit('call_answered', answeredData);
 
       // 3. 通知该门店的所有前台（同步状态）
@@ -381,11 +424,34 @@ export const rejectCall = async (req: AuthRequest, res: Response) => {
     const wsService = getWebSocketService();
     const io = wsService?.getIO();
     if (io) {
-      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
-      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
+      let normalizedCallerId = String(callData.caller_id);
+      let normalizedCalleeId = String(callData.callee_id);
+
+      if (callData.caller_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.caller_id, callData.caller_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCallerId = String(roomRows[0].id);
+        }
+      }
+
+      if (callData.callee_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.callee_id, callData.callee_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCalleeId = String(roomRows[0].id);
+        }
+      }
+
+      const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
+      const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
       io.to(callerRoom).emit('call_rejected', { call_id });
       io.to(calleeRoom).emit('call_rejected', { call_id });
-      logger.info(`[HTTP API] 发送 call_rejected 到双方房间`);
+      logger.info(`[HTTP API] 发送 call_rejected 到双方房间 (caller: ${callerRoom}, callee: ${calleeRoom})`);
     }
 
     res.json(successResponse({
@@ -430,11 +496,34 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
     const wsService = getWebSocketService();
     const io = wsService?.getIO();
     if (io) {
-      const callerRoom = `${callData.caller_type}_${callData.caller_id}`;
-      const calleeRoom = `${callData.callee_type}_${callData.callee_id}`;
+      let normalizedCallerId = String(callData.caller_id);
+      let normalizedCalleeId = String(callData.callee_id);
+
+      if (callData.caller_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.caller_id, callData.caller_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCallerId = String(roomRows[0].id);
+        }
+      }
+
+      if (callData.callee_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.callee_id, callData.callee_id]
+        );
+        if (roomRows.length > 0) {
+          normalizedCalleeId = String(roomRows[0].id);
+        }
+      }
+
+      const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
+      const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
       io.to(callerRoom).emit('call_hungup', { call_id });
       io.to(calleeRoom).emit('call_hungup', { call_id });
-      logger.info(`[HTTP API] 发送 call_hungup 到双方房间`);
+      logger.info(`[HTTP API] 发送 call_hungup 到双方房间 (caller: ${callerRoom}, callee: ${calleeRoom})`);
     }
 
     res.json(successResponse({

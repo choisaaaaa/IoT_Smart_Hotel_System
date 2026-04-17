@@ -732,6 +732,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   Map<String, dynamic>? _onlineStatus;
   StreamSubscription? _callEventSubscription;
   bool _inCall = false;
+  bool _isCaller = false;
   String? _activeCallId;
   String _callDuration = '00:00';
   Timer? _callTimer;
@@ -745,7 +746,8 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
 
   void _initCallService() {
     if (widget.roomId == null) return;
-    _callService.init('${widget.roomId}', clientType: 'room');
+    final clientId = '${widget.roomId}';
+    _callService.init(clientId, clientType: 'room');
     _callEventSubscription = _callService.callEvents.listen((event) {
       if (!mounted) return;
       
@@ -781,6 +783,11 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
             _callStartTime = DateTime.now();
           });
           _startCallTimer();
+          if (_isCaller) {
+            _callService.onCallAnswered(
+              Map<String, dynamic>.from(event['data'] as Map),
+            );
+          }
           break;
         case 'call_rejected':
           Navigator.of(context).maybePop();
@@ -823,6 +830,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     _callTimer?.cancel();
     setState(() {
       _inCall = false;
+      _isCaller = false;
       _activeCallId = null;
       _callDuration = '00:00';
       _callStartTime = null;
@@ -871,6 +879,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      _isCaller = false;
                       _callService.answerCall(
                         callId,
                         callData['caller_id'],
@@ -925,7 +934,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       );
     } else {
       // 上线
-      final clientId = widget.roomId != null ? 'guest_${widget.roomId}' : 'guest_app';
+      final clientId = widget.roomId != null ? '${widget.roomId}' : 'guest_app';
       _callService.registerClient(clientId);
     }
   }
@@ -950,6 +959,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     }
 
     // 呼叫所有前台：callee_type='front_desk', callee_id='all'
+    _isCaller = true;
     _callService.startCall('all', 'front_desk');
 
     if (mounted) {
