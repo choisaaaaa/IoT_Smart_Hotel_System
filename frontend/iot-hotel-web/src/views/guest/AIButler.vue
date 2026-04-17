@@ -364,7 +364,7 @@ import {
   SoundOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSocket } from '@/utils/websocket'
+import { getSocket, initWebSocket as initWebSocketFromUtil } from '@/utils/websocket'
 import request from '@/api/request'
 import { now } from '@/utils/date'
 
@@ -472,6 +472,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (socket) {
+    socket.off('connect')
+    socket.off('disconnect')
     socket.off('incoming_call')
     socket.off('call_answered')
     socket.off('call_rejected')
@@ -479,45 +481,74 @@ onUnmounted(() => {
     socket.off('webrtc_offer')
     socket.off('webrtc_answer')
     socket.off('webrtc_ice_candidate')
+    socket.off('online_status')
   }
 })
 
+function registerAsRoom() {
+  if (socket && socket.connected) {
+    console.log(`[AIButler] 注册为房间客户端: room/${roomId.value}`)
+    socket.emit('register_client', {
+      clientType: 'room',
+      clientId: roomId.value
+    })
+  }
+}
+
 // 初始化WebSocket
 function initWebSocket() {
+  const existingSocket = getSocket()
+  if (!existingSocket) {
+    console.warn('[AIButler] WebSocket未初始化，尝试初始化...')
+    initWebSocketFromUtil()
+  }
+
   socket = getSocket()
-  if (socket) {
-    isConnected.value = socket.connected
-    
-    // 如果已经连接，立即注册
-    if (socket.connected) {
-      socket.emit('register_client', {
-        clientType: 'room',
-        clientId: roomId.value
-      })
-    }
-    
-    socket.on('connect', () => {
-      isConnected.value = true
-      // 注册为房间客户端
-      socket.emit('register_client', {
-        clientType: 'room',
-        clientId: roomId.value
-      })
-    })
+  if (!socket) {
+    console.error('[AIButler] 无法获取WebSocket连接')
+    return
+  }
 
-    socket.on('disconnect', () => {
-      isConnected.value = false
-    })
+  isConnected.value = socket.connected
 
-    // 监听来电（转接时）
-    socket.on('incoming_call', (data: any) => {
-      if (data.isTransfer) {
-        transferModal.value.visible = true
-        transferModal.value.callId = data.call_id
+  if (socket.connected) {
+    registerAsRoom()
+  }
+
+  socket.on('connect', () => {
+    console.log('[AIButler] WebSocket已连接')
+    isConnected.value = true
+    registerAsRoom()
+  })
+
+  socket.on('disconnect', () => {
+    console.log('[AIButler] WebSocket已断开')
+    isConnected.value = false
+  })
+
+  socket.on('online_status', (data: any) => {
+    if (data.rooms && Array.isArray(data.rooms)) {
+      const isOnline = data.rooms.some((r: any) => String(r.id) === String(roomId.value) || r.id === roomId.value)
+      if (isOnline && !isConnected.value && socket?.connected) {
+        isConnected.value = true
       }
-    })
+    }
+    if (data.web && Array.isArray(data.web)) {
+      frontDeskCount.value = data.web.filter((w: any) => w.isOnDuty).length || data.web.length
+    }
+  })
 
-    socket.on('call_answered', (data: any) => {
+  socket.on('incoming_call', (data: any) => {
+    console.log('[AIButler] 收到来电:', data)
+    transferModal.value.visible = true
+    transferModal.value.callId = data.call_id
+    if (!data.isTransfer) {
+      transferModal.value.statusText = '来电...'
+      transferModal.value.statusDesc = `来自${data.caller_type === 'front_desk' ? '前台' : data.caller_id}的呼叫`
+    }
+  })
+
+  socket.on('call_answered', (data: any) => {
       console.log('[AIButler] 收到call_answered:', data)
       console.log('[AIButler] 当前transferModal.callId:', transferModal.value.callId)
       

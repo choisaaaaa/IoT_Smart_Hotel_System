@@ -4,21 +4,44 @@ import { useAppStore } from '@/stores/app'
 
 let socket: Socket | null = null
 
+function doAutoRegister(s: Socket) {
+  const appStore = useAppStore()
+  const userInfo = appStore.userInfo
+  if (userInfo && userInfo.username) {
+    const isStaff = ['admin', 'staff', 'manager', 'reception'].includes(userInfo.role)
+    const clientType = isStaff ? 'front_desk' : 'app'
+    const clientId = userInfo.username
+
+    console.log(`[WS] 自动注册客户端: ${clientId} as ${clientType}`)
+    s.emit('register_client', { clientType, clientId })
+    s.once('registered', (data: any) => {
+      console.log('[WS] 自动注册成功:', data)
+      appStore.setRegistration(true, data.clientName)
+    })
+  }
+}
+
 export function initWebSocket(roomId?: string): Socket {
   if (socket?.connected) {
+    doAutoRegister(socket)
     return socket
   }
 
-  // 使用相对路径，让Vite代理处理WebSocket连接
+  if (socket && !socket.connected) {
+    socket.connect()
+    doAutoRegister(socket)
+    return socket
+  }
+
   const socketUrl = window.location.origin
 
   socket = io(socketUrl, {
-    transports: ['websocket', 'polling'], // 允许回退到 polling 以提高兼容性
+    transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: Infinity, // 无限重连
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000, // 最大重连间隔 5 秒
-    timeout: 10000 // 增加超时时间到 10s
+    reconnectionDelayMax: 5000,
+    timeout: 10000
   })
 
   const deviceStore = useDeviceStore()
@@ -32,27 +55,12 @@ export function initWebSocket(roomId?: string): Socket {
       socket.emit('join_room', roomId)
     }
 
-    // 自动注册客户端上线
-    const userInfo = appStore.userInfo
-    if (userInfo && userInfo.username && socket) {
-      const isStaff = ['admin', 'staff', 'manager', 'reception'].includes(userInfo.role)
-      const clientType = isStaff ? 'front_desk' : 'app'
-      const clientId = userInfo.username
-      
-      console.log(`[WS] 自动注册客户端: ${clientId} as ${clientType}`)
-      socket.emit('register_client', { clientType, clientId })
-      socket.once('registered', (data: any) => {
-        console.log('[WS] 自动注册成功:', data)
-        appStore.setRegistration(true, data.clientName)
-      })
-    }
+    doAutoRegister(socket!)
   })
 
   socket.on('disconnect', (reason: string) => {
     console.log('[WS] 与服务器断开连接:', reason)
     appStore.setConnected(false)
-    // 注意：不要在这里清除注册状态，因为会自动重连
-    // 重连后会在 connect 事件中自动重新注册
   })
 
   socket.on('reconnect', (attemptNumber: number) => {

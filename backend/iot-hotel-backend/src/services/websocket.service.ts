@@ -153,19 +153,28 @@ class WebSocketService {
                 hotelId = roomRows[0].hotel_id;
               }
             } else {
-              const [bookings] = await pool.query<RowDataPacket[]>(
-                `SELECT r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id
-                 WHERE b.user_id = ? AND b.status = 'checked_in' LIMIT 1`,
-                [data.clientId]
-              );
-              if (bookings.length > 0) {
-                hotelId = bookings[0].hotel_id;
-              }
               const [userRows] = await pool.query<RowDataPacket[]>(
-                'SELECT username FROM users WHERE id = ? OR username = ?',
+                'SELECT id, username, hotel_id FROM users WHERE id = ? OR username = ?',
                 [data.clientId, data.clientId]
               );
-              displayName = userRows.length > 0 ? userRows[0].username : data.clientId;
+              if (userRows.length > 0) {
+                const user = userRows[0];
+                displayName = user.username;
+                const userId = user.id;
+                if (user.hotel_id) {
+                  hotelId = user.hotel_id;
+                }
+                const [bookings] = await pool.query<RowDataPacket[]>(
+                  `SELECT r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id
+                   WHERE b.user_id = ? AND b.status IN ('checked_in', 'pre_checked_in') LIMIT 1`,
+                  [userId]
+                );
+                if (bookings.length > 0) {
+                  hotelId = bookings[0].hotel_id;
+                }
+              } else {
+                displayName = data.clientId;
+              }
             }
           } else if (data.clientType === 'room') {
             const [rows] = await pool.query<RowDataPacket[]>(
@@ -208,25 +217,18 @@ class WebSocketService {
             // if (data.clientType === 'front_desk') { socket.join('front_desk'); }
             
             this.broadcastOnlineStatus();
-            socket.emit('registered', { 
-              clientId: data.clientId, 
-              clientName: displayName,
-              hotelId: hotelId 
-            });
           }
           
           socket.emit('registered', {
             clientType: data.clientType,
             clientId: data.clientId,
             clientName: displayName,
-            webrtcConfig: config.webrtc, // 将 WebRTC 配置下发给客户端
+            hotelId: hotelId,
+            webrtcConfig: config.webrtc,
             timestamp: new Date().toISOString()
           });
           
           logger.info(`客户端 ${socket.id} 注册为: ${data.clientType}/${displayName}`);
-          
-          // 广播更新在线列表
-          this.broadcastOnlineStatus();
         } catch (error) {
           logger.error('注册客户端失败:', error.message);
           socket.emit('error', { message: '注册失败' });
