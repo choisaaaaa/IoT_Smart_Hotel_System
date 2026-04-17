@@ -48,11 +48,15 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
     setState(() => _isLoading = true);
     try {
       final result = await ref.read(bookingServiceProvider).getBookings(pageSize: 50);
+      debugPrint('DEBUG: _fetchOrders - result.success=${result.success}, result.data.length=${result.data?.length}');
       if (result.success) {
         setState(() => _orders = result.data ?? []);
+      } else {
+        debugPrint('DEBUG: _fetchOrders - error=${result.message}');
       }
-    } catch (e) {
-      debugPrint('orders: $e');
+    } catch (e, stackTrace) {
+      debugPrint('DEBUG: _fetchOrders - exception=$e');
+      debugPrint('DEBUG: _fetchOrders - stackTrace=$stackTrace');
     } finally {
       setState(() => _isLoading = false);
     }

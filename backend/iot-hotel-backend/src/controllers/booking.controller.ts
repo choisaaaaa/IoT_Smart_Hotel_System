@@ -287,6 +287,10 @@ export const get = async (req: AuthRequest, res: Response) => {
     const isUser = isCustomer(req.user?.role);
     let hotelId = req.user?.hotel_id;
 
+    // 调试日志
+    logger.info(`[Booking Get] req.user: ${JSON.stringify(req.user)}`);
+    logger.info(`[Booking Get] isUser (isCustomer): ${isUser}, role: ${req.user?.role}`);
+
     if (isSystemAdmin(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
@@ -316,6 +320,7 @@ export const get = async (req: AuthRequest, res: Response) => {
       params.push(req.user?.id);
       params.push(phone);
       params.push(req.user?.username);
+      logger.info(`[Booking Get] User query params - user_id: ${req.user?.id}, phone: ${phone}, username: ${req.user?.username}`);
 
       // 普通用户也可以传 hotel_id 来筛选特定酒店
       if (queryHotelId) {
@@ -348,11 +353,15 @@ export const get = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    logger.info(`[Booking Get] SQL whereClause: ${whereClause}`);
+    logger.info(`[Booking Get] SQL params: ${JSON.stringify(params)}`);
+
     const [totalRows] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
       params
     );
     const total = (totalRows[0] as any).total;
+    logger.info(`[Booking Get] Total bookings found: ${total}`);
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT b.*, r.room_number, r.room_type, r.room_name, h.hotel_name, rt.name as room_type_name,
@@ -531,7 +540,7 @@ export const create = async (req: AuthRequest, res: Response) => {
         locked_at, payment_deadline, auto_checkout_at, room_number
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        bookingNumber, hotelId, room_id || null, finalRoomTypeId, rate_plan_id || null, user_id || req.user?.id || null, 
+        bookingNumber, hotelId, room_id || null, finalRoomTypeId, rate_plan_id || null, (user_id && user_id !== '') ? user_id : (req.user?.id || null), 
         guest_name, guest_phone, req.body.id_type || 'idcard', guest_id_number, check_in_date, check_out_date, 
         guest_count, special_requests, payment_method, coupon_id || null, actualUsedPoints, 
         points_discount, total_price, 0, bookingStatus, checkInTime,
