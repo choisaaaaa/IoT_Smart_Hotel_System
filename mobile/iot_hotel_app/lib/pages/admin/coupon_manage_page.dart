@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/storage/local_storage.dart';
 import '../../services/coupon_service.dart';
@@ -290,7 +291,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             title: const Text('开始日期'),
                             subtitle: Text(
                               startDate != null
-                                  ? DateFormat('yyyy-MM-dd').format(startDate!)
+                                  ? DateUtils.formatDate(startDate!)
                                   : '立即生效',
                             ),
                             trailing: const Icon(Icons.calendar_today),
@@ -310,7 +311,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             title: const Text('结束日期'),
                             subtitle: Text(
                               endDate != null
-                                  ? DateFormat('yyyy-MM-dd').format(endDate!)
+                                  ? DateUtils.formatDate(endDate!)
                                   : '长期有效',
                             ),
                             trailing: const Icon(Icons.calendar_today),

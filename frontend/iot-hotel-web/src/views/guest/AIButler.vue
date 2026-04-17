@@ -366,6 +366,7 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
+import { now } from '@/utils/date'
 
 const route = useRoute()
 const router = useRouter()
@@ -750,7 +751,7 @@ async function handleUserInput(text: string) {
   messages.value.push({
     type: 'user',
     text,
-    time: new Date().toLocaleTimeString()
+    time: now().format('HH:mm')
   })
   
   scrollToBottom()
@@ -766,7 +767,7 @@ async function handleUserInput(text: string) {
     messages.value.push({
       type: 'ai',
       text: '请说"小智小智"唤醒我，或者点击下方的快捷按钮',
-      time: new Date().toLocaleTimeString()
+      time: now().format('HH:mm')
     })
     scrollToBottom()
   }
@@ -822,7 +823,7 @@ async function handleQuickAction(text: string) {
   messages.value.push({
     type: 'user',
     text,
-    time: new Date().toLocaleTimeString()
+    time: now().format('HH:mm')
   })
   scrollToBottom()
   
@@ -834,7 +835,7 @@ async function handleQuickAction(text: string) {
   messages.value.push({
     type: 'ai',
     text: `⏳ 正在为您${text}...`,
-    time: new Date().toLocaleTimeString()
+    time: now().format('HH:mm')
   })
   scrollToBottom()
   
@@ -871,7 +872,7 @@ async function sendToAI(text: string) {
       messages.value.push({
         type: 'ai',
         text: aiText,
-        time: new Date().toLocaleTimeString(),
+        time: now().format('HH:mm'),
         typing: true
       })
 
@@ -910,7 +911,7 @@ async function sendToAI(text: string) {
           messages.value.push({
             type: 'ai',
             text: `📞 正在为您转接前台...${aiResponse.frontDeskCount ? `（${aiResponse.frontDeskCount}位前台在线）` : ''}`,
-            time: new Date().toLocaleTimeString()
+            time: now().format('HH:mm')
           })
           scrollToBottom()
         }, 1000)
@@ -931,7 +932,7 @@ async function sendToAI(text: string) {
     messages.value.push({
       type: 'ai',
       text: '🤔 我好像遇到了点问题，不过您可以继续问我其他问题哦~',
-      time: new Date().toLocaleTimeString()
+      time: now().format('HH:mm')
     })
     scrollToBottom()
   } finally {

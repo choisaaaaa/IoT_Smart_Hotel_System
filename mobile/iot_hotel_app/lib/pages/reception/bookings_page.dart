@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../models/booking.dart';
@@ -47,19 +48,6 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
 
   String _statusText(String? s) => switch (s) { 'pending' => '待支付', 'confirmed' => '待入住', 'pre_checked_in' => '预入住', 'checked_in' => '已入住', 'checked_out' => '已完成', 'cancelled' => '已取消', 'paid' => '已支付', _ => s ?? '未知' };
   Color _statusColor(String? s) => switch (s) { 'pending' => Colors.orange, 'confirmed' => AppColors.primary, 'pre_checked_in' => Colors.cyan, 'checked_in' => AppColors.success, 'checked_out' => AppColors.textSecondary, 'cancelled' => AppColors.error, 'paid' => AppColors.success, _ => AppColors.textHint };
-
-  String _formatDate(dynamic dateVal) {
-    if (dateVal == null) return '';
-    if (dateVal is DateTime) {
-      return '${dateVal.month}/${dateVal.day}';
-    }
-    try {
-      final date = DateTime.parse(dateVal.toString());
-      return '${date.month}/${date.day}';
-    } catch (e) {
-      return dateVal.toString();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +111,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     children: [
                       Icon(Icons.calendar_today, size: 14, color: AppColors.textHint),
                       const SizedBox(width: 4),
-                      Text('${_formatDate(b.checkInDate)} ~ ${_formatDate(b.checkOutDate)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('${DateUtils.formatDotDate(b.checkInDate)} ~ ${DateUtils.formatDotDate(b.checkOutDate)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                       const Spacer(),
                       Text('¥${b.totalPrice.toStringAsFixed(0)}', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
                     ],

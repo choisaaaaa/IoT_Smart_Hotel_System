@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/network/api_result.dart';
@@ -13,8 +14,6 @@ import '../../services/hotel_service.dart';
 import '../../services/review_service.dart';
 import '../../services/user_service.dart';
 import '../../services/device_service.dart';
-import '../../services/payment_service.dart';
-import '../../services/booking_service.dart';
 import '../../models/hotel.dart';
 import 'system_settings_page.dart';
 
@@ -1570,7 +1569,7 @@ class _ReviewTabState extends State<_ReviewTab> {
             if (app['hotel_address'] != null) _buildInfoRow('酒店地址', app['hotel_address']),
             if (app['target_hotel_name'] != null) _buildInfoRow('目标酒店', app['target_hotel_name']),
             if (app['reason'] != null) _buildInfoRow('理由', app['reason']),
-            if (app['created_at'] != null) _buildInfoRow('申请时间', app['created_at'].toString().substring(0, 19)),
+            if (app['created_at'] != null) _buildInfoRow('申请时间', DateUtils.formatDynamic(app['created_at'])),
             const SizedBox(height: 12),
             TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: '审核备注 (可选)', border: OutlineInputBorder()), maxLines: 2),
           ],
@@ -1678,7 +1677,7 @@ class _ReviewTabState extends State<_ReviewTab> {
                 ),
               ]),
               const SizedBox(height: 8),
-              Text('申请人: ${app['username'] ?? '-'} | 时间: ${app['created_at']?.toString().substring(0, 10) ?? '-'}'),
+              Text('申请人: ${app['username'] ?? '-'} | 时间: ${DateUtils.formatDateDynamic(app['created_at'])}'),
               if (app['reason'] != null) Text('理由: ${app['reason']}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               if (app['review_note'] != null) Text('审核备注: ${app['review_note']}', style: const TextStyle(color: AppColors.info, fontSize: 13)),
               if (showActions) ...[
@@ -2020,7 +2019,7 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+                    Text(DateUtils.formatDateDynamic(createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
                     const Spacer(),
                     GestureDetector(
                       onTap: () => _deleteReview(review['id']),
@@ -2152,7 +2151,7 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
               const SizedBox(width: 8),
               Text('$hotelName · $appellantName', style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
               const Spacer(),
-              Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+              Text(DateUtils.formatDateDynamic(createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
             ],
           ),
           const SizedBox(height: 8),

@@ -17,7 +17,7 @@
             <a-badge :status="record.device_status === 'online' ? 'success' : 'error'" :text="record.device_status === 'online' ? '在线' : '离线'" />
           </template>
           <template v-if="column.key === 'last_online'">
-            {{ record.last_online ? dayjs(record.last_online).format('YYYY-MM-DD HH:mm:ss') : '从未上线' }}
+            {{ record.last_online ? formatDateTime(record.last_online) : '从未上线' }}
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
@@ -35,7 +35,7 @@ import { ref, onMounted } from 'vue'
 import { SyncOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
-import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 
 const columns = [
   { title: '设备名称', dataIndex: 'device_name', key: 'device_name' },

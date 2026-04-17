@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../core/network/dio_client.dart';
@@ -212,7 +213,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
           _buildInfoRow('手机号', _user?.phone ?? '-', onTap: _showEditPhoneDialog),
           _buildInfoRow('邮箱', _user?.email ?? '-', onTap: _showEditEmailDialog),
           _buildInfoRow('角色', _roleLabel(_user?.role)),
-          _buildInfoRow('注册时间', _user?.createdAt?.toString().length != null && _user!.createdAt!.toString().length >= 10 ? _user!.createdAt!.toString().substring(0, 10) : _user?.createdAt?.toString() ?? '-'),
+          _buildInfoRow('注册时间', DateUtils.formatDateDynamic(_user?.createdAt)),
         ],
       ),
     );
@@ -622,7 +623,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<int>(
-                    value: selectedHotelId,
+                    initialValue: selectedHotelId,
                     decoration: const InputDecoration(
                       labelText: '选择酒店',
                       prefixIcon: Icon(Icons.hotel_outlined),
@@ -718,7 +719,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
             return ListTile(
               leading: Icon(app.applicationType == 'create_hotel' ? Icons.add_business_outlined : Icons.badge_outlined, color: AppColors.primary),
               title: Text(app.applicationType == 'create_hotel' ? '创建酒店: ${app.hotelName ?? '-'}' : '绑定员工: ${app.hotelName ?? '-'}'),
-              subtitle: Text('申请时间: ${app.createdAt != null && app.createdAt!.toString().length >= 10 ? app.createdAt!.toString().substring(0, 10) : app.createdAt?.toString() ?? '-'}'),
+              subtitle: Text('申请时间: ${DateUtils.formatDateDynamic(app.createdAt)}'),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),

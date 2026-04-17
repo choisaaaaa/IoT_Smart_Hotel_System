@@ -258,7 +258,7 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                           child: Column(
                             children: [
                               Text(
-                                '${floorNum}层',
+                                '$floorNum层',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isSelected ? Colors.white : Colors.black87,
@@ -349,7 +349,7 @@ class _FloorManagePageState extends ConsumerState<FloorManagePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${floorNum}层',
+                            '$floorNum层',
                             style: GoogleFonts.notoSansSc(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,

@@ -553,12 +553,12 @@
                   <div class="date-range-ctrip">
                     <div class="date-item">
                       <div class="lab">入住</div>
-                      <div class="val">{{ dayjs(dateRange[0]).format('MM月DD日') }}</div>
+                      <div class="val">{{ formatShortDate(dateRange[0]) }}</div>
                     </div>
                     <div class="nights-tag">{{ nights }}晚</div>
                     <div class="date-item text-right">
                       <div class="lab">退房</div>
-                      <div class="val">{{ dayjs(dateRange[1]).format('MM月DD日') }}</div>
+                      <div class="val">{{ formatShortDate(dateRange[1]) }}</div>
                     </div>
                   </div>
 
@@ -733,7 +733,7 @@
                 </a-avatar>
                 <span class="reviewer-name">{{ review.member_name || '匿名用户' }}</span>
               </div>
-              <span class="review-date">{{ review.created_at?.substring(0, 10) }}</span>
+              <span class="review-date">{{ formatDate(review.created_at) }}</span>
             </div>
             <div class="review-ratings">
               <span class="rating-tag">环境 {{ review.environment_rating }}⭐</span>
@@ -792,6 +792,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
+import { formatShortDate, formatDate } from '@/utils/date'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
 import { authService } from '@/api/auth'
 import { hotelApi } from '@/api/hotel'

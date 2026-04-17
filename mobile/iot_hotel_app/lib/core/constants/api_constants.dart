@@ -28,6 +28,9 @@ class ApiConstants {
   static const String authResetPassword = 'auth/reset-password';
   static const String authRoleApplication = 'auth/role-application';
   static const String authRoleApplications = 'auth/role-applications';
+  static const String authQrGenerate = 'auth/qr-generate';
+  static const String authQrConfirm = 'auth/qr-confirm';
+  static const String authQrStatus = 'auth/qr-status';
 
   static const String hotels = 'hotels';
   static const String hotel = 'hotel';

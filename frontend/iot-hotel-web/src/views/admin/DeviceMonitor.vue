@@ -129,6 +129,7 @@ import { roomApi } from '@/api/room'
 import { sendDeviceCommand } from '@/utils/websocket'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import { formatDotDateTime } from '@/utils/date'
 
 dayjs.extend(relativeTime)
 
@@ -145,7 +146,7 @@ const auditColumns = [
   { title: '设备ID', dataIndex: 'device_id', key: 'device_id' },
   { title: '类型', dataIndex: 'device_type', key: 'type' },
   { title: '连接信息', key: 'info' },
-  { title: '上报时间', dataIndex: 'created_at', key: 'created_at', customRender: ({ text }: any) => dayjs(text).format('MM-DD HH:mm') },
+  { title: '上报时间', dataIndex: 'created_at', key: 'created_at', customRender: ({ text }: any) => formatDotDateTime(text) },
   { title: '操作', key: 'action', fixed: 'right' }
 ]
 

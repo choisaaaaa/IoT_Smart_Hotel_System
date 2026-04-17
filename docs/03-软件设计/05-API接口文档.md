@@ -27,6 +27,19 @@
 - `POST /users/authorize-manager`: 经理授权校验 (用于现场打折等特权操作)。
   - 请求体：`{ manager_id: number, password: string }`
   - 业务逻辑：校验经理是否存在、角色是否有权、所属酒店是否匹配、密码是否正确。
+- `POST /auth/qr-generate`: 生成扫码登录二维码Token（无需认证）。
+  - 业务逻辑：生成64位随机Token，存入api_tokens表（token_type=qr_login, status=pending），有效期5分钟。
+  - 返回：`{ token: string, expiresAt: string }`
+- `POST /auth/qr-confirm`: APP确认扫码登录（需JWT认证）。
+  - 请求体：`{ token: string }`（二维码中包含的Token）
+  - 业务逻辑：验证Token有效且状态为pending，将Token关联到APP用户，状态改为confirmed。
+  - 返回：`{ message: "扫码确认成功" }`
+- `GET /auth/qr-status`: Web端轮询扫码状态（无需认证）。
+  - 查询参数：`token`（二维码Token）
+  - 业务逻辑：查询Token状态。pending返回等待中；confirmed时生成JWT、创建会话、标记Token已使用，返回JWT和用户信息；expired返回已过期。
+  - 返回（pending）：`{ status: "pending" }`
+  - 返回（confirmed）：`{ status: "confirmed", token: JWT, sessionToken: string, user: UserInfo }`
+  - 返回（expired）：`{ status: "expired" }`
 
 ### 2. 酒店资源管理 (`/hotels`, `/rooms`, `/room-types`, `/price-calendar`)
 - `GET /hotels/search`: 根据目的地和日期搜索酒店。

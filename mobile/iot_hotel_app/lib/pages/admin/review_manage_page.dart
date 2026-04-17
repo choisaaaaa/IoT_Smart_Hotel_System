@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/review_service.dart';
 
@@ -19,8 +20,8 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
   int _reviewTotal = 0;
   int _appealTotal = 0;
   bool _isLoading = true;
-  int _reviewPage = 1;
-  int _appealPage = 1;
+  final int _reviewPage = 1;
+  final int _appealPage = 1;
 
   @override
   void initState() {
@@ -307,7 +308,7 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+              Text(DateUtils.formatDateDynamic(createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
               const Spacer(),
               if (reply == null || reply.toString().isEmpty)
                 _buildSmallButton(Icons.reply_rounded, '回复', () => _replyReview(review['id'])),
@@ -425,7 +426,7 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
                 child: Text(statusText, style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor)),
               ),
               const Spacer(),
-              Text(createdAt.toString().substring(0, 10), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+              Text(DateUtils.formatDateDynamic(createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
             ],
           ),
           const SizedBox(height: 8),
@@ -448,7 +449,7 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
           ],
           if (handledAt != null && handledAt.toString().isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text('处理时间：${handledAt.toString().substring(0, 16)}', style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+            Text('处理时间：${DateUtils.formatDynamic(handledAt)}', style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
           ],
         ],
       ),

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { now } from '@/utils/date'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
@@ -88,7 +89,7 @@ export const useAppStore = defineStore('app', () => {
       id: Date.now().toString(),
       type,
       message,
-      time: new Date().toLocaleTimeString()
+      time: now().format('HH:mm')
     })
     if (notifications.value.length > 50) notifications.value.pop()
   }

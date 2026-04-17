@@ -81,7 +81,7 @@
 | 23 | `floors`              | 楼层信息     | 7     |
 | 24 | `frequent_guests`     | 常住客信息    | 8     |
 | 25 | `role_applications`   | 角色申请     | 13    |
-| 26 | `api_tokens`          | API令牌    | 8     |
+| 26 | `api_tokens`          | API令牌（含扫码登录）    | 9     |
 | 27 | `login_sessions`      | 登录会话     | 7     |
 | 28 | `system_settings`     | 系统配置     | 6     |
 
@@ -123,6 +123,44 @@ CREATE TABLE system_settings (
 - `member_scheme`: 会员等级方案 (JSON 数组)
 - `points_rate`: 积分获取倍率 (Integer)
 - `points_redeem_rate`: 积分抵扣倍率 (Integer)
+
+#### api_tokens 表 (API令牌/扫码登录)
+
+```sql
+CREATE TABLE api_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,                          -- 关联用户ID（扫码登录生成时为NULL，确认后更新）
+    token VARCHAR(255) NOT NULL UNIQUE,        -- 令牌字符串（64位十六进制）
+    token_type VARCHAR(50) DEFAULT 'login',    -- 令牌类型：login=登录令牌, qr_login=扫码登录
+    status VARCHAR(20) DEFAULT 'pending',      -- 状态：pending=等待扫码, confirmed=已确认, used=已完成
+    expires_at DATETIME NOT NULL,              -- 过期时间（扫码登录5分钟，普通令牌可自定义）
+    is_used TINYINT(1) DEFAULT 0,              -- 是否已使用
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    used_at DATETIME DEFAULT NULL,             -- 使用时间
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**扫码登录状态流转**：
+- `pending` → Web端生成二维码后的初始状态，user_id为NULL
+- `confirmed` → APP扫码确认后，user_id更新为APP用户ID
+- `used` → Web端轮询获取到confirmed后，Token标记为已使用
+
+#### login_sessions 表 (登录会话)
+
+```sql
+CREATE TABLE login_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,                      -- 关联用户ID
+    session_token VARCHAR(255) NOT NULL UNIQUE, -- 会话令牌
+    device_info VARCHAR(255) DEFAULT NULL,     -- 设备信息（扫码登录为'QR Scan Login'）
+    ip_address VARCHAR(50) DEFAULT NULL,       -- IP地址
+    expires_at DATETIME NOT NULL,              -- 过期时间（24小时）
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
 
 ***
 

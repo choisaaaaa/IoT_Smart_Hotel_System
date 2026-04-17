@@ -55,12 +55,12 @@
               <div class="booking-dates-display">
                 <div class="date-item">
                   <span class="date-label">入住：</span>
-                  <span class="date-value">{{ dayjs(foundBooking.check_in).format('YYYY-MM-DD') }}</span>
+                  <span class="date-value">{{ formatDate(foundBooking.check_in) }}</span>
                 </div>
                 <div class="date-divider">至</div>
                 <div class="date-item">
                   <span class="date-label">离店：</span>
-                  <span class="date-value">{{ dayjs(foundBooking.check_out).format('YYYY-MM-DD') }}</span>
+                  <span class="date-value">{{ formatDate(foundBooking.check_out) }}</span>
                 </div>
               </div>
             </a-descriptions-item>
@@ -145,8 +145,8 @@
         <a-descriptions-item label="入住人">{{ foundBooking?.guest_name }}</a-descriptions-item>
         <a-descriptions-item label="房型">{{ foundBooking?.room_name }}</a-descriptions-item>
         <a-descriptions-item label="选定房号">{{ selectedRoomNumber }}</a-descriptions-item>
-        <a-descriptions-item label="入住日期">{{ dayjs(foundBooking?.check_in).format('YYYY-MM-DD') }}</a-descriptions-item>
-        <a-descriptions-item label="退房日期">{{ dayjs(foundBooking?.check_out).format('YYYY-MM-DD') }}</a-descriptions-item>
+        <a-descriptions-item label="入住日期">{{ formatDate(foundBooking?.check_in) }}</a-descriptions-item>
+        <a-descriptions-item label="退房日期">{{ formatDate(foundBooking?.check_out) }}</a-descriptions-item>
       </a-descriptions>
       <div style="margin-top: 24px;">
         <a-alert message="信息确认" description="请确认以上信息无误。点击下方按钮即可完成在线入住，到店后请向前台出示办理完成页面。" type="info" show-icon style="margin-bottom: 20px;" />
@@ -182,7 +182,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { AuditOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/date'
 import { bookingApi } from '@/api/booking'
 import { roomApi } from '@/api/room'
 import { floorApi } from '@/api/floor'

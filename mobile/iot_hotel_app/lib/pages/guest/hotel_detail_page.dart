@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
@@ -106,7 +107,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
         'address': hotel.address ?? '',
         'image': hotel.images is List && hotel.images.isNotEmpty ? hotel.images[0] : null,
         'price': hotel.minPrice?.toStringAsFixed(0),
-        'browsed_at': DateFormat('MM/dd HH:mm').format(DateTime.now()),
+        'browsed_at': DateUtils.formatSlashDateTime(DateTime.now()),
       });
       if (historyList.length > 50) historyList.removeRange(50, historyList.length);
       await prefs.setString('browsing_history', json.encode(historyList));
@@ -370,7 +371,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   }
 
   Widget _buildDateSelector() {
-    final format = DateFormat('MM月dd日');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _selectDates,
@@ -383,7 +383,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${format.format(_checkInDate)} - ${format.format(_checkOutDate)} >', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('${DateUtils.formatShortDate(_checkInDate)} - ${DateUtils.formatShortDate(_checkOutDate)} >', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text('${DateFormat('E', 'zh_CN').format(_checkInDate)}入住 - ${DateFormat('E', 'zh_CN').format(_checkOutDate)}离店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
@@ -756,7 +756,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
             ),
           ],
           const SizedBox(height: 8),
-          Text(_formatDate(createdAt), style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+          Text(DateUtils.formatDateDynamic(createdAt), style: TextStyle(fontSize: 12, color: AppColors.textHint)),
           const Divider(height: 24),
         ],
       ),
@@ -772,16 +772,6 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       ),
       child: Text(text, style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textSecondary)),
     );
-  }
-
-  String _formatDate(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return '';
-    try {
-      final date = DateTime.parse(dateStr);
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return dateStr;
-    }
   }
 
   Widget _buildTag(String label, Color bg, Color text) {

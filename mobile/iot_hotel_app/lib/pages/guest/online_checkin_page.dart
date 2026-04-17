@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../models/booking.dart';
@@ -303,7 +303,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                     _buildBookingInfoRow(Icons.person_outline, '入住人', _foundBooking!.guestName ?? '-'),
                     _buildBookingInfoRow(Icons.bed_outlined, '房型', _foundBooking!.displayRoomType),
                     _buildBookingInfoRow(Icons.calendar_today_outlined, '入住日期',
-                      '${DateFormat('yyyy-MM-dd').format(_foundBooking!.checkInDate)} 至 ${DateFormat('yyyy-MM-dd').format(_foundBooking!.checkOutDate)}'),
+                      '${DateUtils.formatDate(_foundBooking!.checkInDate)} 至 ${DateUtils.formatDate(_foundBooking!.checkOutDate)}'),
                     _buildBookingInfoRow(Icons.nightlight_outlined, '入住天数', '${_foundBooking!.nights}晚'),
                     if (_foundBooking!.status == 'checked_in') ...[
                       const SizedBox(height: 8),
@@ -415,7 +415,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                       const Text('证件类型', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String>(
-                        value: _idType,
+                        initialValue: _idType,
                         isExpanded: true,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
@@ -540,8 +540,8 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
             _buildConfirmRow('预订号', _foundBooking?.displayBookingNumber ?? '-'),
             _buildConfirmRow('酒店', _foundBooking?.hotelName ?? '智联酒店'),
             _buildConfirmRow('房间', _foundBooking?.displayRoomType ?? '-'),
-            _buildConfirmRow('入住日期', DateFormat('yyyy-MM-dd').format(_foundBooking?.checkInDate ?? DateTime.now())),
-            _buildConfirmRow('退房日期', DateFormat('yyyy-MM-dd').format(_foundBooking?.checkOutDate ?? DateTime.now().add(const Duration(days: 1)))),
+            _buildConfirmRow('入住日期', DateUtils.formatDate(_foundBooking?.checkInDate ?? DateTime.now())),
+            _buildConfirmRow('退房日期', DateUtils.formatDate(_foundBooking?.checkOutDate ?? DateTime.now().add(const Duration(days: 1)))),
             _buildConfirmRow('入住天数', '${_foundBooking?.nights ?? 1}晚'),
             const Divider(height: 24),
             _buildConfirmRow('客人姓名', _realNameController.text),

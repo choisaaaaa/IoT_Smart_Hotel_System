@@ -63,11 +63,11 @@
             <div class="stay-info">
               <div class="info-item">
                 <span class="label">入住日期</span>
-                <span class="value">{{ formatDate(order.check_in_date || order.check_in) }}</span>
+                <span class="value">{{ formatDateTime(order.check_in_date || order.check_in) }}</span>
               </div>
               <div class="info-item">
                 <span class="label">退房日期</span>
-                <span class="value">{{ formatDate(order.check_out_date || order.check_out) }}</span>
+                <span class="value">{{ formatDateTime(order.check_out_date || order.check_out) }}</span>
               </div>
             </div>
 
@@ -163,8 +163,8 @@
         <a-descriptions :column="2" size="small" bordered>
           <a-descriptions-item label="酒店">{{ extendOrder.hotel_name || '智联酒店' }}</a-descriptions-item>
           <a-descriptions-item label="房间">{{ extendOrder.room_type_name || extendOrder.room_type }} - {{ extendOrder.room_number || extendOrder.room_name }}</a-descriptions-item>
-          <a-descriptions-item label="入住日期">{{ formatDate(extendOrder.check_in_date || extendOrder.check_in) }}</a-descriptions-item>
-          <a-descriptions-item label="当前退房">{{ formatDate(extendOrder.check_out_date || extendOrder.check_out) }}</a-descriptions-item>
+          <a-descriptions-item label="入住日期">{{ formatDateTime(extendOrder.check_in_date || extendOrder.check_in) }}</a-descriptions-item>
+          <a-descriptions-item label="当前退房">{{ formatDateTime(extendOrder.check_out_date || extendOrder.check_out) }}</a-descriptions-item>
         </a-descriptions>
 
         <div class="extend-section">
@@ -369,6 +369,7 @@ import {
   EditOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import request from '@/api/request'
 import { bookingApi } from '@/api/booking'
 import { memberApi } from '@/api/member'
@@ -443,12 +444,6 @@ const getStatusText = (status: string) => {
     cancelled: '已取消'
   }
   return texts[status] || status
-}
-
-// 格式化日期
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 const fetchMemberInfo = async () => {

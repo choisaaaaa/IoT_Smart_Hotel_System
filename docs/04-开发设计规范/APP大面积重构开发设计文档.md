@@ -553,7 +553,8 @@ lib/
 │   │   └── system_settings_page.dart
 │   └── auth/
 │       ├── login_page.dart
-│       └── register_page.dart
+│       ├── register_page.dart
+│       └── qr_scanner_page.dart
 ├── widgets/               # 共享组件（新增）
 │   ├── loading_widget.dart
 │   ├── error_widget.dart

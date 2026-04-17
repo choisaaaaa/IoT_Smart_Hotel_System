@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/message_service.dart';
 import '../../models/app_notification.dart';
@@ -175,7 +175,7 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
       if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
       if (diff.inDays < 1) return '${diff.inHours}小时前';
       if (diff.inDays < 7) return '${diff.inDays}天前';
-      return DateFormat('yyyy-MM-dd HH:mm').format(time);
+      return DateUtils.formatDateTime(time);
     } catch (e) {
       return '';
     }

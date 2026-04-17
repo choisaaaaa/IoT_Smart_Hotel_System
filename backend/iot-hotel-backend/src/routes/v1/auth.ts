@@ -10,6 +10,164 @@ import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, CANONICAL_ROLES
 
 const router = Router();
 
+// 生成扫码登录二维码Token（无需认证）
+router.post('/qr-generate', async (req, res) => {
+  try {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await db.execute(
+      `INSERT INTO api_tokens (user_id, token, token_type, status, expires_at)
+       VALUES (NULL, ?, 'qr_login', 'pending', ?)`,
+      [token, expiresAt]
+    );
+
+    sendSuccess(res, { token, expiresAt });
+  } catch (error) {
+    console.error('生成扫码Token失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// APP确认扫码（需要APP的JWT认证）
+router.post('/qr-confirm', authenticate as any, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return sendError(res, errorResponse('未认证', 401));
+    }
+
+    const { token } = req.body;
+    if (!token) {
+      return sendError(res, errorResponse('Token不能为空', 400));
+    }
+
+    const [tokens]: any = await db.execute(
+      `SELECT * FROM api_tokens WHERE token = ? AND token_type = 'qr_login' AND status = 'pending' AND expires_at > NOW()`,
+      [token]
+    );
+
+    if (tokens.length === 0) {
+      return sendError(res, errorResponse('二维码无效或已过期', 401));
+    }
+
+    const tokenData = tokens[0];
+
+    await db.execute(
+      `UPDATE api_tokens SET user_id = ?, status = 'confirmed' WHERE id = ?`,
+      [user.id, tokenData.id]
+    );
+
+    sendSuccess(res, { message: '扫码确认成功' });
+  } catch (error) {
+    console.error('扫码确认失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// Web端轮询扫码状态（无需认证）
+router.get('/qr-status', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return sendError(res, errorResponse('Token不能为空', 400));
+    }
+
+    const [tokens]: any = await db.execute(
+      `SELECT * FROM api_tokens WHERE token = ? AND token_type = 'qr_login'`,
+      [token]
+    );
+
+    if (tokens.length === 0) {
+      return sendError(res, errorResponse('Token无效', 401));
+    }
+
+    const tokenData = tokens[0];
+
+    if (tokenData.expires_at < new Date()) {
+      return sendSuccess(res, { status: 'expired' });
+    }
+
+    if (tokenData.status !== 'confirmed') {
+      return sendSuccess(res, { status: 'pending' });
+    }
+
+    const [users]: any = await db.execute(
+      `SELECT u.*, h.hotel_name FROM users u LEFT JOIN hotels h ON u.hotel_id = h.id WHERE u.id = ?`,
+      [tokenData.user_id]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('用户不存在', 404));
+    }
+
+    const user = users[0];
+    const role = normalizeRole(user.role);
+
+    const parsePermissions = (p: any) => {
+      if (!p) return [];
+      if (Array.isArray(p)) return p;
+      if (typeof p === 'string') {
+        try { return JSON.parse(p); } catch (e) { return p.split(',').map((s: string) => s.trim()); }
+      }
+      return [];
+    };
+
+    const [userRoles]: any = await db.execute(
+      `SELECT r.permissions FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = ?`,
+      [user.id]
+    );
+    const permissions = userRoles.length > 0 ? parsePermissions(userRoles[0].permissions) : parsePermissions(user.permissions);
+
+    const jwtPayload: JwtPayload = {
+      id: user.id,
+      username: user.username,
+      phone: user.phone,
+      role,
+      hotel_id: user.hotel_id,
+      permissions
+    };
+
+    const jwtToken = generateToken(jwtPayload);
+
+    await db.execute(
+      `UPDATE api_tokens SET is_used = 1, status = 'used', used_at = NOW() WHERE id = ?`,
+      [tokenData.id]
+    );
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const deviceInfo = 'QR Scan Login';
+    const ipAddress = req.ip || req.socket.remoteAddress || 'Unknown';
+
+    await db.execute(
+      `INSERT INTO login_sessions (user_id, session_token, device_info, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)`,
+      [user.id, sessionToken, deviceInfo, ipAddress, sessionExpiresAt]
+    );
+
+    sendSuccess(res, {
+      status: 'confirmed',
+      token: jwtToken,
+      sessionToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        role,
+        permissions,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        hotel_id: user.hotel_id,
+        hotel_name: user.hotel_name
+      }
+    });
+  } catch (error) {
+    console.error('查询扫码状态失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
 // 生成 API Token (用于扫码登录)
 router.post('/generate-token', async (req, res) => {
   try {

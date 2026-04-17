@@ -113,7 +113,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: idType,
+                      initialValue: idType,
                       decoration: InputDecoration(
                         labelText: '证件类型',
                         prefixIcon: const Icon(Icons.badge_outlined, size: 20),
@@ -149,7 +149,7 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: relationship,
+                      initialValue: relationship,
                       decoration: InputDecoration(
                         labelText: '与您的关系',
                         prefixIcon: const Icon(Icons.people_outline, size: 20),

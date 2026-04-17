@@ -842,11 +842,6 @@ const todayBookingColumns = [
   { title: '操作', key: 'action', width: 70 }
 ]
 
-function formatDateTime(val: string | null | undefined): string {
-  if (!val) return '-'
-  return dayjs(val).format('MM-DD HH:mm')
-}
-
 function bookingStatusText(s: string): string {
   return ({ pending: '待确认', confirmed: '已确认', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
 }

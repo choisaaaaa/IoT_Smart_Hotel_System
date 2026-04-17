@@ -72,7 +72,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { deviceApi } from '@/api/device'
 import { hotelManageApi, type HotelManageInfo } from '@/api/hotel-manage'
-import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 
 const columns = [
   { title: '设备ID', dataIndex: 'device_id', key: 'device_id' },
@@ -109,7 +109,7 @@ const badgeStatus = (s: string) => ({ online: 'success', offline: 'default', err
 const statusText = (s: string) => ({ online: '在线', offline: '离线', error: '异常' } as any)[s] || s
 const auditColor = (s: string) => ({ approved: 'green', pending: 'orange', rejected: 'red' } as any)[s] || 'default'
 const auditText = (s: string) => ({ approved: '已审核', pending: '待审核', rejected: '已拒绝' } as any)[s] || s
-const formatTime = (t: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '-'
+const formatTime = (t: string) => t ? formatDateTime(t) : '-'
 
 const fetchDevices = async () => {
   loading.value = true

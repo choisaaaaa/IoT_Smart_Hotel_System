@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../models/booking.dart';
@@ -53,15 +53,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       debugPrint('鉁?booking: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return '-';
-    try {
-      return DateFormat('yyyy年MM月dd日').format(date);
-    } catch (e) {
-      return '-';
     }
   }
 
@@ -296,7 +287,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   children: [
                     Text('入住日期',
                         style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textHint)),
-                    Text(_formatDate(_booking?.checkInDate),
+                    Text(DateUtils.formatDateCN(_booking?.checkInDate),
                         style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
@@ -307,7 +298,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   children: [
                     Text('退房日期',
                         style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textHint)),
-                    Text(_formatDate(_booking?.checkOutDate),
+                    Text(DateUtils.formatDateCN(_booking?.checkOutDate),
                         style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
@@ -558,7 +549,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ),
           const SizedBox(height: 16),
           _buildConfirmRow('房间', '${_booking?.displayRoomType} ${_booking?.roomNumber ?? '${_booking?.roomId}号房'}'),
-          _buildConfirmRow('退房日期', _formatDate(_booking?.checkOutDate)),
+          _buildConfirmRow('退房日期', DateUtils.formatDateCN(_booking?.checkOutDate)),
           _buildConfirmRow('应付金额', '¥${totalPrice.toStringAsFixed(2)}'),
           if (_invoiceTitleController.text.trim().isNotEmpty)
             _buildConfirmRow('发票抬头', _invoiceTitleController.text.trim()),

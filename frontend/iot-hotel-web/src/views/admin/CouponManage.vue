@@ -177,6 +177,7 @@ import request from '@/api/request'
 import { CANONICAL_ROLES } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
+import { formatDate } from '@/utils/date'
 
 const userStore = useAppStore()
 const isSystemAdmin = computed(() => userStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN)
@@ -229,8 +230,6 @@ const formState = reactive({
   scope_type: 'hotel',
   is_public: true
 })
-
-const formatDate = (date: any) => date ? dayjs(date).format('YYYY-MM-DD') : '-'
 
 const fetchHotels = async () => {
   try {

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../services/payment_service.dart';
@@ -40,15 +40,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       debugPrint('orderDetail: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return '-';
-    try {
-      return DateFormat('yyyy年MM月dd日 HH:mm').format(date);
-    } catch (e) {
-      return '-';
     }
   }
 
@@ -263,8 +254,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           const Divider(height: 24),
           _buildInfoRow('房型', _order!.displayRoomType),
           _buildInfoRow('房间号', _order!.roomNumber ?? '${_order!.roomId}号房'),
-          _buildInfoRow('入住时间', _formatDate(_order!.checkInDate)),
-          _buildInfoRow('离店时间', _formatDate(_order!.checkOutDate)),
+          _buildInfoRow('入住时间', DateUtils.formatDateTimeFull(_order!.checkInDate)),
+          _buildInfoRow('离店时间', DateUtils.formatDateTimeFull(_order!.checkOutDate)),
           _buildInfoRow('入住天数', '${_order!.nights}晚'),
           _buildInfoRow('房间数量', '${_order!.guestCount}间'),
         ],
@@ -343,7 +334,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           _buildTimelineItem(
             Icons.receipt_long_outlined,
             '创建订单',
-            _order!.createdAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(_order!.createdAt!) : '-',
+            _order!.createdAt != null ? DateUtils.formatDateTime(_order!.createdAt!) : '-',
             true,
           ),
           _buildTimelineItem(

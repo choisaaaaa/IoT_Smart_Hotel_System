@@ -195,6 +195,9 @@ class ApiConstants {
   static const String baseUrl = 'http://8.134.166.69:3000/api/v1';
   static const String login = '/auth/login';
   static const String register = '/auth/register';
+  static const String authQrGenerate = 'auth/qr-generate';
+  static const String authQrConfirm = 'auth/qr-confirm';
+  static const String authQrStatus = 'auth/qr-status';
   static const String bookings = '/bookings';
   static const String payments = '/payments';
   static const String rooms = '/rooms';
@@ -218,7 +221,7 @@ class ApiConstants {
 
 | 页面目录               | 角色            | 主要功能                 |
 | ------------------ | ------------- | -------------------- |
-| `pages/auth/`      | 公开            | 登录、注册                |
+| `pages/auth/`      | 公开            | 登录、注册、扫码登录           |
 | `pages/guest/`     | customer      | 预订、入住、客房服务、订单、续住    |
 | `pages/reception/` | staff         | 前台Dashboard、配送、工单、通话 |
 | `pages/admin/`     | hotel\_admin  | 酒店管理、房型、设备、报表        |

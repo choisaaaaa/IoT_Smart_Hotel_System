@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../services/payment_service.dart';
@@ -156,8 +156,6 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
   }
 
   Widget _buildOrderItem(Booking order) {
-    final dateFormat = DateFormat('MM.dd HH:mm');
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -201,7 +199,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${dateFormat.format(order.checkInDate)} - ${dateFormat.format(order.checkOutDate)} 共${order.nights}晚',
+                      '${DateUtils.formatDotDateTime(order.checkInDate)} - ${DateUtils.formatDotDateTime(order.checkOutDate)} 共${order.nights}晚',
                       style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 4),

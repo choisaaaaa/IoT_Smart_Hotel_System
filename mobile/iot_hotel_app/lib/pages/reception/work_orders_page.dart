@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/room_service.dart';
@@ -623,7 +624,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
               Icon(Icons.access_time, size: 16, color: Colors.grey[400]),
               const SizedBox(width: 4),
               Text(
-                _formatTime(order['created_at']),
+                DateUtils.formatDynamic(order['created_at']),
                 style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
             ],
@@ -669,15 +670,6 @@ class _MaintenanceOrderCard extends StatelessWidget {
     );
   }
 
-  String _formatTime(String? time) {
-    if (time == null) return '-';
-    try {
-      final date = DateTime.parse(time);
-      return '${date.month}-${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return time;
-    }
-  }
 }
 
 class _CleaningTaskCard extends StatelessWidget {

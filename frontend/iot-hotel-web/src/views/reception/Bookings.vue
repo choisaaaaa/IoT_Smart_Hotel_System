@@ -162,6 +162,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import { bookingApi } from '@/api/booking'
 import { useRouter } from 'vue-router'
 import { useHotelStore } from '@/stores/hotel'
@@ -205,11 +206,6 @@ function statusColor(s: string): string {
 }
 function statusText(s: string): string {
   return ({ pending: '待确认', confirmed: '已支付', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record<string, string>)[s] || s
-}
-
-function formatDateTime(val: string | null | undefined): string {
-  if (!val) return '-'
-  return dayjs(val).format('YYYY-MM-DD HH:mm')
 }
 
 function viewDetail(record: any) {

@@ -1,14 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/storage/local_storage.dart';
 import '../../services/auth_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/room_service.dart';
-import '../../services/payment_service.dart';
 import '../../services/device_service.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
@@ -283,7 +283,6 @@ class _DashboardContent extends ConsumerStatefulWidget {
 class _DashboardContentState extends ConsumerState<_DashboardContent> {
   Map<String, dynamic>? _stats;
   Map<String, dynamic>? _roomDistribution;
-  Map<String, dynamic> _revenueStats = {};
   Map<String, dynamic> _deviceStats = {};
   List<dynamic> _todayActivities = [];
   List<dynamic> _weeklyRevenue = []; // 周营收数据
@@ -322,7 +321,6 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         }).toList();
         debugPrint('DEBUG: _weeklyRevenue = $_weeklyRevenue');
       }
-      final revenueResult = await ref.read(paymentServiceProvider).getRevenueStats();
       final deviceResult = await ref.read(deviceServiceProvider).getAllDevices();
 
       List<dynamic> activities = [];
@@ -347,7 +345,6 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         setState(() {
           _stats = statsResult.success ? statsResult.data : null;
           _roomDistribution = distResult.success ? distResult.data : null;
-          _revenueStats = revenueResult.success ? (revenueResult.data ?? {}) : {};
           _todayActivities = activities;
         });
 
@@ -884,7 +881,7 @@ class _AdminReviewTabState extends State<_AdminReviewTab> {
                 Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: sc.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Text(st, style: TextStyle(color: sc, fontSize: 11, fontWeight: FontWeight.bold))),
               ]),
               const SizedBox(height: 8),
-              Text('申请人: ${app['username'] ?? '-'} | ${app['created_at']?.toString().substring(0, 10) ?? '-'}'),
+              Text('申请人: ${app['username'] ?? '-'} | ${DateUtils.formatDateDynamic(app['created_at'])}'),
               if (showActions) ...[
                 const SizedBox(height: 12),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [OutlinedButton(onPressed: () => _showReviewDialog(app), style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary), child: const Text('审核'))]),

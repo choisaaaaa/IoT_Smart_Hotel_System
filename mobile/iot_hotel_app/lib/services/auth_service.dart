@@ -161,13 +161,11 @@ class AuthService {
     return result;
   }
 
-  /// 获取当前用户的酒店ID
   Future<int?> getCurrentHotelId() async {
     final hotelIdStr = await _localStorage.read('hotel_id');
     if (hotelIdStr != null && hotelIdStr.isNotEmpty) {
       return int.tryParse(hotelIdStr);
     }
-    // 如果没有缓存，尝试从用户信息中获取
     final userInfoStr = await _localStorage.read(AppConstants.userInfoKey);
     if (userInfoStr != null) {
       final Map<String, dynamic> userMap = jsonDecode(userInfoStr);
@@ -177,6 +175,23 @@ class AuthService {
       }
     }
     return null;
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> qrConfirm(String token) async {
+    try {
+      final response = await _dioClient.post(ApiConstants.authQrConfirm, data: {
+        'token': token,
+      });
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      }
+      return ApiResult.failure(response.data['message'] ?? '扫码确认失败');
+    } on DioException catch (e) {
+      final message = e.response?.data?['message'] ?? '网络错误：${e.message}';
+      return ApiResult.failure(message);
+    } catch (e) {
+      return ApiResult.failure('系统错误：$e');
+    }
   }
 }
 

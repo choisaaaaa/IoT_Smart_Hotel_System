@@ -518,6 +518,7 @@ class ProfilePage extends ConsumerWidget {
               _buildToolItem(Icons.people_outline_rounded, '常旅客', onTap: () => context.push('/frequent-guests')),
               _buildToolItem(Icons.receipt_long_outlined, '我的订单', onTap: () => context.push('/orders')),
               _buildToolItem(Icons.history_outlined, '最近浏览', onTap: () => context.push('/recent-browsing')),
+              _buildToolItem(Icons.qr_code_scanner_rounded, '扫一扫', onTap: () => context.push('/qr-scanner')),
               _buildToolItem(Icons.headset_mic_outlined, '在线客服', onTap: () => context.push('/ai-butler')),
               _buildToolItem(Icons.notifications_outlined, '消息中心', onTap: () => context.push('/notifications')),
               _buildToolItem(Icons.card_travel_outlined, '自助退房', onTap: () => context.push('/orders')),

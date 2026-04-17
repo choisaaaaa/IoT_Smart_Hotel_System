@@ -168,33 +168,41 @@
         <a-tab-pane key="scan" tab="扫码登录">
           <div class="scan-login-container">
             <div v-if="!scanToken" class="scan-intro">
+              <div class="scan-icon-wrapper">
+                <QrcodeOutlined style="font-size: 64px; color: #1890ff;" />
+              </div>
               <p class="scan-tip">请使用慧宿智联 APP 扫码登录</p>
               <a-button
                 type="primary"
-                @click="handleGenerateToken"
+                @click="handleGenerateQrToken"
                 :loading="generatingToken"
                 block
+                size="large"
               >
-                获取登录码
+                生成登录二维码
               </a-button>
             </div>
 
             <div v-else class="scan-waiting">
-              <a-spin size="large" tip="等待扫码中..." />
-              <div class="scan-token-display">
-                <p>登录码：</p>
-                <a-typography-text copyable :copyable-text="scanToken">
-                  {{ scanToken.substring(0, 20) }}...
-                </a-typography-text>
+              <div class="qr-code-wrapper">
+                <canvas ref="qrCanvasRef"></canvas>
+                <div v-if="qrExpired" class="qr-expired-overlay">
+                  <p>二维码已失效</p>
+                  <a-button type="primary" @click="handleResetScan">点击刷新</a-button>
+                </div>
+              </div>
+              <div class="scan-status">
+                <a-spin v-if="!qrExpired" size="small" />
+                <span v-if="!qrExpired">等待APP扫码...</span>
+                <span v-else style="color: #ff4d4f;">二维码已过期，请刷新</span>
               </div>
               <a-statistic-countdown
+                v-if="!qrExpired"
                 :value="tokenExpireTime"
                 format="mm:ss"
                 @finish="handleCountdownFinish"
+                style="text-align: center; margin-top: 8px;"
               />
-              <a-button @click="handleResetScan" block style="margin-top: 16px">
-                重新获取
-              </a-button>
             </div>
           </div>
         </a-tab-pane>
@@ -288,7 +296,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
@@ -300,10 +308,13 @@ import {
   PhoneOutlined,
   LogoutOutlined,
   OrderedListOutlined,
-  SwapOutlined
+  SwapOutlined,
+  QrcodeOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, normalizeRole, CANONICAL_ROLES } from '@/api/auth'
+import { initWebSocket } from '@/utils/websocket'
+import QRCode from 'qrcode'
 
 const route = useRoute()
 const router = useRouter()
@@ -401,6 +412,9 @@ const loginRules: Record<string, Rule[]> = {
 const generatingToken = ref(false)
 const scanToken = ref('')
 const tokenExpireTime = ref(0)
+const qrExpired = ref(false)
+const qrCanvasRef = ref<HTMLCanvasElement>()
+let pollTimer: ReturnType<typeof setTimeout> | null = null
 
 // 注册相关
 const registerLoading = ref(false)
@@ -496,52 +510,81 @@ const handleLogin = async () => {
   }
 }
 
-// 生成扫码 Token
-const handleGenerateToken = async () => {
+// 生成扫码登录二维码
+const handleGenerateQrToken = async () => {
   try {
     generatingToken.value = true
-    const { token, expiresAt } = await authService.generateToken(loginForm)
+    qrExpired.value = false
+    const { token, expiresAt } = await authService.qrGenerate()
 
     scanToken.value = token
     tokenExpireTime.value = new Date(expiresAt).getTime()
 
-    // 自动开始扫码登录轮询
-    pollScanLogin(token)
+    await nextTick()
+    if (qrCanvasRef.value) {
+      await QRCode.toCanvas(qrCanvasRef.value, token, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      })
+    }
 
-    message.success('登录码生成成功，请使用管理端 APP 扫码')
+    pollQrStatus(token)
+    message.success('二维码已生成，请使用APP扫码')
   } catch (error) {
-    console.error('生成登录码失败:', error)
+    console.error('生成二维码失败:', error)
   } finally {
     generatingToken.value = false
   }
 }
 
-// 轮询扫码登录状态
-const pollScanLogin = async (token: string) => {
+// 轮询扫码状态
+const pollQrStatus = async (token: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 3000))
-    const { user } = await authService.scanLogin(token)
-    message.success('扫码登录成功')
-    appStore.showLoginModal = false
+    const result = await authService.qrStatus(token)
 
-    redirectByRole(user.role)
+    if (result.status === 'confirmed' && result.token && result.user) {
+      const normalizedUser = { ...result.user, role: normalizeRole(result.user.role) }
+      localStorage.setItem('auth_token', result.token)
+      appStore.setUserInfo(normalizedUser)
+      initWebSocket()
+      message.success('扫码登录成功')
+      appStore.showLoginModal = false
+      redirectByRole(normalizedUser.role)
+      return
+    }
+
+    if (result.status === 'expired') {
+      qrExpired.value = true
+      return
+    }
+
+    if (scanToken.value === token) {
+      pollQrStatus(token)
+    }
   } catch (error: any) {
-    if (error?.response?.status === 401 || error?.response?.data?.code === 401) {
-      pollScanLogin(token)
+    if (scanToken.value === token && !qrExpired.value) {
+      pollQrStatus(token)
     }
   }
 }
 
 // 倒计时结束
 const handleCountdownFinish = () => {
-  message.warning('登录码已过期，请重新获取')
-  scanToken.value = ''
+  qrExpired.value = true
+  message.warning('二维码已过期，请刷新')
 }
 
 // 重置扫码
 const handleResetScan = () => {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
   scanToken.value = ''
   tokenExpireTime.value = 0
+  qrExpired.value = false
 }
 
 // 处理注册
@@ -658,8 +701,11 @@ const handleLogout = async () => {
 
 .scan-login-container { padding: 20px 0; text-align: center; }
 .scan-intro { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.scan-icon-wrapper { margin-bottom: 8px; }
 .scan-tip { color: #666; margin: 0; font-size: 14px; }
-.scan-waiting { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.scan-token-display { margin-top: 16px; }
-.scan-token-display p { margin: 0 0 8px 0; color: #666; font-size: 14px; }
+.scan-waiting { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.qr-code-wrapper { position: relative; display: inline-block; border: 1px solid #e8e8e8; border-radius: 8px; padding: 8px; background: #fff; }
+.qr-expired-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; gap: 8px; }
+.qr-expired-overlay p { margin: 0; color: #ff4d4f; font-size: 14px; }
+.scan-status { display: flex; align-items: center; gap: 8px; color: #666; font-size: 13px; }
 </style>

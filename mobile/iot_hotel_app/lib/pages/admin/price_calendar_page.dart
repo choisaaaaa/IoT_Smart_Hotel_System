@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/theme/app_colors.dart';
 import '../../core/network/api_result.dart';
 import '../../services/room_type_service.dart';
@@ -118,7 +119,7 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${DateFormat('MM月dd日').format(date)} 价格设置'),
+        title: Text('${app_date_utils.DateUtils.formatShortDate(date)} 价格设置'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -380,7 +381,7 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
             onPressed: _previousMonth,
           ),
           Text(
-            DateFormat('yyyy年MM月').format(_currentMonth),
+            app_date_utils.DateUtils.formatMonthYear(_currentMonth),
             style: GoogleFonts.notoSansSc(
               fontSize: 18,
               fontWeight: FontWeight.bold,

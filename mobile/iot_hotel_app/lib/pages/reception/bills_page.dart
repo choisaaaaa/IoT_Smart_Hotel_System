@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/payment_service.dart';
 
@@ -295,8 +296,8 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                   _detailRow('账单号', bill['payment_no'] ?? bill['id']?.toString() ?? '-'),
                   _detailRow('客人', bill['guest_name'] ?? '-'),
                   _detailRow('房间', bill['room_number'] ?? '-'),
-                  _detailRow('入住日期', _formatDateStr(bill['check_in_date'])),
-                  _detailRow('退房日期', _formatDateStr(bill['check_out_date'])),
+                  _detailRow('入住日期', DateUtils.formatDateDynamic(bill['check_in_date'])),
+                  _detailRow('退房日期', DateUtils.formatDateDynamic(bill['check_out_date'])),
                   const Divider(),
                   Text('费用明细', style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
@@ -333,12 +334,6 @@ class _BillsPageState extends ConsumerState<BillsPage> {
         Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
       ]),
     );
-  }
-
-  String _formatDateStr(dynamic dateVal) {
-    if (dateVal == null) return '-';
-    final s = dateVal.toString();
-    return s.length >= 10 ? s.substring(0, 10) : s;
   }
 
   Future<void> _handleCollectPayment(dynamic bill) async {
@@ -481,7 +476,7 @@ class _BillItem extends StatelessWidget {
                   const SizedBox(height: 4),
                   if (guestName.isNotEmpty || roomNumber.isNotEmpty)
                     Text('$guestName ${roomNumber.isNotEmpty ? '· $roomNumber' : ''}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  Text(createdAt.length > 10 ? createdAt.substring(0, 10) : createdAt, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  Text(DateUtils.formatDateDynamic(createdAt), style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                 ],
               ),
             ),

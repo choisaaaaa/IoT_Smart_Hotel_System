@@ -71,7 +71,7 @@
                     <div class="reviewer-name">{{ item.member_name || '匿名用户' }}</div>
                     <div class="review-meta">
                       <a-rate :value="item.score" disabled style="font-size: 12px" />
-                      <span class="review-date">{{ formatDate(item.created_at) }}</span>
+                      <span class="review-date">{{ formatDateTime(item.created_at) }}</span>
                     </div>
                   </div>
                 </div>
@@ -132,7 +132,7 @@
               <div v-if="item.reply" class="hotel-reply">
                 <div class="reply-header">
                   <span class="reply-title">酒店回复</span>
-                  <span class="reply-date">{{ formatDate(item.replied_at) }}</span>
+                  <span class="reply-date">{{ formatDateTime(item.replied_at) }}</span>
                 </div>
                 <p class="reply-content">{{ item.reply }}</p>
               </div>
@@ -189,7 +189,7 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">评价时间：</span>
-          <span>{{ formatDate(currentReview.created_at) }}</span>
+          <span>{{ formatDateTime(currentReview.created_at) }}</span>
         </div>
         <a-divider />
         <div class="detail-section">
@@ -225,7 +225,7 @@ import {
 } from '@ant-design/icons-vue'
 import { getReviews, replyReview, deleteReview, getReviewStats } from '@/api/review'
 import { useAppStore } from '@/stores/app'
-import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const loading = ref(false)
@@ -269,11 +269,6 @@ const getFullUrl = (url: string) => {
   if (!url) return ''
   if (url.startsWith('http')) return url
   return appStore.resolveImageUrl(url)
-}
-
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 // 加载评价统计

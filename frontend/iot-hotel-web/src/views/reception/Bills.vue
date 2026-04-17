@@ -95,6 +95,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
 import { bookingApi } from '@/api/booking'
+import { formatDate } from '@/utils/date'
 
 const payMethodFilter = ref<string | undefined>()
 const drawerVisible = ref(false)
@@ -146,7 +147,7 @@ async function fetchBills() {
     // 简单统计逻辑
     stats.pendingCount = list.filter((b: any) => b.status === 'checked_in').length
     stats.todayTotal = list
-      .filter((b: any) => b.status === 'checked_out' && b.updated_at?.startsWith(new Date().toISOString().split('T')[0]))
+      .filter((b: any) => b.status === 'checked_out' && b.updated_at?.startsWith(formatDate(new Date())))
       .reduce((sum: number, b: any) => sum + Number(b.total_price), 0)
     stats.monthTotal = list
       .filter((b: any) => b.status === 'checked_out')

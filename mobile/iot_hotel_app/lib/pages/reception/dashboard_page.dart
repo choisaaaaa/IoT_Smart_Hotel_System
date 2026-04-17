@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../core/auth/auth_state_notifier.dart';
@@ -574,7 +575,7 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
                 color: AppColors.success,
                 title: b.guestName ?? '-',
                 subtitle: '${b.roomNumber ?? '${b.roomId}号房'} · ${b.roomType ?? ''}',
-                time: _formatDate(b.checkInDate),
+                time: DateUtils.formatDotDate(b.checkInDate),
               )),
             ],
             if (_todayCheckOuts.isNotEmpty) ...[
@@ -588,7 +589,7 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
                 color: AppColors.warning,
                 title: b.guestName ?? '-',
                 subtitle: '${b.roomNumber ?? '${b.roomId}号房'} · ${b.roomType ?? ''}',
-                time: _formatDate(b.checkOutDate),
+                time: DateUtils.formatDotDate(b.checkOutDate),
               )),
             ],
           ],
@@ -625,7 +626,7 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(radius: 16, backgroundColor: AppColors.info.withValues(alpha: 0.1), child: Text((b.guestName ?? '?')[0], style: TextStyle(color: AppColors.info, fontSize: 14, fontWeight: FontWeight.bold))),
                   title: Text('${b.guestName ?? '-'} · ${b.roomNumber ?? '${b.roomId}号房'}', style: GoogleFonts.notoSansSc(fontSize: 14)),
-                  subtitle: Text('${_formatDate(b.checkInDate)} ~ ${_formatDate(b.checkOutDate)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  subtitle: Text('${DateUtils.formatDotDate(b.checkInDate)} ~ ${DateUtils.formatDotDate(b.checkOutDate)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -724,16 +725,6 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
       return '${diff.inDays}天前';
     } catch (e) {
       return dateTime.toString();
-    }
-  }
-
-  String _formatDate(dynamic dateVal) {
-    if (dateVal == null) return '';
-    try {
-      final date = dateVal is DateTime ? dateVal : DateTime.parse(dateVal.toString());
-      return '${date.month}/${date.day}';
-    } catch (e) {
-      return dateVal.toString();
     }
   }
 

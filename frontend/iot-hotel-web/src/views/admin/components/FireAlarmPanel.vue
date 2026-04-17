@@ -120,11 +120,11 @@
           </span>
         </a-descriptions-item>
         <a-descriptions-item label="阈值">{{ currentAlarm.threshold }}{{ getUnitByType(currentAlarm.alarm_type) }}</a-descriptions-item>
-        <a-descriptions-item label="触发时间">{{ formatFullTime(currentAlarm.triggered_at) }}</a-descriptions-item>
+        <a-descriptions-item label="触发时间">{{ formatDateTime(currentAlarm.triggered_at) }}</a-descriptions-item>
         <a-descriptions-item label="当前状态"><a-badge :status="getAlarmStatusBadge(currentAlarm.status)" :text="getAlarmStatusText(currentAlarm.status)" /></a-descriptions-item>
         <a-descriptions-item label="描述" :span="2">{{ currentAlarm.description }}</a-descriptions-item>
         <a-descriptions-item v-if="currentAlarm.handled_by" label="处理人">{{ currentAlarm.handled_by }}</a-descriptions-item>
-        <a-descriptions-item v-if="currentAlarm.resolved_at" label="解决时间">{{ formatFullTime(currentAlarm.resolved_at) }}</a-descriptions-item>
+        <a-descriptions-item v-if="currentAlarm.resolved_at" label="解决时间">{{ formatDateTime(currentAlarm.resolved_at) }}</a-descriptions-item>
       </a-descriptions>
 
       <div style="margin-top: 16px; text-align: right;">
@@ -151,6 +151,7 @@ import { message, Modal } from 'ant-design-vue'
 import { WarningFilled, ExclamationCircleFilled, CheckCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type FireAlarmRecord } from '@/api/environment'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 
 const loading = ref(false)
 const alarms = ref<FireAlarmRecord[]>([])
@@ -282,10 +283,6 @@ function getUnitByType(type: string): string {
 
 function formatTime(time: string): string {
   return time ? dayjs(time).fromNow() : '-'
-}
-
-function formatFullTime(time: string): string {
-  return time ? dayjs(time).format('YYYY-MM-DD HH:mm:ss') : '-'
 }
 
 onMounted(() => {

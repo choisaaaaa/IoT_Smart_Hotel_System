@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/network/api_result.dart';
@@ -115,7 +115,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final format = DateFormat('MM.dd');
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -146,7 +145,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
               const VerticalDivider(indent: 10, endIndent: 10),
               GestureDetector(
                 onTap: _selectDateRange,
-                child: Text('${format.format(_checkInDate)} - ${format.format(_checkOutDate)}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                child: Text('${DateUtils.formatDotDate(_checkInDate)} - ${DateUtils.formatDotDate(_checkOutDate)}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
               ),
               const VerticalDivider(indent: 10, endIndent: 10),
               Expanded(

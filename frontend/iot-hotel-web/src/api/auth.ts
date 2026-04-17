@@ -119,6 +119,21 @@ class AuthService {
     return res.data!
   }
 
+  async qrGenerate(): Promise<{ token: string; expiresAt: string }> {
+    const res = await this.api.post<any, ApiResponse<{ token: string; expiresAt: string }>>(
+      '/auth/qr-generate'
+    )
+    return res.data!
+  }
+
+  async qrStatus(token: string): Promise<{ status: string; token?: string; sessionToken?: string; user?: UserInfo }> {
+    const res = await this.api.get<any, ApiResponse<{ status: string; token?: string; sessionToken?: string; user?: UserInfo }>>(
+      '/auth/qr-status',
+      { params: { token } }
+    )
+    return res.data!
+  }
+
   async scanLogin(token: string): Promise<{ token: string; user: UserInfo }> {
     const res = await this.api.post<any, ApiResponse<{ token: string; sessionToken: string; user: UserInfo }>>(
       '/auth/scan-login',

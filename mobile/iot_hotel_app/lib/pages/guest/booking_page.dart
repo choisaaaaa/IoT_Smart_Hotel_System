@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/booking_service.dart';
@@ -340,7 +341,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           children: [
             Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 4),
-            Text(date != null ? DateFormat('MM-dd').format(date) : '请选择',
+            Text(date != null ? DateUtils.formatDashDate(date) : '请选择',
                 style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -409,7 +410,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 const SizedBox(height: 8),
                 Text('${_nameController.text} · ${_phoneController.text}'),
                 const SizedBox(height: 4),
-                Text('${DateFormat('yyyy-MM-dd').format(_checkInDate!)} ~ ${DateFormat('yyyy-MM-dd').format(_checkOutDate!)}'),
+                Text('${DateUtils.formatDate(_checkInDate!)} ~ ${DateUtils.formatDate(_checkOutDate!)}'),
               ],
             ),
             actions: [
@@ -654,8 +655,8 @@ class _MyBookingsState extends ConsumerState<_MyBookings> {
           final status = b.status;
           final roomNumber = b.roomNumber ?? '-';
           final roomType = b.displayRoomType;
-          final checkIn = b.checkInDate.toIso8601String().split('T')[0];
-          final checkOut = b.checkOutDate.toIso8601String().split('T')[0];
+          final checkIn = DateUtils.formatDate(b.checkInDate);
+          final checkOut = DateUtils.formatDate(b.checkOutDate);
           final guestName = b.guestName ?? '';
           return Card(
             margin: const EdgeInsets.only(bottom: 12),

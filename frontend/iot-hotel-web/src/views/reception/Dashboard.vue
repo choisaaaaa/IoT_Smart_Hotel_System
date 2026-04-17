@@ -80,6 +80,7 @@ import { useHotelStore } from '@/stores/hotel'
 import axios from '@/api/request'
 import { bookingApi } from '@/api/booking'
 import dayjs from 'dayjs'
+import { formatDate } from '@/utils/date'
 
 const router = useRouter()
 const hotelStore = useHotelStore()
@@ -119,7 +120,7 @@ async function fetchDashboardData() {
     const resBookings: any = await bookingApi.getBookingList({ pageSize: 100 })
     const allBookings = resBookings.data?.list || []
     
-    const todayStr = dayjs().format('YYYY-MM-DD')
+    const todayStr = formatDate(new Date())
     const checkins = allBookings.filter((b: any) => dayjs(b.check_in_date).isSame(todayStr, 'day'))
     const checkouts = allBookings.filter((b: any) => dayjs(b.check_out_date).isSame(todayStr, 'day'))
     
@@ -163,8 +164,8 @@ async function fetchDashboardData() {
       guest_name: b.guest_name,
       room_number: b.room_number,
       phone: b.guest_phone,
-      check_in: b.check_in_date?.split('T')[0],
-      check_out: b.check_out_date?.split('T')[0],
+      check_in: formatDate(b.check_in_date),
+      check_out: formatDate(b.check_out_date),
       stay_days: Math.ceil((new Date().getTime() - new Date(b.check_in_date).getTime()) / (1000 * 60 * 60 * 24))
     }))
 

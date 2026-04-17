@@ -111,9 +111,10 @@ CREATE TABLE user_roles (
 
 CREATE TABLE api_tokens (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT NULL,
     token VARCHAR(255) NOT NULL UNIQUE,
     token_type VARCHAR(50) DEFAULT 'login',
+    status VARCHAR(20) DEFAULT 'pending',
     expires_at DATETIME NOT NULL,
     is_used TINYINT(1) DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

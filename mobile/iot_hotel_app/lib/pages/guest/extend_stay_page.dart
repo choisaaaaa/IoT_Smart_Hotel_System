@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
 import '../../services/member_service.dart';
@@ -235,7 +235,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
             const Text('续住成功', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
-              '您的退房日期已更新为${_newCheckOutDate != null ? DateFormat('yyyy年MM月dd日').format(_newCheckOutDate!) : ''}',
+              '您的退房日期已更新为${_newCheckOutDate != null ? DateUtils.formatDateCN(_newCheckOutDate!) : ''}',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
@@ -348,7 +348,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
         children: [
           Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
           const SizedBox(height: 4),
-          Text(DateFormat('MM月dd日').format(date),
+          Text(DateUtils.formatShortDate(date),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
@@ -392,7 +392,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
                 children: [
                   const Icon(Icons.event_available_rounded, size: 18, color: AppColors.primary),
                   const SizedBox(width: 8),
-                  Text('新退房日期：${DateFormat('yyyy年MM月dd日').format(_newCheckOutDate!)}',
+                  Text('新退房日期：${DateUtils.formatDateCN(_newCheckOutDate!)}',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.primary)),
                 ],
               ),
@@ -508,15 +508,15 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
   }
 
   Widget _buildPriceSummary() {
-    double _safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
-    final double basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : 0;
-    double discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
+    double safeToDouble(dynamic v) { if (v is num) return v.toDouble(); if (v is String) return double.tryParse(v) ?? 0.0; return 0.0; }
+    final double basePrice = _priceDetails != null ? safeToDouble(_priceDetails!['base_price']) : 0;
+    double discountRate = _priceDetails != null ? safeToDouble(_priceDetails!['discount_rate']) : 1.0;
     if (discountRate == 0.0 && _priceDetails != null) discountRate = 1.0;
-    final double memberDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['member_discount']) : 0;
-    final double couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0;
-    final double pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0;
+    final double memberDiscount = _priceDetails != null ? safeToDouble(_priceDetails!['member_discount']) : 0;
+    final double couponDiscount = _priceDetails != null ? safeToDouble(_priceDetails!['coupon_discount']) : 0;
+    final double pointsDiscount = _priceDetails != null ? safeToDouble(_priceDetails!['points_discount']) : 0;
     final int usedPoints = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : (int.tryParse(_priceDetails?['used_points']?.toString() ?? '0') ?? 0);
-    final double totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : 0;
+    final double totalPrice = _priceDetails != null ? safeToDouble(_priceDetails!['total_price']) : 0;
 
     return Container(
       padding: const EdgeInsets.all(16),

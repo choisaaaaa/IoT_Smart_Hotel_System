@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/network/api_result.dart';
@@ -183,7 +183,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildSearchCard(BuildContext context) {
-    final format = DateFormat('M月d日');
     final nights = _checkOutDate.difference(_checkInDate).inDays;
 
     return Transform.translate(
@@ -238,7 +237,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('入住', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        Text(format.format(_checkInDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(DateUtils.formatShortDate(_checkInDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -255,7 +254,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         const Text('离店', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        Text(format.format(_checkOutDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(DateUtils.formatShortDate(_checkOutDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),

@@ -516,7 +516,7 @@ import request from '@/api/request'
 import { getImageUrl } from '@/utils/url'
 import { systemConfigApi } from '@/api/system-config'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/date'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -670,8 +670,8 @@ const handleImportCoupon = async () => {
 
 const hasCheckedInToday = computed(() => {
   if (!memberInfo.value.last_checkin_date) return false
-  const today = new Date().toISOString().split('T')[0]
-  const lastDate = new Date(memberInfo.value.last_checkin_date).toISOString().split('T')[0]
+  const today = formatDate(new Date())
+  const lastDate = formatDate(memberInfo.value.last_checkin_date)
   return today === lastDate
 })
 
@@ -759,12 +759,6 @@ const guestEditForm = reactive<FrequentGuest>({
   id_type: 'idcard',
   id_number: ''
 })
-
-// 格式化日期
-const formatDate = (date: any) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD')
-}
 
 // 脱敏证件号
 const maskId = (id: string) => {

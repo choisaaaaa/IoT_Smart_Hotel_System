@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/network/dio_client.dart';
@@ -11,7 +11,6 @@ import '../../services/booking_service.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
 import '../../services/payment_service.dart';
-import '../../services/room_service.dart';
 import '../../models/coupon.dart';
 import '../../models/frequent_guest.dart';
 import '../../models/member.dart';
@@ -103,10 +102,9 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         // 过滤出可用状态且匹配当前房型的房间
         availableRooms = allRooms.where((r) {
           // 只显示可用房间
-          final isAvailable = r.roomStatus == 'available' || r.roomStatus == 'clean' || r.roomStatus == null || r.roomStatus!.isEmpty;
-          // 匹配房型
+          final isAvailable = r.roomStatus == 'available' || r.roomStatus == 'clean' || r.roomStatus.isEmpty;
           final typeMatch = widget.roomTypeId != null && r.roomTypeId == widget.roomTypeId;
-          final typeName = r.roomName ?? r.roomType ?? '';
+          final typeName = r.roomName ?? r.roomType;
           final nameMatch = typeName == widget.roomType || typeName.contains(widget.roomType);
           
           debugPrint('DEBUG: Filter - roomId=${r.id}, isAvailable=$isAvailable, typeMatch=$typeMatch, nameMatch=$nameMatch, typeName=$typeName');
@@ -939,7 +937,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       children: [
         Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(DateFormat('MM-dd').format(date), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(DateUtils.formatDashDate(date), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       ],
     );
   }
@@ -947,7 +945,6 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   Widget _buildBottomPayBar() {
     final basePrice = _priceDetails != null ? _safeToDouble(_priceDetails!['base_price']) : widget.price * widget.checkOutDate.difference(widget.checkInDate).inDays;
     final totalPrice = _priceDetails != null ? _safeToDouble(_priceDetails!['total_price']) : basePrice;
-    final discountRate = _priceDetails != null ? _safeToDouble(_priceDetails!['discount_rate']) : 1.0;
     final pointsUsed = _priceDetails?['used_points'] is num ? (_priceDetails!['used_points'] as num).toInt() : 0;
     final pointsDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['points_discount']) : 0.0;
     final couponDiscount = _priceDetails != null ? _safeToDouble(_priceDetails!['coupon_discount']) : 0.0;

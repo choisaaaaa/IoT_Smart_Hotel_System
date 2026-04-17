@@ -46,6 +46,7 @@ import '../pages/guest/wallet_page.dart';
 import '../pages/guest/member_page.dart';
 import '../pages/guest/room_service_page.dart';
 import '../pages/guest/ai_butler_page.dart';
+import '../pages/auth/qr_scanner_page.dart';
 import '../core/auth/auth_state_notifier.dart';
 import '../core/network/api_interceptor.dart';
 
@@ -151,6 +152,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegisterPage(),
+      ),
+      GoRoute(
+        path: '/qr-scanner',
+        name: 'qr-scanner',
+        builder: (context, state) => const QrScannerPage(),
       ),
       GoRoute(path: '/admin', name: 'admin', builder: (context, state) => const AdminDashboardPage()),
       GoRoute(path: '/system', name: 'system', builder: (context, state) => const SystemDashboardPage()),

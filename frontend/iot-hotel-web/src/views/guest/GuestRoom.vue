@@ -251,7 +251,7 @@
             <a-tag :color="getDeliveryStatusColor(record.status)">{{ getDeliveryStatusText(record.status) }}</a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
-            {{ formatDate(record.created_at) }}
+            {{ formatDotDateTime(record.created_at) }}
           </template>
         </template>
       </a-table>
@@ -268,7 +268,7 @@
             <a-tag :color="getPriorityColor(record.priority)">{{ getPriorityText(record.priority) }}</a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
-            {{ formatDate(record.created_at) }}
+            {{ formatDotDateTime(record.created_at) }}
           </template>
         </template>
       </a-table>
@@ -296,6 +296,7 @@ import { maintenanceApi } from '@/api/maintenance'
 import { callApi } from '@/api/call'
 import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
+import { formatDotDateTime, now } from '@/utils/date'
 
 const route = useRoute()
 const router = useRouter()
@@ -503,7 +504,7 @@ function askQuick(q: string) {
 }
 
 async function sendToAI(text: string) {
-  chatMessages.value.push({ type: 'user', text, time: new Date().toLocaleTimeString() })
+  chatMessages.value.push({ type: 'user', text, time: now().format('HH:mm') })
   scrollToBottom()
   aiThinking.value = true
 
@@ -519,7 +520,7 @@ async function sendToAI(text: string) {
       const aiResponse = res.data
       const aiText = aiResponse.text || '抱歉，我没有理解您的意思，请换个说法试试？'
 
-      chatMessages.value.push({ type: 'ai', text: aiText, time: new Date().toLocaleTimeString(), typing: true })
+      chatMessages.value.push({ type: 'ai', text: aiText, time: now().format('HH:mm'), typing: true })
 
       typeWriterEffect(aiText, () => {
         let matchedKey = '默认'
@@ -539,7 +540,7 @@ async function sendToAI(text: string) {
       }
     }
   } catch (error) {
-    chatMessages.value.push({ type: 'ai', text: '🤔 抱歉，我现在有点忙，请稍后再试。', time: new Date().toLocaleTimeString() })
+    chatMessages.value.push({ type: 'ai', text: '🤔 抱歉，我现在有点忙，请稍后再试。', time: now().format('HH:mm') })
   } finally {
     aiThinking.value = false
     scrollToBottom()
@@ -749,17 +750,6 @@ function getPriorityText(priority: string) {
     urgent: '特急'
   }
   return textMap[priority] || priority
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 function scrollToBottom() {

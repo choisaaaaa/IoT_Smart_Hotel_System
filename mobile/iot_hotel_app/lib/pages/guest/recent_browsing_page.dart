@@ -90,7 +90,7 @@ class _RecentBrowsingPageState extends State<RecentBrowsingPage> {
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _browsingHistory.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final item = _browsingHistory[index];
                     return Dismissible(
@@ -116,7 +116,7 @@ class _RecentBrowsingPageState extends State<RecentBrowsingPage> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: item['image'] != null
-                                      ? Image.network(item['image'], width: 80, height: 60, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
+                                      ? Image.network(item['image'], width: 80, height: 60, fit: BoxFit.cover, errorBuilder: (_, _, _) => _buildPlaceholder())
                                       : _buildPlaceholder(),
                                 ),
                                 const SizedBox(width: 12),

@@ -101,7 +101,7 @@
                 </a-typography-text>
               </template>
               <template v-if="column.key === 'timestamp'">
-                {{ formatDate(record.timestamp) }}
+                {{ formatDotDateTime(record.timestamp) }}
               </template>
             </template>
           </a-table>
@@ -116,7 +116,7 @@ import { ref, onMounted, reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
-import dayjs from 'dayjs'
+import { formatDotDateTime, formatDateTime } from '@/utils/date'
 
 const status = ref({
   connected: false,
@@ -171,7 +171,7 @@ const fetchStatus = async () => {
     const res = await request.get('/mqtt/status')
     status.value = {
       ...res.data,
-      lastUpdate: dayjs().format('YYYY-MM-DD HH:mm:ss')
+      lastUpdate: formatDateTime(new Date())
     }
   } catch (err) {
     message.error('获取MQTT状态失败')
@@ -230,10 +230,6 @@ const handleTableChange = (pag: any) => {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
   fetchLogs()
-}
-
-const formatDate = (date: string) => {
-  return dayjs(date).format('MM-DD HH:mm:ss')
 }
 
 onMounted(() => {
