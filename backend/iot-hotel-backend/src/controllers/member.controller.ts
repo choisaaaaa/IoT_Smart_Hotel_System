@@ -358,7 +358,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
 
     // 检查入住状态
     const [guestRows] = await pool.query<RowDataPacket[]>(
-      `SELECT g.*, r.room_number, r.room_name, b.booking_number
+      `SELECT g.*, r.room_number, r.room_name, r.hotel_id, b.booking_number
        FROM guests g
        LEFT JOIN rooms r ON g.room_id = r.id
        LEFT JOIN bookings b ON g.booking_id = b.id
