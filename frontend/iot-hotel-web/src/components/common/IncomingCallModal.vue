@@ -69,7 +69,7 @@ function handleAnswer() {
     // 设置为当前通话
     appStore.setCurrentCall({
       ...appStore.incomingCall,
-      status: 'connected'
+      status: 'connecting'
     })
     
     // 清除来电状态

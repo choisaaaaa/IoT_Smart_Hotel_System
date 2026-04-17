@@ -638,13 +638,21 @@ const handleIncomingCall = (data: any) => {
 const handleWebRTCOffer = async (data: any) => {
   console.log('[WebRTC] 收到 offer')
   if (!peerConnection.value) {
-    pendingOffer.value = {
-      offer: data.offer,
-      from_type: data.from_type,
-      from_id: data.from_id,
-      call_id: data.call_id
+    if (appStore.currentCall?.call_id === data.call_id) {
+      const isCaller = String(data.caller_id) === appStore.userInfo?.username
+      const targetType = isCaller ? data.callee_type : data.caller_type
+      const targetId = isCaller ? data.callee_id : data.caller_id
+      console.log('[WebRTC] peerConnection不存在，自动初始化WebRTC')
+      await initWebRTC(data.call_id, targetType || data.from_type, targetId || data.from_id)
+    } else {
+      pendingOffer.value = {
+        offer: data.offer,
+        from_type: data.from_type,
+        from_id: data.from_id,
+        call_id: data.call_id
+      }
+      return
     }
-    return
   }
   await handleOffer(data)
 }
@@ -706,8 +714,8 @@ const handleCallRejected = (data: any) => {
 const handleCallAnswered = async (data: any) => {
   console.log('[App] 收到 call_answered 事件:', data)
 
-  if (appStore.currentCall?.call_id === data.call_id && appStore.currentCall?.status === 'connected') {
-    console.log('[App] 忽略重复的 call_answered 事件')
+  if (appStore.currentCall?.call_id === data.call_id && peerConnection.value) {
+    console.log('[App] WebRTC已初始化，忽略重复的 call_answered 事件')
     return
   }
 
