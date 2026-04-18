@@ -5,7 +5,7 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), memberController.get);
+router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), memberController.get);
 router.get('/me', authenticate as any, memberController.getMe);
 router.get('/status', authenticate as any, memberController.getStatus);
 router.get('/discounts', memberController.getLevelDiscounts);

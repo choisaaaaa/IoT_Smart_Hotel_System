@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import * as guestController from '../../controllers/frequent-guest.controller';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, authorize } from '../../middleware/auth';
+import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-// 所有接口都需要登录
 router.use(authenticate);
 
-router.get('/', guestController.list);
-router.post('/', guestController.create);
-router.put('/:id', guestController.update);
-router.delete('/:id', guestController.remove);
+router.get('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), guestController.list);
+router.post('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), guestController.create);
+router.put('/:id', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), guestController.update);
+router.delete('/:id', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), guestController.remove);
 
 export default router;
