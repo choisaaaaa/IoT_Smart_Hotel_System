@@ -153,18 +153,12 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (isSystemAdmin(req.user?.role)) {
       hotelId = req.body.hotel_id || req.query.hotel_id || hotelId || 1;
     } else if (isStaff(req.user?.role) || isHotelAdmin(req.user?.role)) {
-      // staff 和 manager 从 user_hotels 表获取 hotel_id
       const [hotelRows]: any = await (await import('../config/database')).default.execute(
         'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
         [req.user?.id]
       );
       if (hotelRows.length > 0) {
         hotelId = hotelRows[0].hotel_id;
-      }
-      // 也支持从请求参数中获取
-      const bodyHotelId = req.body.hotel_id || req.query.hotel_id;
-      if (bodyHotelId) {
-        hotelId = parseInt(bodyHotelId as string);
       }
     }
     if (hotelId === undefined || hotelId === null) {

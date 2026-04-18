@@ -4,11 +4,22 @@ import { AuthRequest, successResponse, errorResponse } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import dayjs from 'dayjs';
+import { isSystemAdmin, isCustomer, isGuest } from '../utils/role';
 
 export const getPriceCalendar = async (req: AuthRequest, res: Response) => {
   try {
     const { room_type_id, rate_plan_id, start_date, end_date } = req.query;
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
+
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : (hotelId || 1);
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : hotelId;
+    }
+
+    if (!hotelId) {
+      return res.status(400).json(errorResponse('缺少酒店ID参数'));
+    }
 
     if (!room_type_id || !start_date || !end_date) {
       return res.status(400).json(errorResponse('缺少必要参数'));
@@ -62,7 +73,18 @@ export const setPriceCalendar = async (req: AuthRequest, res: Response) => {
 
 export const getTodayInventory = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
+
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : (hotelId || 1);
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : hotelId;
+    }
+
+    if (!hotelId) {
+      return res.status(400).json(errorResponse('缺少酒店ID参数'));
+    }
+
     const today = dayjs().format('YYYY-MM-DD');
 
     // 使用 UNION 确保包含每个房型的“标准价”方案 (rate_plan_id 为 NULL) 和所有自定义方案

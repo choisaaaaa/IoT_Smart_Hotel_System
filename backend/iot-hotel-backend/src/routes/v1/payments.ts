@@ -9,8 +9,8 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 
 router.get('/stats/revenue', authenticate as any, authorize(staffRoles), paymentController.getRevenueStats);
-router.get('/', authenticate as any, authorize(allRoles), paymentController.get);
-router.get('/:id', authenticate as any, authorize(allRoles), paymentController.getById);
+router.get('/', authenticate as any, authorize(staffRoles), paymentController.get);
+router.get('/:id', authenticate as any, authorize(staffRoles), paymentController.getById);
 router.post('/', authenticate as any, authorize(allRoles), paymentController.create);
 router.put('/:id/pay', authenticate as any, paymentController.pay);
 
