@@ -374,14 +374,21 @@ watch(() => appStore.currentCall, (newCall) => {
 
 async function handleHangup() {
   if (appStore.currentCall) {
-    try {
-      await callApi.hangup(appStore.currentCall.call_id)
-      cleanupWebRTC()
-      appStore.clearCurrentCall()
-      message.success('通话已挂断')
-    } catch (error) {
-      message.error('挂断失败')
+    const callId = appStore.currentCall.call_id
+    const socket = getSocket()
+    if (socket) {
+      socket.emit('hangup_call', { call_id: callId })
     }
+    try {
+      await callApi.hangup(callId)
+    } catch (error: any) {
+      if (error?.response?.status === 409) {
+        console.log('[App] 通话已结束，清理本地状态')
+      }
+    }
+    cleanupWebRTC()
+    appStore.clearCurrentCall()
+    message.success('通话已挂断')
   }
 }
 
