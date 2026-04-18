@@ -33,6 +33,10 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     // 否则（包括已切换到分店上下文的系统管理员），根据 hotelId 获取对应酒店信息
     if (!hotelId) {
+      if (isCustomer(userRole) || isGuest(userRole)) {
+        const hotels = await HotelService.getAllHotels();
+        return res.json(successResponse(hotels, '获取酒店列表成功'));
+      }
       return res.status(401).json(errorResponse('未授权，缺少酒店绑定信息'));
     }
 

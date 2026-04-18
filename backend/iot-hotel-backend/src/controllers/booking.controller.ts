@@ -314,7 +314,7 @@ export const getMyBookings = async (req: AuthRequest, res: Response) => {
     const total = (totalRows[0] as any).total;
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.*, rt.name as room_type_name, r.room_number, r.room_name, h.name as hotel_name
+      `SELECT b.*, rt.name as room_type_name, r.room_number, r.room_name, h.hotel_name
        FROM bookings b
        LEFT JOIN room_types rt ON b.room_type_id = rt.id
        LEFT JOIN rooms r ON b.room_id = r.id
