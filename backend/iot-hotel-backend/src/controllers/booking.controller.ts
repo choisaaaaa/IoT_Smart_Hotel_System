@@ -1039,16 +1039,15 @@ export const checkin = async (req: AuthRequest, res: Response) => {
 
     await connection.commit();
     res.json(successResponse(null, '办理入住成功'));
-  } catch (error) {
+  } catch (error: any) {
     await connection.rollback();
-    logger.error('办理入住失败:', error.message);
-    res.status(500).json(errorResponse('办理入住失败'));
+    logger.error('办理入住失败:', error?.message || error, error?.stack || '');
+    res.status(500).json(errorResponse(error?.message || '办理入住失败'));
   } finally {
     connection.release();
   }
 };
 
-// 拒绝预入住申请
 export const rejectPreCheckin = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   try {
