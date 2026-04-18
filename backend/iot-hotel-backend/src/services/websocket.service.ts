@@ -831,6 +831,7 @@ class WebSocketService {
       socket.on('reject_call', async (data: { callId?: string; call_id?: string }) => {
         try {
           const callId = String(data.callId || data.call_id).trim();
+          const currentClient = this.clients.get(socket.id);
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -907,6 +908,7 @@ class WebSocketService {
       socket.on('hangup_call', async (data: { callId?: string; call_id?: string }) => {
         try {
           const callId = String(data.callId || data.call_id).trim();
+          const currentClient = this.clients.get(socket.id);
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
