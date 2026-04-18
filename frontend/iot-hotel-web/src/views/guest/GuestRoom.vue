@@ -460,7 +460,6 @@ function initWebSocket() {
 function hangupCall() {
   if (appStore.currentCall?.call_id) {
     socket?.emit('hangup_call', { call_id: appStore.currentCall.call_id })
-    appStore.clearCurrentCall()
   }
 }
 

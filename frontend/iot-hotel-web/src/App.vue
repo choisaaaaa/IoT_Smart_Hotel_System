@@ -691,17 +691,18 @@ const handleWebRTCIceCandidate = async (data: any) => {
 
 const handleCallHungup = (data: any) => {
   console.log('[App] 通话被挂断:', data)
-  if (!appStore.currentCall?.call_id && !appStore.incomingCall?.call_id) {
+  const isRelevantCall = appStore.currentCall?.call_id === data.call_id || appStore.incomingCall?.call_id === data.call_id
+  if (!isRelevantCall && !peerConnection.value) {
     return
   }
   if (appStore.incomingCall?.call_id === data.call_id) {
     appStore.clearIncomingCall()
   }
+  cleanupWebRTC()
   if (appStore.currentCall?.call_id === data.call_id) {
-    cleanupWebRTC()
     appStore.clearCurrentCall()
-    message.info('对方已挂断')
   }
+  message.info('通话已结束')
 }
 
 const handleCallRejected = (data: any) => {

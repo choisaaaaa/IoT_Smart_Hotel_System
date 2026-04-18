@@ -454,13 +454,11 @@ function handleOutgoingCancel() {
 function hangupCurrentCall() {
   if (appStore.currentCall?.call_id) {
     callApi.hangup(appStore.currentCall.call_id)
-    // 发送挂断事件
     const socket = getSocket()
     if (socket) {
       socket.emit('hangup_call', { call_id: appStore.currentCall.call_id })
     }
   }
-  appStore.clearCurrentCall()
   stopCallDurationTimer()
 }
 
