@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { RoomService } from '../services/room.service';
 import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
-import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, isGuest, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -11,7 +11,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     
     // 系统管理员和顾客可以从 query 指定 hotel_id
-    if (isSystemAdmin(req.user?.role) || isCustomer(req.user?.role)) {
+    if (isSystemAdmin(req.user?.role) || isCustomer(req.user?.role) || isGuest(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);

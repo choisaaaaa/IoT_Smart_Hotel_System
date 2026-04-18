@@ -34,7 +34,7 @@ export async function list(req: AuthRequest, res: Response) {
     if (isHotelAdmin(userRole) || isStaff(userRole)) {
       conditions.push('u.hotel_id = ?');
       params.push(currentUser.hotel_id);
-      conditions.push("u.role NOT IN ('customer', 'user')");
+      conditions.push("u.role NOT IN ('customer', 'user', 'guest')");
       conditions.push('u.role != ?');
       params.push('system');
     } else if (isSystemAdmin(userRole)) {

@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { hashPassword, comparePassword } from '../utils/password';
-import { isCustomer } from '../utils/role';
+import { isCustomer, isGuest } from '../utils/role';
 import { systemConfigService } from '../services/system-config.service';
 
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
@@ -121,7 +121,7 @@ export const get = async (req: AuthRequest, res: Response) => {
     const offset = (Number(page) - 1) * Number(pageSize);
 
     // 如果是普通用户且没有提供特定ID，返回自己的信息
-    if (isCustomer(req.user?.role)) {
+    if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
       const user = req.user as any;
       const phone = user.phone || user.username; // 优先使用 phone
       const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM members WHERE phone = ?', [phone]);

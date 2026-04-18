@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin, isHotelAdmin, isCustomer, isStaff } from '../utils/role';
+import { isSystemAdmin, isHotelAdmin, isCustomer, isGuest, isStaff } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -136,7 +136,7 @@ export const create = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('只有已退房的订单才能评价'));
     }
 
-    if (isCustomer(userRole) && booking.user_id !== userId) {
+    if ((isCustomer(userRole) || isGuest(userRole)) && booking.user_id !== userId) {
       return res.status(403).json(errorResponse('只能评价自己的订单'));
     }
 
@@ -240,7 +240,7 @@ export const remove = async (req: AuthRequest, res: Response) => {
 
     const review = rows[0];
 
-    if (isCustomer(userRole)) {
+    if (isCustomer(userRole) || isGuest(userRole)) {
       if (review.user_id !== userId) {
         return res.status(403).json(errorResponse('无权删除此评价'));
       }

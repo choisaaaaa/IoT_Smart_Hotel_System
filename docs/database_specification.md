@@ -1,7 +1,7 @@
 # 智慧酒店物联网控制系统 - 数据库规范文档
 
-> 版本: v3.0.0\
-> 更新日期: 2026-04-12\
+> 版本: v3.1.0\
+> 更新日期: 2026-04-19\
 > 适用范围: 后端服务、Web前端、App端、硬件接口
 
 ***
@@ -10,7 +10,7 @@
 
 ### 1.1 标准角色定义
 
-系统采用 **四角色模型**，所有代码和数据库中必须使用以下标准标识符：
+系统采用 **五角色模型**，所有代码和数据库中必须使用以下标准标识符：
 
 | 标准标识符          | 中文名称  | 说明               | hotel\_id 规则  |
 | -------------- | ----- | ---------------- | ------------- |
@@ -18,6 +18,7 @@
 | `hotel_admin`  | 酒店管理员 | 管理所属酒店的业务和员工     | `>0` (所属酒店ID) |
 | `staff`        | 前台员工  | 处理日常前台业务操作       | `>0` (所属酒店ID) |
 | `customer`     | 顾客    | 预订房间、使用服务        | `NULL` 或 `0`  |
+| `guest`        | 游客    | 浏览酒店和房型信息，未登录用户  | `NULL` 或 `0`  |
 
 ### 1.2 废弃角色标识映射表
 
@@ -38,14 +39,14 @@
 | `front_desk`     | `staff`        | 旧代码             |
 | `frontdesk`      | `staff`        | 旧代码             |
 | `user`           | `customer`     | 旧默认值            |
-| `guest`          | `customer`     | 旧代码             |
+| `visitor`        | `guest`        | 旧代码             |
 
 ### 1.3 角色规范化工具
 
 各端均提供了角色规范化工具函数，确保旧标识自动映射到标准标识：
 
-- **后端**: `src/utils/role.ts` → `normalizeRole()`, `isSystemAdmin()`, `isHotelAdmin()`, `isStaff()`, `isCustomer()`
-- **Web前端**: `src/api/auth.ts` → `normalizeRole()`, `isSystemAdmin()`, `isHotelAdmin()`, `isStaff()`, `isCustomer()`
+- **后端**: `src/utils/role.ts` → `normalizeRole()`, `isSystemAdmin()`, `isHotelAdmin()`, `isStaff()`, `isCustomer()`, `isGuest()`
+- **Web前端**: `src/api/auth.ts` → `normalizeRole()`, `isSystemAdmin()`, `isHotelAdmin()`, `isStaff()`, `isCustomer()`, `isGuest()`
 - **App端**: `lib/core/auth/auth_state_notifier.dart` → `AppRoles.normalize()`, `AppRoles.displayName()`
 
 ***
@@ -179,7 +180,7 @@ CREATE TABLE login_sessions (
 
 **规范要求**:
 
-- `role` 字段只能取值: `system_admin`, `hotel_admin`, `staff`, `customer`
+- `role` 字段只能取值: `system_admin`, `hotel_admin`, `staff`, `customer`, `guest`
 - 默认值为 `customer`（非 `user`）
 - `hotel_id` 为 0 表示系统管理员，大于 0 表示所属酒店
 
@@ -204,6 +205,7 @@ CREATE TABLE roles (
 | 2  | `hotel_admin`  | 酒店管理员             | 酒店管理权限      |
 | 3  | `staff`        | 前台员工              | 业务操作权限      |
 | 4  | `customer`     | 顾客                | 基本服务权限      |
+| 5  | `guest`        | 游客                | 浏览权限        |
 
 #### user\_roles 关联表
 

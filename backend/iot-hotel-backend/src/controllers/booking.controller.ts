@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 dayjs.extend(isSameOrBefore);
 import { v4 as uuidv4 } from 'uuid';
-import { isSystemAdmin, isCustomer, isStaff, isHotelAdmin, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isCustomer, isGuest, isStaff, isHotelAdmin, CANONICAL_ROLES } from '../utils/role';
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 import { orderTimeoutService } from '../services/order-timeout.service';
 import { systemConfigService } from '../services/system-config.service';
@@ -289,9 +289,58 @@ async function calculateBookingPrice(
   };
 }
 
+export const getMyBookings = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
+
+    const { status, page = 1, pageSize = 10 } = req.query;
+    const offset = (Number(page) - 1) * Number(pageSize);
+
+    let whereClause = 'WHERE b.user_id = ?';
+    const params: any[] = [userId];
+
+    if (status) {
+      whereClause += ' AND b.status = ?';
+      params.push(status);
+    }
+
+    const [totalRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
+      params
+    );
+    const total = (totalRows[0] as any).total;
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT b.*, rt.name as room_type_name, r.room_number, r.room_name, h.name as hotel_name
+       FROM bookings b
+       LEFT JOIN room_types rt ON b.room_type_id = rt.id
+       LEFT JOIN rooms r ON b.room_id = r.id
+       LEFT JOIN hotels h ON b.hotel_id = h.id
+       ${whereClause}
+       ORDER BY b.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, Number(pageSize), offset]
+    );
+
+    res.json(successResponse({
+      list: rows,
+      total,
+      page: Number(page),
+      pageSize: Number(pageSize),
+      totalPages: Math.ceil(total / Number(pageSize))
+    }));
+  } catch (error: any) {
+    logger.error('获取我的预订失败:', error);
+    res.status(500).json(errorResponse(error.message || '获取我的预订失败'));
+  }
+};
+
 export const get = async (req: AuthRequest, res: Response) => {
   try {
-    const isUser = isCustomer(req.user?.role);
+    const isUser = isCustomer(req.user?.role) || isGuest(req.user?.role);
     let hotelId = req.user?.hotel_id;
 
     // 调试日志

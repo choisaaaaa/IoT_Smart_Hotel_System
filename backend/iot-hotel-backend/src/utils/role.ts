@@ -16,7 +16,8 @@ const ROLE_ALIASES: Record<string, string> = {
   frontdesk: 'staff',
   user: 'customer',
   customer: 'customer',
-  guest: 'customer',
+  guest: 'guest',
+  visitor: 'guest',
 };
 
 export const CANONICAL_ROLES = {
@@ -24,6 +25,7 @@ export const CANONICAL_ROLES = {
   HOTEL_ADMIN: 'hotel_admin',
   STAFF: 'staff',
   CUSTOMER: 'customer',
+  GUEST: 'guest',
 } as const;
 
 export type CanonicalRole = typeof CANONICAL_ROLES[keyof typeof CANONICAL_ROLES];
@@ -58,4 +60,8 @@ export function isStaff(role?: string | null): boolean {
 
 export function isCustomer(role?: string | null): boolean {
   return normalizeRole(role) === CANONICAL_ROLES.CUSTOMER;
+}
+
+export function isGuest(role?: string | null): boolean {
+  return normalizeRole(role) === CANONICAL_ROLES.GUEST;
 }

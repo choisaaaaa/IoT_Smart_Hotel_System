@@ -4,6 +4,7 @@ import config from '../config';
 import logger from '../utils/logger';
 import mqttService from './mqtt.service';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
+import { normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 interface ClientInfo {
   socketId: string;
@@ -125,8 +126,9 @@ class WebSocketService {
             }
             
             const user = rows[0];
-            if (user.role === 'customer') {
-              socket.emit('error', { message: '身份验证失败：普通顾客无法以柜台身份登录' });
+            const normalizedRole = normalizeRole(user.role);
+            if (normalizedRole === CANONICAL_ROLES.CUSTOMER || normalizedRole === CANONICAL_ROLES.GUEST) {
+              socket.emit('error', { message: '身份验证失败：普通顾客/游客无法以柜台身份登录' });
               return;
             }
             

@@ -24,6 +24,10 @@ import ratePlans from './rate-plans';
 import knowledgeBase from './knowledge-base';
 import mqtt from './mqtt';
 import rfid from './rfid';
+import floors from './floors';
+import frequentGuests from './frequent-guests';
+import health from './health';
+import systemConfig from './system-config';
 
 const router = Router();
 
@@ -51,6 +55,10 @@ router.use('/environment', environment);
 router.use('/knowledge-base', knowledgeBase);
 router.use('/mqtt', mqtt);
 router.use('/rfid', rfid);
+router.use('/floors', floors);
+router.use('/frequent-guests', frequentGuests);
+router.use('/health', health);
+router.use('/system-config', systemConfig);
 
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({

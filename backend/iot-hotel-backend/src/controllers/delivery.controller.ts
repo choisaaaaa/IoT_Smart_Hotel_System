@@ -3,6 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { isCustomer, isGuest } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -15,8 +16,8 @@ export const get = async (req: AuthRequest, res: Response) => {
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     
-    // 如果是顾客角色，只能查看自己房间的订单
-    if (userRole === 'customer') {
+    // 如果是顾客/游客角色，只能查看自己房间的订单
+    if (isCustomer(userRole) || isGuest(userRole)) {
       // 获取顾客当前入住的房间
       const [bookingRows] = await pool.query<RowDataPacket[]>(
         `SELECT room_id FROM bookings 
@@ -84,8 +85,8 @@ export const getById = async (req: AuthRequest, res: Response) => {
     let query = 'SELECT d.*, r.room_number FROM delivery_orders d LEFT JOIN rooms r ON d.room_id = r.id WHERE d.id = ?';
     const params: any[] = [id];
 
-    // 如果是顾客角色，只能查看自己房间的订单
-    if (userRole === 'customer') {
+    // 如果是顾客/游客角色，只能查看自己房间的订单
+    if (isCustomer(userRole) || isGuest(userRole)) {
       const [bookingRows] = await pool.query<RowDataPacket[]>(
         `SELECT room_id FROM bookings 
          WHERE user_id = ? AND status = 'checked_in'

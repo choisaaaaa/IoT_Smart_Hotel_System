@@ -4,7 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { getWebSocketService } from '../services/websocket.service';
-import { isSystemAdmin, isCustomer, normalizeRole } from '../utils/role';
+import { isSystemAdmin, isCustomer, isGuest, normalizeRole } from '../utils/role';
 
 export const initiateCall = async (req: AuthRequest, res: Response) => {
   try {
@@ -52,7 +52,7 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
           calleeExists = true;
           calleeInfo = employee[0];
 
-          if (isCustomer(calleeInfo.role)) {
+          if (isCustomer(calleeInfo.role) || isGuest(calleeInfo.role)) {
             res.status(403).json(errorResponse('权限不足：无法直接拨打普通用户'));
             return;
           }
@@ -191,7 +191,7 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
           calleeExists = true;
           calleeInfo = employee[0];
 
-          if (isCustomer(calleeInfo.role)) {
+          if (isCustomer(calleeInfo.role) || isGuest(calleeInfo.role)) {
             res.status(403).json(errorResponse('权限不足：无法直接拨打普通用户'));
             return;
           }

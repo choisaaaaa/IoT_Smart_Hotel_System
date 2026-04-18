@@ -2,6 +2,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { Call, CallInput, CallStatusUpdate, CallQuery, CallStats } from '../models/call.model';
+import { normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 export interface CallWithRoom extends Call {
   room_number?: string;
@@ -32,8 +33,8 @@ export class CallService {
           case 'front_desk':
             const [employee] = await pool.query<RowDataPacket[]>('SELECT id, role FROM users WHERE id = ? OR username = ?', [data.callee_id, data.callee_id]);
             if (employee.length > 0) {
-              const userRole = employee[0].role;
-              if (userRole === 'customer') {
+              const userRole = normalizeRole(employee[0].role);
+              if (userRole === CANONICAL_ROLES.CUSTOMER || userRole === CANONICAL_ROLES.GUEST) {
                 throw new Error('被叫方权限不足：无法拨打普通用户');
               }
               calleeExists = true;
