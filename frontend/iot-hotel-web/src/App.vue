@@ -540,6 +540,13 @@ async function handleOffer(data: { offer: any; from_type: string; from_id: strin
   }
 
   try {
+    if (peerConnection.value.signalingState !== 'stable' && peerConnection.value.signalingState !== 'have-local-offer') {
+      console.log('[WebRTC] 信令状态异常:', peerConnection.value.signalingState, '，重置连接')
+      cleanupWebRTC()
+      await initWebRTC(data.call_id, data.from_type, data.from_id)
+      if (!peerConnection.value) return
+    }
+
     await peerConnection.value.setRemoteDescription(new RTCSessionDescription(data.offer))
     console.log('[WebRTC] 已设置 remote description')
 
@@ -558,10 +565,15 @@ async function handleOffer(data: { offer: any; from_type: string; from_id: strin
       console.log('[WebRTC] 已发送 answer')
     }
 
-    // 处理待处理的 ICE 候选
-    while (pendingIceCandidates.value.length > 0) {
-      const candidate = pendingIceCandidates.value.shift()
-      await peerConnection.value.addIceCandidate(new RTCIceCandidate(candidate))
+    if (peerConnection.value.remoteDescription) {
+      while (pendingIceCandidates.value.length > 0) {
+        const candidate = pendingIceCandidates.value.shift()
+        try {
+          await peerConnection.value.addIceCandidate(new RTCIceCandidate(candidate))
+        } catch (iceErr) {
+          console.warn('[WebRTC] 添加缓存的ICE候选失败:', iceErr)
+        }
+      }
     }
   } catch (e) {
     console.error('[WebRTC] 处理 offer 失败:', e)
