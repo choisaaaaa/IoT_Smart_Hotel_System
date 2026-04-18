@@ -11,17 +11,24 @@ export const get = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     
     // 系统管理员和顾客可以从 query 指定 hotel_id
-    if (isSystemAdmin(req.user?.role) || isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+    if (isSystemAdmin(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
-      } else if (!hotelId && isSystemAdmin(req.user?.role)) {
-        // 系统管理员若未指定，则默认为 1
+      } else if (!hotelId) {
         hotelId = 1;
+      }
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
       }
     }
 
     if (hotelId === undefined || hotelId === null || hotelId === 0) {
+      if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+        return res.status(400).json(errorResponse('请提供酒店ID参数(hotel_id)'));
+      }
       return res.status(401).json(errorResponse('未授权，无法获取有效的门店 ID'));
     }
 
@@ -59,8 +66,16 @@ export const getById = async (req: AuthRequest, res: Response) => {
       } else if (!hotelId) {
         hotelId = 1;
       }
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id || req.body.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      }
     }
     if (hotelId === undefined || hotelId === null) {
+      if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+        return res.status(400).json(errorResponse('请提供酒店ID参数(hotel_id)'));
+      }
       return res.status(401).json(errorResponse('未授权'));
     }
 
