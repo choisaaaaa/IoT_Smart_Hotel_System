@@ -399,6 +399,7 @@ const localStream = ref<MediaStream | null>(null)
 const pendingOffer = ref<{ offer: any; from_type: string; from_id: string; call_id: string } | null>(null)
 const pendingIceCandidates = ref<any[]>([])
 const processedCallAnswered = ref(new Set<string>())
+let isProcessingOffer = false
 
 const iceServers = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -539,20 +540,44 @@ async function handleOffer(data: { offer: any; from_type: string; from_id: strin
     return
   }
 
+  if (isProcessingOffer) {
+    console.log('[WebRTC] 正在处理 offer，跳过重复调用')
+    return
+  }
+  isProcessingOffer = true
+
+  const pc = peerConnection.value
+
   try {
-    if (peerConnection.value.signalingState !== 'stable' && peerConnection.value.signalingState !== 'have-local-offer') {
-      console.log('[WebRTC] 信令状态异常:', peerConnection.value.signalingState, '，重置连接')
+    if (pc.signalingState !== 'stable') {
+      console.log('[WebRTC] 信令状态异常:', pc.signalingState, '，重置连接')
       cleanupWebRTC()
       await initWebRTC(data.call_id, data.from_type, data.from_id)
       if (!peerConnection.value) return
+      return handleOffer(data)
     }
 
-    await peerConnection.value.setRemoteDescription(new RTCSessionDescription(data.offer))
-    console.log('[WebRTC] 已设置 remote description')
+    if (pc !== peerConnection.value) {
+      console.log('[WebRTC] 连接已被替换，重新处理')
+      return handleOffer(data)
+    }
 
-    const answer = await peerConnection.value.createAnswer()
-    await peerConnection.value.setLocalDescription(answer)
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer))
+    console.log('[WebRTC] 已设置 remote description, signalingState:', pc.signalingState)
+
+    if (pc !== peerConnection.value) {
+      console.log('[WebRTC] 设置 remoteDescription 后连接被替换，中止')
+      return
+    }
+
+    const answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
     console.log('[WebRTC] 已创建并设置 local description (answer)')
+
+    if (pc !== peerConnection.value) {
+      console.log('[WebRTC] 设置 localDescription 后连接被替换，中止发送 answer')
+      return
+    }
 
     const socket = getSocket()
     if (socket) {
@@ -565,22 +590,28 @@ async function handleOffer(data: { offer: any; from_type: string; from_id: strin
       console.log('[WebRTC] 已发送 answer')
     }
 
-    if (peerConnection.value.remoteDescription) {
+    if (pc.remoteDescription && pc === peerConnection.value) {
       while (pendingIceCandidates.value.length > 0) {
         const candidate = pendingIceCandidates.value.shift()
+        if (!candidate || pc !== peerConnection.value) break
         try {
-          await peerConnection.value.addIceCandidate(new RTCIceCandidate(candidate))
+          await pc.addIceCandidate(new RTCIceCandidate(candidate))
         } catch (iceErr) {
           console.warn('[WebRTC] 添加缓存的ICE候选失败:', iceErr)
         }
       }
+    } else {
+      console.log('[WebRTC] remoteDescription 为空或连接已替换，跳过缓存ICE处理')
     }
   } catch (e) {
     console.error('[WebRTC] 处理 offer 失败:', e)
+  } finally {
+    isProcessingOffer = false
   }
 }
 
 function cleanupWebRTC() {
+  isProcessingOffer = false
   if (peerConnection.value) {
     peerConnection.value.close()
     peerConnection.value = null
@@ -592,7 +623,6 @@ function cleanupWebRTC() {
   pendingIceCandidates.value = []
   pendingOffer.value = null
   processedCallAnswered.value.clear()
-  // 重置状态
   connectionState.value = 'new'
   iceConnectionState.value = 'new'
   remoteAddress.value = ''
@@ -657,7 +687,7 @@ const handleIncomingCall = (data: any) => {
 }
 
 const handleWebRTCOffer = async (data: any) => {
-  console.log('[WebRTC] 收到 offer')
+  console.log('[WebRTC] 收到 offer, call_id:', data.call_id)
   if (!peerConnection.value) {
     if (appStore.currentCall?.call_id === data.call_id) {
       const isCaller = String(data.caller_id) === appStore.userInfo?.username
@@ -665,6 +695,16 @@ const handleWebRTCOffer = async (data: any) => {
       const targetId = isCaller ? data.callee_id : data.caller_id
       console.log('[WebRTC] peerConnection不存在，自动初始化WebRTC')
       await initWebRTC(data.call_id, targetType || data.from_type, targetId || data.from_id)
+      if (!peerConnection.value) {
+        console.log('[WebRTC] 初始化失败，保存 offer 等待后续处理')
+        pendingOffer.value = {
+          offer: data.offer,
+          from_type: data.from_type,
+          from_id: data.from_id,
+          call_id: data.call_id
+        }
+        return
+      }
     } else {
       pendingOffer.value = {
         offer: data.offer,
@@ -680,10 +720,23 @@ const handleWebRTCOffer = async (data: any) => {
 
 const handleWebRTCAnswer = async (data: any) => {
   console.log('[WebRTC] 收到 answer')
-  if (peerConnection.value && peerConnection.value.signalingState === 'have-local-offer') {
+  const pc = peerConnection.value
+  if (pc && pc.signalingState === 'have-local-offer') {
     try {
-      await peerConnection.value.setRemoteDescription(new RTCSessionDescription(data.answer))
+      await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
       console.log('[WebRTC] 已设置 remote description (answer)')
+
+      if (pc === peerConnection.value && pc.remoteDescription) {
+        while (pendingIceCandidates.value.length > 0) {
+          const candidate = pendingIceCandidates.value.shift()
+          if (!candidate || pc !== peerConnection.value) break
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate))
+          } catch (iceErr) {
+            console.warn('[WebRTC] 添加缓存的ICE候选失败:', iceErr)
+          }
+        }
+      }
     } catch (e) {
       console.error('[WebRTC] 设置 answer 失败:', e)
     }
@@ -691,13 +744,10 @@ const handleWebRTCAnswer = async (data: any) => {
 }
 
 const handleWebRTCIceCandidate = async (data: any) => {
-  console.log('[WebRTC] 收到 ICE 候选:', data.candidate)
-  console.log('[WebRTC] 当前连接状态:', peerConnection.value?.connectionState)
-  console.log('[WebRTC] remoteDescription是否存在:', !!peerConnection.value?.remoteDescription)
-  
-  if (peerConnection.value && peerConnection.value.remoteDescription) {
+  const pc = peerConnection.value
+  if (pc && pc.remoteDescription && pc.signalingState !== 'closed') {
     try {
-      await peerConnection.value.addIceCandidate(new RTCIceCandidate(data.candidate))
+      await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
       console.log('[WebRTC] ICE候选添加成功')
     } catch (e) {
       console.error('[WebRTC] 添加 ICE 候选失败:', e)
@@ -786,13 +836,18 @@ const handleCallAnswered = async (data: any) => {
     
     await initWebRTC(data.call_id, targetType, targetId)
     
-    // 只有主叫方发起 Offer
     if (isCaller && peerConnection.value) {
+      const pc = peerConnection.value
       try {
-        const offer = await peerConnection.value.createOffer()
-        await peerConnection.value.setLocalDescription(offer)
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
         console.log('[WebRTC] 主叫方发起 Offer')
         
+        if (pc !== peerConnection.value) {
+          console.log('[WebRTC] 创建 Offer 后连接被替换，中止发送')
+          return
+        }
+
         const socket = getSocket()
         if (socket) {
           socket.emit('webrtc_offer', {
