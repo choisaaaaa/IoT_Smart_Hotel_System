@@ -795,13 +795,15 @@ class WebSocketService {
             callee_id: callData.callee_id
           };
           
-          // 1. 通知当前操作的 Socket（被叫方确认）
-          socket.emit('call_answered', answerData);
-          
-          // 2. 通知主叫方（使用标准化ID精准通知个人房间）
+          // 1. 通知主叫方（使用标准化ID精准通知个人房间）
           const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
           logger.info(`发送 call_answered 到主叫房间: ${callerRoom} (原始caller_id: ${callData.caller_id})`);
           this.io?.to(callerRoom).emit('call_answered', answerData);
+          
+          // 2. 通知被叫方（使用标准化ID精准通知个人房间）
+          const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
+          logger.info(`发送 call_answered 到被叫方房间: ${calleeRoom} (原始callee_id: ${callData.callee_id})`);
+          this.io?.to(calleeRoom).emit('call_answered', answerData);
           
           // 3. 通知该门店的所有前台（同步状态）
           const hId = callData.hotel_id || currentClient?.hotelId;
@@ -889,6 +891,12 @@ class WebSocketService {
           }
           this.io?.to(`${callData.caller_type}_${normalizedCallerId}`).emit('call_rejected', rejectData);
           
+          const hId = callData.hotel_id || currentClient?.hotelId;
+          if (hId) {
+            const hotelRoom = `front_desk_hotel_${hId}`;
+            this.io?.to(hotelRoom).emit('call_rejected', rejectData);
+          }
+          
           logger.info(`通话拒接: ${callId}`);
         } catch (error) {
           logger.error('拒接语音通话失败:', error.message);
@@ -975,6 +983,12 @@ class WebSocketService {
             this.io?.to(`${callData.callee_type}_${normalizedCalleeId}`).emit('call_hungup', hangupData);
           } else {
             this.io?.to(`${callData.callee_type}_${normalizedCalleeId}`).emit('call_hungup', hangupData);
+          }
+          
+          const hId = callData.hotel_id || currentClient?.hotelId;
+          if (hId) {
+            const hotelRoom = `front_desk_hotel_${hId}`;
+            this.io?.to(hotelRoom).emit('call_hungup', hangupData);
           }
           
           logger.info(`通话挂断: ${callId}, 时长: ${durationSec}秒`);
