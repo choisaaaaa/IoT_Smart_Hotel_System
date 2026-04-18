@@ -1,6 +1,6 @@
 # 智慧酒店物联网控制系统 - 数据库 E-R 图设计
 
-> 版本: v1.0.0
+> 版本: v2.0.0
 > 更新日期: 2026-04-16
 > 适用范围: 后端服务、Web前端、App端、硬件接口
 
@@ -8,16 +8,16 @@
 
 ## 一、核心实体分类总览
 
-系统采用 **6大模块** 设计，共 **28张核心表**：
+系统采用 **6大模块** 设计，共 **40张核心表**（新增12张）：
 
 | 模块 | 表数量 | 核心功能 |
 |------|--------|----------|
-| 用户与权限 | 4 | 四角色模型、多对多关联 |
-| 酒店与房间 | 6 | 酒店管理、房型、动态价格 |
-| 预订与入住 | 3 | 预订、入住、支付 |
-| 会员与营销 | 5 | 会员体系、优惠券、评价 |
-| IoT物联网 | 4 | 设备控制、传感器、通话 |
-| 客房服务 | 3 | 送物、维修工单 |
+| 用户与权限 | 7 | 四角色模型、扫码登录、会话管理 |
+| 酒店与房间 | 8 | 酒店管理、房型、场景配置、房卡 |
+| 预订与入住 | 4 | 预订、入住、支付、常住客 |
+| 会员与营销 | 6 | 会员体系、优惠券、评价、申诉 |
+| IoT物联网 | 9 | 设备控制、传感器、通话、MQTT、安防 |
+| 客房服务 | 3 | 送物、维修工单、角色申请 |
 
 ---
 
@@ -27,12 +27,19 @@
 erDiagram
     USERS ||--o{ USER_ROLES : "拥有"
     USERS ||--o{ USER_HOTELS : "属于"
+    USERS ||--o{ API_TOKENS : "生成"
+    USERS ||--o{ LOGIN_SESSIONS : "创建"
     USER_ROLES }o--|| ROLES : "分配给"
     USER_HOTELS }o--|| HOTELS : "管理"
     HOTELS ||--o{ FLOORS : "包含"
     HOTELS ||--o{ ROOMS : "拥有"
     HOTELS ||--o{ ROOM_TYPES : "定义"
+    HOTELS ||--o{ SCENE_CONFIGS : "配置"
+    HOTELS ||--o{ RFID_CARDS : "管理"
     HOTELS ||--o{ REVIEWS : "接收"
+    HOTELS ||--o{ CALLS : "通话"
+    HOTELS ||--o{ MQTT_LOGS : "通信"
+    ROOMS ||--o{ RFID_CARDS : "绑定"
     ROOMS ||--o{ BOOKINGS : "被预订"
     ROOMS ||--o{ ROOM_PRICES : "定价"
     ROOMS ||--o{ DELIVERY_ORDERS : "接收"
@@ -40,15 +47,24 @@ erDiagram
     ROOM_TYPES ||--o{ ROOMS : "分类"
     BOOKINGS }o--|| USERS : "创建"
     BOOKINGS }o--|| GUESTS : "入住"
+    BOOKINGS ||--o{ RFID_CARDS : "发卡"
     BOOKINGS ||--o{ PAYMENTS : "支付"
     BOOKINGS }o--|| RATE_PLANS : "使用"
     GUESTS ||--o{ BOOKINGS : "入住"
     MEMBERS ||--o{ MEMBER_COUPONS : "领取"
+    MEMBERS ||--o{ RFID_CARDS : "绑定"
+    MEMBERS ||--o{ FREQUENT_GUESTS : "关联"
     MEMBER_COUPONS }o--|| COUPONS : "包含"
     MEMBERS ||--o{ REVIEWS : "撰写"
+    REVIEWS ||--o{ REVIEW_APPEALS : "申诉"
     DEVICES ||--o{ SENSOR_DATA : "生成"
     DEVICES ||--o{ CONTROL_COMMANDS : "接收"
     DEVICES ||--o{ CALLS : "参与"
+    DEVICES ||--o{ SECURITY_EVENTS : "触发"
+    DEVICES ||--o{ DEVICE_AUTH : "认证"
+    DEVICES ||--o{ SYSTEM_LOGS : "记录"
+    DEVICES ||--o{ NETWORK_CONFIG : "配网"
+    DEVICES ||--o{ MQTT_LOGS : "通信"
 ```
 
 ---
@@ -64,14 +80,18 @@ erDiagram
         varchar username
         varchar password
         varchar phone
+        varchar uid
         varchar email
+        varchar avatar
         varchar role
         int hotel_id
+        json permissions
     }
     ROLES {
         int id PK
         varchar role_name
         varchar role_description
+        json permissions
     }
     USER_ROLES {
         int id PK
@@ -83,6 +103,32 @@ erDiagram
         int user_id FK
         int hotel_id FK
     }
+    API_TOKENS {
+        int id PK
+        int user_id FK
+        varchar token
+        varchar token_type
+        varchar status
+        datetime expires_at
+        tinyint is_used
+    }
+    LOGIN_SESSIONS {
+        int id PK
+        int user_id FK
+        varchar session_token
+        varchar device_info
+        varchar ip_address
+        datetime expires_at
+    }
+    ROLE_APPLICATIONS {
+        int id PK
+        int user_id FK
+        varchar application_type
+        int hotel_id FK
+        varchar hotel_name
+        varchar status
+        int reviewed_by
+    }
     HOTELS {
         int id PK
         varchar hotel_name
@@ -90,8 +136,12 @@ erDiagram
     }
     USERS ||--o{ USER_ROLES : "拥有"
     USERS ||--o{ USER_HOTELS : "属于"
+    USERS ||--o{ API_TOKENS : "生成"
+    USERS ||--o{ LOGIN_SESSIONS : "创建"
+    USERS ||--o{ ROLE_APPLICATIONS : "申请"
     USER_ROLES }o--|| ROLES : "分配给"
     USER_HOTELS }o--|| HOTELS : "管理"
+    ROLE_APPLICATIONS }o--|| HOTELS : "申请"
 ```
 
 | 表名 | 说明 | 主键 | 外键 |
@@ -100,6 +150,9 @@ erDiagram
 | **roles** | 角色定义 | id | - |
 | **user_roles** | 用户-角色关联 | id | user_id, role_id |
 | **user_hotels** | 用户-酒店关联 | id | user_id, hotel_id |
+| **api_tokens** | API令牌/扫码登录 | id | user_id |
+| **login_sessions** | 登录会话 | id | user_id |
+| **role_applications** | 角色申请 | id | user_id, hotel_id |
 
 **角色定义**
 
@@ -109,6 +162,15 @@ erDiagram
 | `hotel_admin` | 酒店管理员 | `>0` (所属酒店ID) |
 | `staff` | 前台员工 | `>0` (所属酒店ID) |
 | `customer` | 顾客 | `NULL` 或 `0` |
+
+**扫码登录状态流转**
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 生成二维码
+    pending --> confirmed: APP扫码确认
+    confirmed --> used: Web端获取登录
+```
 
 ---
 
@@ -122,6 +184,8 @@ erDiagram
         varchar hotel_address
         varchar hotel_phone
         int star_rating
+        varchar city
+        varchar location
     }
     FLOORS {
         int id PK
@@ -150,11 +214,21 @@ erDiagram
         date price_date
         decimal price
     }
-    BOOKINGS {
+    SCENE_CONFIGS {
         int id PK
+        int hotel_id FK
+        varchar scene_name
+        varchar scene_code
+        json config_json
+    }
+    RFID_CARDS {
+        int id PK
+        varchar card_uid
+        int hotel_id FK
+        int booking_id FK
         int room_id FK
-        date check_in_date
-        date check_out_date
+        int member_id FK
+        varchar status
     }
     REVIEWS {
         int id PK
@@ -165,10 +239,12 @@ erDiagram
     HOTELS ||--o{ FLOORS : "包含"
     HOTELS ||--o{ ROOM_TYPES : "定义"
     HOTELS ||--o{ ROOMS : "拥有"
+    HOTELS ||--o{ SCENE_CONFIGS : "配置"
+    HOTELS ||--o{ RFID_CARDS : "管理"
     HOTELS ||--o{ REVIEWS : "接收"
     ROOM_TYPES ||--o{ ROOMS : "分类"
     ROOMS ||--o{ ROOM_PRICES : "定价"
-    ROOMS ||--o{ BOOKINGS : "被预订"
+    ROOMS ||--o{ RFID_CARDS : "绑定"
     ROOMS ||--o{ REVIEWS : "接收"
 ```
 
@@ -179,7 +255,22 @@ erDiagram
 | **room_types** | 房型字典 | id | hotel_id |
 | **rooms** | 房间信息 | id | hotel_id, room_type_id |
 | **room_prices** | 动态价格日历 | id | room_id |
-| **rate_plans** | 价格方案 | id | - |
+| **scene_configs** | 场景配置 | id | hotel_id |
+| **rfid_cards** | 房卡管理 | id | hotel_id, booking_id, room_id, member_id |
+
+**房间状态流转**
+
+```mermaid
+stateDiagram-v2
+    [*] --> available: 初始
+    available --> occupied: 客人入住
+    occupied --> cleaning: 客人退房
+    cleaning --> available: 清洁完成
+    available --> reserved: 预订
+    reserved --> occupied: 客人入住
+    reserved --> maintenance: 故障报修
+    maintenance --> available: 维修完成
+```
 
 ---
 
@@ -228,11 +319,47 @@ erDiagram
         varchar plan_name
         decimal price
     }
+    RFID_CARDS {
+        int id PK
+        varchar card_uid
+        int booking_id FK
+        int room_id FK
+    }
+    FREQUENT_GUESTS {
+        int id PK
+        int member_id FK
+        varchar guest_name
+        varchar phone
+        int visit_count
+    }
     USERS ||--o{ BOOKINGS : "创建"
     GUESTS ||--o{ BOOKINGS : "入住"
     ROOMS ||--o{ BOOKINGS : "被预订"
+    ROOMS ||--o{ RFID_CARDS : "绑定"
+    BOOKINGS ||--o{ RFID_CARDS : "发卡"
     BOOKINGS ||--o{ PAYMENTS : "支付"
     BOOKINGS }o--|| RATE_PLANS : "使用"
+```
+
+| 表名 | 说明 | 主键 | 外键 |
+|------|------|------|------|
+| **guests** | 入住宾客 | id | - |
+| **bookings** | 预订记录 | id | user_id, room_id, guest_id |
+| **payments** | 支付记录 | id | - |
+| **rate_plans** | 价格方案 | id | - |
+| **frequent_guests** | 常住客信息 | id | member_id |
+
+**预订状态流转**
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 创建预订
+    pending --> confirmed: 确认
+    pending --> cancelled: 取消
+    confirmed --> checked_in: 办理入住
+    confirmed --> cancelled: 取消
+    checked_in --> checked_out: 办理退房
+    checked_in --> cancelled: 取消
 ```
 
 ---
@@ -270,13 +397,48 @@ erDiagram
         int member_id FK
         int hotel_id FK
         int room_id FK
+        int room_type_id FK
         decimal score
+        int environment_rating
+        int facility_rating
+        int comfort_rating
         text content
     }
+    REVIEW_APPEALS {
+        int id PK
+        int review_id FK
+        int hotel_id FK
+        int appellant_id FK
+        varchar appeal_reason
+        varchar status
+        int handler_id
+    }
+    RFID_CARDS {
+        int id PK
+        int member_id FK
+        varchar card_uid
+    }
+    FREQUENT_GUESTS {
+        int id PK
+        int member_id FK
+        varchar guest_name
+    }
     MEMBERS ||--o{ MEMBER_COUPONS : "领取"
-    MEMBER_COUPONS }o--|| COUPONS : "包含"
     MEMBERS ||--o{ REVIEWS : "撰写"
+    MEMBERS ||--o{ RFID_CARDS : "绑定"
+    MEMBERS ||--o{ FREQUENT_GUESTS : "关联"
+    MEMBER_COUPONS }o--|| COUPONS : "包含"
+    REVIEWS ||--o{ REVIEW_APPEALS : "申诉"
 ```
+
+| 表名 | 说明 | 主键 | 外键 |
+|------|------|------|------|
+| **members** | 会员信息 | id | - |
+| **coupons** | 优惠券 | id | - |
+| **member_coupons** | 会员-优惠券关联 | id | member_id, coupon_id |
+| **reviews** | 评价 | id | member_id, hotel_id, room_id |
+| **review_appeals** | 评价申诉 | id | review_id, hotel_id |
+| **frequent_guests** | 常住客信息 | id | member_id |
 
 **会员等级**
 
@@ -293,6 +455,10 @@ erDiagram
 
 ```mermaid
 erDiagram
+    HOTELS {
+        int id PK
+        varchar hotel_name
+    }
     DEVICES {
         int id PK
         varchar device_id
@@ -320,27 +486,88 @@ erDiagram
     }
     CALLS {
         int id PK
+        int hotel_id FK
         varchar call_id
         varchar caller_type
         varchar caller_id
         varchar callee_type
         varchar callee_id
         varchar status
-        datetime started_at
-        datetime answered_at
-        datetime ended_at
         int duration_sec
     }
+    SECURITY_EVENTS {
+        int id PK
+        varchar device_id
+        varchar event_type
+        text event_data
+        varchar event_level
+        datetime created_at
+    }
+    DEVICE_AUTH {
+        int id PK
+        varchar device_id
+        varchar token
+        datetime expires_at
+    }
+    SYSTEM_LOGS {
+        int id PK
+        int user_id FK
+        varchar device_id
+        varchar operation
+        text operation_data
+        varchar ip_address
+        datetime created_at
+    }
+    NETWORK_CONFIG {
+        int id PK
+        varchar device_id
+        varchar ssid
+        int signal_strength
+        varchar config_method
+        varchar status
+    }
+    MQTT_LOGS {
+        int id PK
+        int hotel_id FK
+        varchar device_id
+        varchar topic
+        text payload
+        varchar direction
+        tinyint qos
+    }
+    HOTELS ||--o{ CALLS : "通话"
+    HOTELS ||--o{ MQTT_LOGS : "通信"
     DEVICES ||--o{ SENSOR_DATA : "生成"
     DEVICES ||--o{ CONTROL_COMMANDS : "接收"
     DEVICES ||--o{ CALLS : "参与"
+    DEVICES ||--o{ SECURITY_EVENTS : "触发"
+    DEVICES ||--o{ DEVICE_AUTH : "认证"
+    DEVICES ||--o{ SYSTEM_LOGS : "记录"
+    DEVICES ||--o{ NETWORK_CONFIG : "配网"
+    DEVICES ||--o{ MQTT_LOGS : "通信"
 ```
+
+| 表名 | 说明 | 主键 | 外键 |
+|------|------|------|------|
+| **devices** | IoT设备 | id | - |
+| **sensor_data** | 传感器数据 | id | - |
+| **control_commands** | 控制指令 | id | - |
+| **calls** | 语音通话记录 | id | hotel_id |
+| **security_events** | 安防事件 | id | - |
+| **device_auth** | 设备认证 | id | - |
+| **system_logs** | 系统日志 | id | user_id |
+| **network_config** | 配网记录 | id | - |
+| **mqtt_communication_logs** | MQTT通信日志 | id | hotel_id |
+
+**设备类型**
 
 | device_type | 说明 |
 |-------------|------|
 | `main` | 前台管理端 |
 | `sub1` | 楼控设备 |
 | `sub2` | 客房端设备 |
+
+**通话类型**
 
 | caller_type/callee_type | 说明 |
 |--------------------------|------|
@@ -392,6 +619,13 @@ erDiagram
         varchar status
         varchar repairer
     }
+    ROLE_APPLICATIONS {
+        int id PK
+        int user_id FK
+        varchar application_type
+        int hotel_id FK
+        varchar status
+    }
     ROOMS ||--o{ DELIVERY_ORDERS : "接收"
     ROOMS ||--o{ MAINTENANCE_TICKETS : "报修"
     BOOKINGS ||--o{ DELIVERY_ORDERS : "关联"
@@ -399,6 +633,42 @@ erDiagram
     GUESTS ||--o{ DELIVERY_ORDERS : "下单"
     GUESTS ||--o{ MAINTENANCE_TICKETS : "报修"
 ```
+
+| 表名 | 说明 | 主键 | 外键 |
+|------|------|------|------|
+| **delivery_orders** | 客房送物 | id | booking_id, guest_id, room_id |
+| **maintenance_tickets** | 维修工单 | id | booking_id, guest_id, room_id |
+| **role_applications** | 角色申请 | id | user_id, hotel_id |
+
+**送物订单状态流转**
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 下单
+    pending --> delivering: 开始配送
+    pending --> cancelled: 取消
+    delivering --> completed: 送达完成
+    delivering --> cancelled: 取消
+```
+
+**维修工单状态流转**
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 报修
+    pending --> assigned: 分配维修员
+    pending --> cancelled: 取消
+    assigned --> in_progress: 开始维修
+    in_progress --> completed: 维修完成
+    in_progress --> cancelled: 取消
+```
+
+**角色申请类型**
+
+| application_type | 说明 |
+|------------------|------|
+| `create_hotel` | 创建酒店申请 |
+| `bind_employee` | 绑定员工申请 |
 
 ---
 
@@ -462,6 +732,24 @@ stateDiagram-v2
     pending --> paid: 支付成功
     pending --> failed: 支付失败
     paid --> refunded: 退款
+```
+
+### 4.6 扫码登录状态流转
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 生成二维码
+    pending --> confirmed: APP扫码确认
+    confirmed --> used: Web端获取登录
+```
+
+### 4.7 评价申诉状态流转
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 提交申诉
+    pending --> approved: 审核通过
+    pending --> rejected: 审核驳回
 ```
 
 ---
@@ -529,7 +817,7 @@ reviews (order_type ENUM('booking'), order_id INT)
 | `_date` | 日期 | `check_in_date` |
 | `_count` | 计数 | `guest_count`, `review_count` |
 | `_number` | 编号 | `booking_number`, `order_no` |
-| `is_` | 布尔 | `is_active`, `is_deleted` |
+| `is_` | 布尔 | `is_used`, `is_active` |
 
 ### 6.3 索引命名
 
@@ -568,4 +856,5 @@ reviews (order_type ENUM('booking'), order_id INT)
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
+| v2.0.0 | 2026-04-16 | 新增12张表：rfid_cards, scene_configs, mqtt_logs, review_appeals, security_events, device_auth, system_logs, network_config, api_tokens, login_sessions, role_applications, frequent_guests |
 | v1.0.0 | 2026-04-16 | 初始文档，完整 E-R 图设计 |
