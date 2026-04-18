@@ -927,7 +927,8 @@ export const checkin = async (req: AuthRequest, res: Response) => {
         const dup = duplicateIdRows[0] as any;
         await connection.rollback();
         return res.status(409).json(errorResponse(
-          `证件号 ${finalIdNumber} 当前已在其他房间入住（酒店: ${dup.hotel_name}, 房号: ${dup.room_number}）。请先退房后再办理新入住。`
+          `证件号 ${finalIdNumber} 当前已在其他房间入住（酒店: ${dup.hotel_name}, 房号: ${dup.room_number}）。请先退房后再办理新入住。`,
+          409
         ));
       }
     }
