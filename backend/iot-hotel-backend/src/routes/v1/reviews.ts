@@ -9,14 +9,14 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
 
-router.get('/', reviewController.get);
+router.get('/', authenticate as any, authorize(allRoles), reviewController.get);
 router.get('/my', authenticate as any, reviewController.getMyReviews);
-router.get('/stats', authenticate as any, authorize(staffRoles), reviewController.getStats);
+router.get('/stats', authenticate as any, authorize(allRoles), reviewController.getStats);
 router.get('/appeals', authenticate as any, authorize(staffRoles), reviewController.getAppeals);
-router.get('/:id', reviewController.getById);
+router.get('/:id', authenticate as any, reviewController.getById);
 router.post('/', authenticate as any, reviewController.create);
 router.put('/:id', authenticate as any, reviewController.update);
-router.delete('/:id', authenticate as any, reviewController.remove);
+router.delete('/:id', authenticate as any, authorize(adminRoles), reviewController.remove);
 router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewController.reply);
 router.post('/appeals', authenticate as any, reviewController.createAppeal);
 router.put('/appeals/:id', authenticate as any, authorize(adminRoles), reviewController.handleAppeal);
