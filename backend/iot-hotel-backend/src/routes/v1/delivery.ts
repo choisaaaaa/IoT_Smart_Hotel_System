@@ -8,8 +8,8 @@ const router = Router();
 const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 
-router.get('/', authenticate as any, deliveryController.get);
-router.get('/:id', authenticate as any, deliveryController.getById);
+router.get('/', authenticate as any, authorize(staffRoles), deliveryController.get);
+router.get('/:id', authenticate as any, authorize(staffRoles), deliveryController.getById);
 router.post('/', authenticate as any, authorize(allRoles), deliveryController.create);
 router.put('/:id/status', authenticate as any, authorize(staffRoles), deliveryController.updateStatus);
 router.put('/:id/complete', authenticate as any, authorize(staffRoles), deliveryController.complete);
