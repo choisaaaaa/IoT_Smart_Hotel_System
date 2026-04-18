@@ -5,12 +5,16 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.get);
-router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.getById);
-router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), maintenanceController.create);
-router.put('/:id/assign', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.assign);
-router.put('/:id/status', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.updateStatus);
-router.put('/:id/complete', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.complete);
-router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), maintenanceController.remove);
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+router.get('/', authenticate as any, authorize(allRoles), maintenanceController.get);
+router.get('/:id', authenticate as any, authorize(allRoles), maintenanceController.getById);
+router.post('/', authenticate as any, authorize(allRoles), maintenanceController.create);
+router.put('/:id/assign', authenticate as any, authorize(staffRoles), maintenanceController.assign);
+router.put('/:id/status', authenticate as any, authorize(staffRoles), maintenanceController.updateStatus);
+router.put('/:id/complete', authenticate as any, authorize(staffRoles), maintenanceController.complete);
+router.delete('/:id', authenticate as any, authorize(adminRoles), maintenanceController.remove);
 
 export default router;

@@ -10,23 +10,21 @@ import {
   updateHotel,
   getHotelDetailWithImages
 } from '../../controllers/hotels.controller';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, authorize } from '../../middleware/auth';
+import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-// 公开接口
 router.get('/search', search);
 router.get('/:id', detail);
 router.get('/:hotelId/detail', getHotelDetailWithImages);
 router.get('/:hotelId/images', getHotelImages);
 
-// 需要登录的接口（选房和价格需要会员信息）
 router.get('/:hotelId/rooms/availability', authenticate, getRoomAvailability);
 
-// 酒店管理接口（需要酒店管理员或系统管理员权限）
-router.put('/:hotelId', authenticate, updateHotel);
-router.post('/:hotelId/images', authenticate, addHotelImage);
-router.put('/:hotelId/images/:imageId', authenticate, updateHotelImage);
-router.delete('/:hotelId/images/:imageId', authenticate, deleteHotelImage);
+router.put('/:hotelId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotel);
+router.post('/:hotelId/images', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), addHotelImage);
+router.put('/:hotelId/images/:imageId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotelImage);
+router.delete('/:hotelId/images/:imageId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), deleteHotelImage);
 
 export default router;

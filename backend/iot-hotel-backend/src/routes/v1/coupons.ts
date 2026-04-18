@@ -5,19 +5,23 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.get);
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+router.get('/', authenticate as any, authorize(allRoles), couponController.get);
 router.get('/me', authenticate as any, couponController.getMe);
 router.post('/import', authenticate as any, couponController.importCoupon);
-router.post('/redeem', authenticate as any, authorize([CANONICAL_ROLES.STAFF, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.redeemByCode);
+router.post('/redeem', authenticate as any, authorize(staffRoles), couponController.redeemByCode);
 
-router.post('/issue-to-user', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.issueToUser);
+router.post('/issue-to-user', authenticate as any, authorize(adminRoles), couponController.issueToUser);
 router.get('/hotels', authenticate as any, couponController.getHotels);
 
-router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.getById);
-router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.create);
-router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.update);
-router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.remove);
+router.get('/:id', authenticate as any, authorize(allRoles), couponController.getById);
+router.post('/', authenticate as any, authorize(adminRoles), couponController.create);
+router.put('/:id', authenticate as any, authorize(adminRoles), couponController.update);
+router.delete('/:id', authenticate as any, authorize(adminRoles), couponController.remove);
 router.post('/:id/receive', authenticate as any, couponController.receive);
-router.post('/:id/redeem', authenticate as any, authorize([CANONICAL_ROLES.STAFF, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), couponController.redeemCoupon);
+router.post('/:id/redeem', authenticate as any, authorize(staffRoles), couponController.redeemCoupon);
 
 export default router;

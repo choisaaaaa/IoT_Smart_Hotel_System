@@ -5,16 +5,20 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.get);
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+router.get('/', authorize(allRoles), reviewController.get);
 router.get('/my', authenticate as any, reviewController.getMyReviews);
-router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.getStats);
-router.get('/appeals', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.getAppeals);
-router.get('/:id', authenticate as any, reviewController.getById);
+router.get('/stats', authenticate as any, authorize(staffRoles), reviewController.getStats);
+router.get('/appeals', authenticate as any, authorize(staffRoles), reviewController.getAppeals);
+router.get('/:id', reviewController.getById);
 router.post('/', authenticate as any, reviewController.create);
 router.put('/:id', authenticate as any, reviewController.update);
-router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.remove);
-router.post('/:id/reply', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.reply);
+router.delete('/:id', authenticate as any, authorize(allRoles), reviewController.remove);
+router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewController.reply);
 router.post('/appeals', authenticate as any, reviewController.createAppeal);
-router.put('/appeals/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), reviewController.handleAppeal);
+router.put('/appeals/:id', authenticate as any, authorize(adminRoles), reviewController.handleAppeal);
 
 export default router;
