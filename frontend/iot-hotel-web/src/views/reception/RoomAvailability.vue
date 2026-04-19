@@ -4,10 +4,10 @@
       <div class="filter-header">
         <div class="filter-left">
           <a-space>
-            <a-select v-model:value="filterFloor" placeholder="楼层" style="width: 100px" allow-clear @change="refreshData">
+            <a-select v-model:value="filterFloor" placeholder="楼层" style="width: 100px" allow-clear>
               <a-select-option v-for="f in hotelStore.floors" :key="f.floor" :value="f.floor">{{ f.floor }}层</a-select-option>
             </a-select>
-            <a-select v-model:value="filterStatus" placeholder="状态" style="width: 120px" allow-clear @change="refreshData">
+            <a-select v-model:value="filterStatus" placeholder="状态" style="width: 120px" allow-clear>
               <a-select-option v-for="(v, k) in statusMap" :key="k" :value="k">{{ v.label }}</a-select-option>
             </a-select>
             <a-button @click="refreshData" :loading="loading">
@@ -228,7 +228,7 @@ async function reportMaintenance(room: RoomInfo) {
 async function refreshData() {
   loading.value = true
   try {
-    await hotelStore.fetchRooms({ pageSize: 300, status: filterStatus.value, floor: filterFloor.value })
+    await hotelStore.fetchRooms({ pageSize: 300 }, true)
   } catch (error) {
     message.error('刷新房态失败')
   } finally {

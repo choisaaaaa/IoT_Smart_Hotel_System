@@ -32,10 +32,10 @@ export const useHotelStore = defineStore('hotel', () => {
     currentHotelId.value = hotelId
   }
 
-  async function fetchRooms(params?: any) {
+  async function fetchRooms(params?: any, forceRefresh = false) {
     const nextKey = JSON.stringify(params || {})
     const now = Date.now()
-    if (now < roomRateLimitedUntil.value) {
+    if (!forceRefresh && now < roomRateLimitedUntil.value) {
       return {
         list: rooms.value,
         total: rooms.value.length,
@@ -44,10 +44,10 @@ export const useHotelStore = defineStore('hotel', () => {
         totalPages: 1
       }
     }
-    if (roomFetchPromise.value && roomFetchKey.value === nextKey) {
+    if (!forceRefresh && roomFetchPromise.value && roomFetchKey.value === nextKey) {
       return roomFetchPromise.value
     }
-    if (roomFetchKey.value === nextKey && now - roomFetchAt.value < 2000 && rooms.value.length > 0) {
+    if (!forceRefresh && roomFetchKey.value === nextKey && now - roomFetchAt.value < 2000 && rooms.value.length > 0) {
       return {
         list: rooms.value,
         total: rooms.value.length,
