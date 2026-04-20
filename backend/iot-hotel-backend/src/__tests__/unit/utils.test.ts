@@ -1,4 +1,4 @@
-import { generateSignature, verifySignature } from '../../utils/signature';
+import { calculateSignature, verifySignature } from '../../utils/signature';
 import logger from '../../utils/logger';
 
 describe('工具函数测试', () => {
@@ -6,26 +6,24 @@ describe('工具函数测试', () => {
     it('应该能正确生成和验证签名', () => {
       const params = { a: '1', b: '2', c: '3' };
       const secret = 'testSecret';
-      const signature = generateSignature(params, secret);
+      const signature = calculateSignature(params, secret);
 
       expect(signature).toBeDefined();
       expect(typeof signature).toBe('string');
       expect(signature.length).toBeGreaterThan(0);
 
-      // 验证相同参数生成相同签名
-      const signature2 = generateSignature(params, secret);
+      const signature2 = calculateSignature(params, secret);
       expect(signature).toBe(signature2);
 
-      // 不同参数生成不同签名
       const differentParams = { a: '1', b: '2', c: '4' };
-      const differentSignature = generateSignature(differentParams, secret);
+      const differentSignature = calculateSignature(differentParams, secret);
       expect(signature).not.toBe(differentSignature);
     });
 
     it('应该能正确验证签名', () => {
       const params = { deviceId: '123', timestamp: Date.now().toString() };
       const secret = 'deviceSecret';
-      const signature = generateSignature(params, secret);
+      const signature = calculateSignature(params, secret);
 
       expect(verifySignature(params, signature, secret)).toBe(true);
       expect(verifySignature(params, 'wrongSignature', secret)).toBe(false);

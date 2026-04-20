@@ -26,7 +26,7 @@ describe('认证工具测试', () => {
 
   describe('JWT Token 工具', () => {
     it('应该能正确生成和验证 Token', () => {
-      const payload = { id: 1, role: 'admin', hotel_id: 1 };
+      const payload = { id: 1, username: 'admin', role: 'admin', hotel_id: 1 };
       const token = generateToken(payload);
 
       expect(token).toBeDefined();
