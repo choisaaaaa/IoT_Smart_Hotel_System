@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
@@ -17,9 +18,15 @@ class PaymentService {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '创建支付订单失败');
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['message']?.toString();
+      if (serverMsg != null && serverMsg.isNotEmpty) {
+        return ApiResult.failure(serverMsg);
+      }
+      return ApiResult.failure('网络错误，请重试');
     } catch (e) {
       debugPrint('💳 [PaymentService] Error creating payment: $e');
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('创建支付订单失败');
     }
   }
 
@@ -34,8 +41,14 @@ class PaymentService {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '支付失败');
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['message']?.toString();
+      if (serverMsg != null && serverMsg.isNotEmpty) {
+        return ApiResult.failure(serverMsg);
+      }
+      return ApiResult.failure('网络错误，请重试');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('支付失败：$e');
     }
   }
 

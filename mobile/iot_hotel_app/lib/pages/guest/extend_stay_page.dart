@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
@@ -203,13 +204,60 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await ref.read(paymentServiceProvider).pay(paymentId);
+                final payResult = await ref.read(paymentServiceProvider).pay(paymentId);
+                if (payResult.success) {
+                  if (mounted) _showSuccess();
+                } else {
+                  final msg = payResult.message ?? '支付失败';
+                  if (mounted) {
+                    if (msg.contains('余额不足')) {
+                      _showInsufficientBalanceDialog(msg);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                    }
+                  }
+                }
               } catch (e) {
                 debugPrint('Payment error: $e');
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('支付失败，请重试')));
               }
-              if (mounted) _showSuccess();
             },
             child: const Text('确认支付'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInsufficientBalanceDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.warning, size: 40),
+        title: const Text('余额不足'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+            const Text('您可以选择：', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            const Text('• 前往钱包充值后再支付', style: TextStyle(fontSize: 13)),
+            const Text('• 切换其他支付方式', style: TextStyle(fontSize: 13)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push('/wallet');
+            },
+            child: const Text('去充值'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
           ),
         ],
       ),

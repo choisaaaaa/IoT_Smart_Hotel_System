@@ -577,7 +577,12 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         if (payResult.success && mounted) {
           _showSuccessDialog(booking.id, booking.displayBookingNumber);
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(payResult.message ?? '支付确认失败，请稍后在订单中重试')));
+          final msg = payResult.message ?? '支付确认失败，请稍后在订单中重试';
+          if (msg.contains('余额不足')) {
+            _showInsufficientBalanceDialog(msg);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+          }
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '预订失败')));
@@ -589,6 +594,41 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showInsufficientBalanceDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.warning, size: 40),
+        title: const Text('余额不足'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+            const Text('您可以选择：', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            const Text('• 前往钱包充值后再支付', style: TextStyle(fontSize: 13)),
+            const Text('• 切换其他支付方式重新下单', style: TextStyle(fontSize: 13)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push('/wallet');
+            },
+            child: const Text('去充值'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSuccessDialog(int bookingId, String bookingNo) {
