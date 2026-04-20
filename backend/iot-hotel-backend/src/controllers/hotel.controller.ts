@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { HotelService } from '../services/hotel.service';
 import pool, { ResultSetHeader, RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin, isHotelAdmin, isCustomer, normalizeRole, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isHotelAdmin, isCustomer, isGuest, normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -12,7 +12,7 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     // 系统管理员和顾客可以从 query 指定 hotel_id
     const queryHotelId = req.query.hotel_id;
-    if ((isSystemAdmin(userRole) || isCustomer(userRole)) && queryHotelId) {
+    if ((isSystemAdmin(userRole) || isCustomer(userRole) || isGuest(userRole)) && queryHotelId) {
       const id = parseInt(queryHotelId as string);
       const hotel = await HotelService.getHotelById(id);
       if (!hotel) {return res.status(404).json(errorResponse('酒店不存在'));}
@@ -33,6 +33,10 @@ export const get = async (req: AuthRequest, res: Response) => {
 
     // 否则（包括已切换到分店上下文的系统管理员），根据 hotelId 获取对应酒店信息
     if (!hotelId) {
+      if (isCustomer(userRole) || isGuest(userRole)) {
+        const hotels = await HotelService.getAllHotels();
+        return res.json(successResponse(hotels, '获取酒店列表成功'));
+      }
       return res.status(401).json(errorResponse('未授权，缺少酒店绑定信息'));
     }
 

@@ -3,14 +3,14 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { PaymentService } from '../services/payment.service';
 import logger from '../utils/logger';
 import pool from '../config/database';
-import { isCustomer } from '../utils/role';
+import { isCustomer, isGuest } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, pageSize = 10, status, order_type } = req.query;
     
     // 普通用户只能看到自己的支付（通过关联的预订）
-    const userId = isCustomer(req.user?.role) ? req.user.id : undefined;
+    const userId = (isCustomer(req.user?.role) || isGuest(req.user?.role)) ? req.user.id : undefined;
     
     const data = await PaymentService.getPayments({
       page: Number(page),
@@ -32,7 +32,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     
     // 普通用户只能看到自己的支付
-    const userId = isCustomer(req.user?.role) ? req.user.id : undefined;
+    const userId = (isCustomer(req.user?.role) || isGuest(req.user?.role)) ? req.user.id : undefined;
     
     const payment = await PaymentService.getPaymentById(Number(id), req.user?.hotel_id || 1, userId);
     if (!payment) {

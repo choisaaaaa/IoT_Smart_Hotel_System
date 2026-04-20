@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import deviceService from '../services/device.service';
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin, isCustomer } from '../utils/role';
+import { isSystemAdmin, isCustomer, isGuest } from '../utils/role';
 
 class DeviceController {
   /**
@@ -75,7 +75,7 @@ class DeviceController {
 
       if (isSystemAdmin(user?.role)) {
         targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
-      } else if (isCustomer(user?.role)) {
+      } else if (isCustomer(user?.role) || isGuest(user?.role)) {
         const [bookings]: any = await pool.query(
           `SELECT room_id FROM bookings WHERE (user_id = ? OR guest_phone = ?) AND status = 'checked_in' ORDER BY id DESC LIMIT 1`,
           [user?.id, user?.phone]
@@ -118,7 +118,7 @@ class DeviceController {
         hotelId = req.query.hotel_id || hotelId || 1;
       }
 
-      if (isCustomer(user?.role)) {
+      if (isCustomer(user?.role) || isGuest(user?.role)) {
         const [bookings]: any = await pool.query(
           `SELECT r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE (b.user_id = ? OR b.guest_phone = ?) AND b.status = 'checked_in' ORDER BY b.id DESC LIMIT 1`,
           [user?.id, user?.phone]
@@ -187,7 +187,7 @@ class DeviceController {
         return res.status(400).json({ success: false, message: 'Invalid parameters' });
       }
 
-      if (isCustomer(user?.role)) {
+      if (isCustomer(user?.role) || isGuest(user?.role)) {
         const [bookings]: any = await pool.query(
           `SELECT b.room_id, r.hotel_id FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE (b.user_id = ? OR b.guest_phone = ?) AND b.status = 'checked_in' ORDER BY b.id DESC LIMIT 1`,
           [user?.id, user?.phone]

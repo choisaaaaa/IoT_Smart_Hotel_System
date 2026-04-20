@@ -10,6 +10,7 @@ export const CANONICAL_ROLES = {
   HOTEL_ADMIN: 'hotel_admin',
   STAFF: 'staff',
   CUSTOMER: 'customer',
+  GUEST: 'guest',
 } as const
 
 export function normalizeRole(role?: string): string {
@@ -24,8 +25,11 @@ export function normalizeRole(role?: string): string {
   if (value === 'staff' || value === 'receptionist' || value === 'reception' || compact === 'frontdesk') {
     return CANONICAL_ROLES.STAFF
   }
-  if (value === 'user' || value === 'customer' || value === 'guest') {
+  if (value === 'user' || value === 'customer') {
     return CANONICAL_ROLES.CUSTOMER
+  }
+  if (value === 'guest' || value === 'visitor') {
+    return CANONICAL_ROLES.GUEST
   }
   return value
 }
@@ -44,6 +48,10 @@ export function isStaff(role?: string): boolean {
 
 export function isCustomer(role?: string): boolean {
   return normalizeRole(role) === CANONICAL_ROLES.CUSTOMER
+}
+
+export function isGuest(role?: string): boolean {
+  return normalizeRole(role) === CANONICAL_ROLES.GUEST
 }
 
 export interface LoginParams {

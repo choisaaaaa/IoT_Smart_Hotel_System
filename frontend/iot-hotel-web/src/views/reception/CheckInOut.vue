@@ -948,8 +948,8 @@ async function fetchTodayBookings(force = false) {
     const list = allList.filter((item: any) => {
       const isTodayCheckin = dayjs(item.check_in_date).isSame(today, 'day')
       const isTodayCheckout = dayjs(item.check_out_date).isSame(today, 'day')
-      const isActive = ['pending', 'confirmed', 'pre_checked_in', 'checked_in'].includes(item.status)
-      return isActive && (isTodayCheckin || isTodayCheckout)
+      const isPendingCheckin = ['pending', 'confirmed', 'pre_checked_in'].includes(item.status) && isTodayCheckin
+      return isPendingCheckin
     })
     console.log('[今日预定清单] 过滤后:', list.length, '条, 状态分布:',
       allList.reduce((acc: any, item: any) => {

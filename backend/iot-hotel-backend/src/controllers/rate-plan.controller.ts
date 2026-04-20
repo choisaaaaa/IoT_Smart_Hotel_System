@@ -3,11 +3,22 @@ import { Response } from 'express';
 import { AuthRequest, successResponse, errorResponse } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
+import { isSystemAdmin, isCustomer, isGuest } from '../utils/role';
 
 export const getRatePlans = async (req: AuthRequest, res: Response) => {
   try {
     const { room_type_id } = req.query;
-    const hotelId = req.user?.hotel_id;
+    let hotelId = req.user?.hotel_id;
+
+    if (isSystemAdmin(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : (hotelId || 1);
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      hotelId = req.query.hotel_id ? Number(req.query.hotel_id) : hotelId;
+    }
+
+    if (!hotelId) {
+      return res.status(400).json(errorResponse('缺少酒店ID参数'));
+    }
 
     let sql = 'SELECT * FROM rate_plans WHERE hotel_id = ?';
     const params: any[] = [hotelId];

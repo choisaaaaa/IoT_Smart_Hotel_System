@@ -5,10 +5,13 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER]), deliveryController.get);
-router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER]), deliveryController.getById);
-router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER]), deliveryController.create);
-router.put('/:id/status', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), deliveryController.updateStatus);
-router.put('/:id/complete', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), deliveryController.complete);
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+router.get('/', authenticate as any, authorize(allRoles), deliveryController.get);
+router.get('/:id', authenticate as any, authorize(allRoles), deliveryController.getById);
+router.post('/', authenticate as any, authorize(allRoles), deliveryController.create);
+router.put('/:id/status', authenticate as any, authorize(staffRoles), deliveryController.updateStatus);
+router.put('/:id/complete', authenticate as any, authorize(staffRoles), deliveryController.complete);
 
 export default router;

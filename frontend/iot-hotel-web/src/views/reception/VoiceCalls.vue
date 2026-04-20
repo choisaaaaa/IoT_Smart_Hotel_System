@@ -454,13 +454,11 @@ function handleOutgoingCancel() {
 function hangupCurrentCall() {
   if (appStore.currentCall?.call_id) {
     callApi.hangup(appStore.currentCall.call_id)
-    // 发送挂断事件
     const socket = getSocket()
     if (socket) {
       socket.emit('hangup_call', { call_id: appStore.currentCall.call_id })
     }
   }
-  appStore.clearCurrentCall()
   stopCallDurationTimer()
 }
 
@@ -524,8 +522,13 @@ const handleCallRejected = (data: any) => {
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
     message.warning('通话被拒接')
-    // 清除全局通话状态
     appStore.clearCurrentCall()
+    stopCallDurationTimer()
+    fetchCalls()
+  } else if (appStore.currentCall?.call_id === data.call_id) {
+    appStore.clearCurrentCall()
+    stopCallDurationTimer()
+    message.warning('通话被拒接')
     fetchCalls()
   }
 }
@@ -534,9 +537,13 @@ const handleCallHungup = (data: any) => {
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
     message.info('通话已挂断')
-    // 清除全局通话状态
     appStore.clearCurrentCall()
     stopCallDurationTimer()
+    fetchCalls()
+  } else if (appStore.currentCall?.call_id === data.call_id) {
+    appStore.clearCurrentCall()
+    stopCallDurationTimer()
+    message.info('对方已挂断')
     fetchCalls()
   }
 }

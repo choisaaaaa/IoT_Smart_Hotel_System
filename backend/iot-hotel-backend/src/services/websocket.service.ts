@@ -4,6 +4,7 @@ import config from '../config';
 import logger from '../utils/logger';
 import mqttService from './mqtt.service';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
+import { normalizeRole, CANONICAL_ROLES } from '../utils/role';
 
 interface ClientInfo {
   socketId: string;
@@ -125,8 +126,9 @@ class WebSocketService {
             }
             
             const user = rows[0];
-            if (user.role === 'customer') {
-              socket.emit('error', { message: '身份验证失败：普通顾客无法以柜台身份登录' });
+            const normalizedRole = normalizeRole(user.role);
+            if (normalizedRole === CANONICAL_ROLES.CUSTOMER || normalizedRole === CANONICAL_ROLES.GUEST) {
+              socket.emit('error', { message: '身份验证失败：普通顾客/游客无法以柜台身份登录' });
               return;
             }
             
@@ -420,7 +422,7 @@ class WebSocketService {
           const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, hotel_id, status, started_at) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [callId, caller_type, caller_id, callee_type, callee_id, callerHotelId, 'calling', new Date()]
+            [callId, caller_type, caller_id, callee_type, callee_id, callerHotelId || null, 'calling', new Date()]
           );
           
           // 1. 获取主叫方的酒店信息（如果是房间）
@@ -795,17 +797,25 @@ class WebSocketService {
             callee_id: callData.callee_id
           };
           
-          // 1. 通知当前操作的 Socket（被叫方确认）
-          socket.emit('call_answered', answerData);
-          
-          // 2. 通知主叫方（使用标准化ID精准通知个人房间）
           const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
           logger.info(`发送 call_answered 到主叫房间: ${callerRoom} (原始caller_id: ${callData.caller_id})`);
           this.io?.to(callerRoom).emit('call_answered', answerData);
           
-          // 3. 通知该门店的所有前台（同步状态）
+          if (callData.callee_type === 'front_desk' && normalizedCalleeId === 'all') {
+            const ansHotelId = callData.hotel_id || currentClient?.hotelId;
+            if (ansHotelId) {
+              this.io?.to(`front_desk_hotel_${ansHotelId}`).emit('call_answered', answerData);
+            } else {
+              this.io?.to('front_desk').emit('call_answered', answerData);
+            }
+          } else {
+            const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
+            logger.info(`发送 call_answered 到被叫方房间: ${calleeRoom} (原始callee_id: ${callData.callee_id})`);
+            this.io?.to(calleeRoom).emit('call_answered', answerData);
+          }
+          
           const hId = callData.hotel_id || currentClient?.hotelId;
-          if (hId) {
+          if (hId && hId !== 0) {
             const hotelRoom = `front_desk_hotel_${hId}`;
             this.io?.to(hotelRoom).emit('call_answered', answerData);
           }
@@ -829,6 +839,7 @@ class WebSocketService {
       socket.on('reject_call', async (data: { callId?: string; call_id?: string }) => {
         try {
           const callId = String(data.callId || data.call_id).trim();
+          const currentClient = this.clients.get(socket.id);
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -889,6 +900,19 @@ class WebSocketService {
           }
           this.io?.to(`${callData.caller_type}_${normalizedCallerId}`).emit('call_rejected', rejectData);
           
+          let rejectHotelId = callData.hotel_id || currentClient?.hotelId;
+          if ((!rejectHotelId || rejectHotelId === 0) && callData.caller_type === 'room') {
+            const [rhRows] = await pool.query<RowDataPacket[]>(
+              'SELECT hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+              [callData.caller_id, callData.caller_id]
+            );
+            if (rhRows.length > 0) rejectHotelId = rhRows[0].hotel_id;
+          }
+          if (rejectHotelId && rejectHotelId !== 0) {
+            const hotelRoom = `front_desk_hotel_${rejectHotelId}`;
+            this.io?.to(hotelRoom).emit('call_rejected', rejectData);
+          }
+          
           logger.info(`通话拒接: ${callId}`);
         } catch (error) {
           logger.error('拒接语音通话失败:', error.message);
@@ -899,6 +923,7 @@ class WebSocketService {
       socket.on('hangup_call', async (data: { callId?: string; call_id?: string }) => {
         try {
           const callId = String(data.callId || data.call_id).trim();
+          const currentClient = this.clients.get(socket.id);
           
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
@@ -954,7 +979,24 @@ class WebSocketService {
             }
           }
 
-          // 通知双方挂断，如果是房间则发 MQTT
+          let effectiveHotelId = callData.hotel_id || currentClient?.hotelId;
+          if (!effectiveHotelId || effectiveHotelId === 0) {
+            if (callData.caller_type === 'room') {
+              const [hRows] = await pool.query<RowDataPacket[]>(
+                'SELECT hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+                [callData.caller_id, callData.caller_id]
+              );
+              if (hRows.length > 0) effectiveHotelId = hRows[0].hotel_id;
+            }
+            if ((!effectiveHotelId || effectiveHotelId === 0) && callData.callee_type === 'room') {
+              const [hRows] = await pool.query<RowDataPacket[]>(
+                'SELECT hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+                [callData.callee_id, callData.callee_id]
+              );
+              if (hRows.length > 0) effectiveHotelId = hRows[0].hotel_id;
+            }
+          }
+
           if (callData.caller_type === 'room') {
             mqttService.publish(`hotel/device/command/room/${normalizedCallerId}`, {
               command_id: Date.now(),
@@ -973,8 +1015,19 @@ class WebSocketService {
               call_id: callId
             });
             this.io?.to(`${callData.callee_type}_${normalizedCalleeId}`).emit('call_hungup', hangupData);
+          } else if (callData.callee_type === 'front_desk' && normalizedCalleeId === 'all') {
+            if (effectiveHotelId) {
+              this.io?.to(`front_desk_hotel_${effectiveHotelId}`).emit('call_hungup', hangupData);
+            } else {
+              this.io?.to('front_desk').emit('call_hungup', hangupData);
+            }
           } else {
             this.io?.to(`${callData.callee_type}_${normalizedCalleeId}`).emit('call_hungup', hangupData);
+          }
+          
+          if (effectiveHotelId && effectiveHotelId !== 0) {
+            const hotelRoom = `front_desk_hotel_${effectiveHotelId}`;
+            this.io?.to(hotelRoom).emit('call_hungup', hangupData);
           }
           
           logger.info(`通话挂断: ${callId}, 时长: ${durationSec}秒`);

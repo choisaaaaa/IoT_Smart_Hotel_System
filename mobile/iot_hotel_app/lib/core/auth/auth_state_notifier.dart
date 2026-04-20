@@ -13,9 +13,10 @@ class AppRoles {
   static const String hotelAdmin = 'hotel_admin';
   static const String staff = 'staff';
   static const String customer = 'customer';
+  static const String guest = 'guest';
 
   static String normalize(String? role) {
-    if (role == null) return customer;
+    if (role == null) return guest;
     final r = role.trim().toLowerCase();
     switch (r) {
       case 'system':
@@ -38,8 +39,10 @@ class AppRoles {
         return staff;
       case 'user':
       case 'customer':
-      case 'guest':
         return customer;
+      case 'guest':
+      case 'visitor':
+        return guest;
       default:
         return r;
     }
@@ -51,6 +54,7 @@ class AppRoles {
       case hotelAdmin: return '酒店管理员';
       case staff: return '前台员工';
       case customer: return '顾客';
+      case guest: return '游客';
       default: return role;
     }
   }
@@ -59,10 +63,11 @@ class AppRoles {
 int roleToLevel(String? role) {
   final normalized = AppRoles.normalize(role);
   switch (normalized) {
-    case AppRoles.systemAdmin: return 4;
-    case AppRoles.hotelAdmin: return 3;
-    case AppRoles.staff: return 2;
-    case AppRoles.customer: return 1;
+    case AppRoles.systemAdmin: return 5;
+    case AppRoles.hotelAdmin: return 4;
+    case AppRoles.staff: return 3;
+    case AppRoles.customer: return 2;
+    case AppRoles.guest: return 1;
     default: return 0;
   }
 }
@@ -96,10 +101,10 @@ class AuthState {
     if (!isAuthenticated) return mode == AppMode.guest;
     switch (mode) {
       case AppMode.guest: return true;
-      case AppMode.customer: return roleLevel >= 1;
-      case AppMode.reception: return roleLevel >= 2;
-      case AppMode.manager: return roleLevel >= 3;
-      case AppMode.system: return roleLevel >= 4;
+      case AppMode.customer: return roleLevel >= 2;
+      case AppMode.reception: return roleLevel >= 3;
+      case AppMode.manager: return roleLevel >= 4;
+      case AppMode.system: return roleLevel >= 5;
     }
   }
 
@@ -146,6 +151,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       case AppRoles.hotelAdmin: initialMode = AppMode.manager; break;
       case AppRoles.staff: initialMode = AppMode.reception; break;
       case AppRoles.customer: initialMode = AppMode.customer; break;
+      case AppRoles.guest: initialMode = AppMode.guest; break;
       default: initialMode = AppMode.guest;
     }
     state = AuthState(

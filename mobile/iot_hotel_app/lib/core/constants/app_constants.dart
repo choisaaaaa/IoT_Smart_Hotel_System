@@ -9,14 +9,14 @@ class AppConstants {
   static const String favoriteHotelsKey = 'hotel_favorites';
   static const String userRoleKey = 'user_role';
 
-  static const List<String> userRoles = ['admin', 'system', 'receptionist', 'staff', 'user'];
+  static const List<String> userRoles = ['system_admin', 'hotel_admin', 'staff', 'customer', 'guest'];
 
   static Map<String, String> roleNames = {
-    'admin': '管理员',
-    'system': '系统管理员',
-    'receptionist': '前台',
-    'staff': '员工',
-    'user': '住客',
+    'system_admin': '系统管理员',
+    'hotel_admin': '酒店管理员',
+    'staff': '前台员工',
+    'customer': '顾客',
+    'guest': '游客',
   };
 
   static Map<String, String> roomStatusMap = {

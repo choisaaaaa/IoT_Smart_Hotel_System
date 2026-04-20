@@ -8,8 +8,8 @@ function doAutoRegister(s: Socket) {
   const appStore = useAppStore()
   const userInfo = appStore.userInfo
   if (userInfo && userInfo.username) {
-    const isStaff = ['admin', 'staff', 'manager', 'reception', 'hotel_admin', 'system_admin'].includes(userInfo.role)
-    const clientType = isStaff ? 'front_desk' : 'app'
+    const isStaffUser = ['hotel_admin', 'system_admin', 'staff'].includes(userInfo.role)
+    const clientType = isStaffUser ? 'front_desk' : 'app'
     const clientId = userInfo.username
 
     console.log(`[WS] 自动注册客户端: ${clientId} as ${clientType}`)

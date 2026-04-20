@@ -1,19 +1,24 @@
 import { Router } from 'express';
 import * as reviewController from '../../controllers/review.controller';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, authorize } from '../../middleware/auth';
+import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
-router.get('/', reviewController.get);
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+router.get('/', authenticate as any, authorize(allRoles), reviewController.get);
 router.get('/my', authenticate as any, reviewController.getMyReviews);
-router.get('/stats', reviewController.getStats);
-router.get('/appeals', authenticate as any, reviewController.getAppeals);
-router.get('/:id', reviewController.getById);
+router.get('/stats', authenticate as any, authorize(allRoles), reviewController.getStats);
+router.get('/appeals', authenticate as any, authorize(staffRoles), reviewController.getAppeals);
+router.get('/:id', authenticate as any, reviewController.getById);
 router.post('/', authenticate as any, reviewController.create);
 router.put('/:id', authenticate as any, reviewController.update);
-router.delete('/:id', authenticate as any, reviewController.remove);
-router.post('/:id/reply', authenticate as any, reviewController.reply);
+router.delete('/:id', authenticate as any, authorize(adminRoles), reviewController.remove);
+router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewController.reply);
 router.post('/appeals', authenticate as any, reviewController.createAppeal);
-router.put('/appeals/:id', authenticate as any, reviewController.handleAppeal);
+router.put('/appeals/:id', authenticate as any, authorize(adminRoles), reviewController.handleAppeal);
 
 export default router;

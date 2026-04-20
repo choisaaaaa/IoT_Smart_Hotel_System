@@ -3,7 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import { RoomService } from '../services/room.service';
 import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
-import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../utils/role';
+import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, isGuest, CANONICAL_ROLES } from '../utils/role';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -11,17 +11,24 @@ export const get = async (req: AuthRequest, res: Response) => {
     let hotelId = req.user?.hotel_id;
     
     // 系统管理员和顾客可以从 query 指定 hotel_id
-    if (isSystemAdmin(req.user?.role) || isCustomer(req.user?.role)) {
+    if (isSystemAdmin(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
-      } else if (!hotelId && isSystemAdmin(req.user?.role)) {
-        // 系统管理员若未指定，则默认为 1
+      } else if (!hotelId) {
         hotelId = 1;
+      }
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
       }
     }
 
     if (hotelId === undefined || hotelId === null || hotelId === 0) {
+      if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+        return res.status(400).json(errorResponse('请提供酒店ID参数(hotel_id)'));
+      }
       return res.status(401).json(errorResponse('未授权，无法获取有效的门店 ID'));
     }
 
@@ -59,8 +66,16 @@ export const getById = async (req: AuthRequest, res: Response) => {
       } else if (!hotelId) {
         hotelId = 1;
       }
+    } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      const queryHotelId = req.query.hotel_id || req.body.hotel_id;
+      if (queryHotelId) {
+        hotelId = parseInt(queryHotelId as string);
+      }
     }
     if (hotelId === undefined || hotelId === null) {
+      if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+        return res.status(400).json(errorResponse('请提供酒店ID参数(hotel_id)'));
+      }
       return res.status(401).json(errorResponse('未授权'));
     }
 
@@ -153,18 +168,12 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (isSystemAdmin(req.user?.role)) {
       hotelId = req.body.hotel_id || req.query.hotel_id || hotelId || 1;
     } else if (isStaff(req.user?.role) || isHotelAdmin(req.user?.role)) {
-      // staff 和 manager 从 user_hotels 表获取 hotel_id
       const [hotelRows]: any = await (await import('../config/database')).default.execute(
         'SELECT hotel_id FROM user_hotels WHERE user_id = ? LIMIT 1',
         [req.user?.id]
       );
       if (hotelRows.length > 0) {
         hotelId = hotelRows[0].hotel_id;
-      }
-      // 也支持从请求参数中获取
-      const bodyHotelId = req.body.hotel_id || req.query.hotel_id;
-      if (bodyHotelId) {
-        hotelId = parseInt(bodyHotelId as string);
       }
     }
     if (hotelId === undefined || hotelId === null) {

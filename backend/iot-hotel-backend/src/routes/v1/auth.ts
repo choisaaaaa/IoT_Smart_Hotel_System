@@ -6,7 +6,7 @@ import { successResponse, errorResponse, sendSuccess, sendError } from '../../ty
 import { authenticate } from '../../middleware/auth';
 import crypto from 'crypto';
 import db from '../../config/database';
-import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, CANONICAL_ROLES } from '../../utils/role';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, isGuest, CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
@@ -676,7 +676,7 @@ router.get('/role-applications', async (req: AuthRequest, res) => {
       params.push('bind_employee', decoded.id);
     }
 
-    if (isCustomer(role)) {
+    if (isCustomer(role) || isGuest(role)) {
       whereClause += ' AND ra.user_id = ?';
       params.push(decoded.id);
     }
