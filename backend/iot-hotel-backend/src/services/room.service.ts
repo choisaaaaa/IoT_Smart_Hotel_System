@@ -117,7 +117,7 @@ export class RoomService {
             totalPages: Math.ceil(total / Number(pageSize))
           };
         },
-        { ttl: 180 }
+        { ttl: 1 }
       );
     } catch (error) {
       logger.error('获取房间列表失败:', error.message);
@@ -151,7 +151,7 @@ export class RoomService {
             rooms: grouped[Number(floor)]
           }));
         },
-        { ttl: 180 }
+        { ttl: 1 }
       );
     } catch (error) {
       logger.error('按楼层获取房间失败:', error.message);
@@ -176,7 +176,7 @@ export class RoomService {
           const [rows] = await pool.query<RowDataPacket[]>(getByIdSql, [id, hotelId]);
           return (rows[0] as Room) || null;
         },
-        { ttl: 300 }
+        { ttl: 1 }
       );
     } catch (error) {
       logger.error('获取房间详情失败:', error.message);
@@ -268,11 +268,26 @@ export class RoomService {
       }
 
       if (result.affectedRows > 0) {
-        // 清除相关缓存
         await CacheService.delete(CacheService.roomKeys.info(id));
         if (hotelId) {
           await CacheService.deletePattern(`${CacheService.roomKeys.list(hotelId)}*`);
+          await CacheService.delete(CacheService.roomKeys.list(hotelId));
           await CacheService.delete(`rooms:byFloor:${hotelId}`);
+        }
+        try {
+          const redis = (await import('../utils/redis')).default;
+          if (redis.isReady()) {
+            const client = redis.getClient();
+            if (client) {
+              const keys = await client.keys(`iot_hotel:room:list:${hotelId}*`);
+              if (keys.length > 0) {
+                await client.del(keys);
+                logger.info(`强制清除房间列表缓存: ${keys.length} 个键`);
+              }
+            }
+          }
+        } catch (e) {
+          logger.warn('强制清除缓存失败:', (e as Error).message);
         }
       }
 
