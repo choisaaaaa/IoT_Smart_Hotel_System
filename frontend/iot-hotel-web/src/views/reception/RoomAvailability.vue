@@ -124,13 +124,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import type { RoomInfo } from '@/types'
 import { useHotelStore } from '@/stores/hotel'
 import { roomApi } from '@/api/room'
 import { maintenanceApi } from '@/api/maintenance'
 import { useRouter } from 'vue-router'
+import { getSocket } from '@/utils/websocket'
 
 import {
   CheckCircleOutlined, CloseCircleOutlined,
@@ -236,7 +237,47 @@ async function refreshData() {
   }
 }
 
-onMounted(refreshData)
+// 监听WebSocket房间状态更新
+function setupWebSocketListener() {
+  const socket = getSocket()
+  if (!socket) return
+
+  const handleRoomStatusUpdate = (data: any) => {
+    console.log('[RoomAvailability] 收到房间状态更新:', data)
+    if (data.room_id && data.room_status) {
+      // 更新本地房间状态
+      const room = hotelStore.rooms.find(r => r.id === data.room_id)
+      if (room) {
+        room.room_status = data.room_status
+        message.success(`房间 ${room.room_number} 状态更新为 ${statusMap[data.room_status]?.label || data.room_status}`)
+      }
+      // 如果当前打开的房间详情是这个房间，也更新详情
+      if (currentRoom.value?.id === data.room_id) {
+        currentRoom.value.room_status = data.room_status
+      }
+    }
+  }
+
+  socket.on('room_status_update', handleRoomStatusUpdate)
+
+  // 返回清理函数
+  return () => {
+    socket.off('room_status_update', handleRoomStatusUpdate)
+  }
+}
+
+let cleanupWebSocket: (() => void) | null = null
+
+onMounted(() => {
+  refreshData()
+  cleanupWebSocket = setupWebSocketListener()
+})
+
+onUnmounted(() => {
+  if (cleanupWebSocket) {
+    cleanupWebSocket()
+  }
+})
 </script>
 
 <style scoped>

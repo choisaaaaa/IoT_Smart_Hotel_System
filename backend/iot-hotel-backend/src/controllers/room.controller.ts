@@ -4,6 +4,7 @@ import { RoomService } from '../services/room.service';
 import { HotelService } from '../services/hotel.service';
 import logger from '../utils/logger';
 import { isSystemAdmin, isStaff, isHotelAdmin, isCustomer, isGuest, CANONICAL_ROLES } from '../utils/role';
+import websocketService from '../services/websocket.service';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -198,7 +199,25 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return;
     }
     
-    res.json(successResponse(null, '更新房间状态成功'));
+    // 广播房间状态变更给该酒店的所有前台客户端
+    try {
+      const io = websocketService.getIO();
+      if (io) {
+        const roomUpdateData = {
+          room_id: id,
+          room_status: status,
+          hotel_id: hotelId,
+          timestamp: new Date().toISOString()
+        };
+        // 发送到酒店前台房间
+        io.to(`front_desk_hotel_${hotelId}`).emit('room_status_update', roomUpdateData);
+        logger.info(`房间状态更新已广播: 房间ID=${id}, 状态=${status}, 酒店ID=${hotelId}`);
+      }
+    } catch (wsError) {
+      logger.warn('WebSocket广播房间状态更新失败:', wsError.message);
+    }
+    
+    res.json(successResponse({ room_id: id, room_status: status }, '更新房间状态成功'));
   } catch (error: any) {
     logger.error('更新房间状态失败:', error.message);
     res.status(500).json(errorResponse(error.message || '更新房间状态失败'));
