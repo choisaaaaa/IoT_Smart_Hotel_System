@@ -12,6 +12,7 @@ class RoomService {
     String? status,
     String? floor,
     int? hotelId,
+    int? roomTypeId,
     String? type,
   }) async {
     try {
@@ -22,6 +23,7 @@ class RoomService {
       if (status != null) queryParams['status'] = status;
       if (floor != null) queryParams['floor'] = floor;
       if (hotelId != null) queryParams['hotel_id'] = hotelId;
+      if (roomTypeId != null) queryParams['room_type_id'] = roomTypeId;
       if (type != null) queryParams['type'] = type;
 
       final response = await _dioClient.get(

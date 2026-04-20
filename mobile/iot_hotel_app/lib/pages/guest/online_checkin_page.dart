@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/booking_service.dart';
+import '../../services/room_service.dart';
 import '../../models/booking.dart';
 import '../../core/network/api_result.dart';
 
@@ -26,9 +27,16 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
   String _arrivalTime = '14:00';
   bool _isSearching = false;
   bool _isConfirming = false;
+  bool _isLoadingRooms = false;
   Booking? _foundBooking;
   String _roomPin = '';
   bool _agreedToTerms = false;
+
+  List<Map<String, dynamic>> _availableRooms = [];
+  int? _selectedRoomId;
+  String _selectedRoomNumber = '';
+  int _selectedFloorNumber = 0;
+  String _selectedRoomTypeName = '';
 
   final List<String> _arrivalTimeOptions = [
     '12:00', '13:00', '14:00', '15:00', '16:00',
@@ -92,6 +100,51 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
     }
   }
 
+  Future<void> _loadAvailableRooms() async {
+    if (_foundBooking == null) return;
+    setState(() => _isLoadingRooms = true);
+    try {
+      final roomService = ref.read(roomServiceProvider);
+      final result = await roomService.getRooms(
+        status: 'available',
+        hotelId: _foundBooking!.hotelId,
+        roomTypeId: _foundBooking!.roomTypeId,
+        pageSize: 100,
+      );
+
+      if (result.success && mounted) {
+        final rooms = result.data ?? [];
+        final roomMaps = rooms.map((r) {
+          if (r is Map<String, dynamic>) return r;
+          return <String, dynamic>{};
+        }).where((r) => r.isNotEmpty).toList();
+
+        if (_foundBooking!.roomId > 0) {
+          final currentRoomResult = await roomService.getRoomById(_foundBooking!.roomId);
+          if (currentRoomResult.success && currentRoomResult.data != null) {
+            final currentRoom = currentRoomResult.data!;
+            final exists = roomMaps.any((r) => r['id'] == currentRoom['id']);
+            if (!exists) {
+              roomMaps.add(currentRoom);
+            }
+            setState(() {
+              _selectedRoomId = currentRoom['id'] as int?;
+              _selectedRoomNumber = currentRoom['room_number']?.toString() ?? '';
+              _selectedFloorNumber = (currentRoom['floor'] as num?)?.toInt() ?? 0;
+              _selectedRoomTypeName = currentRoom['room_name']?.toString() ?? currentRoom['room_type_name']?.toString() ?? '';
+            });
+          }
+        }
+
+        setState(() => _availableRooms = roomMaps);
+      }
+    } catch (e) {
+      debugPrint('加载房间列表失败: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingRooms = false);
+    }
+  }
+
   bool _validateIdNumber() {
     final idNumber = _idNumberController.text.trim();
     if (idNumber.isEmpty) return false;
@@ -115,20 +168,25 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
     setState(() => _isConfirming = true);
     try {
       final bookingId = _foundBooking!.id;
-      final result = await ref.read(bookingServiceProvider).checkinOnline(bookingId, {
+      final data = <String, dynamic>{
         'guest_phone': _foundBooking!.guestPhone ?? '',
         'real_name': _realNameController.text.trim(),
         'id_type': _idType,
         'id_number': _idNumberController.text.trim(),
         'arrival_time': _arrivalTime,
         'plate_number': _plateController.text.trim(),
-      });
+      };
+      if (_selectedRoomId != null) {
+        data['room_id'] = _selectedRoomId;
+      }
+
+      final result = await ref.read(bookingServiceProvider).checkinOnline(bookingId, data);
 
       if (result.success && mounted) {
-        final data = result.data;
+        final respData = result.data;
         setState(() {
-          _roomPin = data?.roomNumber ?? '';
-          _currentStep = 3;
+          _roomPin = respData?.roomNumber ?? '';
+          _currentStep = 4;
         });
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '办理失败')));
@@ -181,8 +239,8 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Row(
-              children: List.generate(4, (i) {
-                final labels = ['验证预订', '填写信息', '确认提交', '办理完成'];
+              children: List.generate(5, (i) {
+                final labels = ['验证预订', '选择房间', '填写信息', '确认提交', '办理完成'];
                 final isActive = i <= _currentStep;
                 return Expanded(
                   child: Row(
@@ -208,7 +266,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                           ],
                         ),
                       ),
-                      if (i < 3)
+                      if (i < 4)
                         Expanded(
                           child: Container(
                             height: 2,
@@ -238,6 +296,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
       case 1: return _buildStep1();
       case 2: return _buildStep2();
       case 3: return _buildStep3();
+      case 4: return _buildStep4();
       default: return const SizedBox.shrink();
     }
   }
@@ -313,22 +372,16 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              if (_foundBooking!.status == 'confirmed') ...[
+              if (_foundBooking!.status == 'confirmed' || _foundBooking!.status == 'pre_checked_in') ...[
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: FilledButton(
-                    onPressed: () => setState(() => _currentStep = 1),
-                    child: const Text('下一步：填写入住信息'),
-                  ),
-                ),
-              ] else if (_foundBooking!.status == 'pre_checked_in') ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    onPressed: () => setState(() => _currentStep = 1),
-                    child: const Text('继续完善入住信息'),
+                    onPressed: () {
+                      _loadAvailableRooms();
+                      setState(() => _currentStep = 1);
+                    },
+                    child: Text(_foundBooking!.status == 'pre_checked_in' ? '继续完善入住信息' : '下一步：选择房间'),
                   ),
                 ),
               ] else if (_foundBooking!.status == 'checked_in') ...[
@@ -392,7 +445,141 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('步骤2: 填写入住信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('步骤2: 选择房间', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('请从以下可用房间中选择一间入住', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            if (_isLoadingRooms)
+              const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+            else if (_availableRooms.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: Column(
+                    children: [
+                      Icon(Icons.meeting_room_outlined, size: 48, color: AppColors.textHint.withValues(alpha: 0.3)),
+                      const SizedBox(height: 12),
+                      const Text('暂无可用房间', style: TextStyle(color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text('共 ${_availableRooms.length} 间可用 · ${_foundBooking?.displayRoomType ?? ''}', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _availableRooms.map((room) {
+                  final roomId = room['id'] as int? ?? 0;
+                  final roomNumber = room['room_number']?.toString() ?? '';
+                  final floor = (room['floor'] as num?)?.toInt() ?? 0;
+                  final roomName = room['room_name']?.toString() ?? room['room_type_name']?.toString() ?? '';
+                  final isSelected = _selectedRoomId == roomId;
+
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedRoomId = roomId;
+                      _selectedRoomNumber = roomNumber;
+                      _selectedFloorNumber = floor;
+                      _selectedRoomTypeName = roomName;
+                    }),
+                    child: Container(
+                      width: (MediaQuery.of(context).size.width - 72) / 3,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary : AppColors.divider,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(roomNumber, style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          )),
+                          const SizedBox(height: 4),
+                          Text('$floor层', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          if (roomName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(roomName, style: TextStyle(fontSize: 10, color: AppColors.textHint), overflow: TextOverflow.ellipsis),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              if (_selectedRoomId != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '已选择：$_selectedFloorNumber层 $_selectedRoomNumber 号房${_selectedRoomTypeName.isNotEmpty ? ' · $_selectedRoomTypeName' : ''}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 0), child: const Text('上一步'))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _selectedRoomId != null
+                        ? () => setState(() => _currentStep = 2)
+                        : null,
+                    child: const Text('下一步：填写信息'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep2() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('步骤3: 填写入住信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -400,7 +587,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                 color: AppColors.primary.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text('正在为 ${_foundBooking?.guestName ?? '-'} 办理 ${_foundBooking?.displayRoomType ?? '-'} 入住', style: TextStyle(fontSize: 13, color: AppColors.primary)),
+              child: Text('正在为 ${_foundBooking?.guestName ?? '-'} 办理 ${_foundBooking?.displayRoomType ?? '-'} · $_selectedFloorNumber层$_selectedRoomNumber号房 入住', style: TextStyle(fontSize: 13, color: AppColors.primary)),
             ),
             const SizedBox(height: 16),
             Row(
@@ -479,7 +666,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 0), child: const Text('上一步'))),
+                Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 1), child: const Text('上一步'))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
@@ -496,7 +683,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入正确的身份证号')));
                         return;
                       }
-                      setState(() => _currentStep = 2);
+                      setState(() => _currentStep = 3);
                     },
                     child: const Text('下一步：确认'),
                   ),
@@ -528,18 +715,19 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
     );
   }
 
-  Widget _buildStep2() {
+  Widget _buildStep3() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('步骤3: 确认信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('步骤4: 确认信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _buildConfirmRow('预订号', _foundBooking?.displayBookingNumber ?? '-'),
             _buildConfirmRow('酒店', _foundBooking?.hotelName ?? '智联酒店'),
-            _buildConfirmRow('房间', _foundBooking?.displayRoomType ?? '-'),
+            _buildConfirmRow('房型', _foundBooking?.displayRoomType ?? '-'),
+            _buildConfirmRow('房间号', '$_selectedFloorNumber层 $_selectedRoomNumber号房'),
             _buildConfirmRow('入住日期', DateUtils.formatDate(_foundBooking?.checkInDate ?? DateTime.now())),
             _buildConfirmRow('退房日期', DateUtils.formatDate(_foundBooking?.checkOutDate ?? DateTime.now().add(const Duration(days: 1)))),
             _buildConfirmRow('入住天数', '${_foundBooking?.nights ?? 1}晚'),
@@ -606,7 +794,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 1), child: const Text('返回修改'))),
+                Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 2), child: const Text('返回修改'))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
@@ -670,7 +858,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
     );
   }
 
-  Widget _buildStep3() {
+  Widget _buildStep4() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -721,12 +909,18 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
               ),
               child: Column(
                 children: [
-                  const Text('预订房间', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                  const Text('您的房间', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
                   const SizedBox(height: 4),
                   Text(
-                    _foundBooking?.roomName ?? _foundBooking?.roomNumber ?? '${_foundBooking?.roomId ?? '-'}号房',
+                    _selectedRoomNumber.isNotEmpty
+                        ? '$_selectedFloorNumber层 $_selectedRoomNumber号房'
+                        : _foundBooking?.roomName ?? _foundBooking?.roomNumber ?? '${_foundBooking?.roomId ?? '-'}号房',
                     style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
+                  if (_selectedRoomTypeName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(_selectedRoomTypeName, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                  ],
                   if (_roomPin.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text('临时密码：$_roomPin', style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),

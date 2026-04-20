@@ -21,6 +21,9 @@ class Booking {
   @JsonKey(name: 'room_id')
   final int roomId;
 
+  @JsonKey(name: 'room_type_id')
+  final int? roomTypeId;
+
   @JsonKey(name: 'hotel_id')
   final int? hotelId;
 
@@ -80,6 +83,7 @@ class Booking {
     this.guestPhone,
     this.guestIdNumber,
     required this.roomId,
+    this.roomTypeId,
     this.hotelId,
     required this.checkInDate,
     required this.checkOutDate,
@@ -174,6 +178,7 @@ class Booking {
       guestPhone: normalized['guest_phone'],
       guestIdNumber: normalized['guest_id_number'],
       roomId: normalized['room_id'] ?? 0,
+      roomTypeId: normalized['room_type_id'],
       hotelId: normalized['hotel_id'],
       checkInDate: parseDate(normalized['check_in_date'], DateTime.now()),
       checkOutDate: parseDate(
@@ -205,6 +210,7 @@ class Booking {
         'guest_phone': guestPhone,
         'guest_id_number': guestIdNumber,
         'room_id': roomId,
+        'room_type_id': roomTypeId,
         'hotel_id': hotelId,
         'check_in_date': checkInDate.toIso8601String().split('T')[0],
         'check_out_date': checkOutDate.toIso8601String().split('T')[0],
