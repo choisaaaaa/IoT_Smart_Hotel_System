@@ -50,11 +50,17 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     _checkInDate = searchDates.checkIn;
     _checkOutDate = searchDates.checkOut;
     
-    _fetchHotelDetail();
-    _fetchRooms();
-    _fetchReviews();
-    _loadFavoriteStatus();
-    ref.read(memberServiceProvider).getMyAssets();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    await ref.read(memberServiceProvider).getMyAssets();
+    if (mounted) {
+      _fetchHotelDetail();
+      _fetchRooms();
+      _fetchReviews();
+      _loadFavoriteStatus();
+    }
   }
 
   void _loadFavoriteStatus() async {
@@ -447,9 +453,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
     }
     final originalPrice = room.basePrice;
     
-    // 获取会员折扣
-    final totalSpent = ref.read(memberServiceProvider).cachedMember?.totalSpent ?? 0;
-    final level = MemberLevel.fromExperience(totalSpent.floor());
+    final level = MemberLevel.fromKey(ref.read(memberServiceProvider).cachedMember?.memberLevel ?? 'standard');
     final discountedPrice = originalPrice * level.discount;
 
     final roomName = room.name;

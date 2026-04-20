@@ -27,7 +27,12 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
   @override
   void initState() {
     super.initState();
-    _fetchHotels();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    await ref.read(memberServiceProvider).getMyAssets();
+    if (mounted) _fetchHotels();
   }
 
   @override
@@ -302,8 +307,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
 
   Widget _buildHotelCard(BuildContext context, Hotel hotel) {
     final member = ref.read(memberServiceProvider).cachedMember;
-    final totalSpent = member?.totalSpent ?? 0;
-    final level = MemberLevel.fromExperience(totalSpent.floor());
+    final level = MemberLevel.fromKey(member?.memberLevel ?? 'standard');
 
     final originalPrice = hotel.price ?? 299.0;
     final discountedPrice = originalPrice * level.discount;

@@ -636,7 +636,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   @override
   Widget build(BuildContext context) {
     final memberLevel = _member != null
-        ? MemberLevel.fromExperience(_member!.totalSpent.floor())
+        ? MemberLevel.fromKey(_member!.memberLevel)
         : MemberLevel.standard;
 
     return Scaffold(
