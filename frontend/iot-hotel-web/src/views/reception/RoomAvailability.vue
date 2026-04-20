@@ -131,7 +131,7 @@ import { useHotelStore } from '@/stores/hotel'
 import { roomApi } from '@/api/room'
 import { maintenanceApi } from '@/api/maintenance'
 import { useRouter } from 'vue-router'
-import { getSocket } from '@/utils/websocket'
+import { getSocket, initWebSocket } from '@/utils/websocket'
 
 import {
   CheckCircleOutlined, CloseCircleOutlined,
@@ -197,15 +197,23 @@ function showRoomDetail(room: RoomInfo) {
 }
 
 async function updateStatus(roomId: number, status: string) {
+  const room = hotelStore.rooms.find(r => r.id === roomId)
+  const oldStatus = room?.room_status
+
+  if (room) room.room_status = status
+  if (currentRoom.value?.id === roomId) {
+    currentRoom.value = { ...currentRoom.value, room_status: status }
+  }
+  message.success(`房间状态已更新为 ${statusMap[status]?.label || status}`)
+
   try {
     await roomApi.updateRoomStatus(roomId, status)
-    message.success('房态更新成功')
-    await refreshData()
-    if (currentRoom.value?.id === roomId) {
-      const refreshed = hotelStore.rooms.find(room => room.id === roomId) || null
-      currentRoom.value = refreshed
-    }
+    setTimeout(() => refreshData(), 1500)
   } catch (error) {
+    if (room) room.room_status = oldStatus
+    if (currentRoom.value?.id === roomId) {
+      currentRoom.value = { ...currentRoom.value, room_status: oldStatus }
+    }
     message.error('房态更新失败')
   }
 }
@@ -239,30 +247,35 @@ async function refreshData() {
 
 // 监听WebSocket房间状态更新
 function setupWebSocketListener() {
-  const socket = getSocket()
+  const socket = getSocket() || initWebSocket()
   if (!socket) return
 
   const handleRoomStatusUpdate = (data: any) => {
     console.log('[RoomAvailability] 收到房间状态更新:', data)
     if (data.room_id && data.room_status) {
-      // 更新本地房间状态
       const room = hotelStore.rooms.find(r => r.id === data.room_id)
       if (room) {
         room.room_status = data.room_status
-        message.success(`房间 ${room.room_number} 状态更新为 ${statusMap[data.room_status]?.label || data.room_status}`)
       }
-      // 如果当前打开的房间详情是这个房间，也更新详情
       if (currentRoom.value?.id === data.room_id) {
-        currentRoom.value.room_status = data.room_status
+        currentRoom.value = { ...currentRoom.value, room_status: data.room_status }
       }
     }
   }
 
-  socket.on('room_status_update', handleRoomStatusUpdate)
+  const handleReconnect = () => {
+    console.log('[RoomAvailability] WebSocket重连，重新注册监听')
+    socket.off('room_status_update', handleRoomStatusUpdate)
+    socket.on('room_status_update', handleRoomStatusUpdate)
+    refreshData()
+  }
 
-  // 返回清理函数
+  socket.on('room_status_update', handleRoomStatusUpdate)
+  socket.on('reconnect', handleReconnect)
+
   return () => {
     socket.off('room_status_update', handleRoomStatusUpdate)
+    socket.off('reconnect', handleReconnect)
   }
 }
 

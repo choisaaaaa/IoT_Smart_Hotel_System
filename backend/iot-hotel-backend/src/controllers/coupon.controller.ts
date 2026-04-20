@@ -309,6 +309,15 @@ export const issueToUser = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('优惠券已领完'));
     }
 
+    // 检查用户是否已领取过该优惠券（不可重复领取的券）
+    const [existing] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM member_coupons WHERE member_id = ? AND coupon_id = ?',
+      [memberId, coupon.id]
+    );
+    if (existing.length > 0 && !coupon.is_multiple_use) {
+      return res.status(400).json(errorResponse('该用户已拥有此优惠券，不可重复发放'));
+    }
+
     await pool.query(
       'INSERT INTO member_coupons (member_id, coupon_id, status) VALUES (?, ?, "unused")',
       [memberId, coupon.id]

@@ -3,6 +3,7 @@ import { useDeviceStore } from '@/stores/device'
 import { useAppStore } from '@/stores/app'
 
 let socket: Socket | null = null
+let lastRoomId: string | null = null
 
 function doAutoRegister(s: Socket) {
   const appStore = useAppStore()
@@ -22,14 +23,20 @@ function doAutoRegister(s: Socket) {
 }
 
 export function initWebSocket(roomId?: string): Socket {
+  if (roomId) {
+    lastRoomId = roomId
+  }
+
   if (socket?.connected) {
     doAutoRegister(socket)
+    if (lastRoomId) {
+      socket.emit('join_room', lastRoomId)
+    }
     return socket
   }
 
   if (socket && !socket.connected) {
     socket.connect()
-    doAutoRegister(socket)
     return socket
   }
 
@@ -41,18 +48,18 @@ export function initWebSocket(roomId?: string): Socket {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 10000
+    timeout: 20000
   })
 
   const deviceStore = useDeviceStore()
   const appStore = useAppStore()
 
   socket.on('connect', () => {
-    console.log('[WS] 已连接到服务器')
+    console.log('[WS] 已连接到服务器, transport:', socket?.io?.engine?.transport?.name)
     appStore.setConnected(true)
 
-    if (roomId && socket) {
-      socket.emit('join_room', roomId)
+    if (lastRoomId && socket) {
+      socket.emit('join_room', lastRoomId)
     }
 
     doAutoRegister(socket!)

@@ -429,7 +429,8 @@ export const get = async (req: AuthRequest, res: Response) => {
        LEFT JOIN hotels h ON b.hotel_id = h.id
        LEFT JOIN room_types rt ON b.room_type_id = rt.id
        LEFT JOIN rate_plans rp ON b.rate_plan_id = rp.id
-       LEFT JOIN coupons c ON b.coupon_id = c.id
+       LEFT JOIN member_coupons mc ON b.coupon_id = mc.id
+       LEFT JOIN coupons c ON mc.coupon_id = c.id
        ${whereClause}
        ORDER BY b.id DESC LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), offset]
@@ -456,11 +457,12 @@ export const getById = async (req: AuthRequest, res: Response) => {
       `SELECT b.*, r.room_number, r.room_type, r.room_name, rt.name as room_type_name,
               rt.base_price as room_type_base_price, rp.plan_name, rp.base_price as plan_base_price,
               rp.meal_plan, rp.cancellation_policy, c.coupon_name as coupon_name
-       FROM bookings b 
-       LEFT JOIN rooms r ON b.room_id = r.id 
+       FROM bookings b
+       LEFT JOIN rooms r ON b.room_id = r.id
        LEFT JOIN room_types rt ON b.room_type_id = rt.id
        LEFT JOIN rate_plans rp ON b.rate_plan_id = rp.id
-       LEFT JOIN coupons c ON b.coupon_id = c.id
+       LEFT JOIN member_coupons mc ON b.coupon_id = mc.id
+       LEFT JOIN coupons c ON mc.coupon_id = c.id
        WHERE b.id = ?`,
       [id]
     );
