@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = '智联酒店';
+  static const String appName = '慧宿';
   static const String appVersion = '1.0.0';
 
   static const String tokenKey = 'access_token';

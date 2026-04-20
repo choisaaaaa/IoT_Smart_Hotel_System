@@ -322,7 +322,7 @@ class _ExtendStayPageState extends ConsumerState<ExtendStayPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_booking!.hotelName ?? '智联酒店', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(_booking!.hotelName ?? '慧宿', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     Text('${_booking!.displayRoomType} · ${_booking!.roomNumber ?? '${_booking!.roomId}号房'}',
                         style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                   ],

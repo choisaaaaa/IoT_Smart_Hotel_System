@@ -88,6 +88,9 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
           setState(() {
             _foundBooking = booking;
             _realNameController.text = booking.guestName ?? '';
+            if (booking.guestIdNumber != null && booking.guestIdNumber!.isNotEmpty) {
+              _idNumberController.text = booking.guestIdNumber!;
+            }
           });
         }
       } else if (mounted) {
@@ -725,7 +728,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
             const Text('步骤4: 确认信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _buildConfirmRow('预订号', _foundBooking?.displayBookingNumber ?? '-'),
-            _buildConfirmRow('酒店', _foundBooking?.hotelName ?? '智联酒店'),
+            _buildConfirmRow('酒店', _foundBooking?.hotelName ?? '慧宿'),
             _buildConfirmRow('房型', _foundBooking?.displayRoomType ?? '-'),
             _buildConfirmRow('房间号', '$_selectedFloorNumber层 $_selectedRoomNumber号房'),
             _buildConfirmRow('入住日期', DateUtils.formatDate(_foundBooking?.checkInDate ?? DateTime.now())),

@@ -375,7 +375,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${stay.hotelName ?? '智联酒店'} · ${stay.displayRoomType}',
+                    '${stay.hotelName ?? '慧宿'} · ${stay.displayRoomType}',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 12),

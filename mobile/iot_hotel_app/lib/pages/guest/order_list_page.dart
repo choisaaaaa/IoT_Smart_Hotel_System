@@ -194,7 +194,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                       children: [
                         Expanded(
                           child: Text(
-                            order.hotelName ?? '智联酒店',
+                            order.hotelName ?? '慧宿',
                             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                             overflow: TextOverflow.ellipsis,
                           ),

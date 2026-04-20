@@ -201,7 +201,7 @@ class _ReviewSubmitPageState extends ConsumerState<ReviewSubmitPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.hotelName ?? '智联酒店',
+                  widget.hotelName ?? '慧宿',
                   style: GoogleFonts.notoSansSc(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

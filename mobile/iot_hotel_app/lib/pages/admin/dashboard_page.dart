@@ -102,7 +102,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('智联酒店 - 管理端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+        title: Text('慧宿 - 管理端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(icon: const Icon(Icons.notifications_rounded), onPressed: () {}),
           PopupMenuButton<String>(

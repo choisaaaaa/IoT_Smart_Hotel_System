@@ -159,7 +159,7 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('智联酒店 · 前台端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+        title: Text('慧宿 · 前台端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         leading: Builder(
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.menu_rounded),

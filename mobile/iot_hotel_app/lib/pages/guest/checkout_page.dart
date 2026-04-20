@@ -260,7 +260,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _booking?.hotelName ?? '智联酒店',
+                      _booking?.hotelName ?? '慧宿',
                       style: GoogleFonts.notoSansSc(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

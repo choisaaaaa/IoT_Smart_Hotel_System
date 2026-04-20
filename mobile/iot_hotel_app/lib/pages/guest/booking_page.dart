@@ -84,7 +84,7 @@ class _BookingPageState extends ConsumerState<BookingPage>
                     right: 0,
                     child: Column(
                       children: [
-                        Text('欢迎来到智联酒店',
+                        Text('欢迎来到慧宿',
                             style: GoogleFonts.notoSansSc(
                                 color: Colors.white,
                                 fontSize: 24,

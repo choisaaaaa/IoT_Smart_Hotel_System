@@ -52,7 +52,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('智联酒店 - 系统管理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
+        title: Text('慧宿 - 系统管理', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [

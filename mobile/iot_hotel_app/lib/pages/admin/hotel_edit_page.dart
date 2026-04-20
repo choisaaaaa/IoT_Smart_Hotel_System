@@ -30,7 +30,7 @@ class _HotelEditPageState extends ConsumerState<HotelEditPage> {
       if (result.success && mounted) {
         final data = result.data ?? {};
         setState(() {
-          _nameController.text = data['hotel_name'] ?? data['name'] ?? '智联酒店';
+          _nameController.text = data['hotel_name'] ?? data['name'] ?? '慧宿';
           _addressController.text = data['hotel_address'] ?? data['address'] ?? '';
           _phoneController.text = data['hotel_phone'] ?? data['phone'] ?? '';
           _selectedStar = (data['hotel_star'] ?? data['star_rating'] ?? '5').toString();

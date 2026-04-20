@@ -113,7 +113,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             )
                           ),
                           const SizedBox(height: 8),
-                          Text('加入智联酒店，开启智慧生活', 
+                          Text('加入慧宿，开启智慧生活', 
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)
                           ),
                           const SizedBox(height: 40),

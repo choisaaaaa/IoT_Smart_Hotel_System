@@ -332,7 +332,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_hotelInfo?.hotelName ?? '智联酒店', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(_hotelInfo?.hotelName ?? '慧宿', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text('${_hotelInfo?.effectiveStar ?? 5}星级 | 智慧酒店', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           const SizedBox(height: 12),
@@ -550,7 +550,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                               }
                               if (!context.mounted) return;
                               context.push('/booking-flow', extra: {
-                                  'hotelName': _hotelInfo?.hotelName ?? '智联酒店',
+                                  'hotelName': _hotelInfo?.hotelName ?? '慧宿',
                                   'hotelId': widget.hotelId ?? 1,
                                   'roomType': roomName,
                                   'price': discountedPrice,

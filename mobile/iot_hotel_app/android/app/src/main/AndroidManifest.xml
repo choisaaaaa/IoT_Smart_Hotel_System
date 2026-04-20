@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <application
-        android:label="iot_hotel_app"
+        android:label="慧宿"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

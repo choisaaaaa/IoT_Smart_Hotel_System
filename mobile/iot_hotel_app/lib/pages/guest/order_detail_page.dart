@@ -238,7 +238,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _order!.hotelName ?? '智联酒店',
+                      _order!.hotelName ?? '慧宿',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 2),

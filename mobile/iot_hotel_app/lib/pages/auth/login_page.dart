@@ -258,7 +258,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             child: const Icon(Icons.hotel_rounded, size: 48, color: Colors.white),
                           ),
                           const SizedBox(height: 24),
-                          Text('智联酒店', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: AppColors.textPrimary, letterSpacing: 2)),
+                          Text('慧宿', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: AppColors.textPrimary, letterSpacing: 2)),
                           const SizedBox(height: 8),
                           Text('智慧酒店物联网控制系统', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
                           const SizedBox(height: 40),

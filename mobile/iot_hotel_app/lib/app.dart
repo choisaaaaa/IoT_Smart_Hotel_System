@@ -80,7 +80,7 @@ class _IoTHotelAppState extends ConsumerState<IoTHotelApp> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: '智联酒店',
+      title: '慧宿',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
