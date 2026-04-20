@@ -27,14 +27,12 @@ class AuthInterceptor extends Interceptor {
     }
 
     if (statusCode == 401) {
-      final isAuthMe = path.contains(ApiConstants.authMe);
       final isAuthLogin = path.contains(ApiConstants.authLogin);
-      
-      if (isAuthMe || isAuthLogin) {
-        debugPrint('🚪 401 auth fail, logout');
+      if (!isAuthLogin) {
+        debugPrint('🚪 401 token expired, logout');
         await _clearAuthData();
         authStateNotifier.clearAuth();
-        
+
         final context = AppRouter.navigatorKey.currentContext;
         if (context != null) {
           Future.microtask(() {

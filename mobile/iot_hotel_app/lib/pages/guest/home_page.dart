@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
+import '../../core/logic/search_dates.dart';
 import '../../core/network/api_result.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
@@ -20,15 +21,9 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  DateTime _checkInDate = DateTime.now().add(const Duration(days: 1));
-  DateTime _checkOutDate = DateTime.now().add(const Duration(days: 2));
-
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _checkInDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    _checkOutDate = _checkInDate.add(const Duration(days: 1));
   }
 
   @override
@@ -183,7 +178,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildSearchCard(BuildContext context) {
-    final nights = _checkOutDate.difference(_checkInDate).inDays;
+    final searchDates = ref.watch(searchDatesProvider);
+    final nights = searchDates.nights;
 
     return Transform.translate(
       offset: const Offset(0, -40),
@@ -237,7 +233,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('入住', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        Text(DateUtils.formatShortDate(_checkInDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(DateUtils.formatShortDate(searchDates.checkIn), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -254,7 +250,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         const Text('离店', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        Text(DateUtils.formatShortDate(_checkOutDate), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(DateUtils.formatShortDate(searchDates.checkOut), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -281,11 +277,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _selectDateRange() async {
+    final searchDates = ref.read(searchDatesProvider);
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: _checkInDate, end: _checkOutDate),
+      initialDateRange: DateTimeRange(start: searchDates.checkIn, end: searchDates.checkOut),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(primary: AppColors.primary),
@@ -294,10 +291,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
     if (picked != null && mounted) {
-      setState(() {
-        _checkInDate = picked.start;
-        _checkOutDate = picked.end;
-      });
+      ref.read(searchDatesProvider.notifier).updateDates(picked.start, picked.end);
     }
   }
 

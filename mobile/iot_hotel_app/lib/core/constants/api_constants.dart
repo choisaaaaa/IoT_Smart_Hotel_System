@@ -60,4 +60,5 @@ class ApiConstants {
   static const String ratePlans = 'rate-plans';
   static const String rfid = 'rfid';
   static const String mqtt = 'mqtt';
+  static const String favorites = 'favorites';
 }

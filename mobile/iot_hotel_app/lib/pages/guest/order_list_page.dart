@@ -25,6 +25,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
     {'key': 'all', 'label': '全部'},
     {'key': 'pending', 'label': '待付款'},
     {'key': 'confirmed', 'label': '已支付'},
+    {'key': 'pre_checked_in', 'label': '待确认'},
     {'key': 'checked_in', 'label': '已入住'},
     {'key': 'checked_out', 'label': '已完成'},
     {'key': 'cancelled', 'label': '已取消'},

@@ -67,9 +67,11 @@ class AiButlerService {
       'suggestions': [
         {'icon': '💡', 'text': '调节灯光亮度', 'action': 'device_control'},
         {'icon': '🌡️', 'text': '调整空调温度', 'action': 'device_control'},
+        {'icon': '🪟', 'text': '控制窗帘', 'action': 'curtain'},
         {'icon': '🛎️', 'text': '呼叫前台服务', 'action': 'call_front_desk'},
         {'icon': '🍽️', 'text': '客房送餐服务', 'action': 'room_service'},
         {'icon': '🧹', 'text': '预约清洁服务', 'action': 'housekeeping'},
+        {'icon': '📶', 'text': '获取WiFi密码', 'action': 'wifi'},
         {'icon': '🔑', 'text': '自助退房', 'action': 'checkout'},
       ],
     });
@@ -123,6 +125,18 @@ class AiButlerService {
       quickActions = [
         {'label': '转接前台', 'action': 'transfer'},
         {'label': '拨打前台', 'action': 'call'},
+      ];
+    } else if (lowerMsg.contains('窗帘') || lowerMsg.contains('curtain')) {
+      reply = '好的，我可以帮您控制窗帘。您想要：\n1. 打开窗帘\n2. 关闭窗帘\n3. 半开窗帘\n\n请告诉我您的需求。';
+      quickActions = [
+        {'label': '打开窗帘', 'action': 'curtain_open'},
+        {'label': '关闭窗帘', 'action': 'curtain_close'},
+        {'label': '半开窗帘', 'action': 'curtain_half'},
+      ];
+    } else if (lowerMsg.contains('wifi') || lowerMsg.contains('无线') || lowerMsg.contains('网络密码') || lowerMsg.contains('wifi密码')) {
+      reply = '以下是酒店WiFi信息：\n\n📶 网络名称：SmartHotel-Guest\n🔑 密码：hotel2024\n\n如需帮助，请联系前台。';
+      quickActions = [
+        {'label': '联系前台', 'action': 'front_desk'},
       ];
     } else if (lowerMsg.contains('退房') || lowerMsg.contains('checkout') || lowerMsg.contains('离开')) {
       reply = '好的，我可以帮您办理自助退房。退房前请确认：\n1. 已整理好个人物品\n2. 已归还房卡（如有）\n3. 已结清所有费用\n\n是否现在办理退房？';

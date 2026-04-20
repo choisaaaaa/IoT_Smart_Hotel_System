@@ -119,8 +119,12 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         setState(() {
           _availableRooms = availableRooms;
           if (availableRooms.isNotEmpty) {
-            final initial = availableRooms.where((r) => r.id == widget.roomId).toList();
-            _selectedRoom = initial.isNotEmpty ? initial.first : availableRooms.first;
+            if (widget.roomId > 0) {
+              final initial = availableRooms.where((r) => r.id == widget.roomId).toList();
+              _selectedRoom = initial.isNotEmpty ? initial.first : availableRooms.first;
+            } else {
+              _selectedRoom = availableRooms.first;
+            }
           }
         });
         _calculatePrice();

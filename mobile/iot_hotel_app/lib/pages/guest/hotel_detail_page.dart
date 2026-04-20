@@ -13,6 +13,7 @@ import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
 import '../../services/auth_service.dart';
 import '../../core/logic/member_logic.dart';
+import '../../core/logic/search_dates.dart';
 import '../../models/hotel.dart';
 import '../../models/room_type.dart';
 
@@ -45,10 +46,9 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   @override
   void initState() {
     super.initState();
-    // 确保初始日期是“今天”和“明天”，避免因本地时间偏移导致查询跨度异常
-    final now = DateTime.now();
-    _checkInDate = DateTime(now.year, now.month, now.day);
-    _checkOutDate = _checkInDate.add(const Duration(days: 1));
+    final searchDates = ref.read(searchDatesProvider);
+    _checkInDate = searchDates.checkIn;
+    _checkOutDate = searchDates.checkOut;
     
     _fetchHotelDetail();
     _fetchRooms();
@@ -66,15 +66,29 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
   void _toggleFavorite() async {
     final hotelId = widget.hotelId ?? 1;
     if (_isFavorited) {
-      await ref.read(favoriteServiceProvider).removeFavorite(hotelId);
+      final result = await ref.read(favoriteServiceProvider).removeFavorite(hotelId);
+      if (result.success && mounted) {
+        setState(() => _isFavorited = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已取消收藏')),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '取消收藏失败')),
+        );
+      }
     } else {
-      await ref.read(favoriteServiceProvider).addFavorite(hotelId);
-    }
-    setState(() => _isFavorited = !_isFavorited);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isFavorited ? '已收藏' : '已取消收藏')),
-      );
+      final result = await ref.read(favoriteServiceProvider).addFavorite(hotelId);
+      if (result.success && mounted) {
+        setState(() => _isFavorited = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已收藏')),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '收藏失败')),
+        );
+      }
     }
   }
 
@@ -103,10 +117,10 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       historyList.removeWhere((item) => item['hotel_id'] == hotelId);
       historyList.insert(0, {
         'hotel_id': hotelId,
-        'name': hotel.name ?? '',
-        'address': hotel.address ?? '',
-        'image': hotel.images is List && hotel.images.isNotEmpty ? hotel.images[0] : null,
-        'price': hotel.minPrice?.toStringAsFixed(0),
+        'name': hotel.hotelName,
+        'address': hotel.displayAddress,
+        'image': hotel.displayImage.isNotEmpty ? hotel.displayImage : null,
+        'price': hotel.price?.toStringAsFixed(0),
         'browsed_at': DateUtils.formatSlashDateTime(DateTime.now()),
       });
       if (historyList.length > 50) historyList.removeRange(50, historyList.length);
@@ -422,6 +436,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
       _checkInDate = checkIn;
       _checkOutDate = checkOut;
     });
+    ref.read(searchDatesProvider.notifier).updateDates(checkIn, checkOut);
     _fetchRooms();
   }
 
@@ -535,7 +550,7 @@ class _HotelDetailPageState extends ConsumerState<HotelDetailPage> {
                                   'hotelId': widget.hotelId ?? 1,
                                   'roomType': roomName,
                                   'price': discountedPrice,
-                                  'roomId': room.id,
+                                  'roomId': 0,
                                   'roomTypeId': room.id,
                                   'checkInDate': _checkInDate,
                                   'checkOutDate': _checkOutDate,

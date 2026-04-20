@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/logic/member_logic.dart';
+import '../../core/logic/search_dates.dart';
 import '../../core/network/api_result.dart';
 import '../../services/hotel_service.dart';
 import '../../services/member_service.dart';
@@ -21,8 +22,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
   List<Hotel> _hotels = [];
   bool _isLoading = true;
   String _selectedCity = '全部';
-  DateTime _checkInDate = DateTime.now().add(const Duration(days: 1));
-  DateTime _checkOutDate = DateTime.now().add(const Duration(days: 2));
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -69,11 +68,12 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
   }
 
   Future<void> _selectDateRange() async {
+    final searchDates = ref.read(searchDatesProvider);
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: _checkInDate, end: _checkOutDate),
+      initialDateRange: DateTimeRange(start: searchDates.checkIn, end: searchDates.checkOut),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(primary: AppColors.primary),
@@ -82,10 +82,7 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
       ),
     );
     if (picked != null && mounted) {
-      setState(() {
-        _checkInDate = picked.start;
-        _checkOutDate = picked.end;
-      });
+      ref.read(searchDatesProvider.notifier).updateDates(picked.start, picked.end);
     }
   }
 
@@ -145,7 +142,10 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
               const VerticalDivider(indent: 10, endIndent: 10),
               GestureDetector(
                 onTap: _selectDateRange,
-                child: Text('${DateUtils.formatDotDate(_checkInDate)} - ${DateUtils.formatDotDate(_checkOutDate)}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                child: Consumer(builder: (context, ref, _) {
+                  final searchDates = ref.watch(searchDatesProvider);
+                  return Text('${DateUtils.formatDotDate(searchDates.checkIn)} - ${DateUtils.formatDotDate(searchDates.checkOut)}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12));
+                }),
               ),
               const VerticalDivider(indent: 10, endIndent: 10),
               Expanded(

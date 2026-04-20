@@ -28,6 +28,7 @@ import environmentRouter from './v1/environment';
 import knowledgeBaseRouter from './v1/knowledge-base';
 import mqttRouter from './v1/mqtt';
 import rfidRouter from './v1/rfid';
+import favoriteRouter from './v1/favorites';
 
 const router = Router();
 
@@ -65,5 +66,6 @@ router.use('/environment', environmentRouter);
 router.use('/knowledge-base', knowledgeBaseRouter);
 router.use('/mqtt', mqttRouter);
 router.use('/rfid', rfidRouter);
+router.use('/favorites', favoriteRouter);
 
 export default router;
