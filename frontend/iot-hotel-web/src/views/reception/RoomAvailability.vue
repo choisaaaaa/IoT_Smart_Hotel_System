@@ -204,16 +204,17 @@ async function updateStatus(roomId: number, status: string) {
   if (currentRoom.value?.id === roomId) {
     currentRoom.value = { ...currentRoom.value, room_status: status }
   }
+  hotelStore.optimisticUpdates.set(roomId, { status, timestamp: Date.now() })
   message.success(`房间状态已更新为 ${statusMap[status]?.label || status}`)
 
   try {
     await roomApi.updateRoomStatus(roomId, status)
-    setTimeout(() => refreshData(), 1500)
   } catch (error) {
     if (room) room.room_status = oldStatus
     if (currentRoom.value?.id === roomId) {
       currentRoom.value = { ...currentRoom.value, room_status: oldStatus }
     }
+    hotelStore.optimisticUpdates.delete(roomId)
     message.error('房态更新失败')
   }
 }
@@ -253,6 +254,7 @@ function setupWebSocketListener() {
   const handleRoomStatusUpdate = (data: any) => {
     console.log('[RoomAvailability] 收到房间状态更新:', data)
     if (data.room_id && data.room_status) {
+      hotelStore.optimisticUpdates.delete(data.room_id)
       const room = hotelStore.rooms.find(r => r.id === data.room_id)
       if (room) {
         room.room_status = data.room_status

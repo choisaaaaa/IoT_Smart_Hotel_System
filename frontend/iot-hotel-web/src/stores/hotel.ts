@@ -11,6 +11,7 @@ export const useHotelStore = defineStore('hotel', () => {
   const roomFetchKey = ref('')
   const roomFetchPromise = ref<Promise<any> | null>(null)
   const roomRateLimitedUntil = ref(0)
+  const optimisticUpdates = ref<Map<number, { status: string; timestamp: number }>>(new Map())
 
   async function fetchHotelInfo(hotelId?: number) {
     loading.value = true
@@ -67,7 +68,20 @@ export const useHotelStore = defineStore('hotel', () => {
           ...(currentHotelId.value ? { hotel_id: currentHotelId.value } : {})
         }
         const res: any = await roomApi.getRoomList(requestParams)
-        rooms.value = res.data?.list || []
+        const serverRooms = res.data?.list || []
+        const now = Date.now()
+        rooms.value = serverRooms.map((sr: RoomInfo) => {
+          const opt = optimisticUpdates.value.get(sr.id)
+          if (opt && (now - opt.timestamp < 15000) && opt.status !== sr.room_status) {
+            return { ...sr, room_status: opt.status }
+          }
+          return sr
+        })
+        for (const [roomId, opt] of optimisticUpdates.value) {
+          if (now - opt.timestamp > 15000) {
+            optimisticUpdates.value.delete(roomId)
+          }
+        }
         roomFetchAt.value = Date.now()
         return res.data
       } catch (error: any) {
@@ -128,6 +142,7 @@ export const useHotelStore = defineStore('hotel', () => {
     loading,
     floors,
     groupedRooms,
+    optimisticUpdates,
     fetchHotelInfo,
     setCurrentHotelId,
     fetchRooms,
