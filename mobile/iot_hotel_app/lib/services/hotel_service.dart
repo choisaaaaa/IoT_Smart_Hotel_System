@@ -299,7 +299,7 @@ class HotelService {
       final queryParams = <String, dynamic>{};
       if (hotelId != null) queryParams['hotel_id'] = hotelId;
       
-      final response = await _dioClient.get('${ApiConstants.hotel}/reports', queryParameters: queryParams);
+      final response = await _dioClient.get('${ApiConstants.hotels}/reports', queryParameters: queryParams);
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }

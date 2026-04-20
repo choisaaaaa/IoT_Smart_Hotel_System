@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/storage/local_storage.dart';
 import '../../services/review_service.dart';
 
 class AdminReviewManagePage extends ConsumerStatefulWidget {
@@ -39,8 +40,9 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     try {
+      final hotelId = await LocalStorage().read('hotel_id') as int?;
       final results = await Future.wait([
-        ref.read(reviewServiceProvider).getAllReviews(page: _reviewPage, pageSize: 20),
+        ref.read(reviewServiceProvider).getAllReviews(page: _reviewPage, pageSize: 20, hotelId: hotelId),
         ref.read(reviewServiceProvider).getAppeals(page: _appealPage, pageSize: 20),
       ]);
 

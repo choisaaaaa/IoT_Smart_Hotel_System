@@ -612,10 +612,12 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   }
 
   Widget _buildChartSection(BuildContext context) {
-    final available = _roomDistribution?['available'] ?? 60;
-    final occupied = _roomDistribution?['occupied'] ?? 30;
-    final cleaning = _roomDistribution?['cleaning'] ?? 10;
-    final maintenance = _roomDistribution?['maintenance'] ?? 0;
+    final dist = _roomDistribution?['distribution'] as Map<String, dynamic>? ?? {};
+    final available = dist['available'] ?? 0;
+    final occupied = dist['occupied'] ?? 0;
+    final cleaning = dist['cleaning'] ?? 0;
+    final maintenance = dist['maintenance'] ?? 0;
+    final reserved = dist['reserved'] ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -640,6 +642,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                 sections: [
                   if (available > 0) PieChartSectionData(value: available.toDouble(), color: AppColors.roomAvailable, title: '空闲', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   if (occupied > 0) PieChartSectionData(value: occupied.toDouble(), color: AppColors.roomOccupied, title: '已入', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  if (reserved > 0) PieChartSectionData(value: reserved.toDouble(), color: Colors.orange, title: '预订', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   if (cleaning > 0) PieChartSectionData(value: cleaning.toDouble(), color: AppColors.roomCleaning, title: '清扫', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   if (maintenance > 0) PieChartSectionData(value: maintenance.toDouble(), color: AppColors.roomMaintenance, title: '维修', radius: 50, titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                 ],

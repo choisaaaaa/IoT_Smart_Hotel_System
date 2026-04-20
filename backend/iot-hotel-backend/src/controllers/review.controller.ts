@@ -457,12 +457,13 @@ export const getAppeals = async (req: AuthRequest, res: Response) => {
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT a.*, r.score, r.content as review_content, r.environment_rating, r.facility_rating, r.comfort_rating,
-        r.member_name as reviewer_name, r.member_phone as reviewer_phone,
+        m.name as reviewer_name, m.phone as reviewer_phone,
         h.hotel_name,
         u1.name as appellant_name,
         u2.name as handler_name
       FROM review_appeals a
       LEFT JOIN reviews r ON a.review_id = r.id
+      LEFT JOIN members m ON r.member_id = m.id
       LEFT JOIN hotels h ON a.hotel_id = h.id
       LEFT JOIN users u1 ON a.appellant_id = u1.id
       LEFT JOIN users u2 ON a.handler_id = u2.id

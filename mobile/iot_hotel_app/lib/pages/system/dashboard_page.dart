@@ -1296,7 +1296,7 @@ class _UsersTabState extends ConsumerState<_UsersTab> {
                             child: ListTile(
                               leading: CircleAvatar(backgroundColor: _roleColor(role).withValues(alpha: 0.1), child: Icon(Icons.person, color: _roleColor(role))),
                               title: Row(children: [
-                                Text(u['username'] ?? '未知', style: const TextStyle(fontWeight: FontWeight.w500)),
+                                Flexible(child: Text(u['username'] ?? '未知', style: const TextStyle(fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
