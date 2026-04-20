@@ -195,7 +195,7 @@ export class RoomService {
       const [result] = await pool.query<ResultSetHeader>(sql, values);
 
       // 清除相关缓存
-      await CacheService.deletePattern(`rooms:list:${hotel_id}*`);
+      await CacheService.deletePattern(`${CacheService.roomKeys.list(hotel_id)}*`);
       await CacheService.delete(`rooms:byFloor:${hotel_id}`);
 
       return result.insertId;
@@ -241,7 +241,7 @@ export class RoomService {
       if (result.affectedRows > 0) {
         // 清除相关缓存
         await CacheService.delete(CacheService.roomKeys.info(id));
-        await CacheService.deletePattern(`rooms:list:${hotelId}*`);
+        await CacheService.deletePattern(`${CacheService.roomKeys.list(hotelId)}*`);
         await CacheService.delete(`rooms:byFloor:${hotelId}`);
       }
 
@@ -271,7 +271,7 @@ export class RoomService {
         // 清除相关缓存
         await CacheService.delete(CacheService.roomKeys.info(id));
         if (hotelId) {
-          await CacheService.deletePattern(`rooms:list:${hotelId}*`);
+          await CacheService.deletePattern(`${CacheService.roomKeys.list(hotelId)}*`);
           await CacheService.delete(`rooms:byFloor:${hotelId}`);
         }
       }
@@ -290,7 +290,7 @@ export class RoomService {
       if (result.affectedRows > 0) {
         // 清除相关缓存
         await CacheService.delete(CacheService.roomKeys.info(id));
-        await CacheService.deletePattern(`rooms:list:${hotelId}*`);
+        await CacheService.deletePattern(`${CacheService.roomKeys.list(hotelId)}*`);
         await CacheService.delete(`rooms:byFloor:${hotelId}`);
       }
 
