@@ -24,6 +24,7 @@
 ## 二、E-R 关系总图
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e8f5e9', 'fontSize': '14px' }, 'flowchart': { 'htmlLabels': true, 'curve': 'basis' }, 'er': { 'diagramPadding': 20, 'layoutDirection': 'TB' }}}%%
 erDiagram
     USERS ||--o{ USER_ROLES : "拥有"
     USERS ||--o{ USER_HOTELS : "属于"
@@ -852,7 +853,369 @@ reviews (order_type ENUM('booking'), order_id INT)
 
 ---
 
-## 九、版本历史
+## 九、数据流图（DFD）
+
+### 9.1 上下文数据流图（0层）
+
+```mermaid
+flowchart TB
+    subgraph EXT[外部实体]
+        C[顾客]
+        S[前台员工]
+        A[系统管理员]
+        HA[酒店管理员]
+        D[IoT设备]
+        APP[手机APP]
+    end
+
+    P0[(智慧酒店系统)]
+
+    C --- P0
+    S --- P0
+    A --- P0
+    HA --- P0
+    D --- P0
+    APP --- P0
+```
+
+### 9.2 顶层数据流图（1层）
+
+```mermaid
+flowchart TB
+    subgraph EXT[外部实体]
+        C[顾客]
+        S[前台员工]
+        A[系统管理员]
+        HA[酒店管理员]
+        D[IoT设备]
+        APP[手机APP]
+    end
+
+    subgraph PROC[处理过程]
+        P1[用户认证]
+        P2[预订管理]
+        P3[入住管理]
+        P4[客房服务]
+        P5[IoT管理]
+        P6[会员营销]
+        P7[系统管理]
+        P8[支付管理]
+    end
+
+    subgraph DATA[数据存储]
+        DS1[(用户)]
+        DS2[(预订)]
+        DS3[(房间)]
+        DS4[(设备)]
+        DS5[(会员)]
+        DS6[(日志)]
+    end
+
+    C --- P1
+    C --- P2
+    C --- P4
+    C --- P6
+    
+    S --- P1
+    S --- P3
+    S --- P4
+    
+    A --- P7
+    HA --- P7
+    
+    D --- P5
+    APP --- P5
+    
+    P1 --- DS1
+    P2 --- DS2
+    P3 --- DS2
+    P3 --- DS3
+    P4 --- DS3
+    P5 --- DS4
+    P6 --- DS5
+    P7 --- DS6
+    
+    P2 --- P8
+    P3 --- P8
+    P6 --- P8
+```
+
+### 9.3 预订管理数据流图（2层）
+
+```mermaid
+flowchart LR
+    subgraph IN[输入]
+        C[顾客]
+        S[前台员工]
+    end
+
+    subgraph PROC[处理]
+        P1[查询]
+        P2[创建]
+        P3[确认]
+        P4[取消]
+        P5[支付]
+    end
+
+    subgraph DATA[数据]
+        R[(房间)]
+        B[(预订)]
+        P[(支付)]
+        RT[(价格)]
+    end
+
+    C --- P1
+    S --- P1
+    P1 --- C
+    P1 --- S
+    P1 --- R
+
+    C --- P2
+    S --- P2
+    P2 --- C
+    P2 --- S
+    P2 --- B
+    P2 --- RT
+
+    S --- P3
+    P3 --- S
+    P3 --- B
+
+    C --- P4
+    S --- P4
+    P4 --- C
+    P4 --- S
+    P4 --- B
+
+    P2 --- P5
+    P3 --- P5
+    P5 --- P
+    P5 --- P2
+    P5 --- P3
+```
+
+### 9.4 入住管理数据流图（2层）
+
+```mermaid
+flowchart LR
+    subgraph IN[输入]
+        C[顾客]
+        S[前台员工]
+        M[会员]
+    end
+
+    subgraph PROC[处理]
+        P1[入住]
+        P2[房卡]
+        P3[状态]
+        P4[退房]
+        P5[结算]
+    end
+
+    subgraph DATA[数据]
+        B[(预订)]
+        G[(宾客)]
+        R[(房卡)]
+        RM[(房间)]
+        P[(支付)]
+        MB[(会员)]
+    end
+
+    C --- P1
+    S --- P1
+    P1 --- C
+    P1 --- B
+    P1 --- G
+    P1 --- MB
+    P1 --- M
+
+    P1 --- P2
+    P2 --- P1
+    P2 --- R
+
+    P1 --- P3
+    P3 --- RM
+
+    C --- P4
+    S --- P4
+    P4 --- C
+    P4 --- B
+    P4 --- P2
+    P4 --- P3
+
+    P4 --- P5
+    P5 --- P
+    P5 --- P4
+```
+
+### 9.5 IoT设备管理数据流图（2层）
+
+```mermaid
+flowchart LR
+    subgraph IN[输入]
+        D[IoT设备]
+        APP[APP]
+        S[前台]
+        SYS[系统]
+    end
+
+    subgraph PROC[处理]
+        P1[认证]
+        P2[采集]
+        P3[指令]
+        P4[场景]
+        P5[通话]
+        P6[告警]
+    end
+
+    subgraph DATA[数据]
+        DV[(设备)]
+        SN[(传感器)]
+        CMD[(指令)]
+        SC[(场景)]
+        CL[(通话)]
+        SEC[(安防)]
+        MQ[(MQTT)]
+    end
+
+    D --- P1
+    P1 --- D
+    P1 --- DV
+
+    D --- P2
+    P2 --- SN
+    P2 --- MQ
+
+    APP --- P3
+    S --- P3
+    SYS --- P3
+    P3 --- D
+    P3 --- CMD
+    P3 --- MQ
+
+    APP --- P4
+    S --- P4
+    P4 --- P3
+    P4 --- SC
+
+    D --- P5
+    APP --- P5
+    P5 --- D
+    P5 --- APP
+    P5 --- CL
+
+    D --- P6
+    P6 --- SEC
+    P6 --- S
+    P6 --- APP
+```
+
+### 9.6 客房服务数据流图（2层）
+
+```mermaid
+flowchart LR
+    subgraph IN[输入]
+        C[顾客]
+        S[前台]
+        ST[服务]
+    end
+
+    subgraph PROC[处理]
+        P1[送物]
+        P2[维修]
+        P3[分配]
+        P4[跟踪]
+    end
+
+    subgraph DATA[数据]
+        B[(预订)]
+        D[(送物)]
+        M[(维修)]
+        R[(房间)]
+    end
+
+    C --- P1
+    S --- P1
+    P1 --- C
+    P1 --- D
+    P1 --- B
+    P1 --- R
+
+    C --- P2
+    S --- P2
+    P2 --- C
+    P2 --- M
+    P2 --- B
+    P2 --- R
+
+    P1 --- P3
+    P2 --- P3
+    P3 --- ST
+    ST --- P3
+
+    ST --- P4
+    P4 --- D
+    P4 --- M
+    P4 --- C
+    P4 --- S
+```
+
+### 9.7 会员营销数据流图（2层）
+
+```mermaid
+flowchart LR
+    subgraph IN[输入]
+        C[顾客]
+        M[会员]
+        HA[管理员]
+        SYS[系统]
+    end
+
+    subgraph PROC[处理]
+        P1[注册]
+        P2[积分]
+        P3[优惠券]
+        P4[评价]
+        P5[等级]
+    end
+
+    subgraph DATA[数据]
+        MB[(会员)]
+        CP[(优惠券)]
+        MC[(会员券)]
+        RV[(评价)]
+        AP[(申诉)]
+        FQ[(常住客)]
+    end
+
+    C --- P1
+    P1 --- C
+    P1 --- MB
+    P1 --- FQ
+
+    M --- P2
+    SYS --- P2
+    P2 --- M
+    P2 --- MB
+
+    HA --- P3
+    M --- P3
+    P3 --- CP
+    P3 --- MC
+
+    M --- P4
+    C --- P4
+    P4 --- RV
+    HA --- P4
+    P4 --- AP
+
+    SYS --- P5
+    P5 --- MB
+```
+
+---
+
+## 十、版本历史
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
