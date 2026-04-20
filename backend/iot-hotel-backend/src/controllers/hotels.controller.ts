@@ -37,17 +37,26 @@ export async function search(req: AuthRequest, res: Response) {
       SELECT
         h.*,
         IFNULL(ra.available_rooms, 0) AS available_rooms,
-        IFNULL(ra.min_price, h.hotel_star * 100) AS min_price
+        IFNULL(rt_min.min_price, h.hotel_star * 100) AS min_price
       FROM hotels h
       LEFT JOIN (
         SELECT
           r.hotel_id,
-          COUNT(*) AS available_rooms,
-          MIN(r.room_price) AS min_price
+          COUNT(*) AS available_rooms
         FROM rooms r
         WHERE r.room_status = 'available'
         GROUP BY r.hotel_id
       ) ra ON ra.hotel_id = h.id
+      LEFT JOIN (
+        SELECT
+          rt.hotel_id,
+          MIN(rt.base_price) AS min_price
+        FROM room_types rt
+        WHERE rt.id IN (
+          SELECT DISTINCT r.room_type_id FROM rooms r WHERE r.room_status = 'available'
+        )
+        GROUP BY rt.hotel_id
+      ) rt_min ON rt_min.hotel_id = h.id
       WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ? OR h.location LIKE ?)
     `;
 
