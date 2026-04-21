@@ -690,21 +690,36 @@ const handleLogout = async () => {
 <style scoped>
 .guest-layout {
   min-height: 100vh;
-  background: var(--hotel-bg);
+  background: linear-gradient(135deg, var(--hotel-bg) 0%, #f0f4f8 100%);
 }
 
-/* 顶部导航 */
+/* ==================== 顶部导航 - 炫酷玻璃态 ==================== */
 .guest-header {
-  background: #fff;
-  box-shadow: var(--hotel-shadow-sm);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 
+    0 4px 30px rgba(26, 43, 74, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 48px;
-  height: 72px;
+  height: 76px;
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.3s;
+}
+
+.guest-header::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 169, 98, 0.3), transparent);
 }
 
 .header-left {
@@ -715,25 +730,53 @@ const handleLogout = async () => {
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   cursor: pointer;
-  transition: opacity 0.3s;
+  transition: all 0.3s;
+  padding: 8px 12px;
+  border-radius: var(--hotel-radius);
 }
 
 .logo:hover {
-  opacity: 0.8;
+  background: rgba(201, 169, 98, 0.08);
 }
 
 .logo-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 22px;
+  font-size: 24px;
+  box-shadow: 
+    0 4px 15px rgba(26, 43, 74, 0.25),
+    0 0 0 2px rgba(201, 169, 98, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-icon::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  animation: logoShine 3s ease-in-out infinite;
+}
+
+@keyframes logoShine {
+  0%, 100% { transform: translateX(-100%) rotate(45deg); }
+  50% { transform: translateX(100%) rotate(45deg); }
 }
 
 .logo-text {
@@ -743,65 +786,100 @@ const handleLogout = async () => {
 }
 
 .brand-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--hotel-primary);
-  letter-spacing: 1px;
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-gold) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 2px;
 }
 
 .brand-tagline {
   font-size: 12px;
   color: var(--hotel-text-muted);
+  letter-spacing: 1px;
 }
 
-/* 导航菜单 */
+/* ==================== 导航菜单 - 炫酷按钮效果 ==================== */
 .header-nav {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .header-nav .ant-btn {
   font-size: 15px;
-  padding: 8px 20px;
-  border-radius: var(--hotel-radius-sm);
-  font-weight: 500;
+  padding: 10px 22px;
+  border-radius: var(--hotel-radius);
+  font-weight: 600;
   color: var(--hotel-text-secondary);
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.3s;
+  gap: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-nav .ant-btn::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  background: var(--hotel-gold);
+  transition: width 0.3s;
 }
 
 .header-nav .ant-btn:hover {
   color: var(--hotel-primary);
-  background: var(--hotel-bg-secondary);
+  background: rgba(26, 43, 74, 0.05);
+}
+
+.header-nav .ant-btn:hover::before {
+  width: 60%;
 }
 
 .header-nav .ant-btn.active {
-  background: var(--hotel-primary);
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
+  box-shadow: 0 4px 15px rgba(26, 43, 74, 0.25);
 }
 
-/* 右侧区域 */
+.header-nav .ant-btn.active::before {
+  display: none;
+}
+
+/* ==================== 右侧区域 ==================== */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 13px;
   color: var(--hotel-text-muted);
-  padding: 6px 12px;
-  background: var(--hotel-bg-secondary);
-  border-radius: 20px;
+  padding: 8px 16px;
+  background: rgba(26, 43, 74, 0.05);
+  border-radius: 24px;
+  border: 1px solid rgba(26, 43, 74, 0.08);
+  transition: all 0.3s;
+}
+
+.connection-status:hover {
+  background: rgba(26, 43, 74, 0.08);
 }
 
 .connection-status.online {
   color: var(--hotel-success);
+  background: rgba(39, 174, 96, 0.08);
+  border-color: rgba(39, 174, 96, 0.2);
 }
 
 .status-dot {
@@ -809,39 +887,62 @@ const handleLogout = async () => {
   height: 8px;
   border-radius: 50%;
   background: var(--hotel-text-muted);
+  transition: all 0.3s;
 }
 
 .connection-status.online .status-dot {
   background: var(--hotel-success);
-  animation: pulse 2s infinite;
+  box-shadow: 0 0 8px var(--hotel-success);
+  animation: statusPulse 2s infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+@keyframes statusPulse {
+  0%, 100% { 
+    transform: scale(1); 
+    box-shadow: 0 0 8px var(--hotel-success);
+  }
+  50% { 
+    transform: scale(1.2); 
+    box-shadow: 0 0 16px var(--hotel-success);
+  }
 }
 
 .login-btn {
-  border-radius: var(--hotel-radius-sm);
-  font-weight: 500;
-  padding: 0 24px;
-  height: 40px;
+  border-radius: var(--hotel-radius);
+  font-weight: 600;
+  padding: 0 28px;
+  height: 42px;
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.35);
+  transition: all 0.3s;
+}
+
+.login-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(201, 169, 98, 0.45);
 }
 
 .user-status-tags {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .member-tag,
 .checkin-tag {
-  border-radius: 20px;
+  border-radius: 24px;
   font-size: 12px;
-  padding: 2px 10px;
+  padding: 4px 14px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.member-tag:hover {
+  transform: scale(1.05);
 }
 
 .checkin-tag {
@@ -850,41 +951,53 @@ const handleLogout = async () => {
   border: 1px solid rgba(39, 174, 96, 0.3);
 }
 
+.checkin-tag:hover {
+  background: rgba(39, 174, 96, 0.15);
+}
+
 .switch-side-btn {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--hotel-gold);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--hotel-radius);
+  transition: all 0.3s;
 }
 
 .switch-side-btn:hover {
   color: var(--hotel-gold-dark);
+  background: rgba(201, 169, 98, 0.1);
 }
 
 .user-dropdown-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: var(--hotel-radius);
-  transition: background 0.3s;
-  border: 1px solid var(--hotel-border);
+  padding: 8px 14px;
+  border-radius: var(--hotel-radius-lg);
+  transition: all 0.3s;
+  border: 1px solid rgba(26, 43, 74, 0.1);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .user-dropdown-wrapper:hover {
-  background: var(--hotel-bg-secondary);
+  background: rgba(201, 169, 98, 0.08);
+  border-color: var(--hotel-gold);
+  box-shadow: 0 4px 12px rgba(201, 169, 98, 0.15);
 }
 
 .header-avatar {
   border: 2px solid var(--hotel-gold);
+  box-shadow: 0 2px 8px rgba(201, 169, 98, 0.3);
 }
 
 .header-username {
   font-size: 14px;
   color: var(--hotel-text);
-  font-weight: 500;
+  font-weight: 600;
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -894,78 +1007,119 @@ const handleLogout = async () => {
 .dropdown-arrow {
   font-size: 12px;
   color: var(--hotel-text-muted);
+  transition: transform 0.3s;
+}
+
+.user-dropdown-wrapper:hover .dropdown-arrow {
+  transform: rotate(180deg);
 }
 
 .user-dropdown-menu {
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
+  box-shadow: 0 8px 30px rgba(26, 43, 74, 0.12);
+  border: 1px solid rgba(201, 169, 98, 0.1);
+  overflow: hidden;
 }
 
 .logout-item {
   color: var(--hotel-error);
 }
 
-/* 主内容区 */
+/* ==================== 主内容区 ==================== */
 .guest-content {
   max-width: 1440px;
   width: 100%;
   margin: 0 auto;
-  padding: 32px 48px;
-  min-height: calc(100vh - 72px - 200px);
+  padding: 36px 48px;
+  min-height: calc(100vh - 76px - 220px);
 }
 
-/* 页脚 */
+/* ==================== 页脚 - 炫酷渐变 ==================== */
 .guest-footer {
-  background: var(--hotel-primary);
-  padding: 48px 48px 32px;
-  color: rgba(255, 255, 255, 0.8);
+  background: linear-gradient(135deg, var(--hotel-primary-dark) 0%, var(--hotel-primary) 50%, var(--hotel-primary-light) 100%);
+  padding: 56px 48px 36px;
+  color: rgba(255, 255, 255, 0.85);
+  position: relative;
+  overflow: hidden;
+}
+
+.guest-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hotel-gold), transparent);
 }
 
 .footer-content {
   max-width: 1440px;
   margin: 0 auto;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .footer-brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 28px;
 }
 
 .footer-logo {
-  font-size: 32px;
+  font-size: 36px;
   color: var(--hotel-gold);
+  filter: drop-shadow(0 2px 8px rgba(201, 169, 98, 0.4));
 }
 
 .footer-brand span {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
   color: #fff;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .footer-links {
   display: flex;
   justify-content: center;
-  gap: 32px;
-  margin-bottom: 32px;
+  gap: 36px;
+  margin-bottom: 36px;
 }
 
 .footer-links a {
   color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
-  transition: color 0.3s;
+  transition: all 0.3s;
+  position: relative;
+  padding: 4px 0;
+}
+
+.footer-links a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--hotel-gold);
+  transition: width 0.3s;
 }
 
 .footer-links a:hover {
   color: var(--hotel-gold);
 }
 
+.footer-links a:hover::after {
+  width: 100%;
+}
+
 .footer-copyright {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 24px;
+  padding-top: 28px;
 }
 
 .footer-copyright p {
@@ -975,41 +1129,74 @@ const handleLogout = async () => {
 }
 
 .footer-sub {
-  margin-top: 8px !important;
-  font-size: 12px !important;
+  margin-top: 10px !important;
+  font-size: 13px !important;
   color: var(--hotel-gold) !important;
   font-style: italic;
+  opacity: 0.9;
 }
 
-/* 登录弹窗 */
+/* ==================== 登录弹窗 - 炫酷玻璃态 ==================== */
 .login-modal :deep(.ant-modal-content) {
-  border-radius: var(--hotel-radius-lg);
+  border-radius: var(--hotel-radius-xl);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 
+    0 20px 60px rgba(26, 43, 74, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .login-modal-header {
   text-align: center;
-  padding: 32px 0 24px;
+  padding: 36px 0 28px;
 }
 
 .login-logo {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin: 0 auto 20px;
   color: #fff;
-  font-size: 32px;
+  font-size: 36px;
+  box-shadow: 
+    0 8px 25px rgba(26, 43, 74, 0.25),
+    0 0 0 3px rgba(201, 169, 98, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-logo::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 70%
+  );
+  animation: loginLogoShine 3s ease-in-out infinite;
+}
+
+@keyframes loginLogoShine {
+  0%, 100% { transform: translateX(-100%) rotate(45deg); }
+  50% { transform: translateX(100%) rotate(45deg); }
 }
 
 .login-modal-header h3 {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--hotel-primary);
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .login-modal-header p {
@@ -1019,12 +1206,17 @@ const handleLogout = async () => {
 }
 
 .login-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .login-tabs :deep(.ant-tabs-tab) {
   font-size: 15px;
-  padding: 12px 24px;
+  padding: 14px 28px;
+  font-weight: 600;
+}
+
+.login-tabs :deep(.ant-tabs-ink-bar) {
+  background: var(--hotel-gold);
 }
 
 .login-form,
@@ -1033,39 +1225,50 @@ const handleLogout = async () => {
 }
 
 .login-form :deep(.ant-form-item-label) {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--hotel-text);
 }
 
 .submit-btn {
-  height: 44px;
+  height: 48px;
   font-size: 16px;
-  font-weight: 500;
-  border-radius: var(--hotel-radius-sm);
-  margin-top: 8px;
+  font-weight: 600;
+  border-radius: var(--hotel-radius);
+  margin-top: 12px;
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.4);
+  transition: all 0.3s;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(201, 169, 98, 0.5);
 }
 
 .form-footer {
   text-align: center;
-  margin-top: 20px;
+  margin-top: 24px;
   color: var(--hotel-text-secondary);
   font-size: 14px;
 }
 
 .register-link {
   color: var(--hotel-gold);
-  font-weight: 500;
-  margin-left: 4px;
+  font-weight: 600;
+  margin-left: 6px;
   cursor: pointer;
+  transition: all 0.3s;
 }
 
 .register-link:hover {
   color: var(--hotel-gold-dark);
+  text-decoration: underline;
 }
 
-/* 扫码登录 */
+/* ==================== 扫码登录 ==================== */
 .scan-login-container {
-  padding: 20px 0;
+  padding: 24px 0;
   text-align: center;
 }
 
@@ -1073,19 +1276,26 @@ const handleLogout = async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .scan-icon-wrapper {
-  width: 80px;
-  height: 80px;
-  background: var(--hotel-bg-secondary);
+  width: 90px;
+  height: 90px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.05) 0%, rgba(201, 169, 98, 0.08) 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--hotel-primary);
-  font-size: 40px;
+  font-size: 44px;
+  border: 2px dashed rgba(201, 169, 98, 0.3);
+  transition: all 0.3s;
+}
+
+.scan-icon-wrapper:hover {
+  border-color: var(--hotel-gold);
+  background: rgba(201, 169, 98, 0.1);
 }
 
 .scan-tip {
@@ -1095,24 +1305,29 @@ const handleLogout = async () => {
 }
 
 .generate-btn {
-  height: 44px;
-  font-weight: 500;
+  height: 48px;
+  font-weight: 600;
+  border-radius: var(--hotel-radius);
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.4);
 }
 
 .scan-waiting {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .qr-code-wrapper {
   position: relative;
   display: inline-block;
-  border: 2px solid var(--hotel-border);
-  border-radius: var(--hotel-radius);
-  padding: 16px;
+  border: 2px solid rgba(201, 169, 98, 0.3);
+  border-radius: var(--hotel-radius-lg);
+  padding: 18px;
   background: #fff;
+  box-shadow: 0 4px 20px rgba(26, 43, 74, 0.1);
 }
 
 .qr-expired-overlay {
@@ -1122,24 +1337,26 @@ const handleLogout = async () => {
   right: 0;
   bottom: 0;
   background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: var(--hotel-radius-sm);
-  gap: 12px;
+  border-radius: var(--hotel-radius);
+  gap: 14px;
 }
 
 .qr-expired-overlay p {
   margin: 0;
   color: var(--hotel-error);
   font-size: 14px;
+  font-weight: 600;
 }
 
 .scan-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--hotel-text-secondary);
   font-size: 14px;
 }
@@ -1151,39 +1368,43 @@ const handleLogout = async () => {
 .countdown :deep(.ant-statistic-content) {
   font-size: 14px;
   color: var(--hotel-gold);
+  font-weight: 600;
 }
 
-/* 注册弹窗 */
+/* ==================== 注册弹窗 ==================== */
 .register-modal :deep(.ant-modal-content) {
-  border-radius: var(--hotel-radius-lg);
+  border-radius: var(--hotel-radius-xl);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
 }
 
 .register-modal :deep(.ant-modal-header) {
-  border-bottom: 1px solid var(--hotel-border);
-  padding: 20px 24px;
+  border-bottom: 1px solid rgba(201, 169, 98, 0.15);
+  padding: 22px 28px;
 }
 
 .register-modal :deep(.ant-modal-title) {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--hotel-primary);
 }
 
 .register-form :deep(.ant-form-item-label) {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--hotel-text);
 }
 
 .register-tip {
-  margin-top: 8px;
+  margin-top: 12px;
+  border-radius: var(--hotel-radius);
 }
 
 .register-tip :deep(.ant-alert-message) {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--hotel-primary);
 }
 
-/* 响应式 */
+/* ==================== 响应式 ==================== */
 @media (max-width: 1024px) {
   .guest-header {
     padding: 0 24px;
@@ -1199,14 +1420,14 @@ const handleLogout = async () => {
   
   .footer-links {
     flex-wrap: wrap;
-    gap: 16px 32px;
+    gap: 18px 36px;
   }
 }
 
 @media (max-width: 768px) {
   .guest-header {
     padding: 0 16px;
-    height: 64px;
+    height: 68px;
   }
   
   .brand-tagline {
@@ -1226,7 +1447,7 @@ const handleLogout = async () => {
   }
   
   .guest-footer {
-    padding: 32px 16px;
+    padding: 36px 16px;
   }
 }
 </style>

@@ -944,38 +944,40 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 会员等级主题色变量 */
-.profile-page-container.theme-standard { --level-color: #4b6cb7; --level-bg: #f0f5ff; }
-.profile-page-container.theme-silver { --level-color: #90a4ae; --level-bg: #f0f4f8; }
-.profile-page-container.theme-gold { --level-color: #d4af37; --level-bg: #fffdf0; }
-.profile-page-container.theme-platinum { --level-color: #535c68; --level-bg: #f1f2f6; }
-.profile-page-container.theme-diamond { --level-color: #30cfd0; --level-bg: #f0fbff; }
+/* ==================== 会员等级主题色变量 ==================== */
+.profile-page-container.theme-standard { --level-color: #4b6cb7; --level-bg: rgba(75, 108, 183, 0.08); --level-glow: rgba(75, 108, 183, 0.3); }
+.profile-page-container.theme-silver { --level-color: #90a4ae; --level-bg: rgba(144, 164, 174, 0.08); --level-glow: rgba(144, 164, 174, 0.3); }
+.profile-page-container.theme-gold { --level-color: var(--hotel-gold); --level-bg: rgba(201, 169, 98, 0.08); --level-glow: rgba(201, 169, 98, 0.3); }
+.profile-page-container.theme-platinum { --level-color: #535c68; --level-bg: rgba(83, 92, 104, 0.08); --level-glow: rgba(83, 92, 104, 0.3); }
+.profile-page-container.theme-diamond { --level-color: #30cfd0; --level-bg: rgba(48, 207, 208, 0.08); --level-glow: rgba(48, 207, 208, 0.3); }
 
 .profile-page-container {
-  padding: 40px 24px;
+  padding: 48px 32px;
   max-width: 100%;
   margin: 0 auto;
   min-height: calc(100vh - 120px);
+  background: linear-gradient(135deg, var(--hotel-bg) 0%, #f0f4f8 100%);
 }
 
 .profile-content {
   display: grid;
-  grid-template-columns: 450px 1fr;
-  gap: 40px;
-}
-
-/* 非会员模式下的布局调整 */
-.profile-content.no-member {
-  display: block;
-  max-width: 800px;
+  grid-template-columns: 460px 1fr;
+  gap: 48px;
+  max-width: 1500px;
   margin: 0 auto;
 }
 
-/* 统一配色适配 */
+.profile-content.no-member {
+  display: block;
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+/* ==================== 统一配色适配 ==================== */
 .stats-header-modern::before { background: var(--level-color) !important; }
 .asset-icon-bg { background: var(--level-bg) !important; color: var(--level-color) !important; }
 .balance-display-large { background: var(--level-bg) !important; border-color: var(--level-color) !important; }
-.recharge-item.active { border-color: var(--level-color) !important; background: var(--level-bg) !important; }
+.recharge-item.active { border-color: var(--level-color) !important; background: var(--level-bg) !important; box-shadow: 0 0 20px var(--level-glow) !important; }
 .recharge-btn-large { background: var(--level-color) !important; border-color: var(--level-color) !important; }
 .bonus-explain { background: var(--level-bg) !important; border-color: var(--level-color) !important; }
 .bonus-explain .icon, .bonus-explain strong { color: var(--level-color) !important; }
@@ -989,25 +991,44 @@ onMounted(() => {
 .guest-card-modern:hover { border-color: var(--level-color) !important; }
 .guest-card-body .info-row .icon { color: var(--level-color) !important; }
 
-/* 新版会员卡样式 */
+/* ==================== 新版会员卡样式 - 炫酷玻璃态 ==================== */
 .member-card-new {
-  height: 260px;
-  border-radius: 28px;
+  height: 280px;
+  border-radius: var(--hotel-radius-2xl);
   position: relative;
   overflow: hidden;
   color: #fff;
-  padding: 32px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-  margin-bottom: 32px;
-  transition: all 0.5s ease;
+  padding: 36px;
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  margin-bottom: 36px;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.member-card-new:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 35px 70px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset;
 }
 
 /* 等级配色方案 */
-.card-level-standard { background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%); }
-.card-level-silver { background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%); }
-.card-level-gold { background: linear-gradient(135deg, #d4af37 0%, #1a1a1a 100%); }
-.card-level-platinum { background: linear-gradient(135deg, #e5e4e2 0%, #434343 100%); }
-.card-level-diamond { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+.card-level-standard { 
+  background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+}
+.card-level-silver { 
+  background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
+}
+.card-level-gold { 
+  background: linear-gradient(135deg, #d4af37 0%, #1a1a1a 100%);
+}
+.card-level-platinum { 
+  background: linear-gradient(135deg, #e5e4e2 0%, #434343 100%);
+}
+.card-level-diamond { 
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
 
 .card-inner {
   position: relative;
@@ -1031,7 +1052,7 @@ onMounted(() => {
 
 .hotel-logo {
   font-family: 'Playfair Display', 'Optima', 'Palatino', serif;
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 900;
   letter-spacing: 4px;
   line-height: 1;
@@ -1040,65 +1061,91 @@ onMounted(() => {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  animation: textGlow 3s ease-in-out infinite;
+}
+
+@keyframes textGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3)); }
+  50% { filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5)); }
 }
 
 .hotel-brand {
   font-size: 11px;
   letter-spacing: 4px;
   opacity: 0.6;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .member-badge-new {
-  padding: 8px 20px;
-  border-radius: 14px;
+  padding: 10px 22px;
+  border-radius: 16px;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.member-badge-new::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: badgeShine 3s ease-in-out infinite;
+}
+
+@keyframes badgeShine {
+  0%, 100% { left: -100%; }
+  50% { left: 100%; }
 }
 
 /* 勋章颜色方案 */
 .badge-level-standard {
   background: linear-gradient(90deg, #4b6cb7, #182848);
-  box-shadow: 0 6px 15px rgba(75, 108, 183, 0.3);
+  box-shadow: 0 6px 20px rgba(75, 108, 183, 0.4);
 }
 .badge-level-standard .level-text { color: #fff; }
 
 .badge-level-silver {
   background: linear-gradient(90deg, #bdc3c7, #2c3e50);
-  box-shadow: 0 6px 15px rgba(189, 195, 199, 0.3);
+  box-shadow: 0 6px 20px rgba(189, 195, 199, 0.4);
 }
 .badge-level-silver .level-text { color: #fff; }
 
 .badge-level-gold {
   background: linear-gradient(90deg, #d4af37, #f9e29c);
-  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.3);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
 }
 .badge-level-gold .level-text { color: #1a1a1a; }
 
 .badge-level-platinum {
   background: linear-gradient(90deg, #e5e4e2, #434343);
-  box-shadow: 0 6px 15px rgba(229, 228, 226, 0.3);
+  box-shadow: 0 6px 20px rgba(229, 228, 226, 0.4);
 }
 .badge-level-platinum .level-text { color: #1a1a1a; }
 
 .badge-level-diamond {
   background: linear-gradient(90deg, #30cfd0, #330867);
-  box-shadow: 0 6px 15px rgba(48, 207, 208, 0.3);
+  box-shadow: 0 6px 20px rgba(48, 207, 208, 0.4);
 }
 .badge-level-diamond .level-text { color: #fff; }
 
 .level-text {
   font-weight: 800;
   font-size: 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .user-info-section {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .user-name-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   flex-wrap: wrap;
 }
 
@@ -1108,11 +1155,13 @@ onMounted(() => {
   border-radius: 50%;
   padding: 4px;
   background: linear-gradient(135deg, #d4af37, #f9e29c);
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
 }
 
 .user-avatar-wrapper:hover {
   transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.5);
 }
 
 .premium-avatar {
@@ -1128,6 +1177,7 @@ onMounted(() => {
   height: 100%;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1149,10 +1199,10 @@ onMounted(() => {
 
 .user-name {
   color: #fff;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   margin: 0;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   word-break: break-word;
   max-width: 180px;
 }
@@ -1160,41 +1210,44 @@ onMounted(() => {
 .user-phone-row {
   font-size: 14px;
   opacity: 0.6;
-  margin-top: 6px;
+  margin-top: 8px;
   letter-spacing: 1px;
 }
 
 .premium-checkin-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   color: #fff;
   font-weight: 700;
   backdrop-filter: blur(8px);
-  padding: 0 16px;
-  height: 32px;
+  padding: 0 18px;
+  height: 36px;
   font-size: 13px;
   flex-shrink: 0;
+  transition: all 0.3s;
 }
 
 .premium-checkin-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
   border-color: #fff;
   transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
 }
 
 .checkin-done {
-  color: #52c41a;
+  color: #4ade80;
   font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(82, 196, 26, 0.15);
-  padding: 4px 10px;
-  border-radius: 20px;
+  gap: 6px;
+  background: rgba(74, 222, 128, 0.15);
+  padding: 6px 14px;
+  border-radius: 24px;
   backdrop-filter: blur(4px);
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
 }
 
 .card-bottom {
@@ -1209,14 +1262,14 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   opacity: 0.9;
 }
 
 .points-badge {
   background: rgba(255, 255, 255, 0.15);
-  padding: 3px 10px;
-  border-radius: 6px;
+  padding: 4px 12px;
+  border-radius: 8px;
   font-weight: 600;
 }
 
@@ -1231,12 +1284,12 @@ onMounted(() => {
   height: 100%;
   background: linear-gradient(90deg, #d4af37, #f9e29c, #fff);
   background-size: 200% 100%;
-  animation: shine 3s infinite linear;
+  animation: progressShine 3s infinite linear;
   border-radius: 4px;
   transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes shine {
+@keyframes progressShine {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
@@ -1251,68 +1304,76 @@ onMounted(() => {
   z-index: 1;
 }
 
-/* 资产网格 (现代感) */
+/* ==================== 资产网格 - 炫酷玻璃态 ==================== */
 .stats-card-modern {
-  background: #fff;
-  border-radius: 28px;
-  padding: 32px;
-  margin-bottom: 32px;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
-  border: 1px solid #f0f0f0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: var(--hotel-radius-2xl);
+  padding: 36px;
+  margin-bottom: 36px;
+  box-shadow: 
+    0 15px 40px rgba(26, 43, 74, 0.08),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .stats-header-modern {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
-  color: #1a1a1a;
-  margin-bottom: 24px;
+  color: var(--hotel-primary);
+  margin-bottom: 28px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .stats-header-modern::before {
   content: '';
   width: 4px;
-  height: 18px;
-  background: #d4af37;
+  height: 20px;
+  background: linear-gradient(180deg, var(--hotel-gold) 0%, var(--hotel-gold-dark) 100%);
   border-radius: 2px;
 }
 
 .asset-grid-modern {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 22px;
 }
 
 .asset-item-modern {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #f8faff;
-  border-radius: 20px;
+  gap: 18px;
+  padding: 22px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.02) 0%, rgba(201, 169, 98, 0.03) 100%);
+  border-radius: var(--hotel-radius-xl);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
 }
 
 .asset-item-modern:hover {
-  background: #fff;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
-  transform: translateY(-4px);
-  border-color: #e6f0ff;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 30px rgba(26, 43, 74, 0.12);
+  transform: translateY(-6px);
+  border-color: rgba(201, 169, 98, 0.2);
 }
 
 .asset-icon-bg {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--hotel-radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  font-size: 26px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s;
+}
+
+.asset-item-modern:hover .asset-icon-bg {
+  transform: scale(1.1);
 }
 
 .coupon-bg { background: linear-gradient(135deg, #fff1f0 0%, #fff1f0 100%); color: #ff4d4f; }
@@ -1326,208 +1387,269 @@ onMounted(() => {
 }
 
 .asset-num {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
   line-height: 1.1;
 }
 
 .asset-num .unit, .asset-num .currency {
   font-size: 14px;
   margin: 0 2px;
-  color: #8c8c8c;
+  color: var(--hotel-text-muted);
   font-weight: 600;
 }
 
 .asset-name {
   font-size: 13px;
-  color: #8c8c8c;
-  margin-top: 4px;
+  color: var(--hotel-text-muted);
+  margin-top: 6px;
   font-weight: 500;
 }
 
-/* Wallet Styles */
+/* ==================== 钱包样式 ==================== */
 .wallet-card-ctrip {
-  background: #fff;
-  border-radius: 20px;
-  padding: 32px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: var(--hotel-radius-xl);
+  padding: 36px;
+  box-shadow: 
+    0 10px 30px rgba(26, 43, 74, 0.08),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .wallet-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .wallet-header h3 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   margin: 0;
+  color: var(--hotel-primary);
 }
 
 .balance-display-large {
-  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
-  padding: 40px;
-  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  padding: 48px;
+  border-radius: var(--hotel-radius-xl);
   text-align: center;
-  margin-bottom: 40px;
-  border: 1px solid #91d5ff;
+  margin-bottom: 48px;
+  border: 1px solid rgba(201, 169, 98, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.balance-display-large::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--hotel-gold), var(--hotel-gold-light), var(--hotel-gold));
 }
 
 .balance-display-large .lab {
   font-size: 14px;
-  color: #595959;
-  margin-bottom: 12px;
+  color: var(--hotel-text-secondary);
+  margin-bottom: 14px;
 }
 
 .balance-display-large .val {
-  color: #1a1a1a;
+  color: var(--hotel-primary);
 }
 
 .balance-display-large .val .currency {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  margin-right: 4px;
+  margin-right: 6px;
 }
 
 .balance-display-large .val .num {
-  font-size: 56px;
+  font-size: 60px;
   font-weight: 900;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-gold) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .recharge-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 22px;
 }
 
 .recharge-item {
-  border: 1.5px solid #f0f0f0;
-  border-radius: 16px;
-  padding: 24px;
+  border: 2px solid rgba(26, 43, 74, 0.1);
+  border-radius: var(--hotel-radius-xl);
+  padding: 28px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .recharge-item:hover {
-  border-color: #008cff;
-  background: #f8faff;
+  border-color: var(--hotel-gold);
+  background: rgba(201, 169, 98, 0.05);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(201, 169, 98, 0.15);
 }
 
 .recharge-item.active {
-  border-color: #008cff;
-  background: #e6f7ff;
-  box-shadow: 0 0 0 1px #008cff;
+  border-color: var(--hotel-gold);
+  background: rgba(201, 169, 98, 0.1);
+  box-shadow: 0 0 0 2px rgba(201, 169, 98, 0.2), 0 8px 25px rgba(201, 169, 98, 0.2);
 }
 
 .recharge-item .amount-text {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
   display: block;
 }
 
 .recharge-item .bonus-tag {
   display: inline-block;
-  background: #ff4d4f;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
-  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
 }
 
 .recharge-item .bonus-tip {
   display: block;
   font-size: 12px;
-  color: #52c41a;
-  margin-top: 4px;
+  color: var(--hotel-success);
+  margin-top: 6px;
   font-weight: 600;
 }
 
 .recharge-btn-container {
-  margin-top: 40px;
+  margin-top: 48px;
 }
 
 .recharge-btn-large {
-  height: 60px;
-  font-size: 20px;
+  height: 64px;
+  font-size: 22px;
   font-weight: 800;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 140, 255, 0.2);
+  border-radius: var(--hotel-radius-xl);
+  box-shadow: 0 8px 30px rgba(201, 169, 98, 0.35);
+  transition: all 0.3s;
+}
+
+.recharge-btn-large:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(201, 169, 98, 0.45);
 }
 
 .bonus-explain {
-  margin-top: 24px;
-  padding: 20px;
-  background: #fffbe6;
-  border-radius: 12px;
-  border: 1px solid #ffe58f;
+  margin-top: 28px;
+  padding: 24px;
+  background: rgba(201, 169, 98, 0.08);
+  border-radius: var(--hotel-radius-lg);
+  border: 1px solid rgba(201, 169, 98, 0.15);
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
 }
 
-.bonus-explain .icon { color: #faad14; font-size: 18px; margin-top: 2px; }
-.bonus-explain .text { font-size: 13px; color: #856404; line-height: 1.6; }
+.bonus-explain .icon { 
+  color: var(--hotel-gold); 
+  font-size: 20px; 
+  margin-top: 2px; 
+}
+.bonus-explain .text { 
+  font-size: 13px; 
+  color: var(--hotel-text-secondary); 
+  line-height: 1.7; 
+}
 
-/* Mock Payment Recharge */
+/* ==================== 支付弹窗 ==================== */
 .mock-payment-recharge {
   text-align: center;
-  padding: 24px 0;
+  padding: 28px 0;
 }
 
 .mock-payment-recharge .amount-box {
-  margin: 24px 0;
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 12px;
+  margin: 28px 0;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  padding: 24px;
+  border-radius: var(--hotel-radius-xl);
+  border: 1px solid rgba(201, 169, 98, 0.1);
 }
 
-.mock-payment-recharge .amount-box .lab { font-size: 13px; color: #8c8c8c; }
-.mock-payment-recharge .amount-box .val { font-size: 36px; font-weight: 800; color: #1a1a1a; margin-top: 4px; }
+.mock-payment-recharge .amount-box .lab { font-size: 13px; color: var(--hotel-text-muted); }
+.mock-payment-recharge .amount-box .val { 
+  font-size: 40px; 
+  font-weight: 800; 
+  color: var(--hotel-primary); 
+  margin-top: 6px; 
+}
 
 .payment-vendor-recharge {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 32px;
+  gap: 24px;
+  margin-bottom: 36px;
 }
 
 .vendor-item {
-  width: 120px;
-  padding: 16px;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  width: 130px;
+  padding: 20px;
+  border: 2px solid rgba(26, 43, 74, 0.1);
+  border-radius: var(--hotel-radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.8);
 }
 
-.vendor-item:hover { border-color: #008cff; }
-.vendor-item.active { border-color: #008cff; }
-.vendor-item.wechat-active { background: #e6fffb; border-color: #07c160; }
-.vendor-item.alipay-active { background: #e6f7ff; border-color: #1677ff; }
-.vendor-item .icon-wrapper { margin-bottom: 8px; display: flex; justify-content: center; align-items: center; height: 32px; }
+.vendor-item:hover { 
+  border-color: var(--hotel-gold); 
+  background: rgba(201, 169, 98, 0.05);
+}
+.vendor-item.active { border-color: var(--hotel-gold); }
+.vendor-item.wechat-active { 
+  background: rgba(7, 193, 96, 0.08); 
+  border-color: #07c160; 
+  box-shadow: 0 4px 15px rgba(7, 193, 96, 0.2);
+}
+.vendor-item.alipay-active { 
+  background: rgba(22, 119, 255, 0.08); 
+  border-color: #1677ff; 
+  box-shadow: 0 4px 15px rgba(22, 119, 255, 0.2);
+}
+.vendor-item .icon-wrapper { margin-bottom: 10px; display: flex; justify-content: center; align-items: center; height: 36px; }
 .vendor-item .icon-wrapper.wechat-color { color: #07c160 !important; }
 .vendor-item .icon-wrapper.alipay-color { color: #1677ff !important; }
-.vendor-item .name { font-size: 13px; font-weight: 600; text-align: center; color: #595959; }
+.vendor-item .name { font-size: 14px; font-weight: 600; text-align: center; color: var(--hotel-text-secondary); }
 .vendor-item.active .name { color: var(--level-color); }
 
 .wechat-color { color: #07c160; }
 .alipay-color { color: #1677ff; }
 
-/* 会员权益 (现代感) */
+/* ==================== 会员权益 - 炫酷卡片 ==================== */
 .rights-card-modern {
-  border-radius: 28px;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
-  border: 1px solid #f0f0f0;
-  padding: 8px;
+  border-radius: var(--hotel-radius-2xl);
+  box-shadow: 
+    0 15px 40px rgba(26, 43, 74, 0.08),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
 }
 
 .rights-header {
@@ -1537,41 +1659,42 @@ onMounted(() => {
 }
 
 .rights-title-text {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
+  color: var(--hotel-primary);
 }
 
 .rights-subtitle {
   font-size: 13px;
-  color: #d4af37;
+  color: var(--hotel-gold);
   font-weight: 700;
-  background: #fffdf0;
-  padding: 4px 12px;
-  border-radius: 10px;
-  border: 1px solid #f9e29c;
+  background: rgba(201, 169, 98, 0.1);
+  padding: 6px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 169, 98, 0.2);
 }
 
 .rights-grid-modern {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 18px;
+  padding: 18px;
 }
 
 .right-box {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
-  background: #fafafa;
-  border-radius: 20px;
-  transition: all 0.3s;
-  border: 1px solid transparent;
+  gap: 22px;
+  padding: 22px;
+  background: rgba(26, 43, 74, 0.02);
+  border-radius: var(--hotel-radius-xl);
+  transition: all 0.4s;
+  border: 2px solid transparent;
 }
 
 .right-box.active, .right-box:not(.disabled) {
-  background: linear-gradient(90deg, #fff 0%, #fffdf0 100%);
-  border: 1px solid #f9e29c;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(201, 169, 98, 0.05) 100%);
+  border: 2px solid rgba(201, 169, 98, 0.15);
 }
 
 .right-box.disabled {
@@ -1580,77 +1703,87 @@ onMounted(() => {
 }
 
 .right-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  background: #fff;
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  color: #d4af37;
-  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.15);
+  font-size: 24px;
+  color: var(--hotel-gold);
+  box-shadow: 0 6px 20px rgba(201, 169, 98, 0.2);
+  transition: transform 0.3s;
+}
+
+.right-box:hover .right-icon-wrapper {
+  transform: scale(1.1);
 }
 
 .right-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
 }
 
 .right-value {
   font-size: 14px;
-  color: #8c8c8c;
-  margin-top: 4px;
-  font-weight: 500;
+  color: var(--hotel-gold);
+  margin-top: 6px;
+  font-weight: 600;
 }
 
-/* 优惠券页 */
+/* ==================== 优惠券页 ==================== */
 .coupons-section {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 36px;
 }
 
 .coupon-import-bar {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
-  padding: 32px;
-  border-radius: 24px;
-  border: 1px dashed #d9d9d9;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  padding: 36px;
+  border-radius: var(--hotel-radius-xl);
+  border: 2px dashed rgba(201, 169, 98, 0.2);
   text-align: center;
 }
 
 .coupons-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 28px;
 }
 
 .coupon-card {
   display: flex;
-  height: 120px;
-  background: #fff;
-  border-radius: 20px;
+  height: 130px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  border-radius: var(--hotel-radius-xl);
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s;
+  box-shadow: 
+    0 10px 30px rgba(26, 43, 74, 0.1),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .coupon-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 20px 50px rgba(26, 43, 74, 0.15),
+    0 0 0 1px rgba(201, 169, 98, 0.2);
 }
 
 .coupon-left {
-  width: 120px;
-  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  width: 130px;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 16px;
+  padding: 18px;
   position: relative;
 }
 
@@ -1661,17 +1794,18 @@ onMounted(() => {
   top: 0;
   bottom: 0;
   width: 12px;
-  background-image: radial-gradient(circle at 12px 10px, transparent 6px, #ff605c 6px);
+  background-image: radial-gradient(circle at 12px 10px, transparent 6px, #ff6b6b 6px);
   background-size: 12px 20px;
 }
 
 .coupon-value .val {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 900;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .coupon-value .unit {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -1679,64 +1813,68 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   opacity: 0.9;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .coupon-right {
   flex: 1;
-  padding: 20px;
+  padding: 22px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .coupon-name {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
 }
 
 .coupon-date {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--hotel-text-muted);
   font-weight: 500;
 }
 
 .empty-state {
-  padding: 60px 0;
+  padding: 70px 0;
 }
-/* 右侧标签页 */
+
+/* ==================== 右侧标签页 ==================== */
 .profile-right {
-  background: #fff;
-  border-radius: 28px;
-  padding: 32px;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06);
-  border: 1px solid #f0f0f0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: var(--hotel-radius-2xl);
+  padding: 36px;
+  box-shadow: 
+    0 15px 40px rgba(26, 43, 74, 0.08),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .profile-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .profile-tabs :deep(.ant-tabs-tab) {
   font-size: 16px;
   font-weight: 600;
-  padding: 12px 24px;
+  padding: 14px 28px;
 }
 
 .account-info-list {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 36px;
 }
 
 .info-item {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 150px 1fr;
   align-items: start;
-  gap: 24px;
-  padding-bottom: 32px;
-  border-bottom: 1px solid #f5f5f5;
+  gap: 28px;
+  padding-bottom: 36px;
+  border-bottom: 1px solid rgba(201, 169, 98, 0.1);
 }
 
 .info-item:last-child {
@@ -1745,7 +1883,7 @@ onMounted(() => {
 
 .info-label {
   font-size: 15px;
-  color: #8c8c8c;
+  color: var(--hotel-text-secondary);
   font-weight: 600;
   padding-top: 4px;
 }
@@ -1753,13 +1891,13 @@ onMounted(() => {
 .info-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .info-value {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
 }
 
 .display-row {
@@ -1771,119 +1909,166 @@ onMounted(() => {
 .edit-link {
   font-weight: 600;
   font-size: 14px;
+  transition: all 0.3s;
+}
+
+.edit-link:hover {
+  color: var(--hotel-gold-dark);
 }
 
 .info-tip {
   font-size: 13px;
-  color: #bfbfbf;
+  color: var(--hotel-text-muted);
 }
 
 .edit-row {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   align-items: center;
 }
 
 .edit-input {
-  max-width: 300px;
+  max-width: 320px;
 }
 
 .edit-row-vertical {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 400px;
+  gap: 18px;
+  max-width: 420px;
 }
 
 .phone-input-group {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .send-code-btn {
-  width: 120px;
+  width: 130px;
   font-weight: 600;
+  border-radius: var(--hotel-radius);
 }
 
 .edit-actions {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .mt-2 { margin-top: 8px; }
 
-/* 常用入住人 */
+/* ==================== 常用入住人 ==================== */
 .frequent-guests-section {
-  padding: 8px 0;
+  padding: 10px 0;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  background: #f8faff;
-  padding: 20px 24px;
-  border-radius: 20px;
-  border: 1px solid #e6f0ff;
+  margin-bottom: 36px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  padding: 24px 28px;
+  border-radius: var(--hotel-radius-xl);
+  border: 1px solid rgba(201, 169, 98, 0.1);
 }
 
 .section-header p {
   margin: 0;
-  color: #595959;
+  color: var(--hotel-text-secondary);
   font-weight: 500;
 }
 
 .guests-list :deep(.ant-list-item) {
-  padding: 24px;
-  border-radius: 20px;
-  margin-bottom: 16px;
-  transition: all 0.3s;
-  border: 1px solid #f0f0f0;
+  padding: 28px;
+  border-radius: var(--hotel-radius-xl);
+  margin-bottom: 18px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .guests-list :deep(.ant-list-item:hover) {
-  background: #f8faff;
-  border-color: #008cff;
-  transform: translateX(8px);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--hotel-gold);
+  transform: translateX(10px);
+  box-shadow: 0 8px 25px rgba(201, 169, 98, 0.15);
 }
 
 .guest-name {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--hotel-primary);
 }
 
 .self-tag {
-  margin-left: 12px;
+  margin-left: 14px;
   font-weight: 700;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .guest-desc {
   display: flex;
-  gap: 24px;
-  margin-top: 8px;
+  gap: 28px;
+  margin-top: 10px;
 }
 
 .guest-desc span {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 14px;
-  color: #8c8c8c;
+  color: var(--hotel-text-muted);
 }
 
-.text-danger { color: #ff4d4f; }
+.text-danger { color: var(--hotel-error); }
 
-@media (max-width: 992px) {
+/* ==================== 响应式 ==================== */
+@media (max-width: 1200px) {
   .profile-content {
     grid-template-columns: 1fr;
   }
 
   .profile-left {
-    max-width: 500px;
-    margin: 0 auto 32px;
+    max-width: 550px;
+    margin: 0 auto 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-page-container {
+    padding: 24px 16px;
+  }
+  
+  .profile-content {
+    gap: 32px;
+  }
+  
+  .member-card-new {
+    height: auto;
+    min-height: 260px;
+    padding: 28px;
+  }
+  
+  .user-name-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .asset-grid-modern {
+    grid-template-columns: 1fr;
+  }
+  
+  .recharge-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-item {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  
+  .coupons-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

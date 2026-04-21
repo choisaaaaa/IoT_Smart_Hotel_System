@@ -297,7 +297,7 @@
               <ThunderboltOutlined /> 电力/灯光
             </a-select-option>
             <a-select-option value="water">
-              <DropletOutlined /> 水路/卫浴
+              <InboxOutlined /> 水路/卫浴
             </a-select-option>
             <a-select-option value="ac">
               <CloudOutlined /> 空调/暖气
@@ -457,7 +457,6 @@ import {
   SkinOutlined,
   InboxOutlined,
   ThunderboltOutlined,
-  DropletOutlined,
   CloudOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -921,39 +920,66 @@ function scrollToBottom() {
 
 <style scoped>
 .guest-room-page {
-  min-height: calc(100vh - 72px - 200px);
+  min-height: calc(100vh - 76px - 220px);
 }
 
+/* ==================== 页面头部 ==================== */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .room-info {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .room-icon {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 28px;
+  font-size: 30px;
+  box-shadow: 
+    0 6px 20px rgba(26, 43, 74, 0.25),
+    0 0 0 2px rgba(201, 169, 98, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.room-icon::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  animation: iconShine 3s ease-in-out infinite;
+}
+
+@keyframes iconShine {
+  0%, 100% { transform: translateX(-100%) rotate(45deg); }
+  50% { transform: translateX(100%) rotate(45deg); }
 }
 
 .room-details h1 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--hotel-primary);
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 
 .room-details p {
@@ -965,145 +991,208 @@ function scrollToBottom() {
 .connection-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--hotel-bg-secondary);
-  border-radius: 20px;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(26, 43, 74, 0.05);
+  border-radius: 24px;
   font-size: 14px;
   color: var(--hotel-text-muted);
+  border: 1px solid rgba(26, 43, 74, 0.08);
+  transition: all 0.3s;
+}
+
+.connection-badge:hover {
+  background: rgba(26, 43, 74, 0.08);
 }
 
 .connection-badge.online {
   color: var(--hotel-success);
   background: rgba(39, 174, 96, 0.1);
+  border-color: rgba(39, 174, 96, 0.2);
+  box-shadow: 0 0 20px rgba(39, 174, 96, 0.15);
 }
 
-/* AI Card */
+/* ==================== AI Card - 炫酷玻璃态 ==================== */
 .ai-card {
-  background: #fff;
-  border-radius: var(--hotel-radius-lg);
-  box-shadow: var(--hotel-shadow);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--hotel-radius-xl);
+  box-shadow: 
+    0 8px 32px rgba(26, 43, 74, 0.1),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
   overflow: hidden;
   height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .ai-header {
-  padding: 20px 24px;
+  padding: 22px 28px;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: headerShine 4s ease-in-out infinite;
+}
+
+@keyframes headerShine {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
 }
 
 .ai-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 18px;
-  font-weight: 600;
+  gap: 14px;
+  font-size: 19px;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
 }
 
 .ai-icon {
-  font-size: 24px;
+  font-size: 26px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .ai-status {
   background: rgba(255, 255, 255, 0.2);
-  border: none;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: #fff;
-  border-radius: 20px;
-  padding: 4px 12px;
+  border-radius: 24px;
+  padding: 6px 16px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
 }
 
 .ai-status .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--hotel-text-muted);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .ai-status.active .status-dot {
-  background: var(--hotel-success);
-  animation: pulse 2s infinite;
+  background: #4ade80;
+  box-shadow: 0 0 8px #4ade80;
+  animation: statusPulse 2s infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+@keyframes statusPulse {
+  0%, 100% { 
+    transform: scale(1); 
+    box-shadow: 0 0 8px #4ade80;
+  }
+  50% { 
+    transform: scale(1.3); 
+    box-shadow: 0 0 16px #4ade80;
+  }
 }
 
 .ai-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--hotel-bg);
+  background: linear-gradient(180deg, var(--hotel-bg) 0%, rgba(250, 248, 245, 0.8) 100%);
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 28px;
 }
 
+/* ==================== 欢迎区域 ==================== */
 .welcome-section {
   text-align: center;
-  padding: 60px 20px;
+  padding: 70px 24px;
 }
 
 .welcome-avatar {
-  width: 100px;
-  height: 100px;
+  width: 110px;
+  height: 110px;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
   border-radius: 50%;
-  margin: 0 auto 24px;
+  margin: 0 auto 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
+  font-size: 52px;
   position: relative;
+  box-shadow: 
+    0 8px 30px rgba(26, 43, 74, 0.25),
+    0 0 0 4px rgba(201, 169, 98, 0.15);
 }
 
 .welcome-avatar.thinking::after {
   content: '';
   position: absolute;
-  top: -8px;
-  left: -8px;
-  right: -8px;
-  bottom: -8px;
+  top: -12px;
+  left: -12px;
+  right: -12px;
+  bottom: -12px;
   border: 2px solid var(--hotel-gold);
   border-radius: 50%;
-  animation: ring-pulse 1.5s infinite;
+  animation: ringPulse 1.5s infinite;
+  box-shadow: 0 0 20px rgba(201, 169, 98, 0.3);
 }
 
-@keyframes ring-pulse {
+@keyframes ringPulse {
   0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.1); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
 }
 
 .welcome-section h2 {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--hotel-primary);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .welcome-section p {
   color: var(--hotel-text-muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
+/* ==================== 消息样式 ==================== */
 .message-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 24px;
   max-width: 85%;
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-row.user {
@@ -1112,50 +1201,53 @@ function scrollToBottom() {
 }
 
 .message-avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .message-row.ai .message-avatar {
-  background: var(--hotel-primary);
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
 }
 
 .message-row.user .message-avatar {
-  background: var(--hotel-gold);
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%);
   color: #fff;
 }
 
 .message-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .message-bubble {
-  padding: 14px 18px;
-  border-radius: var(--hotel-radius);
+  padding: 16px 20px;
+  border-radius: var(--hotel-radius-lg);
   font-size: 15px;
-  line-height: 1.6;
-  box-shadow: var(--hotel-shadow-sm);
+  line-height: 1.7;
+  box-shadow: 0 2px 12px rgba(26, 43, 74, 0.06);
 }
 
 .message-row.ai .message-bubble {
-  background: #fff;
-  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom-left-radius: 6px;
   color: var(--hotel-text);
+  border: 1px solid rgba(201, 169, 98, 0.1);
 }
 
 .message-row.user .message-bubble {
-  background: var(--hotel-primary);
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 6px;
 }
 
 .message-bubble.typing .cursor {
@@ -1163,11 +1255,11 @@ function scrollToBottom() {
   width: 2px;
   height: 1em;
   background: var(--hotel-gold);
-  margin-left: 2px;
-  animation: blink 0.8s infinite;
+  margin-left: 3px;
+  animation: cursorBlink 0.8s infinite;
 }
 
-@keyframes blink {
+@keyframes cursorBlink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
 }
@@ -1175,104 +1267,123 @@ function scrollToBottom() {
 .thinking-indicator {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: var(--hotel-radius);
+  gap: 12px;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: var(--hotel-radius-lg);
   color: var(--hotel-text-muted);
   font-size: 14px;
+  border: 1px solid rgba(201, 169, 98, 0.1);
 }
 
 .audio-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
   color: var(--hotel-primary);
   background: rgba(26, 43, 74, 0.05);
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 8px 16px;
+  border-radius: 24px;
   width: fit-content;
+  border: 1px solid rgba(26, 43, 74, 0.08);
 }
 
+/* ==================== 建议区域 ==================== */
 .suggestions-section {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .suggestions-label {
   font-size: 13px;
   color: var(--hotel-text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .suggestions-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .suggestion-chip {
-  padding: 8px 16px;
-  background: #fff;
-  border: 1px solid var(--hotel-border);
-  border-radius: 20px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(201, 169, 98, 0.2);
+  border-radius: 24px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.3s;
+  font-weight: 500;
 }
 
 .suggestion-chip:hover {
-  color: var(--hotel-primary);
-  border-color: var(--hotel-primary);
-  background: rgba(26, 43, 74, 0.02);
+  color: var(--hotel-gold);
+  border-color: var(--hotel-gold);
+  background: rgba(201, 169, 98, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(201, 169, 98, 0.15);
 }
 
+/* ==================== 输入区域 ==================== */
 .chat-input-area {
-  padding: 20px 24px;
-  background: #fff;
-  border-top: 1px solid var(--hotel-border);
+  padding: 22px 28px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(201, 169, 98, 0.1);
 }
 
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 18px;
   justify-content: center;
 }
 
 .action-chip {
-  padding: 8px 16px;
-  background: var(--hotel-bg-secondary);
-  border-radius: 20px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.05) 0%, rgba(201, 169, 98, 0.08) 100%);
+  border-radius: 24px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-weight: 500;
+  border: 1px solid rgba(201, 169, 98, 0.15);
 }
 
 .action-chip:hover {
-  background: var(--hotel-primary);
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(26, 43, 74, 0.2);
 }
 
 .input-wrapper {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
 }
 
 .chat-input {
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
+  border: 1px solid rgba(201, 169, 98, 0.2);
 }
 
 .chat-input :deep(.ant-input) {
-  border-radius: var(--hotel-radius);
+  border-radius: var(--hotel-radius-lg);
+}
+
+.chat-input:focus-within {
+  border-color: var(--hotel-gold);
+  box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.1);
 }
 
 .input-icon {
@@ -1280,53 +1391,68 @@ function scrollToBottom() {
 }
 
 .send-btn {
-  border-radius: var(--hotel-radius);
-  width: 48px;
-  height: 48px;
+  border-radius: var(--hotel-radius-lg);
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.4);
+  transition: all 0.3s;
 }
 
-/* Service Card */
+.send-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(201, 169, 98, 0.5);
+}
+
+/* ==================== 服务卡片 ==================== */
 .service-card {
-  background: #fff;
-  border-radius: var(--hotel-radius-lg);
-  box-shadow: var(--hotel-shadow);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: var(--hotel-radius-xl);
+  box-shadow: 
+    0 8px 32px rgba(26, 43, 74, 0.1),
+    0 0 0 1px rgba(201, 169, 98, 0.1);
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .service-header {
-  padding: 20px 24px;
-  background: var(--hotel-bg-secondary);
-  border-bottom: 1px solid var(--hotel-border);
+  padding: 22px 28px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  border-bottom: 1px solid rgba(201, 169, 98, 0.1);
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 18px;
-  font-weight: 600;
+  gap: 12px;
+  font-size: 19px;
+  font-weight: 700;
   color: var(--hotel-primary);
 }
 
 .service-header :deep(.anticon) {
-  font-size: 22px;
+  font-size: 24px;
   color: var(--hotel-gold);
+  filter: drop-shadow(0 2px 4px rgba(201, 169, 98, 0.3));
 }
 
 .service-list {
-  padding: 16px;
+  padding: 18px;
 }
 
 .service-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--hotel-radius);
+  gap: 18px;
+  padding: 18px;
+  border-radius: var(--hotel-radius-lg);
   cursor: pointer;
-  transition: all 0.3s;
-  margin-bottom: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 10px;
+  border: 1px solid transparent;
 }
 
 .service-item:last-child {
@@ -1334,48 +1460,55 @@ function scrollToBottom() {
 }
 
 .service-item:hover {
-  background: var(--hotel-bg-secondary);
-  transform: translateX(4px);
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.03) 0%, rgba(201, 169, 98, 0.05) 100%);
+  transform: translateX(6px);
+  border-color: rgba(201, 169, 98, 0.2);
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.1);
 }
 
 .service-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--hotel-radius-sm);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--hotel-radius);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 24px;
   flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.service-item:hover .service-icon {
+  transform: scale(1.1);
 }
 
 .service-icon.delivery {
-  background: rgba(52, 152, 219, 0.1);
+  background: rgba(52, 152, 219, 0.12);
   color: var(--hotel-info);
 }
 
 .service-icon.call {
-  background: rgba(39, 174, 96, 0.1);
+  background: rgba(39, 174, 96, 0.12);
   color: var(--hotel-success);
 }
 
 .service-icon.message {
-  background: rgba(243, 156, 18, 0.1);
+  background: rgba(243, 156, 18, 0.12);
   color: var(--hotel-warning);
 }
 
 .service-icon.repair {
-  background: rgba(231, 76, 60, 0.1);
+  background: rgba(231, 76, 60, 0.12);
   color: var(--hotel-error);
 }
 
 .service-icon.cleaning {
-  background: rgba(201, 169, 98, 0.1);
+  background: rgba(201, 169, 98, 0.15);
   color: var(--hotel-gold);
 }
 
 .service-icon.records {
-  background: rgba(149, 165, 166, 0.1);
+  background: rgba(149, 165, 166, 0.12);
   color: var(--hotel-text-secondary);
 }
 
@@ -1384,10 +1517,10 @@ function scrollToBottom() {
 }
 
 .service-name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 15px;
   color: var(--hotel-text);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .service-desc {
@@ -1398,44 +1531,54 @@ function scrollToBottom() {
 .service-arrow {
   font-size: 14px;
   color: var(--hotel-text-muted);
+  transition: transform 0.3s;
 }
 
-/* Modals */
+.service-item:hover .service-arrow {
+  transform: translateX(4px);
+  color: var(--hotel-gold);
+}
+
+/* ==================== 弹窗样式 ==================== */
 .service-modal :deep(.ant-modal-content) {
-  border-radius: var(--hotel-radius-lg);
+  border-radius: var(--hotel-radius-xl);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
 }
 
 .service-modal :deep(.ant-modal-header) {
-  border-bottom: 1px solid var(--hotel-border);
-  padding: 20px 24px;
+  border-bottom: 1px solid rgba(201, 169, 98, 0.15);
+  padding: 22px 28px;
 }
 
 .service-modal :deep(.ant-modal-title) {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--hotel-primary);
 }
 
 .service-form :deep(.ant-form-item-label) {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--hotel-text);
 }
 
 .calling-modal :deep(.ant-modal-content) {
-  border-radius: var(--hotel-radius-lg);
+  border-radius: var(--hotel-radius-xl);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
 }
 
 .calling-content {
   text-align: center;
-  padding: 40px 20px;
+  padding: 48px 24px;
 }
 
 .calling-animation {
   position: relative;
-  width: 100px;
-  height: 100px;
-  margin: 0 auto 24px;
+  width: 110px;
+  height: 110px;
+  margin: 0 auto 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1445,9 +1588,9 @@ function scrollToBottom() {
   position: absolute;
   width: 100%;
   height: 100%;
-  border: 2px solid var(--hotel-primary);
+  border: 2px solid var(--hotel-gold);
   border-radius: 50%;
-  animation: calling-pulse 2s infinite;
+  animation: callingPulse 2s infinite;
   opacity: 0;
 }
 
@@ -1459,54 +1602,59 @@ function scrollToBottom() {
   animation-delay: 1.2s;
 }
 
-@keyframes calling-pulse {
+@keyframes callingPulse {
   0% {
     transform: scale(0.5);
     opacity: 0.8;
+    box-shadow: 0 0 20px rgba(201, 169, 98, 0.3);
   }
   100% {
     transform: scale(1.5);
     opacity: 0;
+    box-shadow: 0 0 40px rgba(201, 169, 98, 0);
   }
 }
 
 .phone-icon {
-  font-size: 40px;
-  color: var(--hotel-primary);
+  font-size: 44px;
+  color: var(--hotel-gold);
   z-index: 1;
+  filter: drop-shadow(0 4px 8px rgba(201, 169, 98, 0.3));
 }
 
 .calling-content h3 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: var(--hotel-primary);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .calling-content p {
   color: var(--hotel-text-muted);
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .cancel-btn {
-  min-width: 140px;
-  height: 44px;
+  min-width: 150px;
+  height: 48px;
+  border-radius: var(--hotel-radius-lg);
+  font-weight: 600;
 }
 
 .records-modal :deep(.ant-modal-content) {
-  border-radius: var(--hotel-radius-lg);
+  border-radius: var(--hotel-radius-xl);
 }
 
 .records-modal :deep(.ant-modal-header) {
-  border-bottom: 1px solid var(--hotel-border);
+  border-bottom: 1px solid rgba(201, 169, 98, 0.15);
 }
 
-/* Responsive */
+/* ==================== 响应式 ==================== */
 @media (max-width: 992px) {
   .ai-card {
     height: auto;
-    min-height: 500px;
-    margin-bottom: 24px;
+    min-height: 550px;
+    margin-bottom: 28px;
   }
 }
 
@@ -1514,11 +1662,19 @@ function scrollToBottom() {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 18px;
   }
   
   .connection-badge {
     align-self: flex-end;
+  }
+  
+  .chat-messages {
+    padding: 20px;
+  }
+  
+  .chat-input-area {
+    padding: 18px;
   }
 }
 </style>
