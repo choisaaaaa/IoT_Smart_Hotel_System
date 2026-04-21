@@ -98,7 +98,7 @@ class MQTTClient:
         self.logger.info(f"接收 [{topic}]: {payload}")
         self.log_buffer.log("RX", f"[{topic}] {payload}")
 
-        if topic in self.subscriptions:
+        if topic in self.subscriptions and self.subscriptions[topic]:
             try:
                 self.subscriptions[topic](topic, payload)
             except Exception as e:
@@ -196,10 +196,11 @@ class MQTTClient:
         if not self.device_key:
             return None
 
-        payload_dict['timestamp'] = datetime.now().isoformat()
+        if 'timestamp' not in payload_dict:
+            payload_dict['timestamp'] = datetime.now().isoformat()
 
-        sorted_items = sorted(payload_dict.items())
-        sign_str = '&'.join([f"{k}={v}" for k, v in sorted_items if k != 'signature'])
+        sign_payload = {k: v for k, v in payload_dict.items() if k != 'signature'}
+        sign_str = json.dumps(sign_payload, ensure_ascii=False, separators=(',', ':'))
 
         signature = hmac_mod.new(
             self.device_key.encode('utf-8'),
@@ -217,6 +218,7 @@ class MQTTClient:
         try:
             if isinstance(payload, dict):
                 if self.audit_status == "approved" and self.device_key:
+                    payload['timestamp'] = datetime.now().isoformat()
                     payload['signature'] = self._generate_signature(payload.copy())
 
                 payload = json.dumps(payload, ensure_ascii=False)
@@ -261,7 +263,7 @@ class MQTTClient:
         return self.publish(topic, payload)
 
     def publish_sensor_data(self, sensor_type, value, unit=""):
-        topic = f"{TOPIC_DEVICE_DATA_PREFIX}/{sensor_type}/{self.device_id}"
+        topic = f"{TOPIC_DEVICE_DATA_PREFIX}/{sensor_type}"
         payload = {
             "device_id": self.device_id,
             "sensor_type": sensor_type,
@@ -286,7 +288,7 @@ class MQTTClient:
         payload = {
             "device_id": self.device_id,
             "event_type": event_type,
-            "event_data": event_data or {},
+            "data": event_data or {},
             "level": level,
             "timestamp": datetime.now().isoformat()
         }
