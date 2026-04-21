@@ -259,7 +259,13 @@
             <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
               <a-space style="margin-bottom: 8px;">
                 <a-button size="small" type="primary" @click="fetchTodayBookings">刷新</a-button>
-                <a-button size="small" type="primary" :disabled="selectedBookingKeys.length === 0" @click="checkInSelectedBooking">
+                <a-button 
+                  size="small" 
+                  type="primary" 
+                  :disabled="selectedBookingKeys.length === 0"
+                  :class="{ 'disabled-primary-btn': selectedBookingKeys.length === 0 }"
+                  @click="checkInSelectedBooking"
+                >
                   办理选中预订
                 </a-button>
               </a-space>
@@ -1424,5 +1430,20 @@ onMounted(async () => {
   font-size: 12px;
   color: #8c8c8c;
   cursor: help;
+}
+
+/* 禁用状态下保持白色文字 */
+.disabled-primary-btn {
+  color: #fff !important;
+  background-color: #1890ff !important;
+  border-color: #1890ff !important;
+  opacity: 0.6;
+}
+
+.disabled-primary-btn:hover,
+.disabled-primary-btn:focus {
+  color: #fff !important;
+  background-color: #1890ff !important;
+  border-color: #1890ff !important;
 }
 </style>

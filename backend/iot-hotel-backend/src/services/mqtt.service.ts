@@ -241,7 +241,11 @@ class MQTTService {
       'hotel/room/control/result',
       'hotel/call/signaling/+',
       'hotel/call/audio/+',
-      'hotel/ai/request/room/+'
+      'hotel/ai/request/room/+',
+      // 客房服务相关主题
+      'hotel/service/delivery/+/request',
+      'hotel/service/maintenance/+/request',
+      'hotel/service/room/+/status'
     ];
 
     topics.forEach((topic) => {
@@ -261,6 +265,11 @@ class MQTTService {
     }
     if (topic.startsWith('hotel/ai/request/room/')) {
       await this.handleAIRequest(topic, data);
+      return;
+    }
+    // 处理客房服务相关消息
+    if (topic.startsWith('hotel/service/')) {
+      await this.handleServiceRequest(topic, data);
       return;
     }
 
@@ -551,6 +560,252 @@ class MQTTService {
       }
     } catch (error) {
       logger.error('处理安防事件失败:', error.message);
+    }
+  }
+
+  /**
+   * 处理客房服务相关请求
+   * 主题格式:
+   * - hotel/service/delivery/{room_id}/request - 送物服务请求
+   * - hotel/service/maintenance/{room_id}/request - 维修服务请求
+   * - hotel/service/room/{room_id}/status - 房间服务状态查询
+   */
+  async handleServiceRequest(topic: string, data: any) {
+    try {
+      const topicParts = topic.split('/');
+      if (topicParts.length < 5) {
+        logger.warn(`客房服务主题格式错误: ${topic}`);
+        return;
+      }
+
+      const serviceType = topicParts[2]; // delivery, maintenance, room
+      const roomId = topicParts[3];
+      const action = topicParts[4]; // request, status
+
+      logger.info(`[客房服务] 收到请求 - 类型: ${serviceType}, 房间: ${roomId}, 动作: ${action}`);
+
+      // 获取房间信息
+      const [roomRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id, room_number, hotel_id FROM rooms WHERE id = ? OR room_number = ?',
+        [roomId, roomId]
+      );
+
+      if (roomRows.length === 0) {
+        logger.warn(`[客房服务] 房间不存在: ${roomId}`);
+        // 发送错误响应
+        await this.publish(`hotel/service/response/${roomId}`, {
+          success: false,
+          error: '房间不存在',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      const room = roomRows[0] as any;
+      const actualRoomId = room.id;
+      const hotelId = room.hotel_id;
+
+      // 获取当前入住信息
+      const [bookingRows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, guest_id FROM bookings 
+         WHERE room_id = ? AND status = 'checked_in'
+         LIMIT 1`,
+        [actualRoomId]
+      );
+
+      const bookingId = bookingRows.length > 0 ? (bookingRows[0] as any).id : null;
+      const guestId = bookingRows.length > 0 ? (bookingRows[0] as any).guest_id : null;
+
+      if (action === 'request') {
+        if (serviceType === 'delivery') {
+          // 处理送物请求
+          await this.handleDeliveryRequest(actualRoomId, bookingId, guestId, room.room_number, hotelId, data);
+        } else if (serviceType === 'maintenance') {
+          // 处理维修请求
+          await this.handleMaintenanceRequest(actualRoomId, bookingId, guestId, room.room_number, hotelId, data);
+        }
+      } else if (action === 'status') {
+        // 查询房间服务状态
+        await this.handleRoomServiceStatus(actualRoomId, room.room_number, hotelId);
+      }
+    } catch (error) {
+      logger.error('[客房服务] 处理请求失败:', error.message);
+    }
+  }
+
+  /**
+   * 处理送物服务请求
+   */
+  private async handleDeliveryRequest(
+    roomId: number,
+    bookingId: number | null,
+    guestId: number | null,
+    roomNumber: string,
+    hotelId: number,
+    data: any
+  ) {
+    try {
+      const itemName = data.item_name || '未知物品';
+      const quantity = data.quantity || 1;
+      const note = data.note || '';
+
+      const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
+
+      const [result] = await pool.query<ResultSetHeader>(
+        'INSERT INTO delivery_orders (order_no, room_id, booking_id, guest_id, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [orderNo, roomId, bookingId, guestId, itemName, quantity, note, 'pending']
+      );
+
+      // 发送响应给房间
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: true,
+        type: 'delivery',
+        order_id: result.insertId,
+        order_no: orderNo,
+        message: `送物订单已创建，订单号: ${orderNo}`,
+        timestamp: new Date().toISOString()
+      });
+
+      // 通知前台
+      await this.publish(`hotel/${hotelId}/reception/announce`, {
+        type: 'delivery_order_created',
+        order_id: result.insertId,
+        order_no: orderNo,
+        room_id: roomId,
+        room_number: roomNumber,
+        hotel_id: hotelId,
+        item_name: itemName,
+        quantity: quantity,
+        note: note,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        message: `房间 ${roomNumber} 请求送物: ${itemName} x${quantity}`,
+        announce: true
+      });
+
+      logger.info(`[送物服务] 订单创建成功 - 订单号: ${orderNo}, 房间: ${roomNumber}`);
+    } catch (error) {
+      logger.error('[送物服务] 创建订单失败:', error.message);
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: false,
+        type: 'delivery',
+        error: '创建订单失败',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * 处理维修服务请求
+   */
+  private async handleMaintenanceRequest(
+    roomId: number,
+    bookingId: number | null,
+    guestId: number | null,
+    roomNumber: string,
+    hotelId: number,
+    data: any
+  ) {
+    try {
+      const faultType = data.fault_type || 'other';
+      const faultDescription = data.fault_description || '无描述';
+      const priority = data.priority || 'normal';
+
+      const ticketNo = `MT${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${Date.now().toString(36).toUpperCase()}`;
+
+      const [result] = await pool.query<ResultSetHeader>(
+        'INSERT INTO maintenance_tickets (ticket_no, room_id, booking_id, guest_id, fault_type, fault_description, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [ticketNo, roomId, bookingId, guestId, faultType, faultDescription, priority, 'pending']
+      );
+
+      // 更新房间状态为维修中
+      await pool.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['maintenance', roomId]);
+
+      // 发送响应给房间
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: true,
+        type: 'maintenance',
+        ticket_id: result.insertId,
+        ticket_no: ticketNo,
+        message: `维修工单已创建，工单号: ${ticketNo}`,
+        timestamp: new Date().toISOString()
+      });
+
+      // 通知前台
+      await this.publish(`hotel/${hotelId}/reception/announce`, {
+        type: 'maintenance_ticket_created',
+        ticket_id: result.insertId,
+        ticket_no: ticketNo,
+        room_id: roomId,
+        room_number: roomNumber,
+        hotel_id: hotelId,
+        fault_type: faultType,
+        fault_description: faultDescription,
+        priority: priority,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        message: `房间 ${roomNumber} 报修: ${faultType} - ${faultDescription?.substring(0, 30)}`,
+        announce: true
+      });
+
+      logger.info(`[维修服务] 工单创建成功 - 工单号: ${ticketNo}, 房间: ${roomNumber}`);
+    } catch (error) {
+      logger.error('[维修服务] 创建工单失败:', error.message);
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: false,
+        type: 'maintenance',
+        error: '创建工单失败',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * 处理房间服务状态查询
+   */
+  private async handleRoomServiceStatus(
+    roomId: number,
+    roomNumber: string,
+    hotelId: number
+  ) {
+    try {
+      // 查询进行中的送物订单
+      const [deliveryRows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, order_no, item_name, quantity, status, created_at 
+         FROM delivery_orders 
+         WHERE room_id = ? AND status IN ('pending', 'delivering')
+         ORDER BY created_at DESC`,
+        [roomId]
+      );
+
+      // 查询进行中的维修工单
+      const [maintenanceRows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, ticket_no, fault_type, fault_description, status, created_at 
+         FROM maintenance_tickets 
+         WHERE room_id = ? AND status IN ('pending', 'assigned', 'processing')
+         ORDER BY created_at DESC`,
+        [roomId]
+      );
+
+      // 发送状态响应
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: true,
+        type: 'status',
+        room_number: roomNumber,
+        pending_deliveries: deliveryRows,
+        pending_maintenance: maintenanceRows,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`[服务状态] 查询成功 - 房间: ${roomNumber}, 送物: ${deliveryRows.length}, 维修: ${maintenanceRows.length}`);
+    } catch (error) {
+      logger.error('[服务状态] 查询失败:', error.message);
+      await this.publish(`hotel/service/response/${roomNumber}`, {
+        success: false,
+        type: 'status',
+        error: '查询失败',
+        timestamp: new Date().toISOString()
+      });
     }
   }
 

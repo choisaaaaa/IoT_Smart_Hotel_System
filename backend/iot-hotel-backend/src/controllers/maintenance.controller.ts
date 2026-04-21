@@ -4,6 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { isCustomer, isGuest } from '../utils/role';
+import mqttService from '../services/mqtt.service';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -164,7 +165,41 @@ export const create = async (req: AuthRequest, res: Response) => {
     if (room_id) {
       await pool.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['maintenance', room_id]);
     }
-    
+
+    // 获取房间号用于 MQTT 通知
+    const [roomRows] = await pool.query<RowDataPacket[]>(
+      'SELECT room_number, hotel_id FROM rooms WHERE id = ?',
+      [room_id]
+    );
+    const roomNumber = (roomRows[0] as any)?.room_number || room_id;
+    const hotelId = (roomRows[0] as any)?.hotel_id;
+
+    // 构建 MQTT 通知消息
+    const mqttMessage = {
+      type: 'maintenance_ticket_created',
+      ticket_id: result.insertId,
+      ticket_no: ticketNo,
+      room_id: room_id,
+      room_number: roomNumber,
+      hotel_id: hotelId,
+      fault_type: fault_type,
+      fault_description: fault_description,
+      priority: priority,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      message: `房间 ${roomNumber} 报修: ${fault_type} - ${fault_description?.substring(0, 30) || '无描述'}`,
+      announce: true,
+    };
+
+    // 发送 MQTT 通知到前台
+    const mqttTopic = `hotel/${hotelId}/reception/announce`;
+    const mqttResult = await mqttService.publish(mqttTopic, mqttMessage);
+
+    // 记录详细日志
+    logger.info(`[维修工单] 创建成功 - 工单号: ${ticketNo}, 房间: ${roomNumber}, 类型: ${fault_type}`);
+    logger.info(`[MQTT通知] 主题: ${mqttTopic}, 发送结果: ${mqttResult ? '成功' : '失败'}`);
+    logger.info(`[MQTT消息内容] ${JSON.stringify(mqttMessage)}`);
+
     res.json(successResponse({ id: result.insertId, ticket_no: ticketNo }, '创建报修工单成功'));
   } catch (error) {
     logger.error('创建报修工单失败:', error.message);
@@ -226,6 +261,41 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (result.affectedRows === 0) {
       res.status(404).json(errorResponse('更新工单状态失败'));
       return;
+    }
+
+    // 获取工单详情用于 MQTT 通知
+    const [ticketRows] = await pool.query<RowDataPacket[]>(
+      `SELECT m.*, r.room_number, r.hotel_id 
+       FROM maintenance_tickets m 
+       LEFT JOIN rooms r ON m.room_id = r.id 
+       WHERE m.id = ?`,
+      [id]
+    );
+
+    if (ticketRows.length > 0) {
+      const ticket = ticketRows[0] as any;
+      const statusText = { pending: '待处理', assigned: '已分配', processing: '处理中', completed: '已完成' }[status] || status;
+
+      // 构建 MQTT 通知消息
+      const mqttMessage = {
+        type: 'maintenance_ticket_updated',
+        ticket_id: id,
+        ticket_no: ticket.ticket_no,
+        room_id: ticket.room_id,
+        room_number: ticket.room_number,
+        hotel_id: ticket.hotel_id,
+        status: status,
+        status_text: statusText,
+        updated_at: new Date().toISOString(),
+        message: `工单 ${ticket.ticket_no} 状态更新为: ${statusText}`,
+        announce: status === 'completed',
+      };
+
+      // 发送 MQTT 通知
+      const mqttTopic = `hotel/${ticket.hotel_id}/reception/announce`;
+      await mqttService.publish(mqttTopic, mqttMessage);
+
+      logger.info(`[维修工单] 状态更新 - 工单号: ${ticket.ticket_no}, 新状态: ${statusText}`);
     }
 
     res.json(successResponse(null, '更新工单状态成功'));

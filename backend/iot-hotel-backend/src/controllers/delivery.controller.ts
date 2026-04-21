@@ -274,6 +274,42 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // 获取订单详情用于 MQTT 通知
+    const [orderRows] = await pool.query<RowDataPacket[]>(
+      `SELECT d.*, r.room_number, r.hotel_id 
+       FROM delivery_orders d 
+       LEFT JOIN rooms r ON d.room_id = r.id 
+       WHERE d.id = ?`,
+      [id]
+    );
+
+    if (orderRows.length > 0) {
+      const order = orderRows[0] as any;
+      const statusText = { pending: '待处理', delivering: '配送中', completed: '已完成', cancelled: '已取消' }[status] || status;
+
+      // 构建 MQTT 通知消息
+      const mqttMessage = {
+        type: 'delivery_order_updated',
+        order_id: id,
+        order_no: order.order_no,
+        room_id: order.room_id,
+        room_number: order.room_number,
+        hotel_id: order.hotel_id,
+        item_name: order.item_name,
+        status: status,
+        status_text: statusText,
+        updated_at: new Date().toISOString(),
+        message: `送物订单 ${order.order_no} 状态更新为: ${statusText}`,
+        announce: status === 'completed' || status === 'delivering',
+      };
+
+      // 发送 MQTT 通知
+      const mqttTopic = `hotel/${order.hotel_id}/reception/announce`;
+      await mqttService.publish(mqttTopic, mqttMessage);
+
+      logger.info(`[送物订单] 状态更新 - 订单号: ${order.order_no}, 新状态: ${statusText}`);
+    }
+
     res.json(successResponse(null, '更新送物订单状态成功'));
   } catch (error) {
     logger.error('更新送物订单状态失败:', error.message);
