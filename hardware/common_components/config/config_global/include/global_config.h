@@ -77,10 +77,19 @@ extern "C" {
 #define GLOBAL_ADC_NTC_PIN         6
 
 // 继电器与红外
+// 允许各终端工程通过编译宏覆盖默认引脚（如楼控单路继电器场景）
+#ifndef GLOBAL_RELAY_CH1_PIN
 #define GLOBAL_RELAY_CH1_PIN       17 // 灯光
+#endif
+#ifndef GLOBAL_RELAY_CH2_PIN
 #define GLOBAL_RELAY_CH2_PIN       18 // 插座
+#endif
+#ifndef GLOBAL_RELAY_CH3_PIN
 #define GLOBAL_RELAY_CH3_PIN       31 // 窗帘电机
+#endif
+#ifndef GLOBAL_RELAY_CH4_PIN
 #define GLOBAL_RELAY_CH4_PIN       32 // 电磁门锁
+#endif
 #define GLOBAL_IR_TX_PIN           47
 #define GLOBAL_IR_RX_PIN           48
 

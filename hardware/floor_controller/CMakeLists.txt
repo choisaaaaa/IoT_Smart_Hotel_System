@@ -11,5 +11,13 @@ set(EXTRA_COMPONENT_DIRS
     "../common_components/config"
 )
 
+# 楼控端当前硬件为单路继电器：CH1=GPIO7，其他通道禁用
+add_compile_definitions(
+    GLOBAL_RELAY_CH1_PIN=7
+    GLOBAL_RELAY_CH2_PIN=-1
+    GLOBAL_RELAY_CH3_PIN=-1
+    GLOBAL_RELAY_CH4_PIN=-1
+)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(floor_controller)
