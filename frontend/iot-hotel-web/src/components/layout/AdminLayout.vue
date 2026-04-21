@@ -8,7 +8,7 @@
       theme="dark"
       class="admin-sider"
     >
-      <div class="sider-header" @click="$router.push('/admin/dashboard')">
+      <div class="sider-header" @click="$router.push('/hotel-admin/dashboard')">
         <div class="sider-logo">
           <SettingOutlined />
         </div>
@@ -17,82 +17,81 @@
           <span class="brand-sub">慧宿智联</span>
         </div>
       </div>
-      
-      <a-menu
-        v-model:selectedKeys="selectedKeys"
-        mode="inline"
-        theme="dark"
-        @click="handleMenuClick"
-        class="admin-menu"
-      >
-        <a-menu-item key="/admin/dashboard">
-          <template #icon><DashboardOutlined /></template>
-          <span>管理总览</span>
-        </a-menu-item>
-        
-        <a-sub-menu key="hotel-management">
-          <template #icon><BankOutlined /></template>
-          <template #title>酒店管理</template>
-          <a-menu-item key="/admin/hotels">酒店列表</a-menu-item>
-          <a-menu-item key="/admin/hotels/add">添加酒店</a-menu-item>
-          <a-menu-item key="/admin/hotels/settings">酒店设置</a-menu-item>
-        </a-sub-menu>
-        
-        <a-sub-menu key="room-management">
-          <template #icon><HomeOutlined /></template>
-          <template #title>客房管理</template>
-          <a-menu-item key="/admin/rooms">客房列表</a-menu-item>
-          <a-menu-item key="/admin/room-types">房型管理</a-menu-item>
-          <a-menu-item key="/admin/room-prices">价格管理</a-menu-item>
-        </a-sub-menu>
-        
-        <a-sub-menu key="user-management">
-          <template #icon><TeamOutlined /></template>
-          <template #title>用户管理</template>
-          <a-menu-item key="/admin/users">用户列表</a-menu-item>
-          <a-menu-item key="/admin/staff">员工管理</a-menu-item>
-          <a-menu-item key="/admin/roles">角色权限</a-menu-item>
-        </a-sub-menu>
-        
-        <a-sub-menu key="order-management">
-          <template #icon><FileTextOutlined /></template>
-          <template #title>订单管理</template>
-          <a-menu-item key="/admin/bookings">预订订单</a-menu-item>
-          <a-menu-item key="/admin/delivery">配送订单</a-menu-item>
-          <a-menu-item key="/admin/maintenance">维修工单</a-menu-item>
-        </a-sub-menu>
-        
-        <a-sub-menu key="device-management">
-          <template #icon><ControlOutlined /></template>
-          <template #title>设备管理</template>
-          <a-menu-item key="/admin/devices">设备列表</a-menu-item>
-          <a-menu-item key="/admin/device-types">设备类型</a-menu-item>
-          <a-menu-item key="/admin/device-logs">设备日志</a-menu-item>
-        </a-sub-menu>
-        
-        <a-sub-menu key="system-settings">
-          <template #icon><ToolOutlined /></template>
-          <template #title>系统设置</template>
-          <a-menu-item key="/admin/settings/general">通用设置</a-menu-item>
-          <a-menu-item key="/admin/settings/payment">支付设置</a-menu-item>
-          <a-menu-item key="/admin/settings/notification">通知设置</a-menu-item>
-        </a-sub-menu>
-        
-        <a-menu-item key="/admin/reports">
-          <template #icon><BarChartOutlined /></template>
-          <span>数据报表</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/admin/logs">
-          <template #icon><HistoryOutlined /></template>
-          <span>操作日志</span>
-        </a-menu-item>
-      </a-menu>
-      
-      <div v-show="!collapsed" class="sider-footer">
-        <div class="system-info">
-          <span class="version">系统版本 v2.2.0</span>
-          <span class="status online">运行正常</span>
+
+      <div class="sider-menu-wrapper">
+        <a-menu
+          v-model:selectedKeys="selectedKeys"
+          mode="inline"
+          theme="dark"
+          @click="handleMenuClick"
+          class="admin-menu"
+        >
+          <a-menu-item key="/hotel-admin/dashboard">
+            <template #icon><DashboardOutlined /></template>
+            <span>管理总览</span>
+          </a-menu-item>
+
+          <a-sub-menu key="hotel-management">
+            <template #icon><BankOutlined /></template>
+            <template #title>酒店管理</template>
+            <a-menu-item key="/hotel-admin/hotel/info">酒店信息</a-menu-item>
+            <a-menu-item key="/hotel-admin/hotel/price-calendar">价格日历</a-menu-item>
+            <a-menu-item key="/hotel-admin/hotel/coupons">优惠券管理</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="room-management">
+            <template #icon><HomeOutlined /></template>
+            <template #title>客房管理</template>
+            <a-menu-item key="/hotel-admin/rooms/edit">客房列表</a-menu-item>
+            <a-menu-item key="/hotel-admin/rooms/types">房型管理</a-menu-item>
+            <a-menu-item key="/hotel-admin/rooms/floors">楼层管理</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="user-management">
+            <template #icon><TeamOutlined /></template>
+            <template #title>用户管理</template>
+            <a-menu-item key="/hotel-admin/users">用户管理</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="device-management">
+            <template #icon><ControlOutlined /></template>
+            <template #title>设备管理</template>
+            <a-menu-item key="/hotel-admin/devices">设备监控</a-menu-item>
+            <a-menu-item key="/hotel-admin/device-types">设备类型</a-menu-item>
+            <a-menu-item key="/hotel-admin/device-logs">设备日志</a-menu-item>
+            <a-menu-item key="/hotel-admin/pending-devices">待审核设备</a-menu-item>
+            <a-menu-item key="/hotel-admin/environment">环境监测</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="service-management">
+            <template #icon><FileTextOutlined /></template>
+            <template #title>服务管理</template>
+            <a-menu-item key="/hotel-admin/reviews">评价管理</a-menu-item>
+            <a-menu-item key="/hotel-admin/knowledge-base">AI知识库</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="system-settings">
+            <template #icon><ToolOutlined /></template>
+            <template #title>系统设置</template>
+            <a-menu-item key="/hotel-admin/mqtt">MQTT通信管理</a-menu-item>
+          </a-sub-menu>
+
+          <a-menu-item key="/hotel-admin/reports">
+            <template #icon><BarChartOutlined /></template>
+            <span>数据报表</span>
+          </a-menu-item>
+        </a-menu>
+      </div>
+
+      <div class="sider-footer-wrapper">
+        <div class="sider-footer" :class="{ collapsed: collapsed }">
+          <div v-if="!collapsed" class="system-info">
+            <span class="version">系统版本 v2.2.0</span>
+            <span class="status online">运行正常</span>
+          </div>
+          <div v-else class="system-info-collapsed">
+            <span class="status-dot online"></span>
+          </div>
         </div>
       </div>
     </a-layout-sider>
@@ -138,7 +137,7 @@
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
-                <a-menu-item key="settings" @click="$router.push('/admin/settings/general')">
+                <a-menu-item key="settings" @click="$router.push('/hotel-admin/hotel/info')">
                   <SettingOutlined /> 系统设置
                 </a-menu-item>
                 <a-menu-divider />
@@ -254,6 +253,12 @@ onMounted(() => {
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
 }
 
+.admin-sider :deep(.ant-layout-sider-children) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .sider-header {
   height: 72px;
   display: flex;
@@ -326,19 +331,59 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.2) !important;
 }
 
+.sider-menu-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sider-footer-wrapper {
+  flex-shrink: 0;
+  background: #001529;
+  position: relative;
+  z-index: 10;
+}
+
 .sider-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
   padding: 16px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sider-footer.collapsed {
+  padding: 16px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .system-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.system-info-collapsed {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .version {
@@ -363,6 +408,17 @@ onMounted(() => {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: block;
+}
+
+.status-dot.online {
+  background: var(--hotel-success);
 }
 
 .admin-header {
