@@ -31,10 +31,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
     """客房终端仿真器"""
 
     def __init__(self, root):
+        # 初始默认值
         self.room_id = "301"
         self.device_id = f"room_{self.room_id}"
         
-        # 内部状态
+        # 业务状态
         self.light_on = False
         self.air_on = False
         self.temp_val = 26
@@ -48,12 +49,35 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
 
         super().__init__(
             root=root,
-            title=f"智慧酒店 - 客房终端仿真器 ({self.device_id})",
+            title=f"智慧酒店 - 客房终端仿真器",
             device_id=self.device_id,
             device_type="room",
             width=950,
             height=850
         )
+        
+        # 加载配置后的同步
+        self._sync_room_info()
+
+    def _sync_room_info(self):
+        """同步来自基类的房间配置信息"""
+        old_room_id = self.room_id
+        if self.room_id_var.get():
+            self.room_id = self.room_id_var.get()
+            self.device_id = f"room_{self.room_id}"
+            self._log(f"已同步房间信息: ID={self.room_id}, 编号={self.room_number_var.get()}")
+            
+            # 如果房间号发生变化且已连接，需要重新订阅 AI 响应主题
+            if old_room_id != self.room_id and self.mqtt_client and self.connected:
+                new_topic = TOPIC_AI_RESPONSE.format(self.room_id)
+                self.mqtt_client.subscribe(new_topic)
+                self._log(f"已重新订阅 AI 主题: {new_topic}")
+
+    def _on_config_updated(self):
+        """当云端分配房间后触发"""
+        self._sync_room_info()
+        self._update_oled()
+        self._log("收到云端配置更新，已重载界面")
 
     def _init_biz_ui(self):
         """初始化客房特有的业务界面"""
@@ -165,7 +189,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.oled_canvas.create_rectangle(5, 5, w-5, h-5, outline="#333333", width=1)
         
         # 房间信息
-        self.oled_canvas.create_text(30, 40, text=f"ROOM: {self.room_id}", fill="#00FF00", font=("Consolas", 22, "bold"), anchor=tk.W)
+        display_room = self.room_number_var.get() or self.room_id
+        self.oled_canvas.create_text(30, 40, text=f"ROOM: {display_room}", fill="#00FF00", font=("Consolas", 22, "bold"), anchor=tk.W)
         self.oled_canvas.create_text(30, 80, text=f"TEMP: {self.temp_val}C | HUMI: 55%", fill="white", font=("Consolas", 14), anchor=tk.W)
         status_str = f"LIGHT: {'ON' if self.light_on else 'OFF'} | AC: {'ON' if self.air_on else 'OFF'} | DOOR: {'OPEN' if self.door_unlocked else 'LOCKED'}"
         self.oled_canvas.create_text(30, 115, text=status_str, fill="#1890ff", font=("Consolas", 12), anchor=tk.W)
@@ -351,6 +376,18 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             self.mqtt_client.publish(f"hotel/device/event/room/{self.room_id}", {
                 "device_id": self.device_id, "event": event, "value": val
             })
+
+    def _on_connected(self):
+        """当 MQTT 连接成功后触发"""
+        # 订阅 AI 响应主题
+        topic = TOPIC_AI_RESPONSE.format(self.room_id)
+        self.mqtt_client.subscribe(topic)
+        self._log(f"已订阅 AI 主题: {topic}")
+        
+        # 订阅房间指令主题
+        cmd_topic = f"hotel/device/command/room/room_{self.room_id}"
+        self.mqtt_client.subscribe(cmd_topic)
+        self._log(f"已订阅客房指令主题: {cmd_topic}")
 
     def _on_mqtt_message(self, topic, payload):
         """覆盖基类消息处理"""

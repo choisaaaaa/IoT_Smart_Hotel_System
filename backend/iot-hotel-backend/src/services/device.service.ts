@@ -15,6 +15,7 @@ export interface DeviceData {
   last_seen?: Date;
   audit_status: 'pending' | 'approved' | 'rejected';
   room_id?: number;
+  room_number?: string;
   area?: string;
   ip_address?: string;
   mac_address?: string;
@@ -76,10 +77,25 @@ class DeviceService {
         await CacheService.delete(CacheService.deviceKeys.info(device.id!));
         await CacheService.deletePattern('device:list:*');
 
+        // 获取更新后的详细信息，包括关联房间号
+        const [updatedRows] = await pool.query<RowDataPacket[]>(
+          `SELECT d.*, r.room_number 
+           FROM devices d 
+           LEFT JOIN rooms r ON d.room_id = r.id 
+           WHERE d.device_id = ?`,
+          [device_id]
+        );
+        const updatedDevice = updatedRows[0] as any;
+
         return {
           status: 'existing',
-          audit_status: device.audit_status,
-          device_key: device.audit_status === 'approved' ? device.device_key : null
+          audit_status: updatedDevice.audit_status,
+          device_key: updatedDevice.audit_status === 'approved' ? updatedDevice.device_key : null,
+          room_id: updatedDevice.room_id,
+          room_number: updatedDevice.room_number,
+          area: updatedDevice.area,
+          device_name: updatedDevice.device_name,
+          device_id: updatedDevice.device_id
         };
       } else {
         // 创建新设备，状态为待审核
@@ -120,28 +136,36 @@ class DeviceService {
   }
 
   /**
-   * 管理员审核设备
+   * 管理员审核或重新分配设备位置
    */
   async auditDevice(id: number, status: 'approved' | 'rejected', assignment?: { room_id?: number; area?: string; device_name?: string }) {
     try {
-      let device_key = '';
-      if (status === 'approved') {
-        // 生成唯一的设备密钥，用于后续通信签名
+      const { room_id, area, device_name } = assignment || {};
+
+      // 获取当前设备信息，检查是否已有 key
+      const [currentRows] = await pool.query<RowDataPacket[]>(
+        'SELECT device_key, audit_status FROM devices WHERE id = ?',
+        [id]
+      );
+      
+      const currentDevice = currentRows[0];
+      let device_key = currentDevice?.device_key || '';
+
+      // 只有在第一次从非 approved 变为 approved 时，或者没有 key 时，才生成新 key
+      if (status === 'approved' && (!device_key || currentDevice?.audit_status !== 'approved')) {
         device_key = crypto.randomBytes(16).toString('hex');
       }
-
-      const { room_id, area, device_name } = assignment || {};
 
       await pool.query<ResultSetHeader>(
         `UPDATE devices SET
           audit_status = ?,
-          device_key = CASE WHEN ? = 'approved' THEN ? ELSE device_key END,
+          device_key = ?,
           room_id = ?,
           area = ?,
           device_name = COALESCE(?, device_name),
           updated_at = NOW()
         WHERE id = ?`,
-        [status, status, device_key, room_id || null, area || null, device_name || null, id]
+        [status, device_key, room_id || null, area || null, device_name || null, id]
       );
 
       // 清除相关缓存
@@ -149,10 +173,26 @@ class DeviceService {
       await CacheService.delete(CacheService.deviceKeys.pending());
       await CacheService.deletePattern('device:list:*');
 
+      // 获取分配后的房号
+      let room_number = '';
+      if (room_id) {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT room_number FROM rooms WHERE id = ?',
+          [room_id]
+        );
+        if (roomRows.length > 0) {
+          room_number = roomRows[0].room_number;
+        }
+      }
+
       return {
         id,
         status,
-        device_key: status === 'approved' ? device_key : null
+        device_key: status === 'approved' ? device_key : null,
+        room_id,
+        room_number,
+        area,
+        device_name
       };
     } catch (error) {
       logger.error('Error auditing device:', error.message);

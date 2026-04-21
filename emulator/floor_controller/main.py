@@ -31,7 +31,7 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         
         super().__init__(
             root=root,
-            title=f"智慧酒店 - 楼控节点仿真器 ({self.device_id})",
+            title=f"智慧酒店 - 楼控节点仿真器",
             device_id=self.device_id,
             device_type="floor",
             width=850,
@@ -41,6 +41,28 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         # 启动传感器模拟线程
         self._stop_sensors = threading.Event()
         threading.Thread(target=self._sensor_loop, daemon=True).start()
+        
+        # 同步位置信息
+        self._sync_position()
+
+    def _sync_position(self):
+        """同步来自基类的区域信息"""
+        if self.area_var.get():
+            # 尝试从区域名提取楼层号（假设格式如 "Floor 3" 或 "3F" 或 "3层"）
+            area = self.area_var.get()
+            import re
+            match = re.search(r'\d+', area)
+            if match:
+                self.floor_id_var.set(match.group())
+            self._log(f"已同步位置信息: {area}")
+
+    def _on_config_updated(self):
+        """当云端分配位置后触发"""
+        self._sync_position()
+        # 更新标签
+        if hasattr(self, 'pos_label'):
+            self.pos_label.config(text=f"{self.area_var.get() or '公共区域'}")
+        self._log("收到云端配置更新，已重载界面")
 
     def _init_biz_ui(self):
         """初始化楼控特有业务界面"""
@@ -51,8 +73,11 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         info_f = tk.Frame(status_body, bg="white")
         info_f.pack(fill=tk.X)
         tk.Label(info_f, text="📍 当前位置:", font=("Arial", 10), bg="white", fg=self.colors['text_secondary']).pack(side=tk.LEFT)
-        tk.Label(info_f, text=f"第 {self.floor_id_var.get()} 层公共区域", 
-                 font=("Arial", 12, "bold"), bg="white", fg=self.colors['primary']).pack(side=tk.LEFT, padx=15)
+        
+        display_pos = self.area_var.get() or f"第 {self.floor_id_var.get()} 层公共区域"
+        self.pos_label = tk.Label(info_f, text=display_pos, 
+                                 font=("Arial", 12, "bold"), bg="white", fg=self.colors['primary'])
+        self.pos_label.pack(side=tk.LEFT, padx=15)
 
         # 2. 传感器实时监控
         self._create_card(self.biz_frame, "环境传感器实时监控").pack(fill=tk.X, pady=(0, 20))

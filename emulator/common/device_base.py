@@ -38,7 +38,9 @@ class BaseDeviceEmulator:
         self.backend_url_var = tk.StringVar(value="http://localhost:9000")  # 后端API地址，本地开发默认localhost
         self.device_key_var = tk.StringVar(value="")  # 设备密钥
         self.hotel_id_var = tk.StringVar(value="")    # 酒店ID
-        self.room_id_var = tk.StringVar(value="")     # 房间ID
+        self.room_id_var = tk.StringVar(value="")     # 房间数据库ID
+        self.room_number_var = tk.StringVar(value="") # 房间显示编号
+        self.area_var = tk.StringVar(value="")        # 区域名称
         self.audit_status_var = tk.StringVar(value="未注册")
         self.ai_status_var = tk.StringVar(value="空闲")
 
@@ -73,6 +75,9 @@ class BaseDeviceEmulator:
                 with open(config_path, 'r') as f:
                     config = json.load(f)
                     self.hotel_id_var.set(str(config.get('hotel_id', '')))
+                    self.room_id_var.set(str(config.get('room_id', '')))
+                    self.room_number_var.set(config.get('room_number', ''))
+                    self.area_var.set(config.get('area', ''))
                     self.backend_url_var.set(config.get('backend_url', 'http://localhost:9000'))
                     self.broker_var.set(config.get('mqtt_broker', '8.134.166.69'))
                     
@@ -326,6 +331,11 @@ class BaseDeviceEmulator:
                                      relief=tk.FLAT, cursor="hand2", pady=8)
         self.reconfig_btn.pack(fill=tk.X, pady=5)
 
+        self.sync_btn = tk.Button(net_body, text="同步云端资产信息", command=self._register_device_to_web, 
+                                 bg=self.colors['primary'], fg="white", font=("Arial", 10), 
+                                 relief=tk.FLAT, cursor="hand2", pady=8)
+        self.sync_btn.pack(fill=tk.X, pady=5)
+
         # 2. AI助手卡片
         self._create_card(self.sys_sidebar, "AI 管家").pack(fill=tk.X, pady=(0, 20))
         ai_body = self.last_card_body
@@ -440,6 +450,10 @@ class BaseDeviceEmulator:
                 
                 # 发布在线状态
                 self.mqtt_client.publish_online_status()
+                
+                # 触发子类连接成功回调
+                if hasattr(self, '_on_connected'):
+                    self._on_connected()
             else:
                 self._log("连接失败，请检查网络或 Broker 地址", "ERROR")
         except Exception as e:
@@ -511,8 +525,18 @@ class BaseDeviceEmulator:
                         result = json.loads(response.read().decode('utf-8'))
                         self._log(f"注册响应: {result}")
                         if result.get('success'):
-                            status = result.get('data', {}).get('status', 'unknown')
+                            data = result.get('data', {})
+                            status = data.get('status', 'unknown')
                             self._log(f"设备注册成功: {status}", "SUCCESS")
+                            
+                            # 更新本地变量
+                            if data.get('room_id'): self.room_id_var.set(str(data['room_id']))
+                            if data.get('room_number'): self.room_number_var.set(data['room_number'])
+                            if data.get('area'): self.area_var.set(data['area'])
+                            if data.get('device_name'): 
+                                self.device_id = data['device_id'] # 如果后端分配了新的ID
+                                # 注意：这里不改 unique_device_id，它是物理标识
+
                             # 更新审核状态
                             if self.mqtt_client:
                                 if status == 'approved':
@@ -521,21 +545,24 @@ class BaseDeviceEmulator:
                                     self.mqtt_client.audit_status = "pending"
                                 # 更新UI显示
                                 self.root.after(0, self._update_audit_status_display)
-                            # 如果已审核，更新密钥
-                            if result.get('data', {}).get('device_key'):
-                                self.device_key_var.set(result['data']['device_key'])
-                                if self.mqtt_client:
-                                    self.mqtt_client.device_key = result['data']['device_key']
-                                # 保存更新后的配置（含密钥）
-                                self._save_config({
-                                    'hotel_id': int(hotel_id),
-                                    'backend_url': backend_url,
-                                    'mqtt_broker': self.broker_var.get(),
-                                    'mqtt_port': self.port_var.get(),
-                                    'device_id': self.unique_device_id,
-                                    'device_type': self.device_type,
-                                    'device_key': self.device_key_var.get()
-                                })
+                                
+                            # 触发子类UI更新
+                            if hasattr(self, '_on_config_updated'):
+                                self.root.after(0, self._on_config_updated)
+
+                            # 保存完整配置，无论是否已审核，只要同步成功就更新本地配置
+                            self._save_config({
+                                'hotel_id': int(hotel_id),
+                                'room_id': data.get('room_id'),
+                                'room_number': data.get('room_number'),
+                                'area': data.get('area'),
+                                'backend_url': backend_url,
+                                'mqtt_broker': self.broker_var.get(),
+                                'mqtt_port': self.port_var.get(),
+                                'device_id': self.unique_device_id,
+                                'device_type': self.device_type,
+                                'device_key': data.get('device_key') or self.device_key_var.get()
+                            })
                         else:
                             self._log(f"设备注册失败: {result.get('message')}", "WARNING")
                 except urllib.error.HTTPError as e:

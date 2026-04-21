@@ -14,7 +14,8 @@ from .config import (
     TOPIC_DEVICE_DATA_PREFIX,
     TOPIC_DEVICE_COMMAND_PREFIX,
     TOPIC_DEVICE_COMMAND_RESULT,
-    TOPIC_SECURITY_EVENT
+    TOPIC_SECURITY_EVENT,
+    TOPIC_AI_RESPONSE
 )
 
 
@@ -117,6 +118,15 @@ class MQTTClient:
         # 处理命令
         if TOPIC_DEVICE_COMMAND_PREFIX in topic:
             self._handle_command(payload)
+        
+        # 处理 AI 响应
+        if "hotel/ai/response/room/" in topic:
+            try:
+                data = json.loads(payload)
+                if hasattr(self, 'on_ai_response') and self.on_ai_response:
+                    self.on_ai_response(data)
+            except Exception as e:
+                self.logger.error(f"处理 AI 响应失败: {e}")
 
     def _handle_command(self, payload):
         """处理控制命令"""

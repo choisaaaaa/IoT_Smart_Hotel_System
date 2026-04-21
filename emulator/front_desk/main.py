@@ -70,12 +70,25 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         
         super().__init__(
             root=root,
-            title=f"智慧酒店 - 前台管理端仿真器 ({self.device_id})",
+            title=f"智慧酒店 - 前台管理端仿真器",
             device_id=self.device_id,
             device_type="front_desk",
             width=950,
             height=800
         )
+        
+        # 同步配置
+        self._sync_info()
+
+    def _sync_info(self):
+        """同步来自基类的配置信息"""
+        if self.area_var.get():
+            self._log(f"已同步位置信息: {self.area_var.get()}")
+
+    def _on_config_updated(self):
+        """当云端配置更新后触发"""
+        self._sync_info()
+        self._log("收到云端配置更新")
 
     def _init_biz_ui(self):
         """初始化前台特有业务界面"""

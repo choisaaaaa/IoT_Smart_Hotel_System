@@ -109,6 +109,12 @@
                     <a-tooltip title="发送控制指令">
                       <ControlOutlined @click="sendCommand(device)" :class="{ disabled: device.device_status !== 'online' }" />
                     </a-tooltip>
+                    <a-tooltip title="设备二次分配/修改">
+                      <EditOutlined @click="openEditModal(device)" />
+                    </a-tooltip>
+                    <a-tooltip title="仿真调试控制台">
+                      <ExperimentOutlined @click="openDebugTerminal(device)" />
+                    </a-tooltip>
                     <a-tooltip title="查看实时数据">
                       <LineChartOutlined @click="viewData(device)" />
                     </a-tooltip>
@@ -166,52 +172,155 @@
       </a-tabs>
     </div>
 
-    <!-- Audit Modal -->
-    <a-modal v-model:open="auditModalVisible" title="设备准入审核" @ok="confirmAudit" :confirmLoading="auditLoading" width="600px">
-      <div class="modal-intro">
-        <div class="intro-icon"><SafetyOutlined /></div>
+    <!-- Audit & Reassign Modal -->
+    <a-modal 
+      v-model:open="auditModalVisible" 
+      :title="isReassign ? '设备配置二次分配' : '设备准入审核'" 
+      @ok="confirmAudit" 
+      :confirmLoading="auditLoading" 
+      width="600px"
+    >
+      <div class="modal-intro" :class="{ reassign: isReassign }">
+        <div class="intro-icon">
+          <component :is="isReassign ? EditOutlined : SafetyOutlined" />
+        </div>
         <div class="intro-text">
-          <h4>正在为 {{ currentAudit.device_id }} 分配权限</h4>
-          <p>审核通过后，系统将下发加密通讯密钥至该物理终端。</p>
+          <h4>{{ isReassign ? '重新配置设备资产' : `正在为 ${currentAudit.device_id} 分配权限` }}</h4>
+          <p>{{ isReassign ? '修改设备关联的房间、位置或显示名称。' : '审核通过后，系统将下发加密通讯密钥至该物理终端。' }}</p>
         </div>
       </div>
 
       <a-form layout="vertical" class="mt-4">
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="设备自定义名称">
+            <a-form-item label="设备显示名称">
               <a-input v-model:value="currentAudit.device_name" placeholder="例如：301室智能终端" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="设备类型">
-              <a-input :value="currentAudit.device_type" disabled />
+              <a-tag :color="getTypeColor(currentAudit.device_type)">{{ currentAudit.device_type }}</a-tag>
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-form-item label="分配位置 (关联房间)">
-          <a-select v-model:value="currentAudit.room_id" placeholder="选择关联房间" allowClear show-search option-filter-prop="label">
-            <a-select-option v-for="room in rooms" :key="room.id" :value="room.id" :label="room.room_number">
-              <div class="room-option">
-                <span class="room-num">{{ room.room_number }}</span>
-                <span class="room-type">{{ room.room_type }}</span>
-              </div>
-            </a-select-option>
-          </a-select>
-        </a-form-item>
+        <!-- Smart fields based on device type -->
+        <div class="smart-assignment-box">
+          <div v-if="currentAudit.device_type === 'room'" class="type-assignment">
+            <div class="assignment-header"><HomeOutlined /> 客房资产分配</div>
+            <a-form-item label="关联房间">
+              <a-select v-model:value="currentAudit.room_id" placeholder="搜索并选择关联房间" allowClear show-search option-filter-prop="label">
+                <a-select-option v-for="room in rooms" :key="room.id" :value="room.id" :label="room.room_number">
+                  <div class="room-option">
+                    <span class="room-num">{{ room.room_number }}</span>
+                    <span class="room-type">{{ room.room_type }}</span>
+                  </div>
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </div>
 
-        <a-form-item label="分配区域 (如公共区域)">
-          <a-input v-model:value="currentAudit.area" placeholder="如：走廊、电梯厅、餐厅等" />
-        </a-form-item>
+          <div v-else-if="currentAudit.device_type === 'floor'" class="type-assignment">
+            <div class="assignment-header"><ClusterOutlined /> 楼层/公共区域分配</div>
+            <a-form-item label="所在楼层/区域">
+              <a-select v-model:value="currentAudit.area" placeholder="选择或输入所在位置" allowClear show-search mode="combobox">
+                <a-select-option value="Floor 1">1层大厅</a-select-option>
+                <a-select-option value="Floor 2">2层客房区</a-select-option>
+                <a-select-option value="Floor 3">3层客房区</a-select-option>
+                <a-select-option value="Gym">健身房</a-select-option>
+                <a-select-option value="Restaurant">餐厅</a-select-option>
+              </a-select>
+            </a-form-item>
+          </div>
 
-        <a-form-item label="审核决策">
+          <div v-else-if="currentAudit.device_type === 'front_desk'" class="type-assignment">
+            <div class="assignment-header"><TeamOutlined /> 前台/管理点分配</div>
+            <a-form-item label="前台编号/名称">
+              <a-input v-model:value="currentAudit.area" placeholder="如：主楼前台 01" />
+            </a-form-item>
+          </div>
+
+          <div v-else class="type-assignment">
+            <div class="assignment-header"><SettingOutlined /> 通用位置分配</div>
+            <a-form-item label="地理位置/区域">
+              <a-input v-model:value="currentAudit.area" placeholder="请输入设备安装的具体位置" />
+            </a-form-item>
+          </div>
+        </div>
+
+        <a-form-item v-if="!isReassign" label="审核决策">
           <a-radio-group v-model:value="currentAudit.status" button-style="solid">
             <a-radio-button value="approved">准许接入</a-radio-button>
             <a-radio-button value="rejected">拒绝接入</a-radio-button>
           </a-radio-group>
         </a-form-item>
       </a-form>
+    </a-modal>
+
+    <!-- Debug Terminal Modal -->
+    <a-modal 
+      v-model:open="debugTerminalVisible" 
+      :title="`设备仿真调试控制台 - ${currentDebug.deviceId}`" 
+      width="850px"
+      :footer="null"
+      @cancel="closeDebugTerminal"
+    >
+      <div class="debug-terminal">
+        <!-- Sidebar: Device Info & Simulation Tools -->
+        <div class="terminal-sidebar">
+          <div class="device-card-mini">
+            <component :is="getDeviceIcon(currentDebug.deviceType)" class="mini-icon" />
+            <div class="mini-info">
+              <div class="name">{{ currentDebug.deviceName }}</div>
+              <a-tag :color="getTypeColor(currentDebug.deviceType)">{{ currentDebug.deviceType }}</a-tag>
+            </div>
+          </div>
+
+          <a-divider>模拟指令下发</a-divider>
+          <div class="simulation-tools">
+            <a-button-group vertical block>
+              <a-button v-for="sim in simulationCommands" :key="sim.label" @click="sendSimulationCommand(sim)">
+                {{ sim.label }}
+              </a-button>
+            </a-button-group>
+            
+            <div class="custom-send mt-4">
+              <p class="small-label">自定义 MQTT 消息</p>
+              <a-input v-model:value="customMqtt.topic" placeholder="Topic" size="small" class="mb-2" />
+              <a-textarea v-model:value="customMqtt.payload" placeholder="Payload (JSON)" :rows="4" size="small" class="mb-2" />
+              <a-button type="primary" block size="small" @click="sendCustomMqtt">
+                <template #icon><SendOutlined /></template> 发送
+              </a-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main: Message Logs -->
+        <div class="terminal-main">
+          <div class="terminal-header">
+            <span class="title"><HistoryOutlined /> 通信日志流水</span>
+            <a-space>
+              <a-checkbox v-model:checked="autoScroll">自动滚动</a-checkbox>
+              <a-button size="small" @click="fetchMqttLogs(true)">
+                <template #icon><SyncOutlined /></template> 刷新
+              </a-button>
+              <a-button size="small" @click="mqttLogs = []">
+                <template #icon><ClearOutlined /></template> 清屏
+              </a-button>
+            </a-space>
+          </div>
+          <div class="log-container" ref="logContainerRef">
+            <div v-for="log in mqttLogs" :key="log.id" class="log-item" :class="log.direction">
+              <div class="log-time">{{ formatTime(log.timestamp) }}</div>
+              <div class="log-topic"><code>{{ log.topic }}</code></div>
+              <div class="log-payload">
+                <pre>{{ formatPayload(log.payload) }}</pre>
+              </div>
+            </div>
+            <div v-if="mqttLogs.length === 0" class="log-empty">等待通信数据中...</div>
+          </div>
+        </div>
+      </div>
     </a-modal>
 
     <!-- Command Modal -->
@@ -253,11 +362,14 @@ import {
   SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
   DesktopOutlined, SafetyCertificateOutlined, BugOutlined, ControlOutlined,
   LineChartOutlined, DeleteOutlined, AuditOutlined, SafetyOutlined,
-  BulbOutlined, LayoutOutlined, UserOutlined, SettingOutlined
+  BulbOutlined, LayoutOutlined, UserOutlined, SettingOutlined, EditOutlined,
+  HomeOutlined, ClusterOutlined, TeamOutlined, ExperimentOutlined,
+  SendOutlined, ClearOutlined, HistoryOutlined
 } from '@ant-design/icons-vue'
 import type { DeviceInfo, RoomInfo } from '@/types'
 import { deviceApi } from '@/api/device'
 import { roomApi } from '@/api/room'
+import request from '@/api/request'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { formatDotDateTime } from '@/utils/date'
@@ -326,6 +438,7 @@ const auditColumns = [
 // Modal States
 const auditModalVisible = ref(false)
 const auditLoading = ref(false)
+const isReassign = ref(false)
 const currentAudit = reactive({
   id: 0,
   device_id: '',
@@ -346,6 +459,121 @@ const currentCmd = reactive({
   commandType: 'ping',
   commandValue: ''
 })
+
+// Debug Terminal State
+const debugTerminalVisible = ref(false)
+const mqttLogs = ref<any[]>([])
+const autoScroll = ref(true)
+const logContainerRef = ref<HTMLElement | null>(null)
+const logTimer = ref<any>(null)
+const currentDebug = reactive({
+  id: 0,
+  deviceId: '',
+  deviceName: '',
+  deviceType: ''
+})
+const customMqtt = reactive({
+  topic: '',
+  payload: ''
+})
+
+const simulationCommands = computed(() => {
+  const type = currentDebug.deviceType
+  const roomId = currentDebug.deviceId.includes('_') 
+    ? currentDebug.deviceId.split('_').pop() 
+    : currentDebug.deviceId
+    
+  if (type === 'room') {
+    return [
+      { label: '欢迎模式 (Welcome)', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'welcome' } },
+      { label: '睡眠模式 (Sleep)', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'sleep' } },
+      { label: '关灯测试 (Lights Off)', topic: `hotel/device/command/room/${roomId}`, payload: { device_type: 'light', action: 'off' } }
+    ]
+  } else if (type === 'floor') {
+    return [
+      { label: '触发消防报警', topic: `hotel/security/event`, payload: { device_id: currentDebug.deviceId, event_type: 'fire_alarm', level: 'danger' } },
+      { label: '同步环境数据', topic: `hotel/device/data/${currentDebug.deviceId}`, payload: { temp: 25, humi: 50, aqi: 'Good' } }
+    ]
+  } else if (type === 'front_desk') {
+    return [
+      { label: '发卡成功模拟', topic: `hotel/device/command/result`, payload: { device_id: currentDebug.deviceId, command_type: 'room_card_op', status: 'success' } }
+    ]
+  }
+  return []
+})
+
+function openDebugTerminal(device: any) {
+  Object.assign(currentDebug, {
+    id: device.id,
+    deviceId: device.device_id,
+    deviceName: device.device_name,
+    deviceType: device.device_type
+  })
+  debugTerminalVisible.value = true
+  fetchMqttLogs()
+  logTimer.value = setInterval(() => fetchMqttLogs(), 3000)
+}
+
+function closeDebugTerminal() {
+  if (logTimer.value) clearInterval(logTimer.value)
+  debugTerminalVisible.value = false
+}
+
+async function fetchMqttLogs(isManual = false) {
+  try {
+    const res: any = await request.get('/mqtt/logs', { 
+      params: { device_id: currentDebug.deviceId, limit: 50 } 
+    })
+    if (res.success) {
+      mqttLogs.value = res.data
+      if (autoScroll.value && logContainerRef.value) {
+        setTimeout(() => {
+          logContainerRef.value!.scrollTop = logContainerRef.value!.scrollHeight
+        }, 100)
+      }
+    }
+  } catch (err) {
+    if (isManual) message.error('刷新日志失败')
+  }
+}
+
+function formatPayload(p: any) {
+  if (typeof p === 'string') {
+    try { return JSON.stringify(JSON.parse(p), null, 2) }
+    catch { return p }
+  }
+  return JSON.stringify(p, null, 2)
+}
+
+async function sendSimulationCommand(sim: any) {
+  try {
+    await request.post('/mqtt/send', {
+      topic: sim.topic,
+      payload: sim.payload
+    })
+    message.success('模拟指令已发出')
+    fetchMqttLogs(true)
+  } catch (err) {
+    message.error('发送失败')
+  }
+}
+
+async function sendCustomMqtt() {
+  if (!customMqtt.topic || !customMqtt.payload) return
+  try {
+    let payload = customMqtt.payload
+    try { payload = JSON.parse(customMqtt.payload) } catch {}
+    
+    await request.post('/mqtt/send', {
+      topic: customMqtt.topic,
+      payload
+    })
+    message.success('消息已发布')
+    fetchMqttLogs(true)
+  } catch (err) {
+    message.error('发送失败')
+  }
+}
 
 // UI Helpers
 const getDeviceIcon = (type: string) => {
@@ -431,14 +659,29 @@ function handleSearch() {
 }
 
 function openAuditModal(record: any) {
+  isReassign.value = false
   Object.assign(currentAudit, {
     id: record.id,
     device_id: record.device_id,
     device_name: record.device_name || '',
     device_type: record.device_type,
-    room_id: undefined,
+    room_id: record.room_id || undefined,
     area: record.area || '',
     status: 'approved'
+  })
+  auditModalVisible.value = true
+}
+
+function openEditModal(record: any) {
+  isReassign.value = true
+  Object.assign(currentAudit, {
+    id: record.id,
+    device_id: record.device_id,
+    device_name: record.device_name || '',
+    device_type: record.device_type,
+    room_id: record.room_id || undefined,
+    area: record.area || '',
+    status: record.audit_status || 'approved'
   })
   auditModalVisible.value = true
 }
@@ -614,8 +857,123 @@ onMounted(() => {
 .intro-text h4 { margin: 0; font-size: 16px; }
 .intro-text p { margin: 4px 0 0; color: #595959; }
 
+.modal-intro.reassign { background: #f6ffed; }
+.modal-intro.reassign .intro-icon { color: #52c41a; }
+
+.smart-assignment-box {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.type-assignment .assignment-header {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #595959;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .room-option { display: flex; justify-content: space-between; width: 100%; }
 .room-type { color: #8c8c8c; font-size: 12px; }
+
+/* Debug Terminal Styles */
+.debug-terminal {
+  display: flex;
+  height: 550px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.terminal-sidebar {
+  width: 250px;
+  border-right: 1px solid #f0f0f0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background: #fafafa;
+}
+
+.device-card-mini {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  margin-bottom: 16px;
+}
+
+.mini-icon { font-size: 24px; color: #1890ff; }
+.mini-info .name { font-weight: 600; font-size: 13px; }
+
+.simulation-tools { flex: 1; overflow-y: auto; }
+.small-label { font-size: 12px; color: #8c8c8c; margin-bottom: 8px; }
+
+.terminal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+}
+
+.terminal-header .title { font-weight: 600; color: #595959; }
+
+.log-container {
+  flex: 1;
+  background: #1e1e1e;
+  padding: 16px;
+  overflow-y: auto;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.log-item {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #333;
+}
+
+.log-item.in { border-left: 3px solid #52c41a; padding-left: 12px; }
+.log-item.out { border-left: 3px solid #1890ff; padding-left: 12px; }
+
+.log-time { color: #8c8c8c; font-size: 11px; margin-bottom: 4px; }
+.log-topic { color: #d4d4d4; font-size: 12px; margin-bottom: 8px; }
+.log-topic code { background: #333; padding: 2px 6px; border-radius: 4px; color: #569cd6; }
+
+.log-payload pre {
+  margin: 0;
+  padding: 8px;
+  background: #2d2d2d;
+  color: #ce9178;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.log-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #595959;
+  font-style: italic;
+}
+
+.mb-2 { margin-bottom: 8px; }
 
 .command-panel { padding: 10px 0; }
 .target-info { display: flex; align-items: center; gap: 16px; }
