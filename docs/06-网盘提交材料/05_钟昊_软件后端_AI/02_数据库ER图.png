@@ -1,0 +1,36 @@
+占位文件
+
+【配图编号】02
+【配图名称】数据库ER图
+【所属章节】第四章：软件系统设计
+【文件格式】PNG + 源文件
+【内容要求】核心实体关系图（10-15个实体）
+
+【核心实体】
+- users（用户表）
+- hotels（酒店表）
+- room_types（房型表）
+- rooms（房间表）
+- bookings（预订表）
+- payments（支付表）
+- guests（住客表）
+- devices（设备表）
+- sensor_data（传感器数据表）
+- maintenance_tickets（维修工单表）
+- delivery_orders（送物订单表）
+
+【ER图规范】
+- 实体：矩形框
+- 属性：椭圆框
+- 关系：菱形框（1:1, 1:N, M:N）
+- 主键：下划线标注
+- 外键：FK标注
+
+【工具建议】Draw.io、MySQL Workbench
+【交付标准】
+- 分辨率：300dpi
+- 文件大小：< 5MB
+- 命名规范：04_数据库ER图.png
+- 需同时提交源文件（.drawio）
+
+请替换此占位文件为实际图片
