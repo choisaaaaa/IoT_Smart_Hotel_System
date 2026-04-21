@@ -56,11 +56,27 @@ class HotelService {
 
   Future<ApiResult<Hotel>> getHotelById(int hotelId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.hotels}/$hotelId');
+      final response = await _dioClient.get('${ApiConstants.hotels}/$hotelId/detail');
 
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(
-            Hotel.fromJson(response.data['data'] as Map<String, dynamic>));
+        final data = response.data['data'];
+        Map<String, dynamic> hotelData;
+        
+        if (data is Map && data.containsKey('hotel')) {
+          hotelData = Map<String, dynamic>.from(data['hotel'] as Map);
+          if (data.containsKey('images') && data['images'] is List) {
+            hotelData['images'] = (data['images'] as List)
+                .map((img) => img['image_url'] ?? img['url'] ?? '')
+                .where((url) => url.isNotEmpty)
+                .toList();
+          }
+        } else if (data is Map) {
+          hotelData = Map<String, dynamic>.from(data);
+        } else {
+          return ApiResult.failure('数据格式错误');
+        }
+        
+        return ApiResult.success(Hotel.fromJson(hotelData));
       }
       return ApiResult.failure(response.data['message'] ?? '获取酒店详情失败');
     } catch (e) {

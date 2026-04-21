@@ -74,6 +74,10 @@ class RoomType {
     normalized['name'] ??= normalized['type_name'] ?? normalized['room_name'] ?? '';
     normalized['base_price'] ??= normalized['price'] ?? normalized['room_price'] ?? 0;
     normalized['id'] ??= normalized['room_type_id'];
+    normalized['bed_type'] ??= normalized['bedType'];
+    normalized['max_guests'] ??= normalized['maxGuests'];
+    normalized['available_count'] ??= normalized['availableCount'];
+    normalized['total_count'] ??= normalized['physicalRooms'] ?? normalized['totalCount'];
 
     List<String>? parseList(dynamic val) {
       if (val is List) return List<String>.from(val);
@@ -81,6 +85,23 @@ class RoomType {
         return val.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       }
       return null;
+    }
+
+    double? bestPrice;
+    if (normalized.containsKey('plans') && normalized['plans'] is List) {
+      final plans = normalized['plans'] as List;
+      if (plans.isNotEmpty) {
+        final prices = plans
+            .where((p) => p is Map && p['price'] != null)
+            .map((p) => (p as Map)['price'] as num)
+            .toList();
+        if (prices.isNotEmpty) {
+          bestPrice = prices.reduce((a, b) => a < b ? a : b).toDouble();
+        }
+      }
+    }
+    if (bestPrice != null) {
+      normalized['base_price'] = bestPrice;
     }
 
     return RoomType(

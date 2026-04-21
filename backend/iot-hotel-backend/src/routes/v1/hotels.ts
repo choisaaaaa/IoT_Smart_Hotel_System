@@ -20,7 +20,8 @@ router.get('/:id', detail);
 router.get('/:hotelId/detail', getHotelDetailWithImages);
 router.get('/:hotelId/images', getHotelImages);
 
-router.get('/:hotelId/rooms/availability', authenticate, getRoomAvailability);
+// 房型可用性查询 - 游客也可访问
+router.get('/:hotelId/rooms/availability', getRoomAvailability);
 
 router.put('/:hotelId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotel);
 router.post('/:hotelId/images', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), addHotelImage);

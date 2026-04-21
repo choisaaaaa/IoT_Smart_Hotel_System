@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
@@ -487,6 +488,21 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   }
 
   Future<void> _submitBookingAndPay() async {
+    final authState = ref.read(authStateProvider);
+    if (!authState.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先登录后再进行预订操作'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        context.push('/login');
+      }
+      return;
+    }
+
     if (_nameController.text.isEmpty || _phoneController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写完整的入住信息')));
       return;

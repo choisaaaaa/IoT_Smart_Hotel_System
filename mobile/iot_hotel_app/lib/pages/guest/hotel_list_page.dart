@@ -124,7 +124,15 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            // 检查是否可以返回，如果不能返回（如在底部导航栏中），则导航到首页
+            final canPop = GoRouter.of(context).canPop();
+            if (canPop) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
         title: Container(
           height: 40,

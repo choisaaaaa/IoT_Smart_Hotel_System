@@ -73,7 +73,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            final canPop = GoRouter.of(context).canPop();
+            if (canPop) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       extendBodyBehindAppBar: true,

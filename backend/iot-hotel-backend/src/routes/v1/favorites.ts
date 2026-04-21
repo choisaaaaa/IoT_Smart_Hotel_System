@@ -6,9 +6,11 @@ import logger from '../../utils/logger';
 
 const router = Router();
 
-router.use(authenticate);
+// 需要认证的路由
+const authenticatedRouter = Router();
+authenticatedRouter.use(authenticate);
 
-router.get('/', async (req: AuthRequest, res: Response) => {
+authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -51,7 +53,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/', async (req: AuthRequest, res: Response) => {
+authenticatedRouter.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -91,7 +93,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.delete('/:hotelId', async (req: AuthRequest, res: Response) => {
+authenticatedRouter.delete('/:hotelId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -116,11 +118,13 @@ router.delete('/:hotelId', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// 公开路由 - 游客也可访问
 router.get('/check/:hotelId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+    // 游客模式：未登录用户默认未收藏
     if (!userId) {
-      return res.status(401).json(errorResponse('未登录'));
+      return res.json(successResponse({ is_favorite: false }, '查询成功'));
     }
 
     const hotelId = req.params.hotelId;
@@ -136,5 +140,8 @@ router.get('/check/:hotelId', async (req: AuthRequest, res: Response) => {
     return res.status(500).json(errorResponse('查询收藏状态失败'));
   }
 });
+
+// 合并路由
+router.use(authenticatedRouter);
 
 export default router;

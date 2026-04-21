@@ -90,15 +90,15 @@ class _DeliveryOrdersPageState extends ConsumerState<DeliveryOrdersPage> {
 
   String _categoryLabel(String? category) {
     switch (category) {
-      case 'beverage':
+      case '饮品':
         return '饮品';
-      case 'food':
+      case '食品':
         return '食品';
-      case 'daily':
+      case '日用品':
         return '日用品';
-      case 'electronic':
+      case '电子':
         return '电子';
-      case 'bedding':
+      case '床品':
         return '床品';
       default:
         return '其他';
@@ -555,15 +555,15 @@ class _DeliveryOrderCard extends StatelessWidget {
 
   Color _getCategoryColor(String? category) {
     switch (category) {
-      case 'beverage':
+      case '饮品':
         return Colors.blue;
-      case 'food':
+      case '食品':
         return Colors.orange;
-      case 'daily':
+      case '日用品':
         return Colors.green;
-      case 'electronic':
+      case '电子':
         return Colors.purple;
-      case 'bedding':
+      case '床品':
         return Colors.brown;
       default:
         return Colors.grey;
