@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../auth/auth_state_notifier.dart';
 import '../storage/local_storage.dart';
 import '../constants/api_constants.dart';
@@ -32,15 +31,8 @@ class AuthInterceptor extends Interceptor {
         debugPrint('🚪 401 token expired, logout');
         await _clearAuthData();
         authStateNotifier.clearAuth();
-
-        final context = AppRouter.navigatorKey.currentContext;
-        if (context != null) {
-          Future.microtask(() {
-            if (context.mounted) {
-              context.go('/login');
-            }
-          });
-        }
+        // 不再自动跳转到登录页，由各个页面自行处理登录状态
+        // 游客模式下，某些API返回401是正常的，不应该强制跳转
       }
     }
     handler.next(err);

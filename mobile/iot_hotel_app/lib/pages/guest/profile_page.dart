@@ -45,6 +45,15 @@ class ProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _buildGuestProfile(context),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -65,6 +74,243 @@ class ProfilePage extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildGuestProfile(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 260,
+          floating: false,
+          pinned: true,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [AppColors.primary, Color(0xFF30CFD0)],
+                ),
+              ),
+              child: SafeArea(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.white24,
+                          child: Icon(Icons.person, color: Colors.white, size: 40),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '游客模式',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '登录后可享受完整服务',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FilledButton(
+                              onPressed: () => context.push('/login'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text('立即登录', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton(
+                              onPressed: () => context.push('/register'),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text('注册账号', style: TextStyle(fontSize: 14)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              _buildGuestInfoCard(),
+              const SizedBox(height: 16),
+              _buildGuestFeatures(),
+              const SizedBox(height: 16),
+              _buildGuestTools(context),
+              const SizedBox(height: 20),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuestInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('游客权益', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          _buildGuestFeatureItem(Icons.visibility_outlined, '浏览酒店信息', '查看所有酒店详情、房型和价格'),
+          _buildGuestFeatureItem(Icons.search_outlined, '搜索酒店', '根据条件筛选心仪酒店'),
+          _buildGuestFeatureItem(Icons.reviews_outlined, '查看评价', '浏览其他用户的评价和反馈'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '登录后即可享受预订、会员权益、订单管理等完整服务',
+                    style: TextStyle(color: AppColors.primary, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestFeatureItem(IconData icon, String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                Text(desc, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestFeatures() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('会员特权', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildPrivilegeItem(Icons.discount_outlined, '订房折扣')),
+              Expanded(child: _buildPrivilegeItem(Icons.stars_outlined, '积分抵扣')),
+              Expanded(child: _buildPrivilegeItem(Icons.card_membership_outlined, '会员等级')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivilegeItem(IconData icon, String label) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 24, color: AppColors.primary),
+        ),
+        const SizedBox(height: 8),
+        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+
+  Widget _buildGuestTools(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('快捷入口', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildGuestToolItem(Icons.hotel_outlined, '酒店列表', onTap: () => context.push('/hotel-list'))),
+              Expanded(child: _buildGuestToolItem(Icons.search_outlined, '搜索酒店', onTap: () => context.push('/hotel-list'))),
+              Expanded(child: _buildGuestToolItem(Icons.reviews_outlined, '查看评价', onTap: () {})),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestToolItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 28, color: AppColors.primary),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ],
       ),
     );
   }

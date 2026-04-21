@@ -83,13 +83,28 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       debugPrint('🛡️ [Router Redirect] path: "$currentPath", isLoggedIn: $isLoggedIn, mode: ${authState.currentMode}');
 
-      final publicPaths = ['/', '/hotel-list', '/hotel-detail', '/login', '/register'];
+      // 定义游客可访问的公开路径
+      final publicPaths = [
+        '/',           // 首页
+        '/hotel-list', // 酒店列表
+        '/hotel-detail', // 酒店详情
+        '/login',      // 登录页
+        '/register',   // 注册页
+      ];
 
-      if (!isLoggedIn && !publicPaths.any((p) => currentPath == p || currentPath.startsWith('$p/'))) {
-        if (currentPath != '/login') {
-          debugPrint('🚩 [Router] Not logged in, redirecting from "$currentPath" to "/login"');
-          return '/login';
+      // 如果未登录且访问的是公开路径，允许访问
+      if (!isLoggedIn && publicPaths.any((p) => currentPath == p || currentPath.startsWith('$p/'))) {
+        // 确保处于游客模式
+        if (authState.currentMode != AppMode.guest) {
+          ref.read(authStateProvider.notifier).switchMode(AppMode.guest);
         }
+        return null;
+      }
+
+      // 如果未登录且访问的不是公开路径，重定向到首页（游客模式）
+      if (!isLoggedIn && !publicPaths.any((p) => currentPath == p || currentPath.startsWith('$p/'))) {
+        debugPrint('🚩 [Router] Not logged in, redirecting from "$currentPath" to "/"');
+        return '/';
       }
 
       if (isLoggedIn && isLoggingIn) {

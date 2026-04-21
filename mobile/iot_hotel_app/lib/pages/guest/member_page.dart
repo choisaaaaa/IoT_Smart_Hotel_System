@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/auth_service.dart';
 import '../../services/member_service.dart';
 import '../../core/logic/member_logic.dart';
@@ -17,6 +19,35 @@ class _MemberPageState extends ConsumerState<MemberPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: const Text('会员中心', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.card_membership_outlined, size: 80, color: AppColors.textHint.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              const Text('请先登录后查看会员信息', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => context.push('/login'),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('立即登录'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(

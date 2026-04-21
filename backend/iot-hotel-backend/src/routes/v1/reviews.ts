@@ -9,11 +9,12 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
 
-router.get('/', authenticate as any, authorize(allRoles), reviewController.get);
+// 评价列表和统计 - 游客也可访问
+router.get('/', reviewController.get);
 router.get('/my', authenticate as any, reviewController.getMyReviews);
-router.get('/stats', authenticate as any, authorize(allRoles), reviewController.getStats);
+router.get('/stats', reviewController.getStats);
 router.get('/appeals', authenticate as any, authorize(staffRoles), reviewController.getAppeals);
-router.get('/:id', authenticate as any, reviewController.getById);
+router.get('/:id', reviewController.getById);
 router.post('/', authenticate as any, reviewController.create);
 router.put('/:id', authenticate as any, reviewController.update);
 router.delete('/:id', authenticate as any, authorize(adminRoles), reviewController.remove);

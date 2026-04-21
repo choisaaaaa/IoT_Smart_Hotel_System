@@ -209,6 +209,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 20),
+          onPressed: () {
+            final canPop = GoRouter.of(context).canPop();
+            if (canPop) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
+        ),
+      ),
       body: Stack(
         children: [
           // Background Gradient

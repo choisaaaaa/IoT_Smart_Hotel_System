@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../services/favorite_service.dart';
 import '../../models/hotel.dart';
 
@@ -70,6 +71,45 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 20),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
+            },
+          ),
+          title: const Text('我的收藏', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bookmark_outline, size: 80, color: AppColors.textHint.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              const Text('请先登录后查看收藏', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => context.push('/login'),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('立即登录'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
 import '../../core/logic/member_logic.dart';
 import '../../core/logic/search_dates.dart';
 import '../../core/network/api_result.dart';
@@ -54,6 +55,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final authService = ref.watch(authServiceProvider);
+    final authState = ref.watch(authStateProvider);
+    final isLoggedIn = authState.isAuthenticated;
 
     return Container(
       width: double.infinity,
@@ -80,55 +83,70 @@ class _HomePageState extends ConsumerState<HomePage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: FutureBuilder(
-                  future: Future.wait([
-                    authService.getCurrentUser(),
-                    ref.read(memberServiceProvider).getMyAssets(),
-                  ]),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox.shrink();
-                    final user = snapshot.data?[0] as User?;
-                    final assetsResult = snapshot.data?[1] as ApiResult<Member>?;
-                    final member = assetsResult?.data;
+                  child: isLoggedIn
+                      ? FutureBuilder(
+                          future: Future.wait([
+                            authService.getCurrentUser(),
+                            ref.read(memberServiceProvider).getMyAssets(),
+                          ]),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) return const SizedBox.shrink();
+                            final user = snapshot.data?[0] as User?;
+                            final assetsResult = snapshot.data?[1] as ApiResult<Member>?;
+                            final member = assetsResult?.data;
 
-                    final displayName = user?.username ?? '游客';
-                    final level = MemberLevel.fromKey(member?.memberLevel ?? 'standard');
+                            final displayName = user?.username ?? '游客';
+                            final level = MemberLevel.fromKey(member?.memberLevel ?? 'standard');
 
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getGreeting(),
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                        Flexible(
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(colors: level.gradientColors),
-                                  borderRadius: BorderRadius.circular(4),
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getGreeting(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 16),
                                 ),
-                                child: Text(level.label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  displayName,
-                                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
+                                Flexible(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(colors: level.gradientColors),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(level.label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          displayName,
+                                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            );
+                          },
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _getGreeting(),
+                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            const Text(
+                              '游客',
+                              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
-                      ],
-                    );
-                  },
-                ),
                 ),
                 Row(
                   children: [
@@ -334,6 +352,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget _buildCurrentStay(BuildContext context) {
     return Consumer(
       builder: (context, ref, _) {
+        final authState = ref.watch(authStateProvider);
+        final isLoggedIn = authState.isAuthenticated;
+        
+        // 未登录时不显示当前入住信息
+        if (!isLoggedIn) {
+          return const SizedBox.shrink();
+        }
+        
         final bookingsAsync = ref.watch(userBookingsProvider);
 
         return bookingsAsync.when(
