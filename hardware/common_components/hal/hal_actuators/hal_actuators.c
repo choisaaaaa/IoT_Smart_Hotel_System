@@ -28,6 +28,11 @@ esp_err_t hal_actuators_init(void) {
     for (int i = 0; i < 4; i++) {
         int pin = relay_pins[i];
         if (pin >= 0) {
+            if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
+                ESP_LOGE(TAG, "继电器 GPIO%d 非法/不可输出，请检查 global_config 引脚映射", pin);
+                return ESP_ERR_INVALID_ARG;
+            }
+
             gpio_config_t cfg = {
                 .pin_bit_mask = (1ULL << pin),
                 .mode = GPIO_MODE_OUTPUT,
