@@ -1,0 +1,76 @@
+<mxfile host="app.diagrams.net" agent="draw.io">
+  <diagram name="技术栈一览" id="tech-stack-diagram">
+    <mxGraphModel dx="1534" dy="852" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" value="各层技术组件" vertex="1">
+          <mxGeometry height="40" width="700" x="64" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="header1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;align=center;" value="层级" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="header2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;align=center;" value="技术" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="header3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;align=center;" value="说明" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="cell1_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="前端" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="cell1_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="Vue 3 + TypeScript + Vite" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="cell1_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="三端协同界面" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="cell2_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="移动端" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="cell2_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="Flutter" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="cell2_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="跨平台APP" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="cell3_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="后端" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="cell3_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="Node.js + Express + TypeScript" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="cell3_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="RESTful API" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="cell4_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="数据库" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="cell4_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="MySQL 8.0 + Redis" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="cell4_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="数据持久化+缓存" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="cell5_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="通信" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="cell5_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="MQTT + WebSocket" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="cell5_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="IoT实时通信" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="cell6_1" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="硬件" vertex="1">
+          <mxGeometry height="40" width="150" x="64" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="cell6_2" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="ESP32系列" vertex="1">
+          <mxGeometry height="40" width="300" x="214" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="cell6_3" parent="1" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;align=left;verticalAlign=middle;spacingLeft=10;" value="IoT终端控制" vertex="1">
+          <mxGeometry height="40" width="250" x="514" y="490" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
