@@ -82,7 +82,7 @@ class ProfilePage extends ConsumerWidget {
     return CustomScrollView(
       slivers: [
         SliverAppBar(
-          expandedHeight: 260,
+          expandedHeight: 250,
           floating: false,
           pinned: true,
           flexibleSpace: FlexibleSpaceBar(
