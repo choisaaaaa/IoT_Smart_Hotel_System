@@ -44,7 +44,7 @@ class DeviceService {
    * 硬件设备上报注册/连接信息
    */
   async registerDevice(data: Partial<DeviceData> & { hotel_id: number }) {
-    const { device_id, device_type, device_name, firmware_version, ip_address, mac_address, hotel_id } = data;
+    const { device_id, device_type, device_name, firmware_version, ip_address, mac_address, hotel_id, room_number: requested_room_number } = data;
 
     if (!device_id) {
       throw new Error('Device ID is required');
@@ -59,6 +59,18 @@ class DeviceService {
 
       if (rows.length > 0) {
         const device = rows[0] as DeviceData;
+        let final_room_id = device.room_id;
+
+        // 如果请求中包含房号，尝试查找并关联（仅当设备未分配房间或管理员允许覆盖时）
+        if (requested_room_number) {
+          const [roomRows] = await pool.query<RowDataPacket[]>(
+            'SELECT id FROM rooms WHERE room_number = ? AND hotel_id = ?',
+            [requested_room_number, hotel_id]
+          );
+          if (roomRows.length > 0) {
+            final_room_id = roomRows[0].id;
+          }
+        }
 
         // 更新现有设备信息
         await pool.query<ResultSetHeader>(
@@ -68,9 +80,10 @@ class DeviceService {
             mac_address = COALESCE(?, mac_address),
             last_seen = NOW(),
             device_status = 'online',
-            hotel_id = ?
+            hotel_id = ?,
+            room_id = COALESCE(?, room_id)
           WHERE device_id = ?`,
-          [firmware_version, ip_address, mac_address, hotel_id, device_id]
+          [firmware_version, ip_address, mac_address, hotel_id, final_room_id, device_id]
         );
 
         // 清除相关缓存，确保设备状态更新
@@ -98,24 +111,37 @@ class DeviceService {
           device_id: updatedDevice.device_id
         };
       } else {
+        // 创建新设备时，如果提供了房号也尝试关联
+        let initial_room_id: number | null = null;
+        if (requested_room_number) {
+          const [roomRows] = await pool.query<RowDataPacket[]>(
+            'SELECT id FROM rooms WHERE room_number = ? AND hotel_id = ?',
+            [requested_room_number, hotel_id]
+          );
+          if (roomRows.length > 0) {
+            initial_room_id = roomRows[0].id;
+          }
+        }
+
         // 创建新设备，状态为待审核
         await pool.query<ResultSetHeader>(
           `INSERT INTO devices (
             device_id, device_type, device_name, device_key,
             device_status, firmware_version, last_seen,
-            audit_status, ip_address, mac_address, hotel_id
-          ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)`,
+            audit_status, ip_address, mac_address, hotel_id, room_id
+          ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
           [
             device_id,
             device_type || 'unknown',
             device_name || `New Device ${device_id}`,
-            '', // 初始 key 为空，审核通过后再生成
+            '', 
             'online',
             firmware_version,
             'pending',
             ip_address,
             mac_address,
-            hotel_id
+            hotel_id,
+            initial_room_id
           ]
         );
 

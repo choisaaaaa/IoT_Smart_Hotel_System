@@ -1,16 +1,15 @@
-import os
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
 import json
-import uuid
 import time
 import threading
-import urllib.request
+import uuid
+import os
+import requests
 import base64
 from datetime import datetime
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-import paho.mqtt.client as mqtt
 from .mqtt_client import MQTTClient
-from .logger import Logger, get_log_buffer
+from .logger import Logger
 from .config import TOPIC_DEVICE_COMMAND_PREFIX, TOPIC_AI_REQUEST, TOPIC_AI_RESPONSE
 
 class BaseDeviceEmulator:
@@ -113,7 +112,7 @@ class BaseDeviceEmulator:
         """显示初始化向导"""
         setup_win = tk.Toplevel(self.root)
         setup_win.title("设备初始化配网")
-        setup_win.geometry("400x450")
+        setup_win.geometry("450x500")
         setup_win.transient(self.root)
         setup_win.grab_set()
 
@@ -123,34 +122,35 @@ class BaseDeviceEmulator:
         form_frame = tk.Frame(setup_win, padx=20)
         form_frame.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form_frame, text="酒店选择:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.hotel_select = ttk.Combobox(form_frame, state="readonly")
-        self.hotel_select.grid(row=0, column=1, sticky=tk.EW, pady=5)
-        
-        # 刷新酒店列表按钮
-        tk.Button(form_frame, text="刷新列表", command=lambda: self._fetch_hotel_list(backend_entry.get())).grid(row=0, column=2, padx=5)
-
-        tk.Label(form_frame, text="后端 API 地址:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        # 后端地址（决定酒店列表来源）
+        tk.Label(form_frame, text="后端 API 地址:").grid(row=0, column=0, sticky=tk.W, pady=8)
         backend_entry = tk.Entry(form_frame)
         backend_entry.insert(0, self.backend_url_var.get() or "http://localhost:9000")
-        backend_entry.grid(row=1, column=1, sticky=tk.EW, pady=5)
+        backend_entry.grid(row=0, column=1, sticky=tk.EW, pady=8)
         
+        # 酒店选择
+        tk.Label(form_frame, text="所属酒店:").grid(row=1, column=0, sticky=tk.W, pady=8)
+        self.hotel_select = ttk.Combobox(form_frame, state="readonly")
+        self.hotel_select.grid(row=1, column=1, sticky=tk.EW, pady=8)
+        
+        # 刷新按钮
+        tk.Button(form_frame, text="🔄 刷新", command=lambda: self._fetch_hotel_list(backend_entry.get())).grid(row=1, column=2, padx=5)
+
         # 初始加载酒店列表
         self.hotels_data = []
         self._fetch_hotel_list(backend_entry.get())
 
-        tk.Label(form_frame, text="MQTT Broker:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        tk.Label(form_frame, text="MQTT Broker:").grid(row=2, column=0, sticky=tk.W, pady=8)
         mqtt_entry = tk.Entry(form_frame)
         mqtt_entry.insert(0, self.broker_var.get() or "8.134.166.69")
-        mqtt_entry.grid(row=2, column=1, sticky=tk.EW, pady=5)
+        mqtt_entry.grid(row=2, column=1, sticky=tk.EW, pady=8)
 
-        tk.Label(form_frame, text="MQTT Port:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        tk.Label(form_frame, text="MQTT Port:").grid(row=3, column=0, sticky=tk.W, pady=8)
         port_entry = tk.Entry(form_frame)
         port_entry.insert(0, "1883")
-        port_entry.grid(row=3, column=1, sticky=tk.EW, pady=5)
+        port_entry.grid(row=3, column=1, sticky=tk.EW, pady=8)
 
         def save_and_close():
-            # 从下拉框获取选中的酒店ID
             selection_idx = self.hotel_select.current()
             if selection_idx < 0:
                 messagebox.showerror("错误", "请先选择所属酒店")
@@ -161,10 +161,6 @@ class BaseDeviceEmulator:
             backend_url = backend_entry.get()
             mqtt_broker = mqtt_entry.get()
             mqtt_port = port_entry.get()
-
-            if not all([hotel_id, backend_url, mqtt_broker, mqtt_port]):
-                messagebox.showerror("错误", "请填写完整信息")
-                return
 
             self.hotel_id_var.set(str(hotel_id))
             self.backend_url_var.set(backend_url)
@@ -177,38 +173,39 @@ class BaseDeviceEmulator:
                 "mqtt_broker": mqtt_broker,
                 "mqtt_port": mqtt_port,
                 "device_id": self.unique_device_id,
-                "device_type": self.device_type
+                "device_type": self.device_type,
+                "room_id": self.room_id_var.get(),
+                "room_number": self.room_number_var.get(),
+                "area": self.area_var.get()
             }
 
             if self._save_config(config):
                 self.configured = True
                 setup_win.destroy()
-                self._init_ui()
-                self._log("设备初始化成功", "SUCCESS")
-                self._log(f"设备物理ID: {self.unique_device_id}")
-                self._log(f"所属酒店: {selected_hotel['name']} (ID: {hotel_id})")
+                if not hasattr(self, 'main_container'):
+                    self._init_ui()
+                self._log(f"初始化成功！所属酒店: {selected_hotel['name']}", "SUCCESS")
 
-        tk.Button(setup_win, text="完成配置并启动", command=save_and_close, bg="#1890ff", fg="white", padx=20).pack(pady=20)
+        tk.Button(setup_win, text="保存并进入系统", command=save_and_close, bg=self.colors['primary'] if hasattr(self, 'colors') else "#1890ff", fg="white", font=("Arial", 10, "bold"), pady=10).pack(fill=tk.X, padx=40, pady=20)
 
     def _fetch_hotel_list(self, backend_url):
-        """从后端获取酒店列表"""
+        """从后端获取酒店列表 (已修复 urllib 未定义错误)"""
         try:
             # 去掉末尾斜杠
             base_url = backend_url.rstrip('/')
             url = f"{base_url}/api/v1/hotels/search?destination="
             
-            # 兼容性处理：如果是 localhost 且请求失败，尝试使用 127.0.0.1
-            url = url.replace('localhost', '127.0.0.1')
-            
-            # 强制禁用代理
-            proxy_handler = urllib.request.ProxyHandler({})
-            opener = urllib.request.build_opener(proxy_handler)
-            
+            # 自动修正 localhost 为 127.0.0.1
+            if "localhost" in url:
+                url = url.replace("localhost", "127.0.0.1")
+
             def do_fetch():
                 try:
-                    with opener.open(url, timeout=5) as response:
-                        result = json.loads(response.read().decode('utf-8'))
-                        # 兼容两种格式：{ success: true, data: { hotels: [...] } } 或直接数据
+                    # 使用 requests 库，它更稳定且能自动处理系统代理
+                    response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        result = response.json()
+                        # 兼容多种返回格式
                         hotels = []
                         if isinstance(result, dict):
                             if 'data' in result and 'hotels' in result['data']:
@@ -219,16 +216,19 @@ class BaseDeviceEmulator:
                         if hotels:
                             self.hotels_data = hotels
                             values = [f"{h['name']} (ID: {h['id']})" for h in hotels]
-                            
                             # 在主线程更新UI
                             self.root.after(0, lambda: self._update_hotel_select(values))
+                        else:
+                            self.root.after(0, lambda: self.hotel_select.config(values=["未搜索到酒店"]))
+                    else:
+                        self.root.after(0, lambda: self.hotel_select.config(values=[f"请求失败 ({response.status_code})"]))
                 except Exception as e:
-                    print(f"获取酒店列表失败: {e}")
-                    self.root.after(0, lambda: self.hotel_select.config(values=["获取失败，请检查后端地址"]))
+                    print(f"获取酒店列表过程出错: {e}")
+                    self.root.after(0, lambda: self.hotel_select.config(values=["获取失败，请检查网络"]))
 
             threading.Thread(target=do_fetch, daemon=True).start()
         except Exception as e:
-            print(f"启动获取酒店列表线程失败: {e}")
+            print(f"初始化酒店列表线程失败: {e}")
 
     def _update_hotel_select(self, values):
         """更新酒店下拉框内容"""
@@ -247,15 +247,175 @@ class BaseDeviceEmulator:
                 self.hotel_select.current(0)
 
     def _reconfigure(self):
-        """重新进入配网流程"""
-        if self.connected:
-            if not messagebox.askyesno("确认", "重新配网需要先断开当前连接，是否继续？"):
-                return
-            self._disconnect()
+        """重新弹出配网配置对话框 (支持酒店列表获取)"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("设备网络与资产配置")
+        dialog.geometry("480x580")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        main_f = tk.Frame(dialog, padx=20, pady=20)
+        main_f.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(main_f, text="设备配网与资产参数修改", font=("Arial", 12, "bold")).pack(pady=(0, 20))
+
+        # 配置表单
+        form = tk.Frame(main_f)
+        form.pack(fill=tk.X)
+
+        # 1. 后端 API 地址 (决定酒店列表)
+        tk.Label(form, text="后端 API 地址:").grid(row=0, column=0, sticky=tk.W, pady=8)
+        backend_entry = tk.Entry(form)
+        backend_entry.insert(0, self.backend_url_var.get() or "http://localhost:9000")
+        backend_entry.grid(row=0, column=1, sticky=tk.EW, pady=8)
+
+        # 2. 酒店选择
+        tk.Label(form, text="所属酒店:").grid(row=1, column=0, sticky=tk.W, pady=8)
+        self.hotel_select = ttk.Combobox(form, state="readonly")
+        self.hotel_select.grid(row=1, column=1, sticky=tk.EW, pady=8)
         
-        # 弹出确认对话框
-        if messagebox.askyesno("重置确认", "重新配网将保留设备物理ID，但允许修改酒店ID和后端地址。是否继续？"):
-            self._show_setup_wizard()
+        # 刷新按钮
+        tk.Button(form, text="🔄 刷新", command=lambda: self._fetch_hotel_list(backend_entry.get())).grid(row=1, column=2, padx=5)
+
+        # 初始加载
+        self.hotels_data = []
+        self._fetch_hotel_list(backend_entry.get())
+
+        # 3. MQTT 配置
+        tk.Label(form, text="MQTT Broker:").grid(row=2, column=0, sticky=tk.W, pady=8)
+        mqtt_entry = tk.Entry(form)
+        mqtt_entry.insert(0, self.broker_var.get() or "8.134.166.69")
+        mqtt_entry.grid(row=2, column=1, sticky=tk.EW, pady=8)
+
+        tk.Label(form, text="MQTT Port:").grid(row=3, column=0, sticky=tk.W, pady=8)
+        port_entry = tk.Entry(form)
+        port_entry.insert(0, self.port_var.get() or "1883")
+        port_entry.grid(row=3, column=1, sticky=tk.EW, pady=8)
+
+        def save():
+            selection_idx = self.hotel_select.current()
+            if selection_idx < 0:
+                messagebox.showerror("错误", "请先选择所属酒店")
+                return
+            
+            selected_hotel = self.hotels_data[selection_idx]
+            hotel_id = selected_hotel['id']
+            backend_url = backend_entry.get()
+            mqtt_broker = mqtt_entry.get()
+            mqtt_port = port_entry.get()
+
+            self.hotel_id_var.set(str(hotel_id))
+            self.backend_url_var.set(backend_url)
+            self.broker_var.set(mqtt_broker)
+            self.port_var.set(mqtt_port)
+            
+            # 保存并同步
+            self._save_config({
+                'hotel_id': int(hotel_id),
+                'backend_url': backend_url,
+                'mqtt_broker': mqtt_broker,
+                'mqtt_port': mqtt_port,
+                'device_id': self.unique_device_id,
+                'device_type': self.device_type,
+                'room_id': self.room_id_var.get(),
+                'room_number': self.room_number_var.get(),
+                'area': self.area_var.get()
+            })
+            
+            dialog.destroy()
+            self._log(f"配置已更新至: {selected_hotel['name']}，正在同步云端...", "INFO")
+            self._register_device_to_web()
+
+        tk.Button(main_f, text="确认并保存", bg=self.colors['primary'], fg="white", 
+                  command=save, pady=10, font=("Arial", 10, "bold")).pack(fill=tk.X, pady=(20, 0))
+
+    def _register_device_to_web(self):
+        """通过 HTTP API 注册/同步设备信息"""
+        def do_register():
+            try:
+                hotel_id = self.hotel_id_var.get()
+                backend_url = self.backend_url_var.get()
+                room_num = self.room_number_var.get()
+                
+                if not hotel_id:
+                    self._log("未配置酒店ID，无法注册", "WARNING")
+                    return
+
+                # 自动修正 localhost 为 127.0.0.1 以避免某些环境下的解析问题
+                if "localhost" in backend_url:
+                    backend_url = backend_url.replace("localhost", "127.0.0.1")
+
+                register_url = f"{backend_url}/api/v1/devices/register"
+                
+                payload = {
+                    "device_id": self.unique_device_id,
+                    "device_type": self.device_type,
+                    "device_name": f"{self.device_type}_{self.unique_device_id[-4:]}",
+                    "hotel_id": int(hotel_id),
+                    "room_number": room_num, # 允许模拟器主动申领房号
+                    "firmware_version": "v1.2.0-smart",
+                    "ip_address": "127.0.0.1"
+                }
+
+                self._log(f"正在同步云端配置: {register_url}")
+                
+                # 使用 requests 发送请求，它会自动处理系统代理
+                response = requests.post(register_url, json=payload, timeout=10)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        data = result.get('data', {})
+                        self._log(f"云端同步成功: {data.get('status', 'ok')}", "SUCCESS")
+                        
+                        # 更新本地资产信息
+                        if data.get('room_id'): self.room_id_var.set(str(data['room_id']))
+                        if data.get('room_number'): self.room_number_var.set(data['room_number'])
+                        if data.get('area'): self.area_var.set(data['area'])
+                        
+                        # 更新密钥
+                        if data.get('device_key'):
+                            self.device_key_var.set(data['device_key'])
+                            if self.mqtt_client:
+                                self.mqtt_client.device_key = data['device_key']
+                        
+                        # 更新审核状态
+                        status = data.get('audit_status') or data.get('status')
+                        if self.mqtt_client:
+                            if status == 'approved':
+                                self.mqtt_client.audit_status = "approved"
+                            elif status == 'pending':
+                                self.mqtt_client.audit_status = "pending"
+                            self.root.after(0, self._update_audit_status_display)
+
+                        # 触发 UI 更新回调
+                        if hasattr(self, '_on_config_updated'):
+                            self.root.after(0, self._on_config_updated)
+                            
+                        # 持久化
+                        self._save_config({
+                            'hotel_id': int(hotel_id),
+                            'room_id': data.get('room_id'),
+                            'room_number': data.get('room_number'),
+                            'area': data.get('area'),
+                            'backend_url': self.backend_url_var.get(),
+                            'mqtt_broker': self.broker_var.get(),
+                            'mqtt_port': self.port_var.get(),
+                            'device_id': self.unique_device_id,
+                            'device_type': self.device_type,
+                            'device_key': self.device_key_var.get()
+                        })
+                    else:
+                        self._log(f"同步失败: {result.get('message')}", "ERROR")
+                else:
+                    self._log(f"后端返回错误: {response.status_code}", "ERROR")
+                    
+            except requests.exceptions.ConnectionError:
+                self._log("无法连接到后端服务器，请检查公网/内网地址是否正确", "ERROR")
+            except Exception as e:
+                self._log(f"同步过程发生异常: {str(e)}", "ERROR")
+
+        threading.Thread(target=do_register, daemon=True).start()
 
     def _init_ui(self):
         """初始化通用UI组件 - 现代化扁平化设计"""
@@ -308,9 +468,25 @@ class BaseDeviceEmulator:
         self.main_container = tk.Frame(self.root, bg=self.colors['bg'], padx=20, pady=20)
         self.main_container.pack(fill=tk.BOTH, expand=True)
 
-        # 左侧: 业务控制区 (由子类填充)
-        self.biz_frame = tk.Frame(self.main_container, bg=self.colors['bg'])
-        self.biz_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 左侧: 业务控制区 (带滚动条)
+        self.biz_canvas = tk.Canvas(self.main_container, bg=self.colors['bg'], highlightthickness=0)
+        self.biz_scrollbar = ttk.Scrollbar(self.main_container, orient="vertical", command=self.biz_canvas.yview)
+        self.biz_canvas.configure(yscrollcommand=self.biz_scrollbar.set)
+        
+        self.biz_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.biz_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 容器 Frame
+        self.biz_frame = tk.Frame(self.biz_canvas, bg=self.colors['bg'])
+        self.biz_canvas_window = self.biz_canvas.create_window((0, 0), window=self.biz_frame, anchor="nw")
+        
+        # 绑定事件以自适应宽度和滚动范围
+        self.biz_frame.bind("<Configure>", self._on_biz_frame_configure)
+        self.biz_canvas.bind("<Configure>", self._on_biz_canvas_configure)
+        
+        # 绑定鼠标滚轮 (仅在鼠标进入画布区域时生效)
+        self.biz_canvas.bind("<Enter>", self._bind_mousewheel)
+        self.biz_canvas.bind("<Leave>", self._unbind_mousewheel)
 
         # 右侧: 系统管理区
         self.sys_sidebar = tk.Frame(self.main_container, bg=self.colors['bg'], width=300)
@@ -470,119 +646,6 @@ class BaseDeviceEmulator:
         self.conn_btn.config(text="连接系统", bg=self.colors['success'])
         self._log("已安全断开系统连接")
 
-    def _register_device_to_web(self):
-        """通过HTTP API注册设备到Web后台"""
-        try:
-            hotel_id = self.hotel_id_var.get()
-            backend_url = self.backend_url_var.get()
-            
-            self._log(f"开始注册设备到Web后台...")
-            self._log(f"后端地址: {backend_url}")
-            self._log(f"酒店ID: {hotel_id}")
-            self._log(f"设备ID: {self.unique_device_id}")
-            
-            if not hotel_id:
-                self._log("未配置酒店ID，跳过HTTP注册", "WARNING")
-                return
-            
-            # 兼容性处理：如果是 localhost 且请求失败，尝试使用 127.0.0.1
-            current_backend_url = backend_url.replace('localhost', '127.0.0.1')
-            
-            # 构建注册数据
-            register_data = {
-                "device_id": self.unique_device_id,
-                "device_type": self.device_type,
-                "device_name": f"{self.device_type}_{self.unique_device_id[-6:]}",
-                "firmware_version": "v1.1.0-emulator",
-                "hotel_id": int(hotel_id),
-                "ip_address": "127.0.0.1",
-                "mac_address": "00:00:00:00:00:00"
-            }
-            
-            self._log(f"注册数据: {register_data}")
-            
-            # 发送HTTP POST请求到后端
-            register_url = f"{current_backend_url}/api/v1/devices/register"
-            self._log(f"注册URL: {register_url}")
-            
-            # 强制禁用代理，避免 localhost 请求走系统代理导致失败
-            proxy_handler = urllib.request.ProxyHandler({})
-            opener = urllib.request.build_opener(proxy_handler)
-            
-            req = urllib.request.Request(
-                register_url,
-                data=json.dumps(register_data).encode('utf-8'),
-                headers={'Content-Type': 'application/json'},
-                method='POST'
-            )
-            
-            # 在后台线程中发送请求
-            def do_register():
-                try:
-                    self._log("正在发送注册请求...")
-                    # 使用 opener 以确保不走代理
-                    with opener.open(req, timeout=10) as response:
-                        result = json.loads(response.read().decode('utf-8'))
-                        self._log(f"注册响应: {result}")
-                        if result.get('success'):
-                            data = result.get('data', {})
-                            status = data.get('status', 'unknown')
-                            self._log(f"设备注册成功: {status}", "SUCCESS")
-                            
-                            # 更新本地变量
-                            if data.get('room_id'): self.room_id_var.set(str(data['room_id']))
-                            if data.get('room_number'): self.room_number_var.set(data['room_number'])
-                            if data.get('area'): self.area_var.set(data['area'])
-                            if data.get('device_name'): 
-                                self.device_id = data['device_id'] # 如果后端分配了新的ID
-                                # 注意：这里不改 unique_device_id，它是物理标识
-
-                            # 更新审核状态
-                            if self.mqtt_client:
-                                if status == 'approved':
-                                    self.mqtt_client.audit_status = "approved"
-                                elif status == 'pending':
-                                    self.mqtt_client.audit_status = "pending"
-                                # 更新UI显示
-                                self.root.after(0, self._update_audit_status_display)
-                                
-                            # 触发子类UI更新
-                            if hasattr(self, '_on_config_updated'):
-                                self.root.after(0, self._on_config_updated)
-
-                            # 保存完整配置，无论是否已审核，只要同步成功就更新本地配置
-                            self._save_config({
-                                'hotel_id': int(hotel_id),
-                                'room_id': data.get('room_id'),
-                                'room_number': data.get('room_number'),
-                                'area': data.get('area'),
-                                'backend_url': backend_url,
-                                'mqtt_broker': self.broker_var.get(),
-                                'mqtt_port': self.port_var.get(),
-                                'device_id': self.unique_device_id,
-                                'device_type': self.device_type,
-                                'device_key': data.get('device_key') or self.device_key_var.get()
-                            })
-                        else:
-                            self._log(f"设备注册失败: {result.get('message')}", "WARNING")
-                except urllib.error.HTTPError as e:
-                    self._log(f"HTTP注册请求失败: {e.code} - {e.reason}", "ERROR")
-                    try:
-                        error_body = e.read().decode('utf-8')
-                        self._log(f"错误详情: {error_body}", "ERROR")
-                    except:
-                        pass
-                except urllib.error.URLError as e:
-                    self._log(f"网络连接错误: {e.reason}", "ERROR")
-                    self._log("请检查后端是否正在运行，且地址是否正确。如果是本地开发，建议使用 http://127.0.0.1:9000", "WARNING")
-                except Exception as e:
-                    self._log(f"HTTP注册请求发生未知错误: {e}", "ERROR")
-            
-            threading.Thread(target=do_register, daemon=True).start()
-            
-        except Exception as e:
-            self._log(f"设备注册准备失败: {e}", "ERROR")
-
     def _on_mqtt_message(self, topic, payload):
         """处理通用的MQTT消息（子类应覆盖此方法）"""
         self._log(f"接收消息 [{topic}]: {payload}")
@@ -616,6 +679,26 @@ class BaseDeviceEmulator:
             text, color = status_map.get(audit_status, ("未注册", self.colors['text_secondary']))
             self.audit_status_var.set(text)
             self.audit_status_label.config(fg=color)
+
+    def _on_biz_frame_configure(self, event):
+        """更新滚动区域范围"""
+        self.biz_canvas.configure(scrollregion=self.biz_canvas.bbox("all"))
+
+    def _on_biz_canvas_configure(self, event):
+        """同步 Canvas 宽度到内层 Frame"""
+        self.biz_canvas.itemconfig(self.biz_canvas_window, width=event.width)
+
+    def _on_mousewheel(self, event):
+        """处理鼠标滚轮"""
+        self.biz_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _bind_mousewheel(self, event):
+        """当鼠标进入时绑定滚轮事件"""
+        self.biz_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, event):
+        """当鼠标离开时取消绑定滚轮事件"""
+        self.biz_canvas.unbind_all("<MouseWheel>")
 
     def run(self):
         """运行主循环"""

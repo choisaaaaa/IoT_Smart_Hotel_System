@@ -77,7 +77,22 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         """当云端分配房间后触发"""
         self._sync_room_info()
         self._update_oled()
+        if hasattr(self, 'room_num_entry'):
+            self.room_num_entry.delete(0, tk.END)
+            self.room_num_entry.insert(0, self.room_number_var.get() or self.room_id)
         self._log("收到云端配置更新，已重载界面")
+
+    def _apply_room_change(self):
+        """主动申请修改房间号"""
+        new_num = self.room_num_entry.get().strip()
+        if not new_num:
+            messagebox.showwarning("提示", "请输入有效的房间号")
+            return
+        
+        self._log(f"正在申请变更房间号为: {new_num}...")
+        self.room_number_var.set(new_num)
+        # 触发基类的同步逻辑
+        self._register_device_to_web()
 
     def _init_biz_ui(self):
         """初始化客房特有的业务界面"""
@@ -148,7 +163,22 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.temp_label.pack(side=tk.RIGHT, padx=15)
         tk.Button(temp_f, text="+", width=4, font=("Arial", 10, "bold"), command=lambda: self._adj_temp(1)).pack(side=tk.RIGHT, padx=2)
 
-        # 3. AI 语音助手对话框
+        # 3. 房间设置 (特有功能)
+        self._create_card(self.biz_frame, "房间资产设置").pack(fill=tk.X, pady=(0, 20))
+        room_settings_body = self.last_card_body
+        
+        settings_f = tk.Frame(room_settings_body, bg="white")
+        settings_f.pack(fill=tk.X)
+        
+        tk.Label(settings_f, text="当前房号:", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
+        self.room_num_entry = tk.Entry(settings_f, width=10, font=("Arial", 10, "bold"))
+        self.room_num_entry.insert(0, self.room_number_var.get() or self.room_id)
+        self.room_num_entry.pack(side=tk.LEFT, padx=10)
+        
+        tk.Button(settings_f, text="应用并同步", bg=self.colors['primary'], fg="white", 
+                  command=self._apply_room_change, relief=tk.FLAT, font=("Arial", 9, "bold"), padx=10).pack(side=tk.LEFT)
+
+        # 4. AI 语音交互管家
         self._create_card(self.biz_frame, "AI 语音交互管家").pack(fill=tk.BOTH, expand=True)
         ai_body = self.last_card_body
         
