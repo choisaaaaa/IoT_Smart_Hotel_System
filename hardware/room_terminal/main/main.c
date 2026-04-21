@@ -516,6 +516,9 @@ void task_sensor_monitor(void *pvParameters) {
         // 分拆 Topic，按照规范格式发送
         publish_sensor_data("temperature", env_data.temperature, "℃");
         publish_sensor_data("humidity", env_data.humidity, "%");
+        publish_sensor_data("air_quality_adc", env_data.air_quality_adc, "adc");
+        publish_sensor_data("light_adc", env_data.light_adc, "adc");
+        publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
     }
 }
 

@@ -38,7 +38,7 @@ static void resubscribe_all_topics(void) {
     for (int i = 0; i < MQTT_MAX_SUBSCRIPTIONS; ++i) {
         if (s_subscriptions[i].used) {
             int msg_id = esp_mqtt_client_subscribe(s_client, s_subscriptions[i].topic, 1);
-            ESP_LOGI(TAG, "Resubscribe topic=%s msg_id=%d", s_subscriptions[i].topic, msg_id);
+            ESP_LOGI(TAG, "重订阅主题: topic=%s msg_id=%d", s_subscriptions[i].topic, msg_id);
         }
     }
 }
@@ -47,20 +47,20 @@ static void reconnect_task(void *param) {
     (void)param;
     int backoff_ms = MQTT_BACKOFF_MIN_MS;
 
-    ESP_LOGW(TAG, "MQTT reconnect task started");
+    ESP_LOGW(TAG, "MQTT 重连任务已启动");
     while (s_started && !s_connected) {
         vTaskDelay(pdMS_TO_TICKS(backoff_ms));
         if (!s_started || s_connected || s_client == NULL) {
             break;
         }
 
-        ESP_LOGW(TAG, "MQTT reconnect attempt, backoff_ms=%d", backoff_ms);
+        ESP_LOGW(TAG, "MQTT 重连尝试, backoff_ms=%d", backoff_ms);
         esp_mqtt_client_reconnect(s_client);
         backoff_ms = (backoff_ms < MQTT_BACKOFF_MAX_MS / 2) ? backoff_ms * 2 : MQTT_BACKOFF_MAX_MS;
     }
 
     s_reconnect_task_running = false;
-    ESP_LOGI(TAG, "MQTT reconnect task stopped");
+    ESP_LOGI(TAG, "MQTT 重连任务已停止");
     vTaskDelete(NULL);
 }
 
@@ -72,13 +72,13 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch (event_id) {
         case MQTT_EVENT_CONNECTED:
             s_connected = true;
-            ESP_LOGI(TAG, "MQTT connected");
+            ESP_LOGI(TAG, "MQTT 已连接");
             resubscribe_all_topics();
             break;
 
         case MQTT_EVENT_DISCONNECTED:
             s_connected = false;
-            ESP_LOGW(TAG, "MQTT disconnected");
+            ESP_LOGW(TAG, "MQTT 已断开");
             if (s_started && !s_reconnect_task_running) {
                 s_reconnect_task_running = true;
                 xTaskCreate(reconnect_task, "mqtt_reconnect", 3072, NULL, 4, NULL);
@@ -106,11 +106,11 @@ esp_err_t service_mqtt_start(const char *broker_uri, const char *client_id) {
     }
 
     if (s_started && s_client != NULL) {
-        ESP_LOGI(TAG, "MQTT service already started");
+        ESP_LOGI(TAG, "MQTT 服务已启动");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Starting MQTT service, broker=%s, client_id=%s", broker_uri, client_id);
+    ESP_LOGI(TAG, "启动 MQTT 服务: broker=%s, client_id=%s", broker_uri, client_id);
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = broker_uri,
@@ -120,14 +120,14 @@ esp_err_t service_mqtt_start(const char *broker_uri, const char *client_id) {
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
     if (s_client == NULL) {
-        ESP_LOGE(TAG, "esp_mqtt_client_init failed");
+        ESP_LOGE(TAG, "esp_mqtt_client_init 失败");
         return ESP_FAIL;
     }
 
     esp_mqtt_client_register_event(s_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_err_t err = esp_mqtt_client_start(s_client);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_mqtt_client_start failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "esp_mqtt_client_start 失败: %s", esp_err_to_name(err));
         return err;
     }
 
@@ -158,7 +158,7 @@ esp_err_t service_mqtt_subscribe(const char *topic, mqtt_event_callback_t callba
             s_subscriptions[i].callback = callback;
             s_subscriptions[i].used = true;
 
-            ESP_LOGI(TAG, "Subscribing topic: %s", s_subscriptions[i].topic);
+            ESP_LOGI(TAG, "订阅主题: %s", s_subscriptions[i].topic);
             if (s_connected && s_client != NULL) {
                 esp_mqtt_client_subscribe(s_client, s_subscriptions[i].topic, 1);
             }
@@ -166,7 +166,7 @@ esp_err_t service_mqtt_subscribe(const char *topic, mqtt_event_callback_t callba
         }
     }
 
-    ESP_LOGE(TAG, "Subscription table full, topic=%s", topic);
+    ESP_LOGE(TAG, "订阅表已满, topic=%s", topic);
     return ESP_ERR_NO_MEM;
 }
 
@@ -176,16 +176,16 @@ esp_err_t service_mqtt_publish(const char *topic, const char *json_payload) {
     }
 
     if (!s_connected || s_client == NULL) {
-        ESP_LOGW(TAG, "Publish skipped while disconnected, topic=%s", topic);
+        ESP_LOGW(TAG, "MQTT 未连接，跳过发布: topic=%s", topic);
         return ESP_ERR_INVALID_STATE;
     }
 
     int msg_id = esp_mqtt_client_publish(s_client, topic, json_payload, 0, 1, 0);
     if (msg_id < 0) {
-        ESP_LOGE(TAG, "Publish failed, topic=%s", topic);
+        ESP_LOGE(TAG, "MQTT 发布失败: topic=%s", topic);
         return ESP_FAIL;
     }
 
-    ESP_LOGD(TAG, "Published topic=%s msg_id=%d", topic, msg_id);
+    ESP_LOGI(TAG, "MQTT 发布成功: topic=%s msg_id=%d", topic, msg_id);
     return ESP_OK;
 }
