@@ -293,9 +293,16 @@ export class AIButlerService {
         return response.data.result;
       }
 
-      throw new Error('ASR识别失败');
-    } catch (error) {
-      logger.error('阿里云ASR识别失败:', error.message);
+      const errorMsg = response.data?.message || 'ASR响应异常';
+      throw new Error(errorMsg);
+    } catch (error: any) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      logger.error('阿里云ASR识别失败:', {
+        message: error.message,
+        status,
+        details: data
+      });
       return '';
     }
   }

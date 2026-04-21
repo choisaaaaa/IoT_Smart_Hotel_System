@@ -359,15 +359,16 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             if self.pyaudio_instance:
                 self.pyaudio_instance.terminate()
             
-            # 将音频帧转换为 WAV 格式的 base64
-            buffer = io.BytesIO()
-            with wave.open(buffer, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2) # 16-bit
-                wf.setframerate(16000)
-                wf.writeframes(b''.join(self.audio_frames))
+            # 发送原始 PCM 数据 (16k, 16bit, 单声道)
+            # 阿里云 ASR 期望的是原始数据流，而不是带头的 WAV 文件
+            raw_pcm = b''.join(self.audio_frames)
             
-            audio_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            if not raw_pcm:
+                self._log("未采集到有效音频数据", "WARNING")
+                self.ai_status_var.set("空闲")
+                return
+
+            audio_base64 = base64.b64encode(raw_pcm).decode('utf-8')
             
             # 发送 AI 请求（带音频数据）
             if self.mqtt_client and self.connected:
