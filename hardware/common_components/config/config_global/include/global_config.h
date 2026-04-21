@@ -66,15 +66,28 @@ extern "C" {
 
 // 毫米波雷达：安信可 S3KM1110 等焊盘为 3V3/GND/OT1/RX/OT2（常见无模组侧 TX），
 // 杜邦线基准为 OT2 数字输出接 MCU，与 driver_rd03_simple 一致。
+#ifndef GLOBAL_RD03_OT2_PIN
 #define GLOBAL_RD03_OT2_PIN        16
+#endif
 // 若使用带模组 TX/RX 的 UART 版本，与上项二选一（勿在同一 MCU 脚上同时接 OT2 与 UART RX）。
 #define GLOBAL_UART_RD03_TX_PIN    15
 #define GLOBAL_UART_RD03_RX_PIN    16
 
 // ADC 采样 (传感器)
+#ifndef GLOBAL_ADC_MQ2_PIN
 #define GLOBAL_ADC_MQ2_PIN         4
+#endif
+#ifndef GLOBAL_ADC_LDR_PIN
 #define GLOBAL_ADC_LDR_PIN         5
+#endif
+#ifndef GLOBAL_ADC_NTC_PIN
 #define GLOBAL_ADC_NTC_PIN         6
+#endif
+
+// DHT11 单总线数据脚（可由终端工程通过编译宏覆盖）
+#ifndef GLOBAL_DHT11_PIN
+#define GLOBAL_DHT11_PIN           15
+#endif
 
 // 继电器与红外
 // 允许各终端工程通过编译宏覆盖默认引脚（如楼控单路继电器场景）
@@ -103,7 +116,9 @@ extern "C" {
 #define GLOBAL_BTN_ROOM_2_PIN      28 // 客房: 场景/睡眠
 #define GLOBAL_BTN_FRONT_1_PIN     5  // 前台: 消音
 #define GLOBAL_BTN_FRONT_2_PIN     6  // 前台: 广播
+#ifndef GLOBAL_BTN_FLOOR_1_PIN
 #define GLOBAL_BTN_FLOOR_1_PIN     19 // 楼控: 报警
+#endif
 
 // 其他输出
 #define GLOBAL_BUZZER_PIN          38 // 蜂鸣器 (高有效)

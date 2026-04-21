@@ -13,11 +13,14 @@ static bool s_ldr_ready = false;
 static bool s_rd03_ready = false;
 
 esp_err_t hal_sensors_init(void) {
-    // 杜邦线基线：DHT11 DATA -> GPIO15（与 docs/22、docs/24 对齐）
-    esp_err_t err = driver_dht11_init(15);
+    if (GLOBAL_DHT11_PIN == GLOBAL_ADC_MQ2_PIN || GLOBAL_DHT11_PIN == GLOBAL_ADC_LDR_PIN) {
+        ESP_LOGW(TAG, "DHT11 GPIO%d 与 ADC 传感器引脚冲突，请检查引脚映射", GLOBAL_DHT11_PIN);
+    }
+
+    esp_err_t err = driver_dht11_init(GLOBAL_DHT11_PIN);
     if (err == ESP_OK) {
         s_dht11_ready = true;
-        ESP_LOGI(TAG, "DHT11 初始化成功: GPIO15");
+        ESP_LOGI(TAG, "DHT11 初始化成功: GPIO%d", GLOBAL_DHT11_PIN);
     } else {
         ESP_LOGW(TAG, "DHT11 初始化失败: %s", esp_err_to_name(err));
     }
@@ -38,12 +41,16 @@ esp_err_t hal_sensors_init(void) {
         ESP_LOGW(TAG, "光敏初始化失败: %s", esp_err_to_name(err));
     }
 
-    err = driver_rd03_simple_init(GLOBAL_RD03_OT2_PIN);
-    if (err == ESP_OK) {
-        s_rd03_ready = true;
-        ESP_LOGI(TAG, "毫米波 OT2 初始化成功: GPIO%d", GLOBAL_RD03_OT2_PIN);
+    if (GLOBAL_RD03_OT2_PIN >= 0) {
+        err = driver_rd03_simple_init(GLOBAL_RD03_OT2_PIN);
+        if (err == ESP_OK) {
+            s_rd03_ready = true;
+            ESP_LOGI(TAG, "毫米波 OT2 初始化成功: GPIO%d", GLOBAL_RD03_OT2_PIN);
+        } else {
+            ESP_LOGW(TAG, "毫米波 OT2 初始化失败: %s", esp_err_to_name(err));
+        }
     } else {
-        ESP_LOGW(TAG, "毫米波 OT2 初始化失败: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "毫米波 OT2 未启用（GLOBAL_RD03_OT2_PIN < 0）");
     }
 
     if (!s_dht11_ready && !s_mq2_ready && !s_ldr_ready && !s_rd03_ready) {
@@ -93,11 +100,19 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         }
     }
 
-    ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u Human=%d",
-             out_data->temperature,
-             out_data->humidity,
-             (unsigned)out_data->air_quality_adc,
-             (unsigned)out_data->light_adc,
-             out_data->is_human_present ? 1 : 0);
+    if (s_rd03_ready) {
+        ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u Human=%d",
+                 out_data->temperature,
+                 out_data->humidity,
+                 (unsigned)out_data->air_quality_adc,
+                 (unsigned)out_data->light_adc,
+                 out_data->is_human_present ? 1 : 0);
+    } else {
+        ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u",
+                 out_data->temperature,
+                 out_data->humidity,
+                 (unsigned)out_data->air_quality_adc,
+                 (unsigned)out_data->light_adc);
+    }
     return ESP_OK;
 }

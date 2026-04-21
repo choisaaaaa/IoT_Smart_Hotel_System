@@ -17,6 +17,10 @@ add_compile_definitions(
     GLOBAL_RELAY_CH2_PIN=-1
     GLOBAL_RELAY_CH3_PIN=-1
     GLOBAL_RELAY_CH4_PIN=-1
+    GLOBAL_RD03_OT2_PIN=-1
+    GLOBAL_DHT11_PIN=4
+    GLOBAL_ADC_MQ2_PIN=1
+    GLOBAL_BTN_FLOOR_1_PIN=18
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
