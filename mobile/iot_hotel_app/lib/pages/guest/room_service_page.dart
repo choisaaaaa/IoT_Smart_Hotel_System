@@ -195,10 +195,6 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     }
   }
 
-  Future<void> _refreshData() async {
-    await _checkCheckinStatus();
-  }
-
   Future<void> _toggleDevice(dynamic device) async {
     final currentStatus = device['device_status'] ?? device['status'] ?? 'off';
     final newStatus = currentStatus == 'on' ? 'off' : 'on';

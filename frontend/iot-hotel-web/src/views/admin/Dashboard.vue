@@ -114,9 +114,9 @@ onMounted(async () => {
         itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
         label: { show: true, formatter: '{b}\n{c}台' },
         data: [
-          { value: online || 5, name: '在线', itemStyle: { color: '#52c41a' } },
-          { value: offline || 2, name: '离线', itemStyle: { color: '#999' } },
-          { value: error || 1, name: '异常', itemStyle: { color: '#ff4d4f' } }
+          { value: online, name: '在线', itemStyle: { color: '#52c41a' } },
+          { value: offline, name: '离线', itemStyle: { color: '#999' } },
+          { value: error, name: '异常', itemStyle: { color: '#ff4d4f' } }
         ]
       }]
     })

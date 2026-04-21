@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/dio_client.dart';
@@ -131,10 +132,17 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: idNumberCtrl,
+                      keyboardType: idType == 'idcard' ? TextInputType.visiblePassword : TextInputType.text,
+                      maxLength: idType == 'idcard' ? 18 : null,
+                      inputFormatters: idType == 'idcard'
+                          ? [FilteringTextInputFormatter.allow(RegExp(r'[\dXx]'))]
+                          : null,
                       decoration: InputDecoration(
                         labelText: '证件号码',
                         prefixIcon: const Icon(Icons.numbers_outlined, size: 20),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        counterText: '',
+                        hintText: idType == 'idcard' ? '请输入18位身份证号' : '请输入证件号码',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -182,6 +190,16 @@ class _FrequentGuestPageState extends ConsumerState<FrequentGuestPage> {
                     }
                     if (idNumberCtrl.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入证件号码')));
+                      return;
+                    }
+                    if (idType == 'idcard') {
+                      final idNumber = idNumberCtrl.text.trim();
+                      if (idNumber.length != 18 || !RegExp(r'^\d{17}[\dXx]$').hasMatch(idNumber)) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入正确的18位身份证号')));
+                        return;
+                      }
+                    } else if (idNumberCtrl.text.trim().length < 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('证件号码至少5位')));
                       return;
                     }
                     Navigator.pop(ctx);

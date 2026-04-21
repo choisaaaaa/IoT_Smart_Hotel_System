@@ -139,17 +139,39 @@
       </div>
     </a-card>
 
-    <a-card v-if="currentStep === 2" title="步骤3: 确认信息" :bordered="false">
-      <a-descriptions :column="1" bordered size="small" style="max-width: 600px;">
+    <a-card v-if="currentStep === 2" title="步骤3: 填写入住信息" :bordered="false">
+      <a-form layout="vertical" style="max-width: 500px;">
+        <a-form-item label="真实姓名" required>
+          <a-input v-model:value="checkinForm.real_name" placeholder="请输入与证件一致的真实姓名" size="large" />
+        </a-form-item>
+        <a-form-item label="证件类型" required>
+          <a-select v-model:value="checkinForm.id_type" size="large">
+            <a-select-option value="idcard">身份证/永居证/居住证</a-select-option>
+            <a-select-option value="hkm_pass">港澳居民来往内地通行证</a-select-option>
+            <a-select-option value="taiwan_pass">台湾居民来往大陆通行证</a-select-option>
+            <a-select-option value="passport">外国护照</a-select-option>
+            <a-select-option value="other">其他</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="证件号码" required :validate-status="idNumberError ? 'error' : ''" :help="idNumberError">
+          <a-input
+            v-model:value="checkinForm.id_number"
+            :placeholder="checkinForm.id_type === 'idcard' ? '请输入18位身份证号' : '请输入证件号码'"
+            :maxlength="checkinForm.id_type === 'idcard' ? 18 : undefined"
+            size="large"
+            @change="validateIdNumber"
+          />
+        </a-form-item>
+      </a-form>
+      <a-descriptions :column="1" bordered size="small" style="max-width: 600px; margin-top: 16px;">
         <a-descriptions-item label="预订号">{{ foundBooking?.booking_no }}</a-descriptions-item>
-        <a-descriptions-item label="入住人">{{ foundBooking?.guest_name }}</a-descriptions-item>
         <a-descriptions-item label="房型">{{ foundBooking?.room_name }}</a-descriptions-item>
         <a-descriptions-item label="选定房号">{{ selectedRoomNumber }}</a-descriptions-item>
         <a-descriptions-item label="入住日期">{{ formatDate(foundBooking?.check_in) }}</a-descriptions-item>
         <a-descriptions-item label="退房日期">{{ formatDate(foundBooking?.check_out) }}</a-descriptions-item>
       </a-descriptions>
       <div style="margin-top: 24px;">
-        <a-alert message="信息确认" description="请确认以上信息无误。点击下方按钮即可完成在线入住，到店后请向前台出示办理完成页面。" type="info" show-icon style="margin-bottom: 20px;" />
+        <a-alert message="信息确认" description="请确保填写的信息准确，到店后需出示有效证件核实。如信息有误可能影响入住。" type="warning" show-icon style="margin-bottom: 20px;" />
         <a-space>
           <a-button type="primary" size="large" :loading="confirming" @click="confirmCheckin">确认办理入住</a-button>
           <a-button size="large" @click="currentStep = 1">返回修改</a-button>
@@ -227,6 +249,31 @@ onMounted(async () => {
 const checkinForm = reactive({
   real_name: '', id_type: 'idcard', id_number: '', arrival_time: null as any, plate_number: ''
 })
+
+const idNumberError = ref('')
+
+function validateIdNumber() {
+  const idNumber = checkinForm.id_number.trim()
+  if (!idNumber) {
+    idNumberError.value = '请输入证件号码'
+    return false
+  }
+  if (checkinForm.id_type === 'idcard') {
+    if (idNumber.length !== 18) {
+      idNumberError.value = '身份证号应为18位'
+      return false
+    }
+    if (!/^\d{17}[\dXx]$/.test(idNumber)) {
+      idNumberError.value = '身份证号格式不正确'
+      return false
+    }
+  } else if (idNumber.length < 5) {
+    idNumberError.value = '证件号码至少5位'
+    return false
+  }
+  idNumberError.value = ''
+  return true
+}
 
 function idTypeLabel(t: string): string {
   const labels: Record<string, string> = {
@@ -331,13 +378,21 @@ async function confirmCheckin() {
     message.warning('请先选择房间')
     return
   }
+  if (!checkinForm.real_name.trim()) {
+    message.warning('请填写真实姓名')
+    return
+  }
+  if (!validateIdNumber()) {
+    message.warning(idNumberError.value || '请输入正确的证件号码')
+    return
+  }
   confirming.value = true
   try {
     const res: any = await bookingApi.checkinOnline(foundBooking.value.id, {
       guest_phone: foundBooking.value.guest_phone,
-      real_name: foundBooking.value.guest_name,
-      id_type: 'idcard', // 默认身份证
-      id_number: 'online_checkin', // 占位符，线下核实
+      real_name: checkinForm.real_name.trim(),
+      id_type: checkinForm.id_type,
+      id_number: checkinForm.id_number.trim(),
       room_id: selectedRoomId.value
     })
     const payload = res?.data || {}
@@ -345,9 +400,9 @@ async function confirmCheckin() {
     
     const guestInfo = {
       booking_id: foundBooking.value?.id,
-      real_name: foundBooking.value.guest_name,
-      id_type: 'idcard',
-      id_number: 'online_checkin',
+      real_name: checkinForm.real_name.trim(),
+      id_type: checkinForm.id_type,
+      id_number: checkinForm.id_number.trim(),
       room_id: selectedRoomId.value,
       room_name: payload.room_name || foundBooking.value?.room_name,
       room_number: selectedRoomNumber.value,

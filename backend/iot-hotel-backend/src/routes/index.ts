@@ -29,6 +29,13 @@ import knowledgeBaseRouter from './v1/knowledge-base';
 import mqttRouter from './v1/mqtt';
 import rfidRouter from './v1/rfid';
 import favoriteRouter from './v1/favorites';
+import deviceAlarmRouter from './v1/device-alarms';
+import deviceGroupRouter from './v1/device-groups';
+import energyRouter from './v1/energy';
+import sceneRouter from './v1/scenes';
+import firmwareRouter from './v1/firmware';
+import irRemoteRouter from './v1/ir-remote';
+import rfidAccessRouter from './v1/rfid-access';
 
 const router = Router();
 
@@ -46,7 +53,7 @@ router.use('/rooms', roomRouter);
 router.use('/room-types', roomTypeRouter);
 router.use('/floors', floorRouter);
 router.use('/bookings', bookingRouter);
-router.use('/booking', bookingRouter); // 同时支持单数以防万一
+router.use('/booking', bookingRouter);
 router.use('/payments', paymentRouter);
 router.use('/members', memberRouter);
 router.use('/coupons', couponRouter);
@@ -67,5 +74,12 @@ router.use('/knowledge-base', knowledgeBaseRouter);
 router.use('/mqtt', mqttRouter);
 router.use('/rfid', rfidRouter);
 router.use('/favorites', favoriteRouter);
+router.use('/device-alarms', deviceAlarmRouter);
+router.use('/device-groups', deviceGroupRouter);
+router.use('/energy', energyRouter);
+router.use('/scenes', sceneRouter);
+router.use('/firmware', firmwareRouter);
+router.use('/ir-remote', irRemoteRouter);
+router.use('/rfid-access', rfidAccessRouter);
 
 export default router;

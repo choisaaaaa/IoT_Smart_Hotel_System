@@ -909,6 +909,14 @@ const handleSaveFrequentGuest = async () => {
   if (!guestEditForm.name || !guestEditForm.phone || !guestEditForm.id_number) {
     return message.warning('请填写完整信息')
   }
+  if (guestEditForm.id_type === 'idcard') {
+    const idNumber = guestEditForm.id_number.trim()
+    if (idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(idNumber)) {
+      return message.warning('请填写正确的18位身份证号码')
+    }
+  } else if (guestEditForm.id_number.trim().length < 5) {
+    return message.warning('证件号码至少5位')
+  }
 
   try {
     guestSaveLoading.value = true

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide DateUtils;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
@@ -630,7 +631,11 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
               '证件号码',
               _idNumberController,
               _idType == 'idcard' ? '请输入18位身份证号' : '请输入证件号码',
-              keyboardType: TextInputType.text,
+              keyboardType: _idType == 'idcard' ? TextInputType.visiblePassword : TextInputType.text,
+              maxLength: _idType == 'idcard' ? 18 : null,
+              inputFormatters: _idType == 'idcard'
+                  ? [FilteringTextInputFormatter.allow(RegExp(r'[\dXx]'))]
+                  : null,
             ),
             if (_idType == 'idcard' && _idNumberController.text.isNotEmpty && !_validateIdNumber())
               Padding(
@@ -699,7 +704,7 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, String hint, {TextInputType? keyboardType}) {
+  Widget _buildInputField(String label, TextEditingController controller, String hint, {TextInputType? keyboardType, int? maxLength, List<TextInputFormatter>? inputFormatters}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -708,9 +713,12 @@ class _OnlineCheckinPageState extends ConsumerState<OnlineCheckinPage> {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          maxLength: maxLength,
+          inputFormatters: inputFormatters,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            counterText: '',
           ),
           onChanged: (_) => setState(() {}),
         ),

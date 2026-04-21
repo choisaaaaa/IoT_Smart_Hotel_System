@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide DateUtils;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
@@ -56,11 +57,13 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
   Room? _selectedRoom;
   bool _isLoadingRooms = false;
   String _paymentMethod = 'balance';
+  String _idType = 'idcard';
   Map<String, dynamic>? _priceDetails;
   bool _usePoints = false;
   int _pointsToUse = 0;
   Member? _member;
   List<FrequentGuest> _frequentGuests = [];
+  String? _idNumberError;
 
   @override
   void initState() {
@@ -78,6 +81,42 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
     if (_phoneController.text.trim().length >= 11) {
       _calculatePrice();
     }
+  }
+
+  bool _validateIdNumber() {
+    final idNumber = _idNumberController.text.trim();
+    if (idNumber.isEmpty) {
+      setState(() => _idNumberError = '请输入证件号码');
+      return false;
+    }
+    if (_idType == 'idcard') {
+      if (idNumber.length != 18) {
+        setState(() => _idNumberError = '身份证号应为18位');
+        return false;
+      }
+      if (!RegExp(r'^\d{17}[\dXx]$').hasMatch(idNumber)) {
+        setState(() => _idNumberError = '身份证号格式不正确');
+        return false;
+      }
+    } else if (_idType == 'passport') {
+      if (idNumber.length < 5) {
+        setState(() => _idNumberError = '护照号至少5位');
+        return false;
+      }
+    } else {
+      if (idNumber.length < 5) {
+        setState(() => _idNumberError = '证件号至少5位');
+        return false;
+      }
+    }
+    setState(() => _idNumberError = null);
+    return true;
+  }
+
+  bool _validatePhone() {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) return false;
+    return RegExp(r'^1[3-9]\d{9}$').hasMatch(phone);
   }
 
   Future<void> _loadAvailableRooms() async {
@@ -508,6 +547,16 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
       return;
     }
 
+    if (!_validatePhone()) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入正确的11位手机号')));
+      return;
+    }
+
+    if (!_validateIdNumber()) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_idNumberError ?? '请输入正确的证件号码')));
+      return;
+    }
+
     final targetRoomId = _selectedRoom?.id;
 
     if (targetRoomId == null || targetRoomId == 0) {
@@ -527,6 +576,7 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
         'user_id': currentUser?.id,
         'guest_name': _nameController.text.trim(),
         'guest_phone': _phoneController.text.trim(),
+        'id_type': _idType,
         'guest_id_number': _idNumberController.text.trim(),
         'check_in_date': widget.checkInDate.toIso8601String().split('T')[0],
         'check_out_date': widget.checkOutDate.toIso8601String().split('T')[0],
@@ -795,8 +845,53 @@ class _BookingFlowPageState extends ConsumerState<BookingFlowPage> {
                   ),
                 ),
               _InfoInputRow(label: '姓名', controller: _nameController, hint: '请填写真实姓名'),
-              _InfoInputRow(label: '手机号', controller: _phoneController, hint: '接收确认短信', keyboardType: TextInputType.phone),
-              _InfoInputRow(label: '证件号码', controller: _idNumberController, hint: '请输入有效证件号'),
+              _InfoInputRow(label: '手机号', controller: _phoneController, hint: '接收确认短信', keyboardType: TextInputType.phone, maxLength: 11, inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 80,
+                    child: DropdownButton<String>(
+                      value: _idType,
+                      isDense: true,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(value: 'idcard', child: Text('身份证', style: TextStyle(fontSize: 14))),
+                        DropdownMenuItem(value: 'passport', child: Text('护照', style: TextStyle(fontSize: 14))),
+                        DropdownMenuItem(value: 'other', child: Text('其他', style: TextStyle(fontSize: 14))),
+                      ],
+                      onChanged: (v) {
+                        setState(() {
+                          _idType = v ?? 'idcard';
+                          _idNumberError = null;
+                        });
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _idNumberController,
+                      keyboardType: _idType == 'idcard' ? TextInputType.visiblePassword : TextInputType.text,
+                      maxLength: _idType == 'idcard' ? 18 : null,
+                      inputFormatters: _idType == 'idcard'
+                          ? [FilteringTextInputFormatter.allow(RegExp(r'[\dXx]'))]
+                          : null,
+                      style: const TextStyle(fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: _idType == 'idcard' ? '请输入18位身份证号' : '请输入证件号码',
+                        hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+                        border: InputBorder.none,
+                        isDense: true,
+                        counterText: '',
+                        errorText: _idNumberError,
+                        errorStyle: const TextStyle(fontSize: 11),
+                      ),
+                      onChanged: (_) {
+                        if (_idNumberError != null) _validateIdNumber();
+                      },
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -1152,12 +1247,16 @@ class _InfoInputRow extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final TextInputType keyboardType;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _InfoInputRow({
     required this.label,
     required this.controller,
     required this.hint,
     this.keyboardType = TextInputType.text,
+    this.maxLength,
+    this.inputFormatters,
   });
 
   @override
@@ -1171,12 +1270,15 @@ class _InfoInputRow extends StatelessWidget {
             child: TextField(
               controller: controller,
               keyboardType: keyboardType,
+              maxLength: maxLength,
+              inputFormatters: inputFormatters,
               style: const TextStyle(fontSize: 14),
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
                 border: InputBorder.none,
                 isDense: true,
+                counterText: '',
               ),
             ),
           ),

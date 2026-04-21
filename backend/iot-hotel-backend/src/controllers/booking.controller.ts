@@ -3,6 +3,7 @@ import { successResponse, errorResponse, AuthRequest } from '../types';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import { PoolConnection } from 'mysql2/promise';
 import logger from '../utils/logger';
+import { validateIdNumber } from '../security/validators';
 import dayjs from 'dayjs';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 dayjs.extend(isSameOrBefore);
@@ -498,6 +499,20 @@ export const create = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('请选择房间或房型'));
     }
 
+    if (guest_id_number) {
+      const idType = req.body.id_type || 'idcard';
+      if (idType === 'idcard') {
+        const idValidation = validateIdNumber(guest_id_number);
+        if (!idValidation.valid) {
+          await connection.rollback();
+          return res.status(400).json(errorResponse(idValidation.error || '身份证号格式不正确'));
+        }
+      } else if (guest_id_number.length < 5) {
+        await connection.rollback();
+        return res.status(400).json(errorResponse('证件号码至少5位'));
+      }
+    }
+
     let hotelId = 0;
     let finalRoomTypeId = room_type_id;
     let roomNumber = null;
@@ -722,6 +737,20 @@ export const checkinOnline = async (req: Request, res: Response) => {
       return;
     }
 
+    const finalIdType = id_type || 'idcard';
+    if (finalIdType === 'idcard') {
+      const idValidation = validateIdNumber(id_number);
+      if (!idValidation.valid) {
+        await connection.rollback();
+        res.status(400).json(errorResponse(idValidation.error || '身份证号格式不正确'));
+        return;
+      }
+    } else if (id_number.length < 5) {
+      await connection.rollback();
+      res.status(400).json(errorResponse('证件号码至少5位'));
+      return;
+    }
+
     const [bookingRows] = await connection.query<RowDataPacket[]>(
       `SELECT b.id, b.booking_number, b.guest_phone, b.status, b.room_id, b.check_in_date, b.check_out_date,
               r.room_number, r.room_name
@@ -900,6 +929,22 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       user_id, guest_name, guest_phone, guest_id_number, special_requests,
       manual_discount, manual_reduce, total_price 
     } = req.body || {};
+
+    if (guest_id_number) {
+      const idType = req.body.id_type || 'idcard';
+      if (idType === 'idcard') {
+        const idValidation = validateIdNumber(guest_id_number);
+        if (!idValidation.valid) {
+          await connection.rollback();
+          res.status(400).json(errorResponse(idValidation.error || '身份证号格式不正确'));
+          return;
+        }
+      } else if (guest_id_number.length < 5) {
+        await connection.rollback();
+        res.status(400).json(errorResponse('证件号码至少5位'));
+        return;
+      }
+    }
 
     // 获取订单信息
     const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number, status, auto_checkout_at, check_out_date, total_price FROM bookings WHERE id = ?', [id]);

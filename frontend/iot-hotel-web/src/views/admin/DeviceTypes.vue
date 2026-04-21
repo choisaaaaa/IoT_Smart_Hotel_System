@@ -11,30 +11,25 @@
         :columns="columns"
         :data-source="deviceTypes"
         :loading="loading"
-        row-key="id"
+        row-key="code"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'icon'">
             <component :is="record.icon || 'AppstoreOutlined'" style="font-size: 24px;" />
           </template>
-          <template v-if="column.key === 'status'">
-            <a-switch
-              :checked="record.status === 'active'"
-              @change="(checked) => toggleStatus(record, checked)"
-            />
+          <template v-if="column.key === 'count'">
+            <a-badge :count="record.count" :number-style="{ backgroundColor: '#1890ff' }" :overflow-count="999" />
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button type="link" @click="showEditModal(record)">编辑</a-button>
-              <a-button type="link" danger @click="deleteType(record.id)">删除</a-button>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
 
-    <!-- 添加/编辑弹窗 -->
     <a-modal
       v-model:open="modalVisible"
       :title="isEdit ? '编辑设备类型' : '添加设备类型'"
@@ -63,6 +58,7 @@
 import { ref, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import request from '@/api/request'
 
 const loading = ref(false)
 const deviceTypes = ref<any[]>([])
@@ -78,33 +74,61 @@ const formData = ref({
   icon: 'AppstoreOutlined'
 })
 
+const typeConfig: Record<string, { name: string; description: string; icon: string }> = {
+  smart_lock: { name: '智能门锁', description: '客房智能门锁设备', icon: 'LockOutlined' },
+  ac: { name: '空调控制器', description: '空调温度控制', icon: 'HeatMapOutlined' },
+  light: { name: '灯光控制器', description: '灯光开关和亮度控制', icon: 'BulbOutlined' },
+  curtain: { name: '窗帘控制器', description: '窗帘开合控制', icon: 'ColumnWidthOutlined' },
+  smoke_detector: { name: '烟雾探测器', description: '烟雾报警检测', icon: 'AlertOutlined' },
+  door_sensor: { name: '门磁传感器', description: '门窗开关检测', icon: 'GatewayOutlined' },
+  window_sensor: { name: '窗户传感器', description: '窗户开关检测', icon: 'WindowsOutlined' },
+  temp_humidity: { name: '温湿度传感器', description: '温度和湿度检测', icon: 'CloudOutlined' },
+  sensor: { name: '传感器', description: '通用环境传感器', icon: 'CloudOutlined' },
+  thermostat: { name: '温控器', description: '温度控制设备', icon: 'HeatMapOutlined' },
+  tv: { name: '智能电视', description: '客房电视控制', icon: 'VideoCameraOutlined' },
+  humidifier: { name: '加湿器', description: '湿度调节设备', icon: 'CloudOutlined' }
+}
+
 const columns = [
   { title: '图标', key: 'icon', width: 80, align: 'center' },
   { title: '类型名称', dataIndex: 'name', key: 'name' },
   { title: '类型标识', dataIndex: 'code', key: 'code' },
   { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '操作', key: 'action', width: 150 }
-]
-
-// 模拟数据
-const mockData = [
-  { id: 1, name: '智能门锁', code: 'smart_lock', description: '客房智能门锁设备', icon: 'LockOutlined', status: 'active' },
-  { id: 2, name: '空调控制器', code: 'ac', description: '空调温度控制', icon: 'HeatMapOutlined', status: 'active' },
-  { id: 3, name: '灯光控制器', code: 'light', description: '灯光开关和亮度控制', icon: 'BulbOutlined', status: 'active' },
-  { id: 4, name: '窗帘控制器', code: 'curtain', description: '窗帘开合控制', icon: 'ColumnWidthOutlined', status: 'active' },
-  { id: 5, name: '烟雾探测器', code: 'smoke_detector', description: '烟雾报警检测', icon: 'AlertOutlined', status: 'active' },
-  { id: 6, name: '门磁传感器', code: 'door_sensor', description: '门窗开关检测', icon: 'GatewayOutlined', status: 'active' },
-  { id: 7, name: '窗户传感器', code: 'window_sensor', description: '窗户开关检测', icon: 'WindowsOutlined', status: 'active' },
-  { id: 8, name: '温湿度传感器', code: 'temp_humidity', description: '温度和湿度检测', icon: 'CloudOutlined', status: 'active' }
+  { title: '设备数量', key: 'count', width: 100 },
+  { title: '操作', key: 'action', width: 100 }
 ]
 
 const fetchDeviceTypes = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    deviceTypes.value = mockData
+    const res: any = await request.get('/devices')
+    if (res.data?.code === 200 || res.data) {
+      const data = res.data?.data ?? res.data
+      let deviceList: any[] = []
+      if (Array.isArray(data)) {
+        deviceList = data
+      } else if (data?.list) {
+        deviceList = data.list
+      }
+
+      const typeMap = new Map<string, number>()
+      deviceList.forEach((d: any) => {
+        const type = d.device_type || d.type || 'unknown'
+        typeMap.set(type, (typeMap.get(type) || 0) + 1)
+      })
+
+      deviceTypes.value = Array.from(typeMap.entries()).map(([code, count]) => {
+        const config = typeConfig[code] || { name: code, description: '', icon: 'AppstoreOutlined' }
+        return {
+          code,
+          name: config.name,
+          description: config.description,
+          icon: config.icon,
+          count,
+          status: 'active'
+        }
+      })
+    }
   } catch (error) {
     message.error('获取设备类型失败')
   } finally {
@@ -138,20 +162,21 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
     if (isEdit.value) {
-      const index = deviceTypes.value.findIndex(item => item.id === formData.value.id)
+      const index = deviceTypes.value.findIndex(item => item.code === formData.value.code)
       if (index > -1) {
-        deviceTypes.value[index] = { ...formData.value }
+        deviceTypes.value[index] = { ...deviceTypes.value[index], ...formData.value }
       }
       message.success('更新成功')
     } else {
-      const newId = Math.max(...deviceTypes.value.map(item => item.id)) + 1
+      typeConfig[formData.value.code] = {
+        name: formData.value.name,
+        description: formData.value.description || '',
+        icon: formData.value.icon || 'AppstoreOutlined'
+      }
       deviceTypes.value.push({
         ...formData.value,
-        id: newId,
+        count: 0,
         status: 'active'
       })
       message.success('添加成功')
@@ -161,26 +186,6 @@ const handleSubmit = async () => {
     message.error('操作失败')
   } finally {
     submitting.value = false
-  }
-}
-
-const deleteType = async (id: number) => {
-  try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 300))
-    deviceTypes.value = deviceTypes.value.filter(item => item.id !== id)
-    message.success('删除成功')
-  } catch (error) {
-    message.error('删除失败')
-  }
-}
-
-const toggleStatus = async (record: any, checked: boolean) => {
-  try {
-    record.status = checked ? 'active' : 'inactive'
-    message.success(`已${checked ? '启用' : '禁用'}该设备类型`)
-  } catch (error) {
-    message.error('操作失败')
   }
 }
 

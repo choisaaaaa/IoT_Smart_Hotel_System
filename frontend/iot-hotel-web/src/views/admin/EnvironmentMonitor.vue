@@ -8,13 +8,13 @@
               <a-card class="stat-card temp-card" hoverable>
                 <a-statistic
                   title="平均温度"
-                  :value="dashboardStats.environment?.avg_temperature || 0"
+                  :value="dashboardStats.environment?.avg_temperature != null ? dashboardStats.environment.avg_temperature : '--'"
                   suffix="°C"
                   :value-style="{ color: '#1890ff', fontSize: '28px' }"
                 >
                   <template #prefix><FireOutlined style="font-size: 28px;" /></template>
                 </a-statistic>
-                <div class="sub-info">空气质量: {{ dashboardStats.environment?.air_quality || '-' }}</div>
+                <div class="sub-info">空气质量: {{ dashboardStats.environment?.air_quality || '-' }} | 舒适度: {{ dashboardStats.environment?.comfort_level || '-' }}</div>
               </a-card>
             </a-col>
 
@@ -78,13 +78,13 @@
               <a-card class="stat-card score-card" hoverable>
                 <a-statistic
                   title="环境评分"
-                  :value="dashboardStats.environment?.avg_environment_score || 0"
+                  :value="dashboardStats.environment_score || dashboardStats.environment?.avg_environment_score || 0"
                   suffix="分"
-                  :value-style="{ color: getScoreColor(dashboardStats.environment?.avg_environment_score || 0), fontSize: '28px' }"
+                  :value-style="{ color: getScoreColor(dashboardStats.environment_score || dashboardStats.environment?.avg_environment_score || 0), fontSize: '28px' }"
                 >
                   <template #prefix><TrophyOutlined style="font-size: 28px;" /></template>
                 </a-statistic>
-                <div class="sub-info">正常房间: {{ dashboardStats.environment?.normal_count || 0 }}/{{ dashboardStats.environment?.total_rooms || 0 }}</div>
+                <div class="sub-info">正常设备: {{ dashboardStats.environment?.normal_count || 0 }}/{{ dashboardStats.environment?.total_rooms || 0 }}</div>
               </a-card>
             </a-col>
           </a-row>

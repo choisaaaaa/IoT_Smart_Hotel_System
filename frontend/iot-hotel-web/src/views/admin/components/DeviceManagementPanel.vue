@@ -3,7 +3,7 @@
     <a-row :gutter="[16, 16]" style="margin-bottom: 16px;">
       <a-col :xs="24" :sm="6">
         <a-card size="small" class="device-stat online-stat">
-          <a-statistic title="在线设备" :value="deviceSummary.online_count || 0" suffix="/{{ deviceSummary.total_devices || 0 }}" :value-style="{ color: '#52c41a', fontSize: '24px' }">
+          <a-statistic title="在线设备" :value="deviceSummary.online_count || 0" :suffix="'/' + (deviceSummary.total_devices || 0)" :value-style="{ color: '#52c41a', fontSize: '24px' }">
             <template #prefix><CheckCircleFilled /></template>
           </a-statistic>
           <div class="rate">在线率: {{ deviceSummary.online_rate || 0 }}%</div>
@@ -159,20 +159,24 @@ const deviceSummary = reactive({
 const selectedRoom = ref<number | undefined>(undefined)
 const filterType = ref<string>('')
 
-const roomList = [
-  { id: 1, number: '301' },
-  { id: 2, number: '302' },
-  { id: 3, number: '303' },
-  { id: 4, number: '304' },
-  { id: 5, number: '305' },
-  { id: 6, number: '401' },
-  { id: 7, number: '402' },
-  { id: 8, number: '403' },
-  { id: 9, number: '404' },
-  { id: 10, number: '405' },
-  { id: 11, number: '501' },
-  { id: 12, number: '502' }
-]
+const roomList = ref<Array<{id: number; number: string}>>([])
+
+async function fetchRooms() {
+  try {
+    const res: any = await environmentApi.getRoomDevices({})
+    const data = res.data
+    if (data?.devices) {
+      const rooms = new Map<number, string>()
+      data.devices.forEach((d: any) => {
+        if (d.room_id && !rooms.has(d.room_id)) {
+          rooms.set(d.room_id, d.room_number || String(d.room_id))
+        }
+      })
+      roomList.value = Array.from(rooms.entries()).map(([id, number]) => ({ id, number }))
+    }
+  } catch (err) {
+  }
+}
 
 const filteredDevices = computed(() => {
   let result = devices.value
@@ -266,7 +270,7 @@ async function executeControl() {
 }
 
 function getRoomNumber(roomId: number): string {
-  const room = roomList.find(r => r.id === roomId)
+  const room = roomList.value.find(r => r.id === roomId)
   return room ? room.number : `${roomId}`
 }
 
@@ -311,6 +315,7 @@ function getValueMarks(type: string, unit: string): Record<number, string> {
 }
 
 onMounted(() => {
+  fetchRooms()
   fetchDevices()
 })
 </script>

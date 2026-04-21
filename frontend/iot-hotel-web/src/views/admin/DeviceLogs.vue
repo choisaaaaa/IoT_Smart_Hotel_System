@@ -10,6 +10,7 @@
             <a-select-option value="ac">空调</a-select-option>
             <a-select-option value="light">灯光</a-select-option>
             <a-select-option value="curtain">窗帘</a-select-option>
+            <a-select-option value="smoke_detector">烟雾探测器</a-select-option>
           </a-select>
           <a-button type="primary" @click="fetchLogs">
             <ReloadOutlined /> 刷新
@@ -43,7 +44,6 @@
       </a-table>
     </a-card>
 
-    <!-- 详情弹窗 -->
     <a-modal v-model:open="detailVisible" title="日志详情" :footer="null">
       <a-descriptions :column="1" bordered>
         <a-descriptions-item label="时间">{{ currentLog?.created_at }}</a-descriptions-item>
@@ -64,6 +64,7 @@ import { ref, onMounted } from 'vue'
 import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
+import request from '@/api/request'
 
 const loading = ref(false)
 const logs = ref<any[]>([])
@@ -90,55 +91,36 @@ const columns = [
   { title: '操作', key: 'action_col', width: 80 }
 ]
 
-// 模拟日志数据
-const generateMockLogs = () => {
-  const actions = [
-    { action: '设备上线', level: 'info' },
-    { action: '设备离线', level: 'warning' },
-    { action: '开关控制', level: 'info' },
-    { action: '温度调节', level: 'info' },
-    { action: '异常报警', level: 'error' },
-    { action: '固件更新', level: 'info' },
-    { action: '配置修改', level: 'info' }
-  ]
-  
-  const devices = [
-    { name: '301门锁', id: 'lock_301', type: 'smart_lock' },
-    { name: '301空调', id: 'ac_301', type: 'ac' },
-    { name: '301灯光', id: 'light_301', type: 'light' },
-    { name: '302门锁', id: 'lock_302', type: 'smart_lock' },
-    { name: '302空调', id: 'ac_302', type: 'ac' }
-  ]
-  
-  const mockLogs = []
-  for (let i = 0; i < 50; i++) {
-    const action = actions[Math.floor(Math.random() * actions.length)]
-    const device = devices[Math.floor(Math.random() * devices.length)]
-    const date = dayjs().subtract(Math.floor(Math.random() * 7), 'day').subtract(Math.floor(Math.random() * 24), 'hour')
-    
-    mockLogs.push({
-      id: i + 1,
-      device_name: device.name,
-      device_id: device.id,
-      device_type: device.type,
-      action: action.action,
-      level: action.level,
-      operator: Math.random() > 0.3 ? '管理员' : '系统',
-      detail: `${action.action} - 设备${device.name}(${device.id})`,
-      created_at: date.format('YYYY-MM-DD HH:mm:ss')
-    })
-  }
-  
-  return mockLogs.sort((a, b) => dayjs(b.created_at).unix() - dayjs(a.created_at).unix())
-}
-
 const fetchLogs = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    logs.value = generateMockLogs()
-    pagination.value.total = logs.value.length
+    const params: any = {
+      page: pagination.value.current,
+      pageSize: pagination.value.pageSize
+    }
+    if (filterType.value) params.device_type = filterType.value
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.start_date = dateRange.value[0].format('YYYY-MM-DD')
+      params.end_date = dateRange.value[1].format('YYYY-MM-DD')
+    }
+
+    const res: any = await request.get('/device-alarms', { params })
+    if (res.data?.code === 200) {
+      const data = res.data.data
+      const alarmList = data?.list || []
+      logs.value = alarmList.map((alarm: any) => ({
+        id: alarm.id,
+        device_name: alarm.device_name || '未知设备',
+        device_id: alarm.device_id || alarm.id,
+        device_type: alarm.alarm_type,
+        action: getAlarmActionText(alarm.alarm_type),
+        level: getAlarmLevel(alarm.alarm_level),
+        operator: alarm.handled_by || '系统',
+        detail: alarm.alarm_content || `${alarm.alarm_type}告警`,
+        created_at: alarm.created_at || ''
+      }))
+      pagination.value.total = data?.pagination?.total || logs.value.length
+    }
   } catch (error) {
     message.error('获取日志失败')
   } finally {
@@ -146,9 +128,36 @@ const fetchLogs = async () => {
   }
 }
 
+function getAlarmActionText(alarmType: string): string {
+  const map: Record<string, string> = {
+    smoke: '烟雾告警',
+    fire: '火灾告警',
+    temperature: '温度异常',
+    overheat: '过热告警',
+    offline: '设备离线',
+    device_error: '设备故障'
+  }
+  return map[alarmType] || '设备告警'
+}
+
+function getAlarmLevel(alarmLevel: string): string {
+  const map: Record<string, string> = {
+    emergency: 'error',
+    critical: 'error',
+    error: 'error',
+    high: 'warning',
+    warning: 'warning',
+    medium: 'warning',
+    info: 'info',
+    low: 'info'
+  }
+  return map[alarmLevel] || 'info'
+}
+
 const handleTableChange = (pag: any) => {
   pagination.value.current = pag.current
   pagination.value.pageSize = pag.pageSize
+  fetchLogs()
 }
 
 const getLevelColor = (level: string) => {
@@ -178,7 +187,6 @@ const showDetail = (record: any) => {
 
 const exportLogs = () => {
   message.success('日志导出成功')
-  // 实际项目中这里会生成CSV文件下载
 }
 
 onMounted(() => {

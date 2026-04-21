@@ -417,8 +417,14 @@
                     </a-form-item>
                   </a-col>
                   <a-col :span="12">
-                    <a-form-item label="证件号码" required>
-                      <a-input v-model:value="bookingForm.idNumber" placeholder="请输入有效证件号" size="large" />
+                    <a-form-item label="证件号码" required :validate-status="bookingIdNumberError ? 'error' : ''" :help="bookingIdNumberError">
+                      <a-input
+                        v-model:value="bookingForm.idNumber"
+                        :placeholder="bookingForm.idType === 'idcard' ? '请输入18位身份证号' : '请输入有效证件号'"
+                        :maxlength="bookingForm.idType === 'idcard' ? 18 : undefined"
+                        size="large"
+                        @change="validateBookingIdNumber"
+                      />
                     </a-form-item>
                   </a-col>
                 </a-row>
@@ -928,6 +934,31 @@ const bookingForm = reactive({
   remark: ''
 })
 
+const bookingIdNumberError = ref('')
+
+function validateBookingIdNumber() {
+  const idNumber = bookingForm.idNumber.trim()
+  if (!idNumber) {
+    bookingIdNumberError.value = '请输入证件号码'
+    return false
+  }
+  if (bookingForm.idType === 'idcard') {
+    if (idNumber.length !== 18) {
+      bookingIdNumberError.value = '身份证号应为18位'
+      return false
+    }
+    if (!/^\d{17}[\dXx]$/.test(idNumber)) {
+      bookingIdNumberError.value = '身份证号格式不正确'
+      return false
+    }
+  } else if (idNumber.length < 5) {
+    bookingIdNumberError.value = '证件号码至少5位'
+    return false
+  }
+  bookingIdNumberError.value = ''
+  return true
+}
+
 const hotelList = ref<any[]>([])
 
 // --- Computed ---
@@ -1228,6 +1259,14 @@ const saveGuest = async () => {
   if (!guestModalForm.name || !guestModalForm.phone || !guestModalForm.id_number) {
     return message.warning('请填写完整信息')
   }
+  if (guestModalForm.id_type === 'idcard') {
+    const idNumber = guestModalForm.id_number.trim()
+    if (idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(idNumber)) {
+      return message.warning('请填写正确的18位身份证号码')
+    }
+  } else if (guestModalForm.id_number.trim().length < 5) {
+    return message.warning('证件号码至少5位')
+  }
   try {
     let res
     if (editingGuestId.value) {
@@ -1254,6 +1293,13 @@ const submitBooking = async () => {
   }
   if (!bookingForm.idNumber || bookingForm.idNumber.length < 15) {
     return message.warning('请填写正确的身份证号码')
+  }
+  if (bookingForm.idType === 'idcard') {
+    if (bookingForm.idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(bookingForm.idNumber)) {
+      return message.warning('请填写正确的18位身份证号码')
+    }
+  } else if (bookingForm.idNumber.length < 5) {
+    return message.warning('证件号码至少5位')
   }
 
   const payload = {

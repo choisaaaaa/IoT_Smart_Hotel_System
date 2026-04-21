@@ -25,7 +25,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
   Future<void> _loadDevices() async {
     setState(() => _isLoading = true);
     try {
-      final result = await ref.read(deviceServiceProvider).getMyRoomDevices();
+      final result = await ref.read(deviceServiceProvider).getAllDevices(status: _filterStatus == 'all' ? null : _filterStatus);
       if (result.success && mounted) {
         final List<dynamic> deviceList = result.data ?? [];
         setState(() {
