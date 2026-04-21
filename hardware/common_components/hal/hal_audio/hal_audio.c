@@ -1,40 +1,73 @@
 #include "hal_audio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <string.h>
+#include "driver_inmp441.h"
+#include "driver_pam8403.h"
+#include "global_config.h"
 
-static const char *TAG = "HAL_AUDIO_MOCK";
+static const char *TAG = "HAL_AUDIO";
+static bool s_audio_ready = false;
+static int16_t s_pcm_buf[512];
 
 esp_err_t hal_audio_init(void) {
-    ESP_LOGI(TAG, "[MOCK] 音频 I2S(INMP441) 与 DAC(PAM8403) 驱动初始化完毕");
-    // TODO: 硬件到位后配置 I2S_NUM_0 录音和 DAC/PWM 音频输出
+    driver_inmp441_config_t mic_cfg = {
+        .i2s_port = 0,
+        .pin_bclk = GLOBAL_I2S_BCLK_PIN,
+        .pin_ws = GLOBAL_I2S_WS_PIN,
+        .pin_din = GLOBAL_I2S_DIN_PIN,
+        .sample_rate_hz = 8000,
+    };
+    esp_err_t err = driver_inmp441_init(&mic_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "INMP441 初始化失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // PAM8403 常见无 EN 引脚，传 -1 仅做逻辑启用。
+    err = driver_pam8403_init(-1);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "PAM8403 初始化失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    s_audio_ready = true;
+    ESP_LOGI(TAG, "音频驱动初始化完成（INMP441 + PAM8403）");
     return ESP_OK;
 }
 
 esp_err_t hal_audio_record_chunk(uint8_t *buffer, size_t max_len, size_t *out_read_len) {
-    if (buffer == NULL || out_read_len == NULL) return ESP_ERR_INVALID_ARG;
+    if (buffer == NULL || out_read_len == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_audio_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
 
-    // 模拟录制 1024 字节的数据，故意延迟 100ms 假装在采样
-    size_t mock_len = (max_len > 1024) ? 1024 : max_len;
-    vTaskDelay(pdMS_TO_TICKS(100)); 
-    
-    // 随便填充点数据（如全 0x80 代表静音的 8bit PCM，或随机噪声）
-    memset(buffer, 0x80, mock_len);
-    *out_read_len = mock_len;
+    size_t max_samples = (max_len < 512) ? max_len : 512;
+    size_t read_samples = 0;
+    esp_err_t err = driver_inmp441_read_pcm(s_pcm_buf, max_samples, &read_samples);
+    if (err != ESP_OK) {
+        return err;
+    }
 
-    ESP_LOGI(TAG, "[MOCK] 录音采样完成，成功读取 %zu Bytes (Push-to-Talk激活中...)", mock_len);
-    // TODO: 硬件到位后替换为 i2s_read()
+    // 将 int16 PCM 简单压缩为 unsigned PCM8，供现有链路使用。
+    for (size_t i = 0; i < read_samples; i++) {
+        int32_t v = (int32_t)s_pcm_buf[i] >> 8;   // -128..127
+        v += 128;                                 // 0..255
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        buffer[i] = (uint8_t)v;
+    }
+    *out_read_len = read_samples;
     return ESP_OK;
 }
 
 esp_err_t hal_audio_play_chunk(const uint8_t *data, size_t len) {
-    if (data == NULL || len == 0) return ESP_ERR_INVALID_ARG;
-
-    ESP_LOGI(TAG, "[MOCK] 收到后端音频流 %zu Bytes，开始交由 DAC 功放播放...", len);
-    // 模拟播放消耗的时间
-    vTaskDelay(pdMS_TO_TICKS(len / 8)); // 粗略模拟 8kHz 的耗时
-    
-    // TODO: 硬件到位后替换为 dac_output_voltage() 或 i2s_write()
-    return ESP_OK;
+    if (data == NULL || len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_audio_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    return driver_pam8403_play_pcm8(data, len);
 }

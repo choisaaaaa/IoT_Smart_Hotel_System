@@ -7,6 +7,17 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     redirect: '/guest/booking'
   },
+  // 添加 /admin 重定向到 /hotel-admin
+  {
+    path: '/admin',
+    redirect: '/hotel-admin'
+  },
+  {
+    path: '/admin/:pathMatch(.*)*',
+    redirect: (to) => {
+      return `/hotel-admin${to.path.replace('/admin', '')}`
+    }
+  },
   {
     path: '/system',
     component: () => import('@/components/layout/SystemLayout.vue'),
@@ -33,6 +44,12 @@ const routes: RouteRecordRaw[] = [
         name: 'SystemDeviceManagement',
         component: () => import('@/views/system/SystemDeviceManagement.vue'),
         meta: { title: '全局设备', icon: 'MobileOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'pending-devices',
+        name: 'PendingDevices',
+        component: () => import('@/views/system/PendingDevices.vue'),
+        meta: { title: '待审核设备', icon: 'ToolOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       },
       {
         path: 'users',
@@ -86,6 +103,24 @@ const routes: RouteRecordRaw[] = [
         name: 'DeviceMonitor',
         component: () => import('@/views/admin/DeviceMonitor.vue'),
         meta: { title: '设备监控', icon: 'MonitorOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'pending-devices',
+        name: 'AdminPendingDevices',
+        component: () => import('@/views/system/PendingDevices.vue'),
+        meta: { title: '待审核设备', icon: 'ToolOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'device-types',
+        name: 'DeviceTypes',
+        component: () => import('@/views/admin/DeviceTypes.vue'),
+        meta: { title: '设备类型', icon: 'TagsOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'device-logs',
+        name: 'DeviceLogs',
+        component: () => import('@/views/admin/DeviceLogs.vue'),
+        meta: { title: '设备日志', icon: 'FileTextOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
       },
       {
         path: 'environment',
