@@ -286,7 +286,7 @@
 
         <a-alert
           message="提示"
-          description="注册默认为顾客账号。如需前台员工或酒店管理权限，请在登录后通过APP端申请绑定酒店。"
+          description="您正在注册顾客账号，门店员工账号请由经理统一注册。"
           type="info"
           show-icon
         />
