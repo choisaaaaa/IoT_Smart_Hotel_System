@@ -1018,11 +1018,11 @@ function scrollToBottom() {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--hotel-radius-xl);
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(26, 43, 74, 0.1),
     0 0 0 1px rgba(201, 169, 98, 0.1);
   overflow: hidden;
-  height: calc(100vh - 200px);
+  height: calc(125vh - 80px);
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.5);
