@@ -292,6 +292,7 @@ async function calculateBookingPrice(
 export const getMyBookings = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+    const userPhone = req.user?.phone;
     if (!userId) {
       return res.status(401).json(errorResponse('未授权'));
     }
@@ -299,8 +300,9 @@ export const getMyBookings = async (req: AuthRequest, res: Response) => {
     const { status, page = 1, pageSize = 10 } = req.query;
     const offset = (Number(page) - 1) * Number(pageSize);
 
-    let whereClause = 'WHERE b.user_id = ?';
-    const params: any[] = [userId];
+    // 同时查询 user_id 和 guest_phone，确保通过手机号预订的订单也能查到
+    let whereClause = 'WHERE (b.user_id = ? OR b.guest_phone = ?)';
+    const params: any[] = [userId, userPhone || ''];
 
     if (status) {
       whereClause += ' AND b.status = ?';

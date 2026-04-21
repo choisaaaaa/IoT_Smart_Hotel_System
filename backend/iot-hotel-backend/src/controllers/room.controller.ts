@@ -236,17 +236,17 @@ export const getGuestRoom = async (req: AuthRequest, res: Response) => {
     }
 
     const pool = (await import('../config/database')).default;
-    
+
     // 查询用户当前有效的入住记录（优先通过user_id，其次通过guest_phone）
+    // 放宽条件：只要状态是 checked_in 即可，不检查日期
     let bookings: any[] = [];
-    
+
     if (userId) {
       const [rows]: any = await pool.execute(
         `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
          FROM bookings b
          JOIN rooms r ON b.room_id = r.id
-         WHERE b.user_id = ? AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.user_id = ? AND b.status = 'checked_in'
          ORDER BY b.check_in_date DESC
          LIMIT 1`,
         [userId]
@@ -259,8 +259,7 @@ export const getGuestRoom = async (req: AuthRequest, res: Response) => {
         `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
          FROM bookings b
          JOIN rooms r ON b.room_id = r.id
-         WHERE b.guest_phone = ? AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.guest_phone = ? AND b.status = 'checked_in'
          ORDER BY b.check_in_date DESC
          LIMIT 1`,
         [userPhone]
@@ -294,16 +293,16 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
     }
 
     const pool = (await import('../config/database')).default;
-    
+
     // 验证该房间是否属于当前用户的有效入住（优先通过user_id，其次通过guest_phone）
+    // 放宽条件：只要状态是 checked_in 即可
     let bookings: any[] = [];
-    
+
     if (userId) {
       const [rows]: any = await pool.execute(
         `SELECT b.id FROM bookings b
-         WHERE b.user_id = ? AND b.room_id = ? 
-         AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.user_id = ? AND b.room_id = ?
+         AND b.status = 'checked_in'
          LIMIT 1`,
         [userId, roomId]
       );
@@ -313,9 +312,8 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
     if (bookings.length === 0 && userPhone) {
       const [rows]: any = await pool.execute(
         `SELECT b.id FROM bookings b
-         WHERE b.guest_phone = ? AND b.room_id = ? 
-         AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.guest_phone = ? AND b.room_id = ?
+         AND b.status = 'checked_in'
          LIMIT 1`,
         [userPhone, roomId]
       );
@@ -330,8 +328,7 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
     const [devices]: any = await pool.execute(
       `SELECT d.id, d.device_id, d.device_name, d.device_type, d.device_status, d.firmware_version, d.last_seen
        FROM devices d
-       INNER JOIN rooms r ON r.room_id = d.id
-       WHERE r.id = ?`,
+       WHERE d.room_id = ?`,
       [roomId]
     );
 
@@ -397,8 +394,7 @@ export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
     const [devices]: any = await pool.execute(
       `SELECT d.id, d.device_id, d.device_name, d.device_type, d.device_status, d.firmware_version, d.last_seen
        FROM devices d
-       INNER JOIN rooms r ON r.room_id = d.id
-       WHERE r.id = ?`,
+       WHERE d.room_id = ?`,
       [roomId]
     );
 
