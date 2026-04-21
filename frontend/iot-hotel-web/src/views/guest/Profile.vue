@@ -1098,7 +1098,8 @@ onMounted(() => {
 .user-name-row {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .user-avatar-wrapper {
@@ -1142,21 +1143,25 @@ onMounted(() => {
 
 .user-main-info {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .user-name {
   color: #fff;
-  font-size: 36px;
+  font-size: 24px;
   font-weight: 800;
   margin: 0;
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  word-break: break-word;
+  max-width: 180px;
 }
 
 .user-phone-row {
-  font-size: 18px;
+  font-size: 14px;
   opacity: 0.6;
   margin-top: 6px;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
 }
 
 .premium-checkin-btn {
@@ -1165,8 +1170,10 @@ onMounted(() => {
   color: #fff;
   font-weight: 700;
   backdrop-filter: blur(8px);
-  padding: 0 20px;
-  height: 36px;
+  padding: 0 16px;
+  height: 32px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .premium-checkin-btn:hover {
@@ -1177,15 +1184,17 @@ onMounted(() => {
 
 .checkin-done {
   color: #52c41a;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: rgba(82, 196, 26, 0.15);
-  padding: 6px 16px;
+  padding: 4px 10px;
   border-radius: 20px;
   backdrop-filter: blur(4px);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .card-bottom {

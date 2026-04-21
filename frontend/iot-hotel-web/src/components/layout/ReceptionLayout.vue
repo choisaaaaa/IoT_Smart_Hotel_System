@@ -4,97 +4,131 @@
       v-model:collapsed="collapsed"
       :trigger="null"
       collapsible
-      width="220"
+      width="240"
       theme="light"
       class="reception-sider"
     >
-      <div class="logo" @click="$router.push('/reception/dashboard')">
-        <CustomerServiceOutlined style="font-size: 24px; color: #1890ff;" />
-        <div v-show="!collapsed" class="logo-wrapper">
-          <span class="logo-text">前台端</span>
-          <span class="hotel-tag">{{ hotelStore.hotelInfo?.hotel_name || '慧宿智联' }}</span>
+      <div class="sider-header" @click="$router.push('/reception/dashboard')">
+        <div class="sider-logo">
+          <CustomerServiceOutlined />
+        </div>
+        <div v-show="!collapsed" class="sider-brand">
+          <span class="brand-title">前台工作台</span>
+          <span class="brand-hotel">{{ hotelStore.hotelInfo?.hotel_name || '慧宿智联' }}</span>
         </div>
       </div>
+      
       <a-menu
         v-model:selectedKeys="selectedKeys"
         mode="inline"
         theme="light"
         @click="handleMenuClick"
+        class="reception-menu"
       >
         <a-menu-item key="/reception/dashboard">
           <template #icon><DashboardOutlined /></template>
           <span>前台总览</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/reception-center">
-          <template #icon>
-            <span style="font-size: 12px;">🛎️</span>
-          </template>
+          <template #icon><BellOutlined /></template>
           <span>接待中心</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/device-management">
           <template #icon><ControlOutlined /></template>
-          <span>主控设备管理</span>
+          <span>设备管理</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/bookings">
           <template #icon><CalendarOutlined /></template>
           <span>预订管理</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/room-availability">
           <template #icon><ApartmentOutlined /></template>
           <span>客房余量</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/workorders">
           <template #icon><ToolOutlined /></template>
           <span>工单处理</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/delivery">
           <template #icon><SendOutlined /></template>
           <span>客房送物</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/voice-calls">
           <template #icon><PhoneOutlined /></template>
           <span>语音通话</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/environment">
           <template #icon><EnvironmentOutlined /></template>
           <span>环境监测</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/price-calendar">
-          <template #icon><CalendarOutlined /></template>
+          <template #icon><DollarOutlined /></template>
           <span>价格日历</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/coupons">
           <template #icon><TagOutlined /></template>
-          <span>优惠券管理</span>
+          <span>优惠券</span>
         </a-menu-item>
+        
         <a-menu-item key="/reception/bills">
-          <template #icon><DollarOutlined /></template>
+          <template #icon><FileTextOutlined /></template>
           <span>账单报表</span>
         </a-menu-item>
       </a-menu>
+      
+      <div v-show="!collapsed" class="sider-footer">
+        <div class="work-status">
+          <span class="status-indicator online"></span>
+          <span class="status-text">工作中</span>
+        </div>
+        <div class="work-time">{{ currentTime }}</div>
+      </div>
     </a-layout-sider>
 
     <a-layout>
-      <a-layout-header class="reception-header" :style="{ marginLeft: collapsed ? '80px' : '220px' }">
+      <a-layout-header class="reception-header" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
         <div class="header-left">
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
-          <a-breadcrumb>
-            <a-breadcrumb-item><CustomerServiceOutlined /> 前台端</a-breadcrumb-item>
+          <a-breadcrumb class="breadcrumb">
+            <a-breadcrumb-item>
+              <CustomerServiceOutlined /> 前台端
+            </a-breadcrumb-item>
             <a-breadcrumb-item>{{ currentTitle }}</a-breadcrumb-item>
           </a-breadcrumb>
         </div>
+        
         <div class="header-right">
-          <a-popover v-model:open="notificationVisible" trigger="click" placement="bottomRight" :overlayStyle="{ width: '360px' }">
+          <a-popover 
+            v-model:open="notificationVisible" 
+            trigger="click" 
+            placement="bottomRight" 
+            :overlayStyle="{ width: '380px' }"
+            class="notification-popover"
+          >
             <template #content>
               <div class="notification-panel">
                 <div class="notification-header">
-                  <span class="notification-title">消息通知</span>
-                  <a-button type="link" size="small" @click="clearAllNotifications">全部已读</a-button>
+                  <span class="notification-title">
+                    <BellOutlined /> 消息通知
+                  </span>
+                  <a-button type="link" size="small" @click="clearAllNotifications">
+                    全部已读
+                  </a-button>
                 </div>
-                <a-divider style="margin: 8px 0;" />
+                <a-divider style="margin: 12px 0;" />
                 <div v-if="notificationItems.length === 0" class="notification-empty">
-                  <CheckCircleOutlined style="font-size: 32px; color: #d9d9d9;" />
+                  <CheckCircleOutlined class="empty-icon" />
                   <p>暂无新消息</p>
                 </div>
                 <div v-else class="notification-list">
@@ -102,49 +136,72 @@
                     v-for="item in notificationItems"
                     :key="item.id"
                     class="notification-item"
+                    :class="{ unread: !item.read }"
                     @click="handleNotificationClick(item)"
                   >
-                    <div class="notification-item-icon">
-                      <ToolOutlined v-if="item.type === 'maintenance'" style="color: #faad14;" />
-                      <SendOutlined v-if="item.type === 'delivery'" style="color: #1890ff;" />
-                      <AlertOutlined v-if="item.type === 'environment'" style="color: #ff4d4f;" />
+                    <div class="notification-icon" :class="item.type">
+                      <ToolOutlined v-if="item.type === 'maintenance'" />
+                      <SendOutlined v-else-if="item.type === 'delivery'" />
+                      <AlertOutlined v-else-if="item.type === 'environment'" />
+                      <InfoCircleOutlined v-else />
                     </div>
-                    <div class="notification-item-content">
-                      <div class="notification-item-title">{{ item.title }}</div>
-                      <div class="notification-item-desc">{{ item.desc }}</div>
+                    <div class="notification-content">
+                      <div class="notification-title-text">{{ item.title }}</div>
+                      <div class="notification-desc">{{ item.desc }}</div>
                     </div>
-                    <div class="notification-item-badge" v-if="!item.read">
-                      <a-badge dot />
-                    </div>
+                    <div v-if="!item.read" class="notification-dot"></div>
                   </div>
                 </div>
               </div>
             </template>
             <a-badge :count="unreadCount" :offset="[-2, 4]">
-              <BellOutlined class="header-icon" :style="{ color: unreadCount > 0 ? '#ff4d4f' : undefined }" />
+              <div class="header-icon-btn" :class="{ active: unreadCount > 0 }">
+                <BellOutlined />
+              </div>
             </a-badge>
           </a-popover>
-          <a-tag :color="appStore.connected ? 'success' : 'error'">{{ appStore.connected ? '在线' : '离线' }}</a-tag>
-          <a-dropdown :overlay-style="{ minWidth: '160px' }">
-            <span class="user-action" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #1890ff;">
-                <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
+          
+          <div class="connection-badge" :class="{ online: appStore.connected }">
+            <WifiOutlined v-if="appStore.connected" />
+            <DisconnectOutlined v-else />
+            <span>{{ appStore.connected ? '在线' : '离线' }}</span>
+          </div>
+          
+          <a-dropdown placement="bottomRight" :overlayStyle="{ minWidth: '180px' }">
+            <div class="user-profile">
+              <a-avatar 
+                :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" 
+                class="user-avatar"
+              >
+                <template #icon><UserOutlined /></template>
               </a-avatar>
-              <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
-            </span>
+              <div v-if="!collapsed" class="user-info">
+                <span class="user-name">{{ appStore.userInfo?.username || '前台员工' }}</span>
+                <span class="user-role">前台接待</span>
+              </div>
+              <DownOutlined class="dropdown-icon" />
+            </div>
             <template #overlay>
-              <a-menu>
+              <a-menu class="profile-menu">
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
-                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" key="hotel-admin" @click="$router.push('/hotel-admin')">
-                  <SettingOutlined /> 进入管理端
+                <a-menu-item 
+                  v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" 
+                  key="hotel-admin" 
+                  @click="$router.push('/hotel-admin')"
+                >
+                  <SettingOutlined /> 管理后台
                 </a-menu-item>
-                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" key="system" @click="returnToSystem">
+                <a-menu-item 
+                  v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" 
+                  key="system" 
+                  @click="returnToSystem"
+                >
                   <SwapOutlined /> 返回系统端
                 </a-menu-item>
                 <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
+                <a-menu-item key="logout" @click="handleLogout" class="logout-item">
                   <LogoutOutlined /> 退出登录
                 </a-menu-item>
               </a-menu>
@@ -153,12 +210,16 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="reception-content" :style="{ marginLeft: collapsed ? '96px' : '236px' }">
+      <a-layout-content class="reception-content" :style="{ marginLeft: collapsed ? '96px' : '256px' }">
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer class="reception-footer" :style="{ marginLeft: collapsed ? '80px' : '220px' }">
-        智慧酒店物联网控制系统 ©2026 - 前台端
+      <a-layout-footer class="reception-footer" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
+        <div class="footer-inner">
+          <span class="footer-text">慧宿智联 · 智慧酒店管理系统</span>
+          <span class="footer-divider">|</span>
+          <span class="footer-version">前台端 v2.2.0</span>
+        </div>
       </a-layout-footer>
     </a-layout>
   </a-layout>
@@ -168,12 +229,31 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  CustomerServiceOutlined, DashboardOutlined, LoginOutlined,
-  CalendarOutlined, ApartmentOutlined, ToolOutlined, SendOutlined,
-  PhoneOutlined, TagsOutlined, DollarOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, LogoutOutlined, EnvironmentOutlined, TagOutlined,
-  CheckCircleOutlined, AlertOutlined, UserOutlined, SwapOutlined,
-  ControlOutlined
+  CustomerServiceOutlined,
+  DashboardOutlined,
+  CalendarOutlined,
+  ApartmentOutlined,
+  ToolOutlined,
+  SendOutlined,
+  PhoneOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  BellOutlined,
+  LogoutOutlined,
+  EnvironmentOutlined,
+  TagOutlined,
+  DollarOutlined,
+  CheckCircleOutlined,
+  AlertOutlined,
+  UserOutlined,
+  SwapOutlined,
+  ControlOutlined,
+  FileTextOutlined,
+  DownOutlined,
+  SettingOutlined,
+  WifiOutlined,
+  DisconnectOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
@@ -182,20 +262,33 @@ import { authService, CANONICAL_ROLES } from '@/api/auth'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
 import { environmentApi } from '@/api/environment'
-import { getSocket, initWebSocket } from '@/utils/websocket'
+import { initWebSocket } from '@/utils/websocket'
 import request from '@/api/request'
+import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
 
-// 初始化用户信息
 appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
+const currentTime = ref(dayjs().format('HH:mm'))
+
+let timeInterval: ReturnType<typeof setInterval>
+
+onMounted(() => {
+  timeInterval = setInterval(() => {
+    currentTime.value = dayjs().format('HH:mm')
+  }, 60000)
+})
+
+onUnmounted(() => {
+  if (timeInterval) clearInterval(timeInterval)
+})
 
 async function handleLogout() {
   await authService.logout()
@@ -204,14 +297,9 @@ async function handleLogout() {
 
 async function returnToSystem() {
   try {
-    const res = await request.post('/auth/switch-hotel', {
-      hotel_id: 0
-    })
-
+    const res = await request.post('/auth/switch-hotel', { hotel_id: 0 })
     if (res.data.token) {
       localStorage.setItem('auth_token', res.data.token)
-      
-      // 更新用户信息中的酒店 ID 和名称
       if (appStore.userInfo) {
         appStore.setUserInfo({
           ...appStore.userInfo,
@@ -219,7 +307,6 @@ async function returnToSystem() {
           hotel_name: '慧宿智联集团总部'
         })
       }
-      
       hotelStore.setCurrentHotelId(0)
       router.push('/system/dashboard')
     }
@@ -228,21 +315,15 @@ async function returnToSystem() {
   }
 }
 
-// WebSocket 全局监听来电
 function setupGlobalWebSocket() {
-  const socket = initWebSocket()
-  if (!socket) return
-
-  // 注册逻辑已在 websocket.ts 的 connect 回调中自动处理
+  initWebSocket()
 }
 
-onUnmounted(() => {
-  // WebSocket 监听器现在主要由 App.vue 处理
-})
+onUnmounted(() => {})
 
 interface NotificationItem {
   id: string
-  type: 'maintenance' | 'delivery' | 'environment'
+  type: 'maintenance' | 'delivery' | 'environment' | 'info'
   title: string
   desc: string
   route: string
@@ -252,7 +333,6 @@ interface NotificationItem {
 const notificationItems = ref<NotificationItem[]>([])
 
 const unreadCount = computed(() => notificationItems.value.filter(n => !n.read).length)
-
 const currentTitle = computed(() => (route.meta.title as string) || '')
 
 watch(() => route.path, (path) => {
@@ -271,7 +351,6 @@ onMounted(async () => {
 })
 
 async function loadNotifications() {
-  // 检查用户角色，只有前台员工才加载通知
   const userInfo = appStore.userInfo
   const userRole = userInfo?.role
   if (!userRole || userRole === 'customer') {
@@ -296,8 +375,8 @@ async function loadNotifications() {
         items.push({
           id: 'maintenance-pending',
           type: 'maintenance',
-          title: `未处理维修工单 (${total})`,
-          desc: list[0]?.fault_description?.substring(0, 30) || `共${total}条待处理工单`,
+          title: `维修工单 (${total})`,
+          desc: list[0]?.fault_description?.substring(0, 30) || `共${total}条待处理`,
           route: '/reception/workorders',
           read: false
         })
@@ -312,8 +391,8 @@ async function loadNotifications() {
         items.push({
           id: 'delivery-pending',
           type: 'delivery',
-          title: `待处理送物订单 (${total})`,
-          desc: list[0]?.item_name || `共${total}条待处理送物`,
+          title: `送物订单 (${total})`,
+          desc: list[0]?.item_name || `共${total}条待处理`,
           route: '/reception/delivery',
           read: false
         })
@@ -329,8 +408,8 @@ async function loadNotifications() {
           items.push({
             id: 'environment-warning',
             type: 'environment',
-            title: `环境异常告警 (${unresolved.length})`,
-            desc: unresolved[0]?.title || `${unresolved.length}条环境异常`,
+            title: `环境告警 (${unresolved.length})`,
+            desc: unresolved[0]?.title || `${unresolved.length}条异常`,
             route: '/reception/environment',
             read: false
           })
@@ -356,7 +435,6 @@ function clearAllNotifications() {
 
 onMounted(() => {
   loadNotifications()
-  // 只有非顾客角色才启动定时刷新
   const userRole = appStore.userInfo?.role
   if (userRole && userRole !== 'customer') {
     setInterval(loadNotifications, 30000)
@@ -365,87 +443,412 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.reception-layout { min-height: 100vh; background: #f5f7fa; }
-.reception-sider { position: fixed; left: 0; top: 0; bottom: 0; z-index: 10; box-shadow: 2px 0 6px rgba(0,21,41,.04); overflow-y: auto; }
-.logo {
-  height: 64px;
+.reception-layout {
+  min-height: 100vh;
+  background: var(--hotel-bg);
+}
+
+.reception-sider {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  box-shadow: 2px 0 12px rgba(26, 43, 74, 0.08);
+  background: #fff;
+}
+
+.sider-header {
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  padding: 0 16px;
+  border-bottom: 1px solid var(--hotel-border);
+  padding: 0 20px;
+  transition: all 0.3s;
 }
-.logo-wrapper {
+
+.sider-header:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.sider-logo {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.sider-brand {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.2;
+  line-height: 1.3;
+  overflow: hidden;
 }
-.logo-text { 
+
+.brand-title {
   font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(135deg, #1890ff, #722ed1); 
-  background-clip: text; 
-  -webkit-background-clip: text; 
-  -webkit-text-fill-color: transparent; 
+  color: var(--hotel-primary);
 }
-.hotel-tag {
-  font-size: 10px;
-  color: #8c8c8c;
-  font-weight: normal;
-  max-width: 120px;
+
+.brand-hotel {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
+
+.reception-menu {
+  border-right: none;
+  padding: 12px 0;
+}
+
+.reception-menu :deep(.ant-menu-item) {
+  margin: 4px 12px;
+  border-radius: var(--hotel-radius-sm);
+  height: 44px;
+  line-height: 44px;
+}
+
+.reception-menu :deep(.ant-menu-item-selected) {
+  background: var(--hotel-primary) !important;
+  color: #fff !important;
+  border-right: none !important;
+}
+
+.reception-menu :deep(.ant-menu-item-selected .anticon) {
+  color: #fff;
+}
+
+.sider-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  border-top: 1px solid var(--hotel-border);
+  background: var(--hotel-bg-secondary);
+}
+
+.work-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hotel-text-muted);
+}
+
+.status-indicator.online {
+  background: var(--hotel-success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hotel-text);
+}
+
+.work-time {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+  padding-left: 16px;
+}
+
 .reception-header {
   background: #fff;
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 4px rgba(0,21,41,.06);
-  z-index: 9;
-  margin-left: 220px;
-  transition: margin-left .2s;
+  box-shadow: var(--hotel-shadow-sm);
+  z-index: 99;
+  height: 72px;
+  position: sticky;
+  top: 0;
+  transition: margin-left 0.2s;
 }
-.header-left { display: flex; align-items: center; gap: 16px; }
-.header-right { display: flex; align-items: center; gap: 14px; }
-.trigger { font-size: 18px; cursor: pointer; padding: 0 8px; }
-.header-icon { font-size: 18px; cursor: pointer; }
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.trigger {
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--hotel-radius-sm);
+  color: var(--hotel-text-secondary);
+  transition: all 0.3s;
+}
+
+.trigger:hover {
+  background: var(--hotel-bg-secondary);
+  color: var(--hotel-primary);
+}
+
+.breadcrumb {
+  font-size: 14px;
+}
+
+.breadcrumb :deep(.ant-breadcrumb-link) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hotel-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--hotel-text-secondary);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.header-icon-btn:hover,
+.header-icon-btn.active {
+  background: var(--hotel-bg-secondary);
+  color: var(--hotel-primary);
+}
+
+.connection-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+}
+
+.connection-badge.online {
+  color: var(--hotel-success);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--hotel-radius);
+  transition: all 0.3s;
+  border: 1px solid var(--hotel-border);
+}
+
+.user-profile:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.user-avatar {
+  border: 2px solid var(--hotel-gold);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hotel-text);
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+.profile-menu {
+  border-radius: var(--hotel-radius);
+}
+
+.logout-item {
+  color: var(--hotel-error);
+}
+
 .reception-content {
-  margin: 16px;
-  margin-left: 236px;
-  padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  min-height: calc(100vh - 56px - 48px - 69px);
-  overflow-y: auto;
-  transition: margin-left .2s;
+  margin: 24px;
+  margin-left: 264px;
+  min-height: calc(100vh - 72px - 80px);
+  transition: margin-left 0.2s;
 }
+
 .reception-footer {
   text-align: center;
-  color: rgba(0,0,0,0.45);
-  margin-left: 220px;
-  transition: margin-left .2s;
+  padding: 20px;
+  transition: margin-left 0.2s;
 }
-.notification-panel { margin: -12px -16px; }
-.notification-header { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
-.notification-title { font-weight: 600; font-size: 15px; }
-.notification-empty { text-align: center; padding: 24px 0; color: #999; }
-.notification-empty p { margin-top: 8px; }
-.notification-list { max-height: 320px; overflow-y: auto; }
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--hotel-text-muted);
+  font-size: 13px;
+}
+
+.footer-divider {
+  color: var(--hotel-border);
+}
+
+/* 通知面板 */
+.notification-panel {
+  margin: -12px -16px;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.notification-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--hotel-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-empty {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--hotel-text-muted);
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: var(--hotel-border);
+  margin-bottom: 12px;
+}
+
+.notification-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
 .notification-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; cursor: pointer; border-radius: 6px;
-  transition: background .2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  border-radius: var(--hotel-radius-sm);
+  transition: all 0.3s;
+  position: relative;
 }
-.notification-item:hover { background: #f5f5f5; }
-.notification-item-icon { font-size: 20px; flex-shrink: 0; }
-.notification-item-content { flex: 1; min-width: 0; }
-.notification-item-title { font-size: 14px; font-weight: 500; }
-.notification-item-desc { font-size: 12px; color: #999; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notification-item-badge { flex-shrink: 0; }
+
+.notification-item:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.notification-item.unread {
+  background: rgba(201, 169, 98, 0.05);
+}
+
+.notification-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--hotel-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.notification-icon.maintenance {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--hotel-warning);
+}
+
+.notification-icon.delivery {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
+}
+
+.notification-icon.environment {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--hotel-error);
+}
+
+.notification-icon.info {
+  background: rgba(201, 169, 98, 0.1);
+  color: var(--hotel-gold);
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-title-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hotel-text);
+  margin-bottom: 4px;
+}
+
+.notification-desc {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hotel-gold);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
 </style>

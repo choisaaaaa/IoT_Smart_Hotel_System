@@ -1,3 +1,9 @@
+/*
+ * 慧宿智联 - 酒店风格全局样式
+ * 设计理念：优雅、专业、温暖、高端
+ * 配色：金色点缀 + 深蓝主色 + 米白背景
+ */
+
 *,
 *::before,
 *::after {
@@ -6,39 +12,91 @@
   padding: 0;
 }
 
+/* CSS Variables - 酒店风格配色系统 */
+:root {
+  /* 主色调 */
+  --hotel-primary: #1A2B4A;
+  --hotel-primary-light: #2D4A6F;
+  --hotel-primary-dark: #0F1A2E;
+  
+  /* 金色点缀 */
+  --hotel-gold: #C9A962;
+  --hotel-gold-light: #D4BC7E;
+  --hotel-gold-dark: #A88B4A;
+  
+  /* 背景色 */
+  --hotel-bg: #FAF8F5;
+  --hotel-bg-secondary: #F5F2ED;
+  --hotel-bg-card: #FFFFFF;
+  
+  /* 文字色 */
+  --hotel-text: #2C3E50;
+  --hotel-text-secondary: #5D6D7E;
+  --hotel-text-muted: #95A5A6;
+  
+  /* 功能色 */
+  --hotel-success: #27AE60;
+  --hotel-warning: #F39C12;
+  --hotel-error: #E74C3C;
+  --hotel-info: #3498DB;
+  
+  /* 边框和阴影 */
+  --hotel-border: #E8E4DE;
+  --hotel-shadow-sm: 0 2px 8px rgba(26, 43, 74, 0.06);
+  --hotel-shadow: 0 4px 20px rgba(26, 43, 74, 0.08);
+  --hotel-shadow-lg: 0 8px 32px rgba(26, 43, 74, 0.12);
+  
+  /* 圆角 */
+  --hotel-radius-sm: 6px;
+  --hotel-radius: 10px;
+  --hotel-radius-lg: 16px;
+  
+  /* 字体 */
+  --hotel-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --hotel-font-display: 'Georgia', 'Times New Roman', serif;
+}
+
 html, body, #app {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  font-family: var(--hotel-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background-color: #f0f2f5;
+  background-color: var(--hotel-bg);
+  color: var(--hotel-text);
+  line-height: 1.6;
 }
 
+/* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(26, 43, 74, 0.2);
   border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 43, 74, 0.3);
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* 页面容器 */
 .page-container {
   min-height: 400px;
 }
 
+/* 过渡动画 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .fade-enter-from,
@@ -46,79 +104,646 @@ body {
   opacity: 0;
 }
 
-/* 全局消息弹窗 - 左下角气泡消息框设计 */
+/* 消息提示样式 - 优雅风格 */
 .ant-message {
   position: fixed !important;
   z-index: 1010;
-  width: 100% !important; /* 容器占满底部宽度 */
+  width: 100% !important;
   top: auto !important;
-  bottom: 20px !important;
-  left: 0 !important; /* 从屏幕最左侧开始 */
+  bottom: 24px !important;
+  left: 0 !important;
   right: auto !important;
-  pointer-events: none; /* 防止遮挡点击 */
+  pointer-events: none;
   display: flex !important;
-  flex-direction: column-reverse !important; /* 消息向上堆叠 */
-  align-items: flex-start !important; /* 强制所有内容向左对齐 */
-  padding-left: 20px !important; /* 整体向右偏移 20px，不再溢出 */
+  flex-direction: column-reverse !important;
+  align-items: flex-start !important;
+  padding-left: 24px !important;
 }
 
 .ant-message .ant-message-notice {
   text-align: left !important;
-  margin-bottom: 8px !important;
+  margin-bottom: 10px !important;
   margin-top: 0 !important;
-  pointer-events: all; /* 恢复气泡内部点击 */
+  pointer-events: all;
   position: relative !important;
   top: auto !important;
   width: auto !important;
-  max-width: calc(100% - 40px) !important;
-  transform: none !important; /* 彻底清除 AntD 的居中偏移 */
+  max-width: calc(100% - 48px) !important;
+  transform: none !important;
 }
 
 .ant-message-notice-content {
-  background: rgba(255, 255, 255, 0.95) !important; /* 进一步增加不透明度 */
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important; /* 增强投影效果 */
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  padding: 12px 20px !important; /* 略微增加内边距 */
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-radius: var(--hotel-radius) !important;
+  box-shadow: var(--hotel-shadow-lg) !important;
+  border: 1px solid var(--hotel-border) !important;
+  padding: 14px 24px !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   position: relative !important;
   display: inline-block !important;
-  max-width: 360px; /* 略微调宽最大宽度 */
+  max-width: 380px;
   transform: none !important;
-  margin: 0 !important; /* 清除所有可能的外边距 */
+  margin: 0 !important;
 }
 
-/* 消息框左下角的小尾巴 */
 .ant-message-notice-content::after {
   content: '';
   position: absolute;
-  left: 12px;
+  left: 16px;
   bottom: -6px;
   width: 12px;
   height: 12px;
   background: inherit;
-  border-right: 1px solid rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-right: 1px solid var(--hotel-border);
+  border-bottom: 1px solid var(--hotel-border);
   transform: rotate(45deg);
-  backdrop-filter: inherit;
 }
 
 .ant-message-notice-content:hover {
-  background: rgba(255, 255, 255, 0.8) !important;
-  transform: scale(1.02);
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 40px rgba(26, 43, 74, 0.15) !important;
 }
 
-/* 图标颜色 */
-.ant-message-success .anticon { color: #52c41a !important; }
-.ant-message-error .anticon { color: #ff4d4f !important; }
-.ant-message-info .anticon { color: #1890ff !important; }
+/* 消息图标颜色 */
+.ant-message-success .anticon { 
+  color: var(--hotel-success) !important; 
+}
+.ant-message-error .anticon { 
+  color: var(--hotel-error) !important; 
+}
+.ant-message-info .anticon { 
+  color: var(--hotel-info) !important; 
+}
+.ant-message-warning .anticon { 
+  color: var(--hotel-warning) !important; 
+}
 
 /* 消息文字 */
 .ant-message-custom-content > span:last-child {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hotel-text);
+  margin-left: 10px;
+}
+
+/* Ant Design 组件样式覆盖 - 酒店风格 */
+
+/* Button */
+.ant-btn-primary {
+  background: var(--hotel-primary);
+  border-color: var(--hotel-primary);
+  border-radius: var(--hotel-radius-sm);
+  font-weight: 500;
+}
+
+.ant-btn-primary:hover,
+.ant-btn-primary:focus {
+  background: var(--hotel-primary-light);
+  border-color: var(--hotel-primary-light);
+}
+
+/* Card */
+.ant-card {
+  border-radius: var(--hotel-radius);
+  border: 1px solid var(--hotel-border);
+  box-shadow: var(--hotel-shadow-sm);
+  background: var(--hotel-bg-card);
+}
+
+.ant-card:hover {
+  box-shadow: var(--hotel-shadow);
+}
+
+.ant-card-head {
+  border-bottom: 1px solid var(--hotel-border);
   font-weight: 600;
-  color: #000;
-  margin-left: 8px;
+  color: var(--hotel-primary);
+}
+
+/* Input */
+.ant-input,
+.ant-input-affix-wrapper {
+  border-radius: var(--hotel-radius-sm);
+  border-color: var(--hotel-border);
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: var(--hotel-gold);
+  box-shadow: 0 0 0 2px rgba(201, 169, 98, 0.15);
+}
+
+/* Menu */
+.ant-menu {
+  font-size: 14px;
+}
+
+.ant-menu-item-selected {
+  background: rgba(201, 169, 98, 0.1) !important;
+  color: var(--hotel-primary) !important;
+  border-right: 3px solid var(--hotel-gold) !important;
+}
+
+.ant-menu-item:hover {
+  color: var(--hotel-gold-dark) !important;
+}
+
+/* Tag */
+.ant-tag {
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 2px 10px;
+}
+
+/* Table */
+.ant-table {
+  font-size: 14px;
+}
+
+.ant-table-thead > tr > th {
+  background: var(--hotel-bg-secondary);
+  color: var(--hotel-primary);
+  font-weight: 600;
+}
+
+/* Modal */
+.ant-modal-content {
+  border-radius: var(--hotel-radius-lg);
+}
+
+.ant-modal-header {
+  border-bottom: 1px solid var(--hotel-border);
+  border-radius: var(--hotel-radius-lg) var(--hotel-radius-lg) 0 0;
+}
+
+/* Select */
+.ant-select:not(.ant-select-customize-input) .ant-select-selector {
+  border-radius: var(--hotel-radius-sm);
+  border-color: var(--hotel-border);
+}
+
+/* DatePicker */
+.ant-picker {
+  border-radius: var(--hotel-radius-sm);
+  border-color: var(--hotel-border);
+}
+
+/* Tabs */
+.ant-tabs-tab {
+  font-weight: 500;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--hotel-primary) !important;
+}
+
+.ant-tabs-ink-bar {
+  background: var(--hotel-gold);
+}
+
+/* Divider */
+.ant-divider {
+  border-color: var(--hotel-border);
+}
+
+/* Badge */
+.ant-badge-count {
+  background: var(--hotel-gold);
+  box-shadow: 0 0 0 1px var(--hotel-bg-card);
+}
+
+/* Progress */
+.ant-progress-bg {
+  background: var(--hotel-gold);
+}
+
+/* Timeline */
+.ant-timeline-item-head {
+  background: var(--hotel-gold);
+}
+
+/* Statistic */
+.ant-statistic-title {
+  color: var(--hotel-text-secondary);
+  font-size: 13px;
+}
+
+.ant-statistic-content {
+  color: var(--hotel-primary);
+  font-weight: 600;
+}
+
+/* Breadcrumb */
+.ant-breadcrumb {
+  font-size: 14px;
+}
+
+.ant-breadcrumb a:hover {
+  color: var(--hotel-gold);
+}
+
+/* Dropdown */
+.ant-dropdown-menu {
+  border-radius: var(--hotel-radius);
+  box-shadow: var(--hotel-shadow-lg);
+}
+
+.ant-dropdown-menu-item:hover {
+  background: rgba(201, 169, 98, 0.08);
+}
+
+/* Popover */
+.ant-popover-inner {
+  border-radius: var(--hotel-radius);
+  box-shadow: var(--hotel-shadow-lg);
+}
+
+/* Tooltip */
+.ant-tooltip-inner {
+  border-radius: var(--hotel-radius-sm);
+  background: var(--hotel-primary);
+}
+
+/* Radio & Checkbox */
+.ant-radio-checked .ant-radio-inner {
+  border-color: var(--hotel-gold);
+  background: var(--hotel-gold);
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background: var(--hotel-gold);
+  border-color: var(--hotel-gold);
+}
+
+/* Switch */
+.ant-switch-checked {
+  background: var(--hotel-gold);
+}
+
+/* Slider */
+.ant-slider-track {
+  background: var(--hotel-gold);
+}
+
+.ant-slider-handle {
+  border-color: var(--hotel-gold);
+}
+
+/* Steps */
+.ant-steps-item-process .ant-steps-item-icon {
+  background: var(--hotel-gold);
+  border-color: var(--hotel-gold);
+}
+
+.ant-steps-item-finish .ant-steps-item-icon {
+  border-color: var(--hotel-gold);
+  color: var(--hotel-gold);
+}
+
+/* Pagination */
+.ant-pagination-item-active {
+  border-color: var(--hotel-gold);
+}
+
+.ant-pagination-item-active a {
+  color: var(--hotel-gold);
+}
+
+/* Upload */
+.ant-upload-drag {
+  border-radius: var(--hotel-radius);
+  border-color: var(--hotel-border);
+}
+
+.ant-upload-drag:hover {
+  border-color: var(--hotel-gold);
+}
+
+/* Collapse */
+.ant-collapse {
+  border-radius: var(--hotel-radius);
+  border-color: var(--hotel-border);
+}
+
+.ant-collapse-header {
+  font-weight: 500;
+}
+
+/* List */
+.ant-list-item {
+  border-bottom: 1px solid var(--hotel-border);
+}
+
+/* Descriptions */
+.ant-descriptions-item-label {
+  color: var(--hotel-text-secondary);
+  font-weight: 500;
+}
+
+/* Empty */
+.ant-empty-description {
+  color: var(--hotel-text-muted);
+}
+
+/* Result */
+.ant-result-title {
+  color: var(--hotel-primary);
+}
+
+.ant-result-subtitle {
+  color: var(--hotel-text-secondary);
+}
+
+/* Spin */
+.ant-spin-dot-item {
+  background: var(--hotel-gold);
+}
+
+/* Skeleton */
+.ant-skeleton-element .ant-skeleton-button,
+.ant-skeleton-element .ant-skeleton-input,
+.ant-skeleton-element .ant-skeleton-image {
+  background: linear-gradient(90deg, var(--hotel-bg-secondary) 25%, #f0f0f0 37%, var(--hotel-bg-secondary) 63%);
+  background-size: 400% 100%;
+}
+
+/* 通用工具类 */
+.hotel-text-gold {
+  color: var(--hotel-gold);
+}
+
+.hotel-text-primary {
+  color: var(--hotel-primary);
+}
+
+.hotel-bg-gold {
+  background: var(--hotel-gold);
+}
+
+.hotel-bg-primary {
+  background: var(--hotel-primary);
+}
+
+.hotel-border-gold {
+  border-color: var(--hotel-gold);
+}
+
+.hotel-shadow {
+  box-shadow: var(--hotel-shadow);
+}
+
+.hotel-shadow-lg {
+  box-shadow: var(--hotel-shadow-lg);
+}
+
+/* 动画 */
+@keyframes hotel-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hotel-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hotel-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.hotel-animate-fade-in {
+  animation: hotel-fade-in 0.4s ease-out;
+}
+
+.hotel-animate-slide-up {
+  animation: hotel-slide-up 0.5s ease-out;
+}
+
+/* 页面标题样式 */
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title::before {
+  content: '';
+  width: 4px;
+  height: 24px;
+  background: var(--hotel-gold);
+  border-radius: 2px;
+}
+
+/* 卡片标题样式 */
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 状态标签样式 */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-tag.success {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
+}
+
+.status-tag.success::before {
+  background: var(--hotel-success);
+}
+
+.status-tag.warning {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--hotel-warning);
+}
+
+.status-tag.warning::before {
+  background: var(--hotel-warning);
+}
+
+.status-tag.error {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--hotel-error);
+}
+
+.status-tag.error::before {
+  background: var(--hotel-error);
+}
+
+.status-tag.info {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
+}
+
+.status-tag.info::before {
+  background: var(--hotel-info);
+}
+
+/* 按钮组样式 */
+.btn-group {
+  display: flex;
+  gap: 12px;
+}
+
+/* 表单区域样式 */
+.form-section {
+  background: var(--hotel-bg-card);
+  border-radius: var(--hotel-radius);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.form-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hotel-border);
+}
+
+/* 数据展示样式 */
+.data-display {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.data-item {
+  background: var(--hotel-bg-card);
+  border-radius: var(--hotel-radius);
+  padding: 20px;
+  border: 1px solid var(--hotel-border);
+}
+
+.data-item-label {
+  font-size: 13px;
+  color: var(--hotel-text-secondary);
+  margin-bottom: 8px;
+}
+
+.data-item-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+}
+
+/* 列表样式 */
+.hotel-list {
+  list-style: none;
+  padding: 0;
+}
+
+.hotel-list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hotel-border);
+}
+
+.hotel-list-item:last-child {
+  border-bottom: none;
+}
+
+/* 时间线样式 */
+.hotel-timeline {
+  position: relative;
+  padding-left: 24px;
+}
+
+.hotel-timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--hotel-border);
+}
+
+.hotel-timeline-item {
+  position: relative;
+  padding-bottom: 20px;
+}
+
+.hotel-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -22px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hotel-gold);
+  border: 2px solid var(--hotel-bg-card);
+}
+
+.hotel-timeline-time {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+  margin-bottom: 4px;
+}
+
+.hotel-timeline-content {
+  font-size: 14px;
+  color: var(--hotel-text);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  :root {
+    --hotel-radius: 8px;
+    --hotel-radius-lg: 12px;
+  }
+  
+  .page-title {
+    font-size: 20px;
+  }
+  
+  .data-display {
+    grid-template-columns: 1fr;
+  }
 }

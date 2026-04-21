@@ -1,86 +1,117 @@
 <template>
   <div class="guest-layout">
     <a-layout>
+      <!-- 顶部导航 -->
       <a-layout-header class="guest-header">
         <div class="header-left">
-          <MobileOutlined class="header-logo" />
-          <h3 @click="$router.push('/guest/booking')">慧宿智联</h3>
+          <div class="logo" @click="$router.push('/guest/booking')">
+            <div class="logo-icon">
+              <HomeOutlined />
+            </div>
+            <div class="logo-text">
+              <span class="brand-name">慧宿智联</span>
+              <span class="brand-tagline">智慧酒店服务</span>
+            </div>
+          </div>
         </div>
+        
         <div class="header-nav">
           <a-button
             type="text"
-            :class="{ active: isActive('/guest/booking') || isActive('/guest/checkin-online') }"
+            :class="{ active: isActive('/guest/booking') }"
             @click="$router.push('/guest/booking')"
-          >探索旅程</a-button>
+          >
+            <CompassOutlined />
+            探索旅程
+          </a-button>
           <a-button
             v-if="appStore.userStatus?.is_checked_in"
             type="text"
             :class="{ active: isActive('/guest/room') }"
             @click="$router.push('/guest/room')"
-          >客房服务</a-button>
+          >
+            <AppstoreOutlined />
+            客房服务
+          </a-button>
           <a-button
             v-else
             type="text"
             :class="{ active: isActive('/guest/checkin-online') }"
             @click="$router.push('/guest/checkin-online')"
-          >预入住</a-button>
+          >
+            <IdcardOutlined />
+            预入住
+          </a-button>
           <a-button
             type="text"
             :class="{ active: isActive('/guest/orders') }"
             @click="$router.push('/guest/orders')"
-          >我的订单</a-button>
+          >
+            <FileTextOutlined />
+            我的订单
+          </a-button>
           <a-button
             type="text"
             :class="{ active: isActive('/guest/profile') }"
             @click="$router.push('/guest/profile')"
-          >个人中心</a-button>
+          >
+            <UserOutlined />
+            个人中心
+          </a-button>
         </div>
+        
         <div class="header-right">
-          <a-tag :color="appStore.connected ? 'success' : 'default'" size="small">
-            {{ appStore.connected ? '在线' : '' }}
-          </a-tag>
+          <div class="connection-status" :class="{ online: appStore.connected }">
+            <span class="status-dot"></span>
+            <span class="status-text">{{ appStore.connected ? '服务在线' : '连接中' }}</span>
+          </div>
+          
           <template v-if="!userInfo">
-            <a-button type="primary" @click="appStore.showLoginModal = true">
-              <UserOutlined /> 登录/注册
+            <a-button type="primary" class="login-btn" @click="appStore.showLoginModal = true">
+              <UserOutlined /> 登录 / 注册
             </a-button>
           </template>
           <template v-else>
             <div class="user-status-tags" v-if="appStore.userStatus">
               <a-tag 
                 v-if="appStore.userStatus.is_member && memberLevelInfo" 
-                :color="memberLevelInfo.color"
-                :style="{ color: memberLevelInfo.textColor, border: 'none', fontWeight: 'bold' }"
+                class="member-tag"
+                :style="{ background: memberLevelInfo.color, color: '#fff', border: 'none' }"
               >
+                <CrownOutlined />
                 {{ memberLevelInfo.label }}
               </a-tag>
-              <a-tag v-if="appStore.userStatus.is_checked_in" color="cyan">已入住</a-tag>
+              <a-tag v-if="appStore.userStatus.is_checked_in" class="checkin-tag">
+                <CheckCircleOutlined />
+                已入住
+              </a-tag>
             </div>
 
-            <!-- 切端按钮：仅对非普通用户显示 -->
             <a-button
               v-if="userInfo.role && userInfo.role !== CANONICAL_ROLES.CUSTOMER"
               type="link"
               class="switch-side-btn"
               @click="$router.push('/reception/dashboard')"
             >
-              <template #icon><SwapOutlined /></template>
-              切换管理端
+              <SwapOutlined />
+              管理后台
             </a-button>
 
-            <a-dropdown>
+            <a-dropdown placement="bottomRight">
               <a class="user-dropdown-wrapper" @click.prevent>
-                <a-avatar :size="32" :src="userInfo.avatar" class="header-avatar">
+                <a-avatar :size="36" :src="userInfo.avatar" class="header-avatar">
                   <template #icon><UserOutlined /></template>
                 </a-avatar>
                 <span class="header-username">{{ userInfo.username }}</span>
+                <DownOutlined class="dropdown-arrow" />
               </a>
               <template #overlay>
-                <a-menu>
+                <a-menu class="user-dropdown-menu">
                   <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                     <UserOutlined /> 个人中心
                   </a-menu-item>
                   <a-menu-divider />
-                  <a-menu-item key="logout" @click="handleLogout">
+                  <a-menu-item key="logout" @click="handleLogout" class="logout-item">
                     <LogoutOutlined /> 退出登录
                   </a-menu-item>
                 </a-menu>
@@ -90,12 +121,29 @@
         </div>
       </a-layout-header>
 
+      <!-- 主内容区 -->
       <a-layout-content class="guest-content">
         <router-view />
       </a-layout-content>
 
+      <!-- 页脚 -->
       <a-layout-footer class="guest-footer">
-        <p>©2026 慧宿智联·云边端一体化智能酒店物联网设备管理与服务全栈解决方案</p>
+        <div class="footer-content">
+          <div class="footer-brand">
+            <HomeOutlined class="footer-logo" />
+            <span>慧宿智联</span>
+          </div>
+          <div class="footer-links">
+            <a href="#">关于我们</a>
+            <a href="#">服务条款</a>
+            <a href="#">隐私政策</a>
+            <a href="#">联系客服</a>
+          </div>
+          <div class="footer-copyright">
+            <p>2026 慧宿智联 · 云边端一体化智能酒店物联网解决方案</p>
+            <p class="footer-sub">让每一次入住都成为美好回忆</p>
+          </div>
+        </div>
       </a-layout-footer>
     </a-layout>
 
@@ -104,16 +152,19 @@
       v-model:open="appStore.showLoginModal"
       :footer="null"
       :closable="true"
-      width="420px"
+      width="440px"
+      class="login-modal"
       @cancel="handleLoginCancel"
     >
-      <template #title>
-        <div style="text-align: center; font-size: 18px; font-weight: 600;">
-          欢迎登录慧宿智联
+      <div class="login-modal-header">
+        <div class="login-logo">
+          <HomeOutlined />
         </div>
-      </template>
+        <h3>欢迎回到慧宿智联</h3>
+        <p>开启您的智慧酒店之旅</p>
+      </div>
 
-      <a-tabs v-model:activeKey="activeTab" class="login-tabs">
+      <a-tabs v-model:activeKey="activeTab" class="login-tabs" centered>
         <a-tab-pane key="password" tab="密码登录">
           <a-form
             ref="loginFormRef"
@@ -121,20 +172,21 @@
             :rules="loginRules"
             layout="vertical"
             @finish="handleLogin"
+            class="login-form"
           >
-            <a-form-item name="phone" label="手机号">
+            <a-form-item name="phone" label="手机号码">
               <a-input
                 v-model:value="loginForm.phone"
                 placeholder="请输入手机号"
                 size="large"
               >
                 <template #prefix>
-                  <PhoneOutlined />
+                  <MobileOutlined />
                 </template>
               </a-input>
             </a-form-item>
 
-            <a-form-item name="password" label="密码">
+            <a-form-item name="password" label="登录密码">
               <a-input-password
                 v-model:value="loginForm.password"
                 placeholder="请输入密码"
@@ -153,6 +205,7 @@
                 size="large"
                 block
                 :loading="loginLoading"
+                class="submit-btn"
               >
                 登录
               </a-button>
@@ -160,7 +213,7 @@
 
             <div class="form-footer">
               <span>还没有账号？</span>
-              <a @click="showRegisterModal = true">立即注册</a>
+              <a @click="showRegisterModal = true" class="register-link">立即注册</a>
             </div>
           </a-form>
         </a-tab-pane>
@@ -169,7 +222,7 @@
           <div class="scan-login-container">
             <div v-if="!scanToken" class="scan-intro">
               <div class="scan-icon-wrapper">
-                <QrcodeOutlined style="font-size: 64px; color: #1890ff;" />
+                <QrcodeOutlined />
               </div>
               <p class="scan-tip">请使用慧宿智联 APP 扫码登录</p>
               <a-button
@@ -178,6 +231,7 @@
                 :loading="generatingToken"
                 block
                 size="large"
+                class="generate-btn"
               >
                 生成登录二维码
               </a-button>
@@ -188,20 +242,22 @@
                 <canvas ref="qrCanvasRef"></canvas>
                 <div v-if="qrExpired" class="qr-expired-overlay">
                   <p>二维码已失效</p>
-                  <a-button type="primary" @click="handleResetScan">点击刷新</a-button>
+                  <a-button type="primary" @click="handleResetScan" size="small">
+                    点击刷新
+                  </a-button>
                 </div>
               </div>
               <div class="scan-status">
                 <a-spin v-if="!qrExpired" size="small" />
-                <span v-if="!qrExpired">等待APP扫码...</span>
-                <span v-else style="color: #ff4d4f;">二维码已过期，请刷新</span>
+                <span v-if="!qrExpired">等待 APP 扫码...</span>
+                <span v-else class="expired-text">二维码已过期，请刷新</span>
               </div>
               <a-statistic-countdown
                 v-if="!qrExpired"
                 :value="tokenExpireTime"
                 format="mm:ss"
                 @finish="handleCountdownFinish"
-                style="text-align: center; margin-top: 8px;"
+                class="countdown"
               />
             </div>
           </div>
@@ -212,19 +268,22 @@
     <!-- 注册弹窗 -->
     <a-modal
       v-model:open="showRegisterModal"
-      title="用户注册"
+      title="注册新账号"
       @ok="handleRegister"
       :confirmLoading="registerLoading"
       cancelText="取消"
-      okText="确定"
+      okText="确定注册"
+      class="register-modal"
+      width="440px"
     >
       <a-form
         ref="registerFormRef"
         :model="registerForm"
         :rules="registerRules"
         layout="vertical"
+        class="register-form"
       >
-        <a-form-item name="username" label="昵称">
+        <a-form-item name="username" label="用户昵称">
           <a-input
             v-model:value="registerForm.username"
             placeholder="请设置您的昵称"
@@ -236,7 +295,19 @@
           </a-input>
         </a-form-item>
 
-        <a-form-item name="password" label="密码">
+        <a-form-item name="phone" label="手机号码">
+          <a-input
+            v-model:value="registerForm.phone"
+            placeholder="请输入手机号"
+            size="large"
+          >
+            <template #prefix>
+              <MobileOutlined />
+            </template>
+          </a-input>
+        </a-form-item>
+
+        <a-form-item name="password" label="设置密码">
           <a-input-password
             v-model:value="registerForm.password"
             placeholder="请设置密码"
@@ -260,7 +331,7 @@
           </a-input-password>
         </a-form-item>
 
-        <a-form-item name="email" label="邮箱 (可选)">
+        <a-form-item name="email" label="电子邮箱 (选填)">
           <a-input
             v-model:value="registerForm.email"
             placeholder="请输入邮箱"
@@ -272,23 +343,12 @@
           </a-input>
         </a-form-item>
 
-        <a-form-item name="phone" label="手机号">
-          <a-input
-            v-model:value="registerForm.phone"
-            placeholder="请输入手机号"
-            size="large"
-          >
-            <template #prefix>
-              <PhoneOutlined />
-            </template>
-          </a-input>
-        </a-form-item>
-
         <a-alert
-          message="提示"
-          description="您正在注册顾客账号，门店员工账号请由经理统一注册。"
+          message="温馨提示"
+          description="您正在注册顾客账号，酒店员工账号请联系管理员开通。"
           type="info"
           show-icon
+          class="register-tip"
         />
       </a-form>
     </a-modal>
@@ -301,15 +361,21 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import {
-  MobileOutlined,
+  HomeOutlined,
   UserOutlined,
   LockOutlined,
   MailOutlined,
-  PhoneOutlined,
+  MobileOutlined,
   LogoutOutlined,
-  OrderedListOutlined,
   SwapOutlined,
-  QrcodeOutlined
+  QrcodeOutlined,
+  DownOutlined,
+  CompassOutlined,
+  AppstoreOutlined,
+  IdcardOutlined,
+  FileTextOutlined,
+  CrownOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, normalizeRole, CANONICAL_ROLES } from '@/api/auth'
@@ -328,25 +394,22 @@ const memberLevelInfo = computed(() => {
   if (!appStore.userStatus?.is_member || !appStore.userStatus?.member_info) {
     return null
   }
-  // 添加对系统配置的依赖，确保配置更新时重新计算
   const scheme = appStore.systemConfigs.member_scheme
   const member = appStore.userStatus.member_info
 
-  // 如果后端返回了 level_label，优先使用后端数据
   if (member?.level_label) {
     return {
       label: member.level_label,
-      color: appStore.getLevelInfo(member.member_level, member.experience).color || '#4b6cb7',
-      textColor: '#fff' // 默认白色
+      color: appStore.getLevelInfo(member.member_level, member.experience).color || '#C9A962',
+      textColor: '#fff'
     }
   }
 
-  // 否则使用前端计算
   const info = appStore.getLevelInfo(member.member_level, member.experience)
   return {
     label: info.label,
-    color: info.color || '#4b6cb7',
-    textColor: '#fff' // 默认白色
+    color: info.color || '#C9A962',
+    textColor: '#fff'
   }
 })
 
@@ -367,7 +430,6 @@ const fetchUserStatus = async () => {
 
 onMounted(() => {
   fetchUserStatus()
-  // 检查 URL 是否带 login 参数
   if (route.query.login === '1') {
     appStore.showLoginModal = true
   }
@@ -487,14 +549,12 @@ const handleLogin = async () => {
     const { user } = await authService.login(loginForm)
 
     appStore.showLoginModal = false
-    message.success('登录成功')
+    message.success('欢迎回来，登录成功')
 
-    // 处理重定向
     const redirect = route.query.redirect as string
     if (redirect) {
       router.push(redirect)
     } else {
-      // 根据角色重定向
       const role = normalizeRole(user.role)
       switch (role) {
         case CANONICAL_ROLES.SYSTEM_ADMIN: router.push('/system/dashboard'); break
@@ -525,12 +585,12 @@ const handleGenerateQrToken = async () => {
       await QRCode.toCanvas(qrCanvasRef.value, token, {
         width: 200,
         margin: 2,
-        color: { dark: '#000000', light: '#ffffff' }
+        color: { dark: '#1A2B4A', light: '#ffffff' }
       })
     }
 
     pollQrStatus(token)
-    message.success('二维码已生成，请使用APP扫码')
+    message.success('二维码已生成')
   } catch (error) {
     console.error('生成二维码失败:', error)
   } finally {
@@ -601,14 +661,12 @@ const handleRegister = async () => {
     message.success('注册成功，请登录')
     showRegisterModal.value = false
 
-    // 清空表单
     registerForm.username = ''
     registerForm.password = ''
     registerForm.confirmPassword = ''
     registerForm.email = ''
     registerForm.phone = ''
 
-    // 切换到密码登录
     activeTab.value = 'password'
   } catch (error) {
     console.error('注册失败:', error)
@@ -621,8 +679,7 @@ const handleRegister = async () => {
 const handleLogout = async () => {
   try {
     await authService.logout()
-    message.success('已退出登录')
-    // 退出后回到首页
+    message.success('已安全退出')
     router.push('/guest/booking')
   } catch (error) {
     console.error('登出失败:', error)
@@ -631,81 +688,545 @@ const handleLogout = async () => {
 </script>
 
 <style scoped>
-.guest-layout { min-height: 100vh; background: linear-gradient(180deg, #f0f5ff 0%, #e6f7ff 100%); }
+.guest-layout {
+  min-height: 100vh;
+  background: var(--hotel-bg);
+}
+
+/* 顶部导航 */
 .guest-header {
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  box-shadow: var(--hotel-shadow-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
-  height: 60px;
+  padding: 0 48px;
+  height: 72px;
   position: sticky;
   top: 0;
   z-index: 100;
 }
-.header-left { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.header-logo { font-size: 26px; color: #1890ff; }
-.header-left h3 { margin: 0; font-size: 18px; background: linear-gradient(135deg, #1890ff, #722ed1); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
-.header-nav { display: flex; gap: 4px; }
-.header-nav .ant-btn { font-size: 15px; padding: 4px 16px; border-radius: 20px; font-weight: 500; }
-.header-nav .ant-btn.active { background: #e6f7ff; color: #1890ff; }
-.header-right { display: flex; align-items: center; gap: 12px; }
-.user-status-tags { display: flex; gap: 4px; align-items: center; }
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.logo:hover {
+  opacity: 0.8;
+}
+
+.logo-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--hotel-primary);
+  letter-spacing: 1px;
+}
+
+.brand-tagline {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+/* 导航菜单 */
+.header-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.header-nav .ant-btn {
+  font-size: 15px;
+  padding: 8px 20px;
+  border-radius: var(--hotel-radius-sm);
+  font-weight: 500;
+  color: var(--hotel-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s;
+}
+
+.header-nav .ant-btn:hover {
+  color: var(--hotel-primary);
+  background: var(--hotel-bg-secondary);
+}
+
+.header-nav .ant-btn.active {
+  background: var(--hotel-primary);
+  color: #fff;
+}
+
+/* 右侧区域 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+  padding: 6px 12px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 20px;
+}
+
+.connection-status.online {
+  color: var(--hotel-success);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hotel-text-muted);
+}
+
+.connection-status.online .status-dot {
+  background: var(--hotel-success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.login-btn {
+  border-radius: var(--hotel-radius-sm);
+  font-weight: 500;
+  padding: 0 24px;
+  height: 40px;
+}
+
+.user-status-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.member-tag,
+.checkin-tag {
+  border-radius: 20px;
+  font-size: 12px;
+  padding: 2px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.checkin-tag {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+
+.switch-side-btn {
+  font-weight: 500;
+  color: var(--hotel-gold);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.switch-side-btn:hover {
+  color: var(--hotel-gold-dark);
+}
+
 .user-dropdown-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 6px 12px;
+  border-radius: var(--hotel-radius);
   transition: background 0.3s;
+  border: 1px solid var(--hotel-border);
 }
+
 .user-dropdown-wrapper:hover {
-  background: #f0f2f5;
+  background: var(--hotel-bg-secondary);
 }
+
 .header-avatar {
-  border: 1px solid #e8e8e8;
+  border: 2px solid var(--hotel-gold);
 }
+
 .header-username {
   font-size: 14px;
-  color: #1a1a1a;
+  color: var(--hotel-text);
   font-weight: 500;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.switch-side-btn {
-  font-weight: 600;
-  color: #1890ff;
+
+.dropdown-arrow {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
 }
-.switch-side-btn:hover {
-  color: #40a9ff;
+
+.user-dropdown-menu {
+  border-radius: var(--hotel-radius);
 }
+
+.logout-item {
+  color: var(--hotel-error);
+}
+
+/* 主内容区 */
 .guest-content {
   max-width: 1440px;
   width: 100%;
   margin: 0 auto;
-  padding: 28px 24px;
-  min-height: calc(100vh - 60px - 80px);
+  padding: 32px 48px;
+  min-height: calc(100vh - 72px - 200px);
 }
+
+/* 页脚 */
 .guest-footer {
-  text-align: center;
-  padding: 20px;
-  color: rgba(0,0,0,0.45);
-  background: transparent;
+  background: var(--hotel-primary);
+  padding: 48px 48px 32px;
+  color: rgba(255, 255, 255, 0.8);
 }
-.guest-footer p { margin: 4px 0; font-size: 13px; }
 
-.login-tabs { margin-top: 16px; }
-.form-footer { text-align: center; margin-top: 16px; color: #666; }
-.form-footer a { color: #667eea; text-decoration: none; margin-left: 8px; cursor: pointer; }
-.form-footer a:hover { text-decoration: underline; }
+.footer-content {
+  max-width: 1440px;
+  margin: 0 auto;
+  text-align: center;
+}
 
-.scan-login-container { padding: 20px 0; text-align: center; }
-.scan-intro { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.scan-icon-wrapper { margin-bottom: 8px; }
-.scan-tip { color: #666; margin: 0; font-size: 14px; }
-.scan-waiting { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.qr-code-wrapper { position: relative; display: inline-block; border: 1px solid #e8e8e8; border-radius: 8px; padding: 8px; background: #fff; }
-.qr-expired-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; gap: 8px; }
-.qr-expired-overlay p { margin: 0; color: #ff4d4f; font-size: 14px; }
-.scan-status { display: flex; align-items: center; gap: 8px; color: #666; font-size: 13px; }
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.footer-logo {
+  font-size: 32px;
+  color: var(--hotel-gold);
+}
+
+.footer-brand span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 2px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.footer-links a {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  transition: color 0.3s;
+}
+
+.footer-links a:hover {
+  color: var(--hotel-gold);
+}
+
+.footer-copyright {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 24px;
+}
+
+.footer-copyright p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.footer-sub {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  color: var(--hotel-gold) !important;
+  font-style: italic;
+}
+
+/* 登录弹窗 */
+.login-modal :deep(.ant-modal-content) {
+  border-radius: var(--hotel-radius-lg);
+  overflow: hidden;
+}
+
+.login-modal-header {
+  text-align: center;
+  padding: 32px 0 24px;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #fff;
+  font-size: 32px;
+}
+
+.login-modal-header h3 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin: 0 0 8px;
+}
+
+.login-modal-header p {
+  font-size: 14px;
+  color: var(--hotel-text-muted);
+  margin: 0;
+}
+
+.login-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 24px;
+}
+
+.login-tabs :deep(.ant-tabs-tab) {
+  font-size: 15px;
+  padding: 12px 24px;
+}
+
+.login-form,
+.register-form {
+  padding: 0 8px;
+}
+
+.login-form :deep(.ant-form-item-label) {
+  font-weight: 500;
+  color: var(--hotel-text);
+}
+
+.submit-btn {
+  height: 44px;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: var(--hotel-radius-sm);
+  margin-top: 8px;
+}
+
+.form-footer {
+  text-align: center;
+  margin-top: 20px;
+  color: var(--hotel-text-secondary);
+  font-size: 14px;
+}
+
+.register-link {
+  color: var(--hotel-gold);
+  font-weight: 500;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.register-link:hover {
+  color: var(--hotel-gold-dark);
+}
+
+/* 扫码登录 */
+.scan-login-container {
+  padding: 20px 0;
+  text-align: center;
+}
+
+.scan-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.scan-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hotel-primary);
+  font-size: 40px;
+}
+
+.scan-tip {
+  color: var(--hotel-text-secondary);
+  margin: 0;
+  font-size: 14px;
+}
+
+.generate-btn {
+  height: 44px;
+  font-weight: 500;
+}
+
+.scan-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.qr-code-wrapper {
+  position: relative;
+  display: inline-block;
+  border: 2px solid var(--hotel-border);
+  border-radius: var(--hotel-radius);
+  padding: 16px;
+  background: #fff;
+}
+
+.qr-expired-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--hotel-radius-sm);
+  gap: 12px;
+}
+
+.qr-expired-overlay p {
+  margin: 0;
+  color: var(--hotel-error);
+  font-size: 14px;
+}
+
+.scan-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hotel-text-secondary);
+  font-size: 14px;
+}
+
+.expired-text {
+  color: var(--hotel-error);
+}
+
+.countdown :deep(.ant-statistic-content) {
+  font-size: 14px;
+  color: var(--hotel-gold);
+}
+
+/* 注册弹窗 */
+.register-modal :deep(.ant-modal-content) {
+  border-radius: var(--hotel-radius-lg);
+}
+
+.register-modal :deep(.ant-modal-header) {
+  border-bottom: 1px solid var(--hotel-border);
+  padding: 20px 24px;
+}
+
+.register-modal :deep(.ant-modal-title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+}
+
+.register-form :deep(.ant-form-item-label) {
+  font-weight: 500;
+  color: var(--hotel-text);
+}
+
+.register-tip {
+  margin-top: 8px;
+}
+
+.register-tip :deep(.ant-alert-message) {
+  font-weight: 500;
+  color: var(--hotel-primary);
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .guest-header {
+    padding: 0 24px;
+  }
+  
+  .header-nav {
+    display: none;
+  }
+  
+  .guest-content {
+    padding: 24px;
+  }
+  
+  .footer-links {
+    flex-wrap: wrap;
+    gap: 16px 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .guest-header {
+    padding: 0 16px;
+    height: 64px;
+  }
+  
+  .brand-tagline {
+    display: none;
+  }
+  
+  .connection-status .status-text {
+    display: none;
+  }
+  
+  .user-status-tags {
+    display: none;
+  }
+  
+  .guest-content {
+    padding: 16px;
+  }
+  
+  .guest-footer {
+    padding: 32px 16px;
+  }
+}
 </style>

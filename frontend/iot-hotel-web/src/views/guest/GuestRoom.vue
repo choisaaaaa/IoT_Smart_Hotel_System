@@ -1,204 +1,321 @@
 <template>
-  <div class="guest-room-new">
-    <div class="ota-content-wrapper with-padding">
-      <a-row :gutter="24">
-        <!-- 左侧：AI 管家交互区 -->
-        <a-col :xs="24" :lg="16">
-          <div class="ai-interaction-card">
-            <div class="card-header-modern">
-              <div class="room-status-badge">
-                <HomeOutlined /> 房间 {{ roomIdDisplay }}
-              </div>
-              <div class="ai-title">🤖 AI 智慧管家</div>
-              <div class="connection-status" :class="{ online: socket?.connected }">
-                {{ socket?.connected ? '在线' : '连接中...' }}
-              </div>
-            </div>
-
-            <div class="ai-chat-body">
-              <div class="chat-messages" ref="chatContainerRef">
-                <div v-if="chatMessages.length === 0" class="welcome-section">
-                  <div class="ai-avatar-large" :class="{ pulsing: aiThinking }">
-                    <RobotOutlined />
-                  </div>
-                  <h2>您好，我是您的 AI 管家小智</h2>
-                  <p>您可以直接跟我说话，或者点击下方的快捷功能</p>
-                </div>
-
-                <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['message-row', msg.type]">
-                  <div class="avatar">
-                    <a-avatar :size="36" :style="{ backgroundColor: msg.type === 'ai' ? '#1890ff' : '#52c41a' }">
-                      <template #icon><RobotOutlined v-if="msg.type === 'ai'" /><UserOutlined v-else /></template>
-                    </a-avatar>
-                  </div>
-                  <div class="bubble-wrapper">
-                    <div class="bubble" :class="{ typing: msg.typing && isTyping && idx === chatMessages.length - 1 }">
-                      <template v-if="msg.typing && isTyping && idx === chatMessages.length - 1">
-                        {{ displayedText }}<span class="cursor">|</span>
-                      </template>
-                      <template v-else>
-                        {{ msg.text }}
-                      </template>
-                    </div>
-                    <div v-if="msg.type === 'ai' && idx === chatMessages.length - 1 && isPlayingAudio" class="audio-mini-player">
-                      <SoundOutlined :spin="isPlayingAudio" />
-                      <span>正在播放 AI 语音</span>
-                      <a-button type="link" size="small" @click="toggleAudio">{{ isPlayingAudio ? '暂停' : '播放' }}</a-button>
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="aiThinking" class="message-row ai">
-                  <div class="avatar"><a-avatar :size="36" style="background-color: #1890ff;"><template #icon><RobotOutlined /></template></a-avatar></div>
-                  <div class="bubble thinking"><a-spin size="small" /> 正在思考中...</div>
-                </div>
-
-                <!-- 智能建议 -->
-                <div v-if="suggestions.length > 0 && !aiThinking && !isTyping" class="suggestions-area">
-                  <div class="suggestion-label">💡 猜您想问：</div>
-                  <div class="suggestion-list">
-                    <span v-for="(s, sIdx) in suggestions.slice(0, 3)" :key="sIdx" class="suggestion-item" @click="askQuick(s)">{{ s }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="chat-input-panel">
-                <div v-if="chatMessages.length === 0" class="pre-chips">
-                  <span v-for="chip in quickChips" :key="chip.text" class="quick-chip" @click="askQuick(chip.text)">
-                    {{ chip.icon }} {{ chip.label }}
-                  </span>
-                </div>
-                <div class="input-container">
-                  <a-input
-                    v-model:value="inputText"
-                    placeholder="输入您的问题，如：打开灯光、需要保洁..."
-                    size="large"
-                    @pressEnter="sendMessage"
-                    :disabled="aiThinking"
-                    class="modern-input"
-                  >
-                    <template #prefix><EditOutlined style="color: #bfbfbf;" /></template>
-                  </a-input>
-                  <a-button type="primary" size="large" class="modern-send-btn" :loading="aiThinking" :disabled="!inputText.trim() || aiThinking" @click="sendMessage">
-                    <SendOutlined />
-                  </a-button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </a-col>
-
-        <!-- 右侧：服务中心 -->
-        <a-col :xs="24" :lg="8">
-          <div class="service-center-card">
-            <div class="section-title-modern">服务中心</div>
-            
-            <div class="service-grid">
-              <div class="service-item-card" @click="showDeliveryModal = true">
-                <div class="icon-box delivery"><ShoppingOutlined /></div>
-                <div class="info">
-                  <div class="name">送物服务</div>
-                  <div class="desc">配送饮品、日用品</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="callFrontDesk">
-                <div class="icon-box call"><PhoneOutlined /></div>
-                <div class="info">
-                  <div class="name">呼叫前台</div>
-                  <div class="desc">语音通话即时沟通</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="showMessagePanel">
-                <div class="icon-box message"><MessageOutlined /></div>
-                <div class="info">
-                  <div class="name">在线留言</div>
-                  <div class="desc">给工作人员留言</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="showMaintenanceModal = true">
-                <div class="icon-box repair"><ToolOutlined /></div>
-                <div class="info">
-                  <div class="name">设施报修</div>
-                  <div class="desc">房间设备故障报修</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="showMyDeliveryRecords">
-                <div class="icon-box records"><ShoppingOutlined /></div>
-                <div class="info">
-                  <div class="name">我的配送</div>
-                  <div class="desc">查看配送订单记录</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="showMyMaintenanceRecords">
-                <div class="icon-box records"><FileTextOutlined /></div>
-                <div class="info">
-                  <div class="name">我的报修</div>
-                  <div class="desc">查看维修工单记录</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-
-              <div class="service-item-card" @click="askQuick('需要保洁服务')">
-                <div class="icon-box cleaning"><ClearOutlined /></div>
-                <div class="info">
-                  <div class="name">申请保洁</div>
-                  <div class="desc">打扫房间、整理床铺</div>
-                </div>
-                <RightOutlined class="arrow" />
-              </div>
-            </div>
-          </div>
-        </a-col>
-      </a-row>
+  <div class="guest-room-page">
+    <div class="page-header">
+      <div class="room-info">
+        <HomeOutlined class="room-icon" />
+        <div class="room-details">
+          <h1>客房服务</h1>
+          <p>房间 {{ roomIdDisplay }}</p>
+        </div>
+      </div>
+      <div class="connection-badge" :class="{ online: socket?.connected }">
+        <WifiOutlined v-if="socket?.connected" />
+        <LoadingOutlined v-else spin />
+        <span>{{ socket?.connected ? '服务在线' : '连接中' }}</span>
+      </div>
     </div>
 
+    <a-row :gutter="24">
+      <!-- 左侧：AI 管家交互区 -->
+      <a-col :xs="24" :lg="16">
+        <div class="ai-card">
+          <div class="ai-header">
+            <div class="ai-title">
+              <RobotOutlined class="ai-icon" />
+              <span>AI 智慧管家</span>
+            </div>
+            <a-tag class="ai-status" :class="{ active: socket?.connected }">
+              <span class="status-dot"></span>
+              {{ socket?.connected ? '在线' : '离线' }}
+            </a-tag>
+          </div>
+
+          <div class="ai-body">
+            <div class="chat-messages" ref="chatContainerRef">
+              <div v-if="chatMessages.length === 0" class="welcome-section">
+                <div class="welcome-avatar" :class="{ thinking: aiThinking }">
+                  <RobotOutlined />
+                </div>
+                <h2>您好，我是您的 AI 管家</h2>
+                <p>您可以直接跟我说话，或者点击下方的快捷功能</p>
+              </div>
+
+              <div 
+                v-for="(msg, idx) in chatMessages" 
+                :key="idx" 
+                :class="['message-row', msg.type]"
+              >
+                <div class="message-avatar">
+                  <RobotOutlined v-if="msg.type === 'ai'" />
+                  <UserOutlined v-else />
+                </div>
+                <div class="message-content">
+                  <div class="message-bubble" :class="{ typing: msg.typing && isTyping && idx === chatMessages.length - 1 }">
+                    <template v-if="msg.typing && isTyping && idx === chatMessages.length - 1">
+                      {{ displayedText }}<span class="cursor">|</span>
+                    </template>
+                    <template v-else>
+                      {{ msg.text }}
+                    </template>
+                  </div>
+                  <div v-if="msg.type === 'ai' && idx === chatMessages.length - 1 && isPlayingAudio" class="audio-indicator">
+                    <SoundOutlined :spin="isPlayingAudio" />
+                    <span>正在播放语音</span>
+                    <a-button type="link" size="small" @click="toggleAudio">
+                      {{ isPlayingAudio ? '暂停' : '播放' }}
+                    </a-button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="aiThinking" class="message-row ai">
+                <div class="message-avatar">
+                  <RobotOutlined />
+                </div>
+                <div class="message-content">
+                  <div class="thinking-indicator">
+                    <a-spin size="small" />
+                    <span>正在思考中...</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 智能建议 -->
+              <div v-if="suggestions.length > 0 && !aiThinking && !isTyping" class="suggestions-section">
+                <div class="suggestions-label">
+                  <BulbOutlined /> 猜您想问
+                </div>
+                <div class="suggestions-list">
+                  <span 
+                    v-for="(s, sIdx) in suggestions.slice(0, 3)" 
+                    :key="sIdx" 
+                    class="suggestion-chip" 
+                    @click="askQuick(s)"
+                  >
+                    {{ s }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-input-area">
+              <div v-if="chatMessages.length === 0" class="quick-actions">
+                <span 
+                  v-for="chip in quickChips" 
+                  :key="chip.text" 
+                  class="action-chip" 
+                  @click="askQuick(chip.text)"
+                >
+                  <component :is="chip.icon" />
+                  {{ chip.label }}
+                </span>
+              </div>
+              <div class="input-wrapper">
+                <a-input
+                  v-model:value="inputText"
+                  placeholder="输入您的问题，如：打开灯光、需要保洁..."
+                  size="large"
+                  @pressEnter="sendMessage"
+                  :disabled="aiThinking"
+                  class="chat-input"
+                >
+                  <template #prefix>
+                    <EditOutlined class="input-icon" />
+                  </template>
+                </a-input>
+                <a-button 
+                  type="primary" 
+                  size="large" 
+                  class="send-btn" 
+                  :loading="aiThinking" 
+                  :disabled="!inputText.trim() || aiThinking" 
+                  @click="sendMessage"
+                >
+                  <SendOutlined />
+                </a-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-col>
+
+      <!-- 右侧：服务中心 -->
+      <a-col :xs="24" :lg="8">
+        <div class="service-card">
+          <div class="service-header">
+            <CustomerServiceOutlined />
+            <span>服务中心</span>
+          </div>
+          
+          <div class="service-list">
+            <div class="service-item" @click="showDeliveryModal = true">
+              <div class="service-icon delivery">
+                <ShoppingOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">送物服务</div>
+                <div class="service-desc">配送饮品、日用品</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="callFrontDesk">
+              <div class="service-icon call">
+                <PhoneOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">呼叫前台</div>
+                <div class="service-desc">语音通话即时沟通</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="showMessagePanel">
+              <div class="service-icon message">
+                <MessageOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">在线留言</div>
+                <div class="service-desc">给工作人员留言</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="showMaintenanceModal = true">
+              <div class="service-icon repair">
+                <ToolOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">设施报修</div>
+                <div class="service-desc">房间设备故障报修</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="showMyDeliveryRecords">
+              <div class="service-icon records">
+                <HistoryOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">我的配送</div>
+                <div class="service-desc">查看配送订单记录</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="showMyMaintenanceRecords">
+              <div class="service-icon records">
+                <FileTextOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">我的报修</div>
+                <div class="service-desc">查看维修工单记录</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+
+            <div class="service-item" @click="askQuick('需要保洁服务')">
+              <div class="service-icon cleaning">
+                <ClearOutlined />
+              </div>
+              <div class="service-info">
+                <div class="service-name">申请保洁</div>
+                <div class="service-desc">打扫房间、整理床铺</div>
+              </div>
+              <RightOutlined class="service-arrow" />
+            </div>
+          </div>
+        </div>
+      </a-col>
+    </a-row>
+
     <!-- 送物弹窗 -->
-    <a-modal v-model:open="showDeliveryModal" title="申请送物" @ok="requestDelivery" :confirmLoading="deliveryLoading">
-      <a-form :model="deliveryForm" layout="vertical">
+    <a-modal 
+      v-model:open="showDeliveryModal" 
+      title="申请送物" 
+      @ok="requestDelivery" 
+      :confirmLoading="deliveryLoading"
+      class="service-modal"
+      width="480px"
+    >
+      <a-form :model="deliveryForm" layout="vertical" class="service-form">
         <a-form-item label="物品类别" required>
-          <a-select v-model:value="deliveryForm.category">
-            <a-select-option value="beverage">🍶 饮品（矿泉水、饮料等）</a-select-option>
-            <a-select-option value="food">🍕 食品（方便面、零食等）</a-select-option>
-            <a-select-option value="daily">🧴 日用品（毛巾、洗漱用品等）</a-select-option>
-            <a-select-option value="other">📦 其他物品</a-select-option>
+          <a-select v-model:value="deliveryForm.category" size="large">
+            <a-select-option value="beverage">
+              <CoffeeOutlined /> 饮品（矿泉水、饮料等）
+            </a-select-option>
+            <a-select-option value="food">
+              <ShoppingOutlined /> 食品（方便面、零食等）
+            </a-select-option>
+            <a-select-option value="daily">
+              <SkinOutlined /> 日用品（毛巾、洗漱用品等）
+            </a-select-option>
+            <a-select-option value="other">
+              <InboxOutlined /> 其他物品
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="物品名称" required>
-          <a-input v-model:value="deliveryForm.item_name" placeholder="如：矿泉水、毛巾..." />
+          <a-input 
+            v-model:value="deliveryForm.item_name" 
+            placeholder="如：矿泉水、毛巾..."
+            size="large"
+          />
         </a-form-item>
         <a-form-item label="数量">
-          <a-input-number v-model:value="deliveryForm.quantity" :min="1" :max="20" style="width: 100%;" />
+          <a-input-number 
+            v-model:value="deliveryForm.quantity" 
+            :min="1" 
+            :max="20" 
+            style="width: 100%;"
+            size="large"
+          />
         </a-form-item>
         <a-form-item label="备注">
-          <a-textarea v-model:value="deliveryForm.note" :rows="2" placeholder="特殊要求..." />
+          <a-textarea 
+            v-model:value="deliveryForm.note" 
+            :rows="3" 
+            placeholder="特殊要求..."
+          />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 报修弹窗 -->
-    <a-modal v-model:open="showMaintenanceModal" title="设施报修" @ok="requestMaintenance" :confirmLoading="maintenanceLoading">
-      <a-form :model="maintenanceForm" layout="vertical">
+    <a-modal 
+      v-model:open="showMaintenanceModal" 
+      title="设施报修" 
+      @ok="requestMaintenance" 
+      :confirmLoading="maintenanceLoading"
+      class="service-modal"
+      width="480px"
+    >
+      <a-form :model="maintenanceForm" layout="vertical" class="service-form">
         <a-form-item label="故障类型" required>
-          <a-select v-model:value="maintenanceForm.fault_type">
-            <a-select-option value="electric">🔌 电力/灯光</a-select-option>
-            <a-select-option value="water">🚰 水路/卫浴</a-select-option>
-            <a-select-option value="ac">❄️ 空调/暖气</a-select-option>
-            <a-select-option value="network">🌐 网络/电视</a-select-option>
-            <a-select-option value="other">🔧 其他故障</a-select-option>
+          <a-select v-model:value="maintenanceForm.fault_type" size="large">
+            <a-select-option value="electric">
+              <ThunderboltOutlined /> 电力/灯光
+            </a-select-option>
+            <a-select-option value="water">
+              <DropletOutlined /> 水路/卫浴
+            </a-select-option>
+            <a-select-option value="ac">
+              <CloudOutlined /> 空调/暖气
+            </a-select-option>
+            <a-select-option value="network">
+              <WifiOutlined /> 网络/电视
+            </a-select-option>
+            <a-select-option value="other">
+              <ToolOutlined /> 其他故障
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="故障描述" required>
-          <a-textarea v-model:value="maintenanceForm.fault_description" :rows="3" placeholder="请详细描述故障情况，以便维修人员准备工具..." />
+          <a-textarea 
+            v-model:value="maintenanceForm.fault_description" 
+            :rows="4" 
+            placeholder="请详细描述故障情况，以便维修人员准备工具..."
+          />
         </a-form-item>
         <a-form-item label="紧急程度">
           <a-radio-group v-model:value="maintenanceForm.priority">
@@ -211,8 +328,18 @@
     </a-modal>
 
     <!-- 留言弹窗 -->
-    <a-modal v-model:open="messageModalVisible" title="给前台留言" @ok="sendMsgToReception">
-      <a-textarea v-model:value="msgContent" :rows="4" placeholder="请输入您想对前台说的话..." />
+    <a-modal 
+      v-model:open="messageModalVisible" 
+      title="给前台留言" 
+      @ok="sendMsgToReception"
+      class="service-modal"
+      width="480px"
+    >
+      <a-textarea 
+        v-model:value="msgContent" 
+        :rows="5" 
+        placeholder="请输入您想对前台说的话..."
+      />
     </a-modal>
 
     <!-- 呼叫中弹窗 -->
@@ -222,33 +349,44 @@
       :closable="false"
       :maskClosable="false"
       centered
-      width="300px"
-      class="transfer-modal"
+      width="360px"
+      class="calling-modal"
     >
-      <div class="transfer-content">
+      <div class="calling-content">
         <div class="calling-animation">
-          <div class="circle"></div>
-          <div class="circle"></div>
-          <div class="circle"></div>
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring"></div>
           <PhoneOutlined class="phone-icon" />
         </div>
         <h3>{{ transferModal.statusText }}</h3>
         <p>{{ transferModal.statusDesc }}</p>
-        <a-button danger shape="round" @click="cancelTransfer" class="cancel-btn">
-          取消呼叫
+        <a-button danger size="large" @click="cancelTransfer" class="cancel-btn">
+          <CloseOutlined /> 取消呼叫
         </a-button>
       </div>
     </a-modal>
 
-    <!-- 远程音频元素 -->
-    <audio ref="remoteAudioRef" autoplay style="display: none;"></audio>
-
     <!-- 我的配送记录弹窗 -->
-    <a-modal v-model:open="showDeliveryRecordsModal" title="我的配送记录" :footer="null" width="600px">
-      <a-table :dataSource="deliveryRecords" :columns="deliveryColumns" :loading="deliveryRecordsLoading" :pagination="{ pageSize: 5 }" size="small">
+    <a-modal 
+      v-model:open="showDeliveryRecordsModal" 
+      title="我的配送记录" 
+      :footer="null" 
+      width="680px"
+      class="records-modal"
+    >
+      <a-table 
+        :dataSource="deliveryRecords" 
+        :columns="deliveryColumns" 
+        :loading="deliveryRecordsLoading" 
+        :pagination="{ pageSize: 5 }" 
+        size="middle"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">
-            <a-tag :color="getDeliveryStatusColor(record.status)">{{ getDeliveryStatusText(record.status) }}</a-tag>
+            <a-tag :color="getDeliveryStatusColor(record.status)">
+              {{ getDeliveryStatusText(record.status) }}
+            </a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
             {{ formatDotDateTime(record.created_at) }}
@@ -258,14 +396,30 @@
     </a-modal>
 
     <!-- 我的维修记录弹窗 -->
-    <a-modal v-model:open="showMaintenanceRecordsModal" title="我的维修记录" :footer="null" width="600px">
-      <a-table :dataSource="maintenanceRecords" :columns="maintenanceColumns" :loading="maintenanceRecordsLoading" :pagination="{ pageSize: 5 }" size="small">
+    <a-modal 
+      v-model:open="showMaintenanceRecordsModal" 
+      title="我的维修记录" 
+      :footer="null" 
+      width="720px"
+      class="records-modal"
+    >
+      <a-table 
+        :dataSource="maintenanceRecords" 
+        :columns="maintenanceColumns" 
+        :loading="maintenanceRecordsLoading" 
+        :pagination="{ pageSize: 5 }" 
+        size="middle"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">
-            <a-tag :color="getMaintenanceStatusColor(record.status)">{{ getMaintenanceStatusText(record.status) }}</a-tag>
+            <a-tag :color="getMaintenanceStatusColor(record.status)">
+              {{ getMaintenanceStatusText(record.status) }}
+            </a-tag>
           </template>
           <template v-if="column.key === 'priority'">
-            <a-tag :color="getPriorityColor(record.priority)">{{ getPriorityText(record.priority) }}</a-tag>
+            <a-tag :color="getPriorityColor(record.priority)">
+              {{ getPriorityText(record.priority) }}
+            </a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
             {{ formatDotDateTime(record.created_at) }}
@@ -280,13 +434,31 @@
 import { ref, reactive, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  SendOutlined, PhoneOutlined, MessageOutlined,
-  ShoppingOutlined, ToolOutlined, ClearOutlined,
-  RightOutlined, RobotOutlined, UserOutlined,
-  EditOutlined, SoundOutlined, HomeOutlined,
-  SafetyCertificateOutlined, CloseOutlined,
-  CheckCircleOutlined, CustomerServiceOutlined,
-  FileTextOutlined
+  SendOutlined,
+  PhoneOutlined,
+  MessageOutlined,
+  ShoppingOutlined,
+  ToolOutlined,
+  ClearOutlined,
+  RightOutlined,
+  RobotOutlined,
+  UserOutlined,
+  EditOutlined,
+  SoundOutlined,
+  HomeOutlined,
+  CloseOutlined,
+  FileTextOutlined,
+  CustomerServiceOutlined,
+  WifiOutlined,
+  LoadingOutlined,
+  BulbOutlined,
+  HistoryOutlined,
+  CoffeeOutlined,
+  SkinOutlined,
+  InboxOutlined,
+  ThunderboltOutlined,
+  DropletOutlined,
+  CloudOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -302,8 +474,6 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
-
-// 基础状态
 
 let socket: any = null
 const isCheckedIn = computed(() => !!appStore.userStatus?.is_checked_in)
@@ -344,20 +514,20 @@ const maintenanceRecords = ref<any[]>([])
 
 // 表格列定义
 const deliveryColumns = [
-  { title: '订单号', dataIndex: 'order_no', key: 'order_no' },
+  { title: '订单号', dataIndex: 'order_no', key: 'order_no', width: 140 },
   { title: '物品', dataIndex: 'item_name', key: 'item_name' },
-  { title: '数量', dataIndex: 'quantity', key: 'quantity' },
-  { title: '状态', key: 'status' },
-  { title: '时间', key: 'created_at' }
+  { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 80 },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '时间', key: 'created_at', width: 160 }
 ]
 
 const maintenanceColumns = [
-  { title: '工单号', dataIndex: 'ticket_no', key: 'ticket_no' },
-  { title: '故障类型', dataIndex: 'fault_type', key: 'fault_type' },
+  { title: '工单号', dataIndex: 'ticket_no', key: 'ticket_no', width: 140 },
+  { title: '故障类型', dataIndex: 'fault_type', key: 'fault_type', width: 120 },
   { title: '描述', dataIndex: 'fault_description', key: 'fault_description', ellipsis: true },
-  { title: '优先级', key: 'priority' },
-  { title: '状态', key: 'status' },
-  { title: '时间', key: 'created_at' }
+  { title: '优先级', key: 'priority', width: 90 },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '时间', key: 'created_at', width: 160 }
 ]
 
 const messageModalVisible = ref(false)
@@ -371,11 +541,11 @@ const transferModal = ref({
 })
 
 const quickChips = [
-  { icon: '💡', label: '开灯', text: '打开灯光' },
-  { icon: '🧹', label: '保洁', text: '需要保洁服务' },
-  { icon: '☕', label: '送餐', text: '需要送餐服务' },
-  { icon: '📶', label: 'WiFi', text: '查询酒店WiFi密码' },
-  { icon: '👨‍💼', label: '人工', text: '转接人工' }
+  { icon: 'BulbOutlined', label: '开灯', text: '打开灯光' },
+  { icon: 'ClearOutlined', label: '保洁', text: '需要保洁服务' },
+  { icon: 'CoffeeOutlined', label: '送餐', text: '需要送餐服务' },
+  { icon: 'WifiOutlined', label: 'WiFi', text: '查询酒店WiFi密码' },
+  { icon: 'CustomerServiceOutlined', label: '人工', text: '转接人工' }
 ]
 
 const suggestionMap: Record<string, string[]> = {
@@ -385,11 +555,6 @@ const suggestionMap: Record<string, string[]> = {
   '默认': ['还需要什么帮助？', '查询酒店设施', '叫醒服务']
 }
 
-const hotlines = computed(() => [
-  { name: '前台总机', icon: PhoneOutlined, number: hotelStore.hotelInfo?.hotel_phone || '010-12345678' },
-  { name: '紧急救援', icon: SafetyCertificateOutlined, number: '110 / 120' }
-])
-
 onMounted(async () => {
   if (!appStore.userInfo) {
     message.warning('请先登录以查看客房服务')
@@ -398,7 +563,6 @@ onMounted(async () => {
     return
   }
   
-  // 前台未办理入住前不开放客房服务页面
   if (!appStore.userStatus?.is_checked_in) {
     message.warning('您当前未入住，无法使用客房服务。请先在预入住页面选房或到前台办理。')
     router.push('/guest/checkin-online')
@@ -421,13 +585,11 @@ onUnmounted(() => {
 function registerAsRoom() {
   const roomId = appStore.userStatus?.checkin_info?.room_id
   if (socket && socket.connected && roomId) {
-    console.log(`[GuestRoom] 房间端追加注册: ${roomId}`)
     socket.emit('register_client', { clientType: 'room', clientId: String(roomId) })
   }
 }
 
 function handleCallAnswered(data: any) {
-  console.log('[GuestRoom] 收到call_answered:', data)
   if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
     transferModal.value.visible = false
     message.success('前台已接听，正在建立连接...')
@@ -443,20 +605,16 @@ function handleCallHungup(data: any) {
 
 function initWebSocket() {
   socket = getSocket()
-
   if (socket) {
     socket.on('connect', registerAsRoom)
-
     if (socket.connected) {
       registerAsRoom()
     }
-
     socket.on('call_answered', handleCallAnswered)
     socket.on('call_hungup', handleCallHungup)
   }
 }
 
-// 通话相关方法
 function hangupCall() {
   if (appStore.currentCall?.call_id) {
     socket?.emit('hangup_call', { call_id: appStore.currentCall.call_id })
@@ -523,7 +681,9 @@ async function sendToAI(text: string) {
 
       typeWriterEffect(aiText, () => {
         let matchedKey = '默认'
-        for (const key of Object.keys(suggestionMap)) { if (text.includes(key)) { matchedKey = key; break } }
+        for (const key of Object.keys(suggestionMap)) { 
+          if (text.includes(key)) { matchedKey = key; break } 
+        }
         suggestions.value = suggestionMap[matchedKey] || suggestionMap['默认']
         
         const lastMsg = chatMessages.value[chatMessages.value.length - 1]
@@ -539,7 +699,7 @@ async function sendToAI(text: string) {
       }
     }
   } catch (error) {
-    chatMessages.value.push({ type: 'ai', text: '🤔 抱歉，我现在有点忙，请稍后再试。', time: now().format('HH:mm') })
+    chatMessages.value.push({ type: 'ai', text: '抱歉，我现在有点忙，请稍后再试。', time: now().format('HH:mm') })
   } finally {
     aiThinking.value = false
     scrollToBottom()
@@ -632,7 +792,6 @@ async function callFrontDesk() {
       transferModal.value.statusText = '正在呼叫前台'
       transferModal.value.statusDesc = '正在为您接通前台，请稍候...'
       
-      // 同步到全局状态，让 App.vue 知道当前有通话
       appStore.setCurrentCall({
         call_id: callId,
         caller_id: String(roomId),
@@ -695,9 +854,9 @@ async function showMyMaintenanceRecords() {
 // 状态转换函数
 function getDeliveryStatusColor(status: string) {
   const colorMap: Record<string, string> = {
-    pending: 'orange',
-    delivering: 'blue',
-    completed: 'green'
+    pending: 'warning',
+    delivering: 'processing',
+    completed: 'success'
   }
   return colorMap[status] || 'default'
 }
@@ -713,10 +872,10 @@ function getDeliveryStatusText(status: string) {
 
 function getMaintenanceStatusColor(status: string) {
   const colorMap: Record<string, string> = {
-    pending: 'orange',
-    assigned: 'blue',
-    processing: 'cyan',
-    completed: 'green'
+    pending: 'warning',
+    assigned: 'processing',
+    processing: 'processing',
+    completed: 'success'
   }
   return colorMap[status] || 'default'
 }
@@ -733,10 +892,10 @@ function getMaintenanceStatusText(status: string) {
 
 function getPriorityColor(priority: string) {
   const colorMap: Record<string, string> = {
-    low: 'green',
-    medium: 'blue',
-    high: 'orange',
-    urgent: 'red'
+    low: 'success',
+    medium: 'processing',
+    high: 'warning',
+    urgent: 'error'
   }
   return colorMap[priority] || 'default'
 }
@@ -752,81 +911,144 @@ function getPriorityText(priority: string) {
 }
 
 function scrollToBottom() {
-  nextTick(() => { if (chatContainerRef.value) chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight })
+  nextTick(() => { 
+    if (chatContainerRef.value) {
+      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight 
+    }
+  })
 }
 </script>
 
 <style scoped>
-.guest-room-new {
-  min-height: calc(100vh - 60px);
-  background: #f5f7fa;
+.guest-room-page {
+  min-height: calc(100vh - 72px - 200px);
 }
 
-/* AI Interaction Card */
-.ai-interaction-card {
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.room-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28px;
+}
+
+.room-details h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin: 0 0 4px;
+}
+
+.room-details p {
+  font-size: 14px;
+  color: var(--hotel-text-muted);
+  margin: 0;
+}
+
+.connection-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--hotel-text-muted);
+}
+
+.connection-badge.online {
+  color: var(--hotel-success);
+  background: rgba(39, 174, 96, 0.1);
+}
+
+/* AI Card */
+.ai-card {
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  border-radius: var(--hotel-radius-lg);
+  box-shadow: var(--hotel-shadow);
+  overflow: hidden;
+  height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
-  height: 750px;
-  overflow: hidden;
 }
 
-.card-header-modern {
+.ai-header {
   padding: 20px 24px;
-  background: linear-gradient(135deg, #1890ff, #722ed1);
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
   color: #fff;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.room-status-badge {
-  background: rgba(255,255,255,0.2);
-  padding: 4px 12px;
+.ai-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ai-icon {
+  font-size: 24px;
+}
+
+.ai-status {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
   border-radius: 20px;
-  font-size: 13px;
+  padding: 4px 12px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.ai-title {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.connection-status {
-  font-size: 12px;
-  opacity: 0.8;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.connection-status.online::before {
-  content: '';
+.ai-status .status-dot {
   width: 8px;
   height: 8px;
-  background: #52c41a;
   border-radius: 50%;
+  background: var(--hotel-text-muted);
 }
 
-.ai-chat-body {
+.ai-status.active .status-dot {
+  background: var(--hotel-success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ai-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #f9f9f9;
-  overflow: hidden;
+  background: var(--hotel-bg);
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .welcome-section {
@@ -834,11 +1056,11 @@ function scrollToBottom() {
   padding: 60px 20px;
 }
 
-.ai-avatar-large {
+.welcome-avatar {
   width: 100px;
   height: 100px;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  color: #fff;
   border-radius: 50%;
   margin: 0 auto 24px;
   display: flex;
@@ -848,269 +1070,396 @@ function scrollToBottom() {
   position: relative;
 }
 
-.ai-avatar-large.pulsing::after {
+.welcome-avatar.thinking::after {
   content: '';
   position: absolute;
-  top: -10px; left: -10px; right: -10px; bottom: -10px;
-  border: 2px solid #1890ff;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border: 2px solid var(--hotel-gold);
   border-radius: 50%;
-  animation: pulse 1.5s infinite;
+  animation: ring-pulse 1.5s infinite;
 }
 
-@keyframes pulse {
-  0% { transform: scale(0.9); opacity: 1; }
-  100% { transform: scale(1.3); opacity: 0; }
+@keyframes ring-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.1); opacity: 0; }
 }
 
-.welcome-section h2 { margin-bottom: 12px; font-weight: 700; }
-.welcome-section p { color: #8c8c8c; }
+.welcome-section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin-bottom: 8px;
+}
 
-.message-row { display: flex; gap: 12px; max-width: 85%; }
-.message-row.user { align-self: flex-end; flex-direction: row-reverse; }
+.welcome-section p {
+  color: var(--hotel-text-muted);
+  font-size: 14px;
+}
 
-.bubble {
-  padding: 12px 16px;
-  border-radius: 12px;
+.message-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  max-width: 85%;
+}
+
+.message-row.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.message-row.ai .message-avatar {
+  background: var(--hotel-primary);
+  color: #fff;
+}
+
+.message-row.user .message-avatar {
+  background: var(--hotel-gold);
+  color: #fff;
+}
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-bubble {
+  padding: 14px 18px;
+  border-radius: var(--hotel-radius);
   font-size: 15px;
   line-height: 1.6;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: var(--hotel-shadow-sm);
 }
 
-.ai .bubble { background: #fff; border-radius: 4px 16px 16px 16px; border: 1px solid #f0f0f0; }
-.user .bubble { background: #1890ff; color: #fff; border-radius: 16px 4px 16px 16px; }
+.message-row.ai .message-bubble {
+  background: #fff;
+  border-bottom-left-radius: 4px;
+  color: var(--hotel-text);
+}
 
-.bubble.typing .cursor { display: inline-block; width: 2px; height: 1em; background: #1890ff; margin-left: 2px; animation: blink 0.8s infinite; }
-@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+.message-row.user .message-bubble {
+  background: var(--hotel-primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
 
-.audio-mini-player {
-  margin-top: 8px;
+.message-bubble.typing .cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--hotel-gold);
+  margin-left: 2px;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: var(--hotel-radius);
+  color: var(--hotel-text-muted);
+  font-size: 14px;
+}
+
+.audio-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #1890ff;
-  background: #f0f5ff;
-  padding: 4px 12px;
+  color: var(--hotel-primary);
+  background: rgba(26, 43, 74, 0.05);
+  padding: 6px 12px;
   border-radius: 20px;
+  width: fit-content;
 }
 
-.suggestions-area { margin-top: 12px; }
-.suggestion-label { font-size: 13px; color: #8c8c8c; margin-bottom: 8px; }
-.suggestion-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.suggestion-item {
-  padding: 6px 16px;
+.suggestions-section {
+  margin-top: 16px;
+}
+
+.suggestions-label {
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-chip {
+  padding: 8px 16px;
   background: #fff;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--hotel-border);
   border-radius: 20px;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s;
 }
-.suggestion-item:hover { color: #1890ff; border-color: #1890ff; background: #f0f7ff; }
 
-.chat-input-panel {
+.suggestion-chip:hover {
+  color: var(--hotel-primary);
+  border-color: var(--hotel-primary);
+  background: rgba(26, 43, 74, 0.02);
+}
+
+.chat-input-area {
   padding: 20px 24px;
   background: #fff;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--hotel-border);
 }
 
-.pre-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; justify-content: center; }
-.quick-chip {
-  padding: 6px 14px;
-  background: #f5f5f5;
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+
+.action-chip {
+  padding: 8px 16px;
+  background: var(--hotel-bg-secondary);
   border-radius: 20px;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-.quick-chip:hover { background: #e6f7ff; color: #1890ff; }
-
-.input-container { display: flex; gap: 12px; align-items: center; }
-.modern-input { border-radius: 24px; }
-.modern-send-btn { border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
-
-/* Service Center Card */
-.service-center-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  height: 750px;
+  transition: all 0.3s;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
-.section-title-modern {
-  font-size: 20px;
-  font-weight: 800;
-  margin-bottom: 24px;
-  color: #1a1a1a;
+.action-chip:hover {
+  background: var(--hotel-primary);
+  color: #fff;
 }
 
-.service-grid { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.input-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
 
-.service-item-card {
+.chat-input {
+  border-radius: var(--hotel-radius);
+}
+
+.chat-input :deep(.ant-input) {
+  border-radius: var(--hotel-radius);
+}
+
+.input-icon {
+  color: var(--hotel-text-muted);
+}
+
+.send-btn {
+  border-radius: var(--hotel-radius);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Service Card */
+.service-card {
+  background: #fff;
+  border-radius: var(--hotel-radius-lg);
+  box-shadow: var(--hotel-shadow);
+  overflow: hidden;
+}
+
+.service-header {
+  padding: 20px 24px;
+  background: var(--hotel-bg-secondary);
+  border-bottom: 1px solid var(--hotel-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+}
+
+.service-header :deep(.anticon) {
+  font-size: 22px;
+  color: var(--hotel-gold);
+}
+
+.service-list {
+  padding: 16px;
+}
+
+.service-item {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 16px;
-  background: #f9f9f9;
-  border-radius: 12px;
+  border-radius: var(--hotel-radius);
   cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
+  transition: all 0.3s;
+  margin-bottom: 8px;
 }
 
-.service-item-card:hover {
-  background: #fff;
-  border-color: #1890ff;
+.service-item:last-child {
+  margin-bottom: 0;
+}
+
+.service-item:hover {
+  background: var(--hotel-bg-secondary);
   transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-.icon-box {
+.service-icon {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--hotel-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
+  flex-shrink: 0;
 }
 
-.icon-box.delivery { background: #e6f7ff; color: #1890ff; }
-.icon-box.call { background: #f6ffed; color: #52c41a; }
-.icon-box.message { background: #fff7e6; color: #fa8c16; }
-.icon-box.repair { background: #fff1f0; color: #ff4d4f; }
-.icon-box.cleaning { background: #f9f0ff; color: #722ed1; }
-.icon-box.records { background: #e6fffb; color: #13c2c2; }
-
-.service-item-card .info { flex: 1; }
-.service-item-card .name { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
-.service-item-card .desc { font-size: 12px; color: #8c8c8c; }
-.service-item-card .arrow { font-size: 12px; color: #bfbfbf; }
-
-.hotlines-section { margin-top: 32px; padding-top: 24px; border-top: 1px solid #f0f0f0; }
-.hotlines-section .sub-title { font-size: 14px; font-weight: 700; color: #8c8c8c; margin-bottom: 16px; }
-.hotline-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.h-name { font-size: 14px; font-weight: 600; }
-.h-number { font-size: 13px; color: #1890ff; font-family: monospace; }
-
-/* 通话弹窗样式 */
-.call-content-modal {
-  padding: 10px 0;
-  text-align: center;
+.service-icon.delivery {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
 }
 
-.call-header-modal {
-  margin-bottom: 30px;
+.service-icon.call {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
 }
 
-.caller-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: #e6f7ff;
-  color: #1890ff;
-  font-size: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 15px;
-  box-shadow: 0 0 20px rgba(24, 144, 255, 0.2);
+.service-icon.message {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--hotel-warning);
 }
 
-.call-status-tag {
-  display: inline-block;
-  padding: 2px 12px;
-  border-radius: 12px;
+.service-icon.repair {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--hotel-error);
+}
+
+.service-icon.cleaning {
+  background: rgba(201, 169, 98, 0.1);
+  color: var(--hotel-gold);
+}
+
+.service-icon.records {
+  background: rgba(149, 165, 166, 0.1);
+  color: var(--hotel-text-secondary);
+}
+
+.service-info {
+  flex: 1;
+}
+
+.service-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--hotel-text);
+  margin-bottom: 2px;
+}
+
+.service-desc {
   font-size: 12px;
-  margin-top: 8px;
-  background: #f5f5f5;
-  color: #8c8c8c;
+  color: var(--hotel-text-muted);
 }
 
-.call-status-tag.connected {
-  background: #f6ffed;
-  color: #52c41a;
-  border: 1px solid #b7eb8f;
+.service-arrow {
+  font-size: 14px;
+  color: var(--hotel-text-muted);
 }
 
-.duration-display {
-  font-size: 36px;
-  font-weight: bold;
-  font-family: monospace;
-  color: #262626;
-  margin-bottom: 30px;
+/* Modals */
+.service-modal :deep(.ant-modal-content) {
+  border-radius: var(--hotel-radius-lg);
 }
 
-.audio-visualizer {
-  margin-bottom: 40px;
-  padding: 0 20px;
+.service-modal :deep(.ant-modal-header) {
+  border-bottom: 1px solid var(--hotel-border);
+  padding: 20px 24px;
 }
 
-.visualizer-item {
-  margin-bottom: 15px;
-  text-align: left;
+.service-modal :deep(.ant-modal-title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hotel-primary);
 }
 
-.vis-label {
-  display: block;
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-bottom: 5px;
+.service-form :deep(.ant-form-item-label) {
+  font-weight: 500;
+  color: var(--hotel-text);
 }
 
-.level-meter {
-  height: 6px;
-  background: #f0f0f0;
-  border-radius: 3px;
+.calling-modal :deep(.ant-modal-content) {
+  border-radius: var(--hotel-radius-lg);
   overflow: hidden;
 }
 
-.level-bar {
-  height: 100%;
-  transition: width 0.1s ease, background 0.3s ease;
-}
-
-.call-footer-modal {
-  padding-top: 10px;
-}
-
-.transfer-content {
+.calling-content {
   text-align: center;
-  padding: 20px 0;
+  padding: 40px 20px;
 }
 
 .calling-animation {
   position: relative;
   width: 100px;
   height: 100px;
-  margin: 0 auto 20px;
+  margin: 0 auto 24px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.circle {
+.pulse-ring {
   position: absolute;
   width: 100%;
   height: 100%;
-  border: 2px solid #1890ff;
+  border: 2px solid var(--hotel-primary);
   border-radius: 50%;
-  animation: pulse 2s infinite;
+  animation: calling-pulse 2s infinite;
   opacity: 0;
 }
 
-.circle:nth-child(2) {
+.pulse-ring:nth-child(2) {
   animation-delay: 0.6s;
 }
 
-.circle:nth-child(3) {
+.pulse-ring:nth-child(3) {
   animation-delay: 1.2s;
 }
 
-@keyframes pulse {
+@keyframes calling-pulse {
   0% {
     transform: scale(0.5);
     opacity: 0.8;
@@ -1123,12 +1472,53 @@ function scrollToBottom() {
 
 .phone-icon {
   font-size: 40px;
-  color: #1890ff;
+  color: var(--hotel-primary);
   z-index: 1;
 }
 
+.calling-content h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin-bottom: 8px;
+}
+
+.calling-content p {
+  color: var(--hotel-text-muted);
+  margin-bottom: 24px;
+}
+
 .cancel-btn {
-  margin-top: 20px;
-  min-width: 120px;
+  min-width: 140px;
+  height: 44px;
+}
+
+.records-modal :deep(.ant-modal-content) {
+  border-radius: var(--hotel-radius-lg);
+}
+
+.records-modal :deep(.ant-modal-header) {
+  border-bottom: 1px solid var(--hotel-border);
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .ai-card {
+    height: auto;
+    min-height: 500px;
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .connection-badge {
+    align-self: flex-end;
+  }
 }
 </style>

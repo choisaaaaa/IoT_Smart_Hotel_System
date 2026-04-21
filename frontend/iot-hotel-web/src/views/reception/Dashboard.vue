@@ -1,194 +1,784 @@
 <template>
   <div class="reception-dashboard">
-    <a-row :gutter="[16, 16]">
-      <a-col :xs="12" :sm="6" v-for="s in stats" :key="s.key">
-        <a-card size="small" :hoverable="true" class="stat-card">
-          <a-statistic :title="s.title" :value="s.value" :value-style="{ color: s.color, fontSize: '24px' }">
-            <template #prefix><component :is="s.icon" /></template>
-          </a-statistic>
-        </a-card>
+    <!-- 页面标题 -->
+    <div class="dashboard-header">
+      <div class="header-title">
+        <DashboardOutlined class="title-icon" />
+        <h1>前台总览</h1>
+      </div>
+      <div class="header-date">
+        <CalendarOutlined />
+        <span>{{ currentDate }}</span>
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <a-row :gutter="24" class="stats-row">
+      <a-col :xs="24" :sm="12" :lg="6">
+        <div class="stat-card">
+          <div class="stat-icon checkin">
+            <LoginOutlined />
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">今日入住</div>
+            <div class="stat-value">{{ stats.todayCheckin }}</div>
+          </div>
+        </div>
+      </a-col>
+      <a-col :xs="24" :sm="12" :lg="6">
+        <div class="stat-card">
+          <div class="stat-icon checkout">
+            <LogoutOutlined />
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">今日退房</div>
+            <div class="stat-value">{{ stats.todayCheckout }}</div>
+          </div>
+        </div>
+      </a-col>
+      <a-col :xs="24" :sm="12" :lg="6">
+        <div class="stat-card">
+          <div class="stat-icon occupied">
+            <HomeOutlined />
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">当前入住</div>
+            <div class="stat-value">{{ stats.currentOccupancy }}</div>
+          </div>
+        </div>
+      </a-col>
+      <a-col :xs="24" :sm="12" :lg="6">
+        <div class="stat-card">
+          <div class="stat-icon occupancy">
+            <PieChartOutlined />
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">入住率</div>
+            <div class="stat-value">{{ stats.occupancyRate }}%</div>
+          </div>
+        </div>
       </a-col>
     </a-row>
 
-    <a-row :gutter="[16, 16]" style="margin-top: 16px;">
-      <a-col :xs="24" :lg="14">
-        <a-card title="今日入住/退房" size="small">
-          <a-timeline>
-            <a-timeline-item color="green" v-for="(item, i) in todayEvents.slice(0, 6)" :key="i">
-              <div class="event-item">
-                <strong>{{ item.guest }}</strong> · {{ item.room }}
-                <a-tag :color="item.type === 'checkin' ? 'success' : 'warning'" size="small">{{ item.type === 'checkin' ? '入住' : '退房' }}</a-tag>
-                <span class="event-time">{{ item.time }}</span>
+    <!-- 快捷操作 -->
+    <div class="quick-actions-section">
+      <div class="section-title">
+        <ThunderboltOutlined class="section-icon" />
+        <span>快捷操作</span>
+      </div>
+      <div class="actions-grid">
+        <div class="action-card" @click="$router.push('/reception/bookings')">
+          <div class="action-icon booking">
+            <CalendarOutlined />
+          </div>
+          <div class="action-name">预订管理</div>
+          <div class="action-desc">查看和处理预订</div>
+        </div>
+        <div class="action-card" @click="$router.push('/reception/checkin')">
+          <div class="action-icon checkin">
+            <IdcardOutlined />
+          </div>
+          <div class="action-name">办理入住</div>
+          <div class="action-desc">快速办理入住</div>
+        </div>
+        <div class="action-card" @click="$router.push('/reception/checkout')">
+          <div class="action-icon checkout">
+            <CreditCardOutlined />
+          </div>
+          <div class="action-name">办理退房</div>
+          <div class="action-desc">快速办理退房</div>
+        </div>
+        <div class="action-card" @click="$router.push('/reception/room-availability')">
+          <div class="action-icon rooms">
+            <ApartmentOutlined />
+          </div>
+          <div class="action-name">客房余量</div>
+          <div class="action-desc">查看房间状态</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 待处理事项 -->
+    <a-row :gutter="24" class="tasks-row">
+      <a-col :xs="24" :lg="12">
+        <div class="task-card">
+          <div class="task-header">
+            <div class="task-title">
+              <ToolOutlined class="task-icon" />
+              <span>待处理工单</span>
+            </div>
+            <a-button type="link" @click="$router.push('/reception/workorders')">
+              查看全部 <RightOutlined />
+            </a-button>
+          </div>
+          <div class="task-list">
+            <div v-if="pendingWorkorders.length === 0" class="task-empty">
+              <CheckCircleOutlined class="empty-icon" />
+              <p>暂无待处理工单</p>
+            </div>
+            <div 
+              v-for="item in pendingWorkorders.slice(0, 5)" 
+              :key="item.id" 
+              class="task-item"
+              @click="$router.push('/reception/workorders')"
+            >
+              <div class="task-badge" :class="item.priority">
+                {{ getPriorityText(item.priority) }}
               </div>
-            </a-timeline-item>
-          </a-timeline>
-        </a-card>
+              <div class="task-content">
+                <div class="task-name">{{ item.fault_description?.substring(0, 30) || '维修工单' }}</div>
+                <div class="task-meta">
+                  <span><HomeOutlined /> {{ item.room_number || item.room_id }}</span>
+                  <span><ClockCircleOutlined /> {{ formatTime(item.created_at) }}</span>
+                </div>
+              </div>
+              <RightOutlined class="task-arrow" />
+            </div>
+          </div>
+        </div>
       </a-col>
-      <a-col :xs="24" :lg="10">
-        <a-card title="待处理事项" size="small">
-          <a-list :data-source="pendingItems" size="small">
-            <template #renderItem="{ item }">
-              <a-list-item>
-                <a-list-item-meta :title="item.title" :description="item.desc">
-                  <template #avatar><a-badge :status="item.status" /></template>
-                </a-list-item-meta>
-                <a-button type="link" size="small" @click="handlePendingItem(item)">处理</a-button>
-              </a-list-item>
-            </template>
-          </a-list>
-        </a-card>
+
+      <a-col :xs="24" :lg="12">
+        <div class="task-card">
+          <div class="task-header">
+            <div class="task-title">
+              <SendOutlined class="task-icon" />
+              <span>待配送订单</span>
+            </div>
+            <a-button type="link" @click="$router.push('/reception/delivery')">
+              查看全部 <RightOutlined />
+            </a-button>
+          </div>
+          <div class="task-list">
+            <div v-if="pendingDeliveries.length === 0" class="task-empty">
+              <CheckCircleOutlined class="empty-icon" />
+              <p>暂无待配送订单</p>
+            </div>
+            <div 
+              v-for="item in pendingDeliveries.slice(0, 5)" 
+              :key="item.id" 
+              class="task-item"
+              @click="$router.push('/reception/delivery')"
+            >
+              <div class="task-badge pending">
+                待处理
+              </div>
+              <div class="task-content">
+                <div class="task-name">{{ item.item_name }} x{{ item.quantity }}</div>
+                <div class="task-meta">
+                  <span><HomeOutlined /> {{ item.room_number || item.room_id }}</span>
+                  <span><ClockCircleOutlined /> {{ formatTime(item.created_at) }}</span>
+                </div>
+              </div>
+              <RightOutlined class="task-arrow" />
+            </div>
+          </div>
+        </div>
       </a-col>
     </a-row>
 
-    <a-row :gutter="[16, 16]" style="margin-top: 16px;">
-      <a-col :xs="24">
-        <a-card title="当前在住客人" size="small">
-          <a-table
-            :columns="guestColumns"
-            :data-source="currentGuests"
-            :pagination="{ pageSize: 6 }"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'stay_days'">
-                {{ record.stay_days }}晚
-              </template>
-              <template v-if="column.key === 'action'">
-                <a-space>
-                  <a-button type="link" size="small">退房</a-button>
-                  <a-button type="link" size="small">续住</a-button>
-                </a-space>
-              </template>
-            </template>
-          </a-table>
-        </a-card>
-      </a-col>
-    </a-row>
+    <!-- 今日预订 -->
+    <div class="booking-section">
+      <div class="section-title">
+        <CalendarOutlined class="section-icon" />
+        <span>今日预订</span>
+      </div>
+      <a-table 
+        :dataSource="todayBookings" 
+        :columns="bookingColumns" 
+        :loading="loading" 
+        :pagination="{ pageSize: 5 }"
+        size="middle"
+        class="booking-table"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="getBookingStatusColor(record.status)">
+              {{ getBookingStatusText(record.status) }}
+            </a-tag>
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-button 
+              v-if="record.status === 'confirmed'" 
+              type="primary" 
+              size="small"
+              @click="handleCheckin(record)"
+            >
+              办理入住
+            </a-button>
+            <a-button 
+              v-else-if="record.status === 'checked_in'" 
+              type="link" 
+              size="small"
+              @click="handleCheckout(record)"
+            >
+              退房
+            </a-button>
+            <span v-else>-</span>
+          </template>
+        </template>
+      </a-table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  UserAddOutlined, UserDeleteOutlined,
-  CalendarOutlined, FileTextOutlined
-} from '@ant-design/icons-vue'
-import { useHotelStore } from '@/stores/hotel'
-
-import axios from '@/api/request'
-import { bookingApi } from '@/api/booking'
+import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import { formatDate } from '@/utils/date'
+import {
+  DashboardOutlined,
+  CalendarOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  HomeOutlined,
+  PieChartOutlined,
+  ThunderboltOutlined,
+  IdcardOutlined,
+  CreditCardOutlined,
+  ApartmentOutlined,
+  ToolOutlined,
+  SendOutlined,
+  RightOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons-vue'
+import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
+import { bookingApi } from '@/api/booking'
+import { maintenanceApi } from '@/api/maintenance'
+import { deliveryApi } from '@/api/delivery'
+import { roomApi } from '@/api/room'
 
 const router = useRouter()
+const appStore = useAppStore()
 const hotelStore = useHotelStore()
+
 const loading = ref(false)
+const currentDate = computed(() => dayjs().format('YYYY年MM月DD日 dddd'))
 
-const stats = ref([
-  { key: 'today_checkin', title: '今日入住', value: 0, color: '#52c41a', icon: UserAddOutlined },
-  { key: 'today_checkout', title: '今日退房', value: 0, color: '#faad14', icon: UserDeleteOutlined },
-  { key: 'available', title: '可售房间', value: 0, color: '#1890ff', icon: CalendarOutlined },
-  { key: 'pending_bills', title: '待处理工单', value: 0, color: '#ff4d4f', icon: FileTextOutlined }
-])
+const stats = ref({
+  todayCheckin: 0,
+  todayCheckout: 0,
+  currentOccupancy: 0,
+  occupancyRate: 0
+})
 
-const todayEvents = ref<any[]>([])
-const pendingItems = ref<any[]>([])
-const currentGuests = ref<any[]>([])
+const pendingWorkorders = ref<any[]>([])
+const pendingDeliveries = ref<any[]>([])
+const todayBookings = ref<any[]>([])
 
-const guestColumns = [
-  { title: '姓名', dataIndex: 'guest_name', width: 90 },
-  { title: '房号', dataIndex: 'room_number', width: 80 },
-  { title: '电话', dataIndex: 'phone', width: 130 },
-  { title: '入住日期', dataIndex: 'check_in', width: 110 },
-  { title: '预计退房', dataIndex: 'check_out', width: 110 },
-  { title: '已住', dataIndex: 'stay_days', key: 'stay_days', width: 70 },
-  { title: '操作', key: 'action', width: 140 }
+const bookingColumns = [
+  { title: '预订号', dataIndex: 'booking_no', key: 'booking_no', width: 140 },
+  { title: '客人姓名', dataIndex: 'guest_name', key: 'guest_name' },
+  { title: '房间号', dataIndex: 'room_number', key: 'room_number', width: 100 },
+  { title: '入住日期', dataIndex: 'checkin_date', key: 'checkin_date', width: 120 },
+  { title: '退房日期', dataIndex: 'checkout_date', key: 'checkout_date', width: 120 },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '操作', key: 'action', width: 120 }
 ]
 
-async function fetchDashboardData() {
+onMounted(async () => {
+  await loadDashboardData()
+})
+
+async function loadDashboardData() {
   loading.value = true
   try {
-    // 1. 获取房态统计
-    await hotelStore.fetchRooms()
-    const availableCount = hotelStore.getAvailableRooms().length
-    const statAvailable = stats.value.find(s => s.key === 'available')
-    if (statAvailable) statAvailable.value = availableCount
-
-    // 2. 获取今日预订/入住/退房数据
-    const resBookings: any = await bookingApi.getBookingList({ pageSize: 100 })
-    const allBookings = resBookings.data?.list || []
-    
-    const todayStr = formatDate(new Date())
-    const checkins = allBookings.filter((b: any) => dayjs(b.check_in_date).isSame(todayStr, 'day'))
-    const checkouts = allBookings.filter((b: any) => dayjs(b.check_out_date).isSame(todayStr, 'day'))
-    
-    stats.value.find(s => s.key === 'today_checkin')!.value = checkins.length
-    stats.value.find(s => s.key === 'today_checkout')!.value = checkouts.length
-
-    // 3. 构造今日事件时间轴
-    todayEvents.value = [
-      ...checkins.map((b: any) => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkin', time: '今日' })),
-      ...checkouts.map((b: any) => ({ guest: b.guest_name, room: b.room_number || '未分配', type: 'checkout', time: '今日' }))
-    ]
-
-    // 4. 获取待处理事项 (报修和送物)
-    const [resMaintenance, resDelivery] = await Promise.all([
-      axios.get('/maintenance', { params: { status: 'pending' } }),
-      axios.get('/delivery', { params: { status: 'pending' } })
-    ])
-
-    const maintenanceItems = (resMaintenance.data?.list || []).map((m: any) => ({
-      id: m.id,
-      title: `报修: ${m.room_number}房 ${m.fault_type}`,
-      desc: m.fault_description,
-      status: 'error',
-      type: 'maintenance'
-    }))
-
-    const deliveryItems = (resDelivery.data?.list || []).map((d: any) => ({
-      id: d.id,
-      title: `送物: ${d.room_number}房 ${d.item_name}`,
-      desc: `数量: ${d.quantity}`,
-      status: 'processing',
-      type: 'delivery'
-    }))
-
-    pendingItems.value = [...maintenanceItems, ...deliveryItems]
-    stats.value.find(s => s.key === 'pending_bills')!.value = pendingItems.value.length
-
-    // 5. 当前在住客人
-    currentGuests.value = allBookings.filter((b: any) => b.status === 'checked_in').map((b: any) => ({
-      id: b.id,
-      guest_name: b.guest_name,
-      room_number: b.room_number,
-      phone: b.guest_phone,
-      check_in: formatDate(b.check_in_date),
-      check_out: formatDate(b.check_out_date),
-      stay_days: Math.ceil((new Date().getTime() - new Date(b.check_in_date).getTime()) / (1000 * 60 * 60 * 24))
-    }))
-
+    // 加载统计数据
+    await loadStats()
+    // 加载待处理工单
+    await loadPendingWorkorders()
+    // 加载待配送订单
+    await loadPendingDeliveries()
+    // 加载今日预订
+    await loadTodayBookings()
   } catch (error) {
-    console.error('加载仪表盘数据失败:', error)
+    console.error('加载数据失败:', error)
   } finally {
     loading.value = false
   }
 }
 
-onMounted(fetchDashboardData)
-
-function handlePendingItem(item: any) {
-  if (item.type === 'maintenance') {
-    router.push('/reception/workorders')
-  } else if (item.type === 'delivery') {
-    router.push('/reception/delivery')
+async function loadStats() {
+  try {
+    const today = dayjs().format('YYYY-MM-DD')
+    
+    // 获取房间统计
+    const roomRes: any = await roomApi.getStats()
+    const roomStats = roomRes.data || {}
+    
+    // 获取今日预订统计
+    const bookingRes: any = await bookingApi.getList({ 
+      checkin_date: today,
+      pageSize: 100 
+    })
+    const bookings = bookingRes.data?.list || []
+    
+    const todayCheckin = bookings.filter((b: any) => b.status === 'checked_in').length
+    const todayCheckout = bookings.filter((b: any) => b.status === 'checked_out').length
+    
+    const totalRooms = roomStats.total_rooms || 100
+    const occupiedRooms = roomStats.occupied_rooms || 0
+    const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0
+    
+    stats.value = {
+      todayCheckin,
+      todayCheckout,
+      currentOccupancy: occupiedRooms,
+      occupancyRate
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
   }
+}
+
+async function loadPendingWorkorders() {
+  try {
+    const res: any = await maintenanceApi.getList({ 
+      status: 'pending',
+      pageSize: 10 
+    })
+    pendingWorkorders.value = res.data?.list || []
+  } catch (error) {
+    console.error('加载工单失败:', error)
+  }
+}
+
+async function loadPendingDeliveries() {
+  try {
+    const res: any = await deliveryApi.getList({ 
+      status: 'pending',
+      pageSize: 10 
+    })
+    pendingDeliveries.value = res.data?.list || []
+  } catch (error) {
+    console.error('加载配送订单失败:', error)
+  }
+}
+
+async function loadTodayBookings() {
+  try {
+    const today = dayjs().format('YYYY-MM-DD')
+    const res: any = await bookingApi.getList({ 
+      checkin_date: today,
+      pageSize: 20 
+    })
+    todayBookings.value = res.data?.list || []
+  } catch (error) {
+    console.error('加载预订失败:', error)
+  }
+}
+
+function formatTime(time: string) {
+  return dayjs(time).format('HH:mm')
+}
+
+function getPriorityText(priority: string) {
+  const map: Record<string, string> = {
+    low: '普通',
+    medium: '一般',
+    high: '紧急',
+    urgent: '特急'
+  }
+  return map[priority] || priority
+}
+
+function getBookingStatusColor(status: string) {
+  const map: Record<string, string> = {
+    pending: 'warning',
+    confirmed: 'processing',
+    checked_in: 'success',
+    checked_out: 'default',
+    cancelled: 'error'
+  }
+  return map[status] || 'default'
+}
+
+function getBookingStatusText(status: string) {
+  const map: Record<string, string> = {
+    pending: '待确认',
+    confirmed: '已确认',
+    checked_in: '已入住',
+    checked_out: '已退房',
+    cancelled: '已取消'
+  }
+  return map[status] || status
+}
+
+function handleCheckin(record: any) {
+  router.push(`/reception/checkin?booking_id=${record.id}`)
+}
+
+function handleCheckout(record: any) {
+  router.push(`/reception/checkout?booking_id=${record.id}`)
 }
 </script>
 
 <style scoped>
-.stat-card { text-align: center; }
-.event-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.event-time { font-size: 12px; color: rgba(0,0,0,0.35); margin-left: auto; }
+.reception-dashboard {
+  padding: 0;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24px;
+}
+
+.header-title h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin: 0;
+}
+
+.header-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hotel-text-muted);
+  font-size: 14px;
+  padding: 8px 16px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 20px;
+}
+
+/* 统计卡片 */
+.stats-row {
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: var(--hotel-radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--hotel-shadow-sm);
+  transition: all 0.3s;
+}
+
+.stat-card:hover {
+  box-shadow: var(--hotel-shadow);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.stat-icon.checkin {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
+}
+
+.stat-icon.checkout {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--hotel-warning);
+}
+
+.stat-icon.occupied {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
+}
+
+.stat-icon.occupancy {
+  background: rgba(201, 169, 98, 0.1);
+  color: var(--hotel-gold);
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--hotel-primary);
+}
+
+/* 快捷操作 */
+.quick-actions-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+  margin-bottom: 16px;
+}
+
+.section-icon {
+  font-size: 20px;
+  color: var(--hotel-gold);
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.action-card {
+  background: #fff;
+  border-radius: var(--hotel-radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: var(--hotel-shadow-sm);
+}
+
+.action-card:hover {
+  box-shadow: var(--hotel-shadow);
+  transform: translateY(-4px);
+}
+
+.action-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 16px;
+}
+
+.action-icon.booking {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
+}
+
+.action-icon.checkin {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
+}
+
+.action-icon.checkout {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--hotel-error);
+}
+
+.action-icon.rooms {
+  background: rgba(201, 169, 98, 0.1);
+  color: var(--hotel-gold);
+}
+
+.action-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--hotel-text);
+  margin-bottom: 4px;
+}
+
+.action-desc {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+/* 待处理事项 */
+.tasks-row {
+  margin-bottom: 24px;
+}
+
+.task-card {
+  background: #fff;
+  border-radius: var(--hotel-radius);
+  box-shadow: var(--hotel-shadow-sm);
+  overflow: hidden;
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--hotel-border);
+}
+
+.task-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--hotel-primary);
+}
+
+.task-icon {
+  font-size: 18px;
+  color: var(--hotel-gold);
+}
+
+.task-list {
+  padding: 8px;
+}
+
+.task-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--hotel-text-muted);
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: var(--hotel-border);
+  margin-bottom: 12px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--hotel-radius-sm);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.task-item:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.task-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.task-badge.low {
+  background: rgba(39, 174, 96, 0.1);
+  color: var(--hotel-success);
+}
+
+.task-badge.medium {
+  background: rgba(243, 156, 18, 0.1);
+  color: var(--hotel-warning);
+}
+
+.task-badge.high {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--hotel-error);
+}
+
+.task-badge.urgent {
+  background: rgba(231, 76, 60, 0.2);
+  color: var(--hotel-error);
+}
+
+.task-badge.pending {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--hotel-info);
+}
+
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hotel-text);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+.task-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-arrow {
+  color: var(--hotel-text-muted);
+  font-size: 12px;
+}
+
+/* 今日预订 */
+.booking-section {
+  background: #fff;
+  border-radius: var(--hotel-radius);
+  padding: 20px;
+  box-shadow: var(--hotel-shadow-sm);
+}
+
+.booking-table :deep(.ant-table-thead > tr > th) {
+  background: var(--hotel-bg-secondary);
+  color: var(--hotel-primary);
+  font-weight: 600;
+}
+
+/* 响应式 */
+@media (max-width: 1200px) {
+  .actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .actions-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .task-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
 </style>

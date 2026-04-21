@@ -4,115 +4,145 @@
       v-model:collapsed="collapsed"
       :trigger="null"
       collapsible
-      width="240"
+      width="260"
       theme="dark"
       class="admin-sider"
     >
-      <div class="logo" @click="$router.push('/hotel-admin/dashboard')">
-        <SettingOutlined style="font-size: 24px;" />
-        <span v-show="!collapsed" class="logo-text">慧宿智联 · 管理端</span>
+      <div class="sider-header" @click="$router.push('/admin/dashboard')">
+        <div class="sider-logo">
+          <SettingOutlined />
+        </div>
+        <div v-show="!collapsed" class="sider-brand">
+          <span class="brand-title">管理后台</span>
+          <span class="brand-sub">慧宿智联</span>
+        </div>
       </div>
+      
       <a-menu
         v-model:selectedKeys="selectedKeys"
         mode="inline"
         theme="dark"
         @click="handleMenuClick"
+        class="admin-menu"
       >
-        <a-menu-item key="/hotel-admin/dashboard">
+        <a-menu-item key="/admin/dashboard">
           <template #icon><DashboardOutlined /></template>
-          <span>总览仪表盘</span>
+          <span>管理总览</span>
         </a-menu-item>
-        <a-menu-item key="/hotel-admin/devices">
-          <template #icon><MonitorOutlined /></template>
-          <span>设备监控</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/environment">
-          <template #icon><EnvironmentOutlined /></template>
-          <span>环境监测</span>
-        </a-menu-item>
-        <a-sub-menu key="info-manage">
-          <template #title><EditOutlined /><span v-show="!collapsed">房间管理</span></template>
-          <a-menu-item key="/hotel-admin/rooms/edit"><HomeOutlined /> 房间列表</a-menu-item>
-          <a-menu-item key="/hotel-admin/rooms/types"><TagsOutlined /> 房型维护</a-menu-item>
-          <a-menu-item key="/hotel-admin/rooms/floors"><BarsOutlined /> 楼层管理</a-menu-item>
-        </a-sub-menu>
-        <a-menu-item key="/hotel-admin/hotel/info">
+        
+        <a-sub-menu key="hotel-management">
           <template #icon><BankOutlined /></template>
-          <span>酒店信息</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/hotel/price-calendar">
-          <template #icon><CalendarOutlined /></template>
-          <span>价格日历</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/hotel/coupons">
-          <template #icon><TagOutlined /></template>
-          <span>优惠券管理</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/reports">
+          <template #title>酒店管理</template>
+          <a-menu-item key="/admin/hotels">酒店列表</a-menu-item>
+          <a-menu-item key="/admin/hotels/add">添加酒店</a-menu-item>
+          <a-menu-item key="/admin/hotels/settings">酒店设置</a-menu-item>
+        </a-sub-menu>
+        
+        <a-sub-menu key="room-management">
+          <template #icon><HomeOutlined /></template>
+          <template #title>客房管理</template>
+          <a-menu-item key="/admin/rooms">客房列表</a-menu-item>
+          <a-menu-item key="/admin/room-types">房型管理</a-menu-item>
+          <a-menu-item key="/admin/room-prices">价格管理</a-menu-item>
+        </a-sub-menu>
+        
+        <a-sub-menu key="user-management">
+          <template #icon><TeamOutlined /></template>
+          <template #title>用户管理</template>
+          <a-menu-item key="/admin/users">用户列表</a-menu-item>
+          <a-menu-item key="/admin/staff">员工管理</a-menu-item>
+          <a-menu-item key="/admin/roles">角色权限</a-menu-item>
+        </a-sub-menu>
+        
+        <a-sub-menu key="order-management">
           <template #icon><FileTextOutlined /></template>
-          <span>账单报表</span>
+          <template #title>订单管理</template>
+          <a-menu-item key="/admin/bookings">预订订单</a-menu-item>
+          <a-menu-item key="/admin/delivery">配送订单</a-menu-item>
+          <a-menu-item key="/admin/maintenance">维修工单</a-menu-item>
+        </a-sub-menu>
+        
+        <a-sub-menu key="device-management">
+          <template #icon><ControlOutlined /></template>
+          <template #title>设备管理</template>
+          <a-menu-item key="/admin/devices">设备列表</a-menu-item>
+          <a-menu-item key="/admin/device-types">设备类型</a-menu-item>
+          <a-menu-item key="/admin/device-logs">设备日志</a-menu-item>
+        </a-sub-menu>
+        
+        <a-sub-menu key="system-settings">
+          <template #icon><ToolOutlined /></template>
+          <template #title>系统设置</template>
+          <a-menu-item key="/admin/settings/general">通用设置</a-menu-item>
+          <a-menu-item key="/admin/settings/payment">支付设置</a-menu-item>
+          <a-menu-item key="/admin/settings/notification">通知设置</a-menu-item>
+        </a-sub-menu>
+        
+        <a-menu-item key="/admin/reports">
+          <template #icon><BarChartOutlined /></template>
+          <span>数据报表</span>
         </a-menu-item>
-        <a-menu-item key="/hotel-admin/users">
-          <template #icon><UserOutlined /></template>
-          <span>用户管理</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/knowledge-base">
-          <template #icon><BookOutlined /></template>
-          <span>AI知识库</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/reviews">
-          <template #icon><StarOutlined /></template>
-          <span>评价管理</span>
-        </a-menu-item>
-        <a-menu-item key="/hotel-admin/mqtt">
-          <template #icon><ClusterOutlined /></template>
-          <span>MQTT 通信管理</span>
+        
+        <a-menu-item key="/admin/logs">
+          <template #icon><HistoryOutlined /></template>
+          <span>操作日志</span>
         </a-menu-item>
       </a-menu>
+      
+      <div v-show="!collapsed" class="sider-footer">
+        <div class="system-info">
+          <span class="version">系统版本 v2.2.0</span>
+          <span class="status online">运行正常</span>
+        </div>
+      </div>
     </a-layout-sider>
 
     <a-layout>
-      <a-layout-header class="admin-header" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
+      <a-layout-header class="admin-header" :style="{ marginLeft: collapsed ? '80px' : '260px' }">
         <div class="header-left">
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
           <a-breadcrumb class="breadcrumb">
-            <a-breadcrumb-item><SettingOutlined /> 管理端</a-breadcrumb-item>
-            <a-breadcrumb-item>{{ currentTitle }}</a-breadcrumb-item>
+            <a-breadcrumb-item>
+              <SettingOutlined /> 管理后台
+            </a-breadcrumb-item>
+            <a-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx">
+              {{ item }}
+            </a-breadcrumb-item>
           </a-breadcrumb>
         </div>
+        
         <div class="header-right">
-          <a-tag v-if="hotelInfoLoading" color="processing" class="hotel-tag">分店信息加载中</a-tag>
-          <a-tag v-else-if="resolvedHotelName" color="blue" class="hotel-tag">
-            <BankOutlined /> {{ resolvedHotelName }}
-          </a-tag>
-          <a-tag v-else color="warning" class="hotel-tag">未绑定分店</a-tag>
-          <a-badge :count="appStore.notificationCount" :offset="[-2, 4]">
-            <BellOutlined class="header-icon" />
-          </a-badge>
-          <a-tag :color="appStore.connected ? 'success' : 'error'" class="ws-status">
-            {{ appStore.connected ? '系统正常' : '连接异常' }}
-          </a-tag>
-          <a-dropdown :overlay-style="{ minWidth: '160px' }">
-            <span class="user-trigger">
-              <a-avatar :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" style="background-color: #722ed1;">
-                <template #icon v-if="!appStore.userInfo?.avatar"><UserOutlined /></template>
+          <div class="connection-badge" :class="{ online: appStore.connected }">
+            <WifiOutlined v-if="appStore.connected" />
+            <DisconnectOutlined v-else />
+            <span>{{ appStore.connected ? '在线' : '离线' }}</span>
+          </div>
+          
+          <a-dropdown placement="bottomRight" :overlayStyle="{ minWidth: '180px' }">
+            <div class="user-profile">
+              <a-avatar 
+                :src="appStore.resolveImageUrl(appStore.userInfo?.avatar)" 
+                class="user-avatar"
+              >
+                <template #icon><UserOutlined /></template>
               </a-avatar>
-              <span v-if="appStore.userInfo?.username">{{ appStore.userInfo.username }}</span>
-            </span>
+              <div v-if="!collapsed" class="user-info">
+                <span class="user-name">{{ appStore.userInfo?.username || '管理员' }}</span>
+                <span class="user-role">{{ getRoleText(appStore.userInfo?.role) }}</span>
+              </div>
+              <DownOutlined class="dropdown-icon" />
+            </div>
             <template #overlay>
-              <a-menu>
+              <a-menu class="profile-menu">
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
-                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" key="reception" @click="$router.push('/reception')">
-                  <CustomerServiceOutlined /> 进入前台端
-                </a-menu-item>
-                <a-menu-item v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" key="system" @click="returnToSystem">
-                  <SwapOutlined /> 返回系统端
+                <a-menu-item key="settings" @click="$router.push('/admin/settings/general')">
+                  <SettingOutlined /> 系统设置
                 </a-menu-item>
                 <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
+                <a-menu-item key="logout" @click="handleLogout" class="logout-item">
                   <LogoutOutlined /> 退出登录
                 </a-menu-item>
               </a-menu>
@@ -121,12 +151,16 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="admin-content" :style="{ marginLeft: collapsed ? '96px' : '256px' }">
+      <a-layout-content class="admin-content" :style="{ marginLeft: collapsed ? '96px' : '276px' }">
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer class="admin-footer" :style="{ marginLeft: collapsed ? '80px' : '240px' }">
-        智慧酒店物联网控制系统 ©2026 - 管理端
+      <a-layout-footer class="admin-footer" :style="{ marginLeft: collapsed ? '80px' : '260px' }">
+        <div class="footer-inner">
+          <span class="footer-text">慧宿智联 · 智慧酒店管理系统</span>
+          <span class="footer-divider">|</span>
+          <span class="footer-version">管理后台 v2.2.0</span>
+        </div>
       </a-layout-footer>
     </a-layout>
   </a-layout>
@@ -136,35 +170,41 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  SettingOutlined, DashboardOutlined, MonitorOutlined,
-  HomeOutlined, BankOutlined, FileTextOutlined, EditOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined,
-  BellOutlined, SwapOutlined,
-  TagsOutlined, BarsOutlined, UserOutlined, LogoutOutlined,
-  EnvironmentOutlined, CalendarOutlined, TagOutlined, BookOutlined,
-  ClusterOutlined, StarOutlined
+  SettingOutlined,
+  DashboardOutlined,
+  BankOutlined,
+  HomeOutlined,
+  TeamOutlined,
+  FileTextOutlined,
+  ControlOutlined,
+  ToolOutlined,
+  BarChartOutlined,
+  HistoryOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  DownOutlined,
+  WifiOutlined,
+  DisconnectOutlined
 } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
-import { authService, CANONICAL_ROLES } from '@/api/auth'
-import { hotelManageApi } from '@/api/hotel-manage'
-import request from '@/api/request'
-import { useHotelStore } from '@/stores/hotel'
+import { authService } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
-const hotelStore = useHotelStore()
 
-// 初始化用户信息
 appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
-const hotelInfoLoading = ref(false)
-const hotelName = ref('')
 
-const currentTitle = computed(() => (route.meta.title as string) || '')
-const resolvedHotelName = computed(() => hotelName.value || appStore.userInfo?.hotel_name || '')
+const breadcrumbs = computed(() => {
+  const matched = route.matched
+  return matched.slice(1).map(m => m.meta?.title || m.name).filter(Boolean)
+})
 
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]
@@ -174,107 +214,294 @@ function handleMenuClick({ key }: { key: string }) {
   router.push(key)
 }
 
-async function loadHotelInfo() {
-  if (appStore.userInfo?.role !== CANONICAL_ROLES.HOTEL_ADMIN && appStore.userInfo?.role !== CANONICAL_ROLES.SYSTEM_ADMIN) {
-    return
+function getRoleText(role?: string) {
+  const roleMap: Record<string, string> = {
+    'system_admin': '系统管理员',
+    'hotel_admin': '酒店管理员',
+    'staff': '员工',
+    'customer': '顾客'
   }
-  hotelInfoLoading.value = true
-  try {
-    const res: any = await hotelManageApi.getHotelInfo()
-    const data = res?.data
-    if (data?.hotel_name) {
-      hotelName.value = data.hotel_name
-    }
-  } finally {
-    hotelInfoLoading.value = false
-  }
+  return roleMap[role || ''] || '管理员'
 }
-
-onMounted(() => {
-  loadHotelInfo()
-})
 
 async function handleLogout() {
   await authService.logout()
   router.push('/guest/booking')
 }
 
-async function returnToSystem() {
-  try {
-    // 切换回全局 Token (hotel_id = 0)
-    const res = await request.post('/auth/switch-hotel', {
-      hotel_id: 0
-    })
-
-    if (res.data.token) {
-      localStorage.setItem('auth_token', res.data.token)
-      
-      // 更新用户信息中的酒店 ID 和名称
-      if (appStore.userInfo) {
-        appStore.setUserInfo({
-          ...appStore.userInfo,
-          hotel_id: 0,
-          hotel_name: '慧宿智联集团总部'
-        })
-      }
-      
-      hotelStore.setCurrentHotelId(0)
-      router.push('/system/dashboard')
-    }
-  } catch (error) {
-    router.push('/system/dashboard')
+onMounted(() => {
+  // 检查权限
+  const userRole = appStore.userInfo?.role
+  if (!userRole || (userRole !== 'system_admin' && userRole !== 'hotel_admin')) {
+    message.warning('您没有权限访问管理后台')
+    router.push('/guest/booking')
   }
-}
+})
 </script>
 
 <style scoped>
-.admin-layout { min-height: 100vh; }
-.admin-sider { position: fixed; left: 0; top: 0; bottom: 0; z-index: 10; }
-.logo {
-  height: 64px;
+.admin-layout {
+  min-height: 100vh;
+  background: var(--hotel-bg);
+}
+
+.admin-sider {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+}
+
+.sider-header {
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
   cursor: pointer;
-  color: #fff;
-  font-size: 16px;
-  font-weight: bold;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 20px;
+  transition: all 0.3s;
 }
+
+.sider-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sider-logo {
+  width: 44px;
+  height: 44px;
+  background: var(--hotel-gold);
+  border-radius: var(--hotel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.sider-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+.brand-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-menu {
+  background: transparent;
+  border-right: none;
+  padding: 12px 0;
+}
+
+.admin-menu :deep(.ant-menu-item) {
+  margin: 4px 12px;
+  border-radius: var(--hotel-radius-sm);
+}
+
+.admin-menu :deep(.ant-menu-item-selected) {
+  background: var(--hotel-gold) !important;
+  color: #fff !important;
+}
+
+.admin-menu :deep(.ant-menu-submenu-title) {
+  margin: 4px 12px;
+  border-radius: var(--hotel-radius-sm);
+}
+
+.admin-menu :deep(.ant-menu-sub) {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+.sider-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.system-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.version {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.status {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status.online {
+  color: var(--hotel-success);
+}
+
+.status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .admin-header {
   background: #fff;
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 4px rgba(0,21,41,.08);
-  z-index: 9;
-  margin-left: 240px;
-  transition: margin-left .2s;
+  box-shadow: var(--hotel-shadow-sm);
+  z-index: 99;
+  height: 72px;
+  position: sticky;
+  top: 0;
+  transition: margin-left 0.2s;
 }
-.header-left { display: flex; align-items: center; gap: 16px; }
-.header-right { display: flex; align-items: center; gap: 16px; }
-.trigger { font-size: 18px; cursor: pointer; padding: 0 8px; }
-.trigger:hover { color: #1890ff; }
-.breadcrumb { font-size: 14px; }
-.header-icon { font-size: 18px; cursor: pointer; }
-.ws-status { border-radius: 12px; }
-.hotel-tag { display: inline-flex; align-items: center; gap: 6px; border-radius: 12px; }
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.trigger {
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--hotel-radius-sm);
+  color: var(--hotel-text-secondary);
+  transition: all 0.3s;
+}
+
+.trigger:hover {
+  background: var(--hotel-bg-secondary);
+  color: var(--hotel-primary);
+}
+
+.breadcrumb {
+  font-size: 14px;
+}
+
+.breadcrumb :deep(.ant-breadcrumb-link) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.connection-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--hotel-bg-secondary);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+}
+
+.connection-badge.online {
+  color: var(--hotel-success);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--hotel-radius);
+  transition: all 0.3s;
+  border: 1px solid var(--hotel-border);
+}
+
+.user-profile:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.user-avatar {
+  border: 2px solid var(--hotel-gold);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hotel-text);
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+}
+
+.profile-menu {
+  border-radius: var(--hotel-radius);
+}
+
+.logout-item {
+  color: var(--hotel-error);
+}
+
 .admin-content {
-  margin: 16px;
-  margin-left: 256px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  min-height: calc(100vh - 64px - 48px - 69px);
-  overflow-y: auto;
-  transition: margin-left .2s;
+  margin: 24px;
+  margin-left: 284px;
+  min-height: calc(100vh - 72px - 80px);
+  transition: margin-left 0.2s;
 }
+
 .admin-footer {
   text-align: center;
-  color: rgba(0,0,0,0.45);
-  margin-left: 240px;
-  transition: margin-left .2s;
+  padding: 20px;
+  transition: margin-left 0.2s;
+}
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--hotel-text-muted);
+  font-size: 13px;
+}
+
+.footer-divider {
+  color: var(--hotel-border);
 }
 </style>
