@@ -7,18 +7,18 @@ class DeliveryService {
   final DioClient _dioClient = DioClient();
 
   static const List<Map<String, dynamic>> deliveryItemCatalog = [
-    {'id': 1, 'name': '矿泉水', 'category': 'beverage', 'price': 3.0},
-    {'id': 2, 'name': '可乐', 'category': 'beverage', 'price': 5.0},
-    {'id': 3, 'name': '橙汁', 'category': 'beverage', 'price': 8.0},
-    {'id': 4, 'name': '咖啡', 'category': 'beverage', 'price': 10.0},
-    {'id': 5, 'name': '方便面', 'category': 'food', 'price': 6.0},
-    {'id': 6, 'name': '饼干', 'category': 'food', 'price': 5.0},
-    {'id': 7, 'name': '水果拼盘', 'category': 'food', 'price': 15.0},
-    {'id': 8, 'name': '毛巾', 'category': 'daily', 'price': 0.0},
-    {'id': 9, 'name': '洗漱套装', 'category': 'daily', 'price': 0.0},
-    {'id': 10, 'name': '拖鞋', 'category': 'daily', 'price': 0.0},
-    {'id': 11, 'name': '充电器', 'category': 'other', 'price': 10.0},
-    {'id': 12, 'name': '数据线', 'category': 'other', 'price': 8.0},
+    {'id': 1, 'name': '矿泉水', 'category': '饮品', 'price': 3.0},
+    {'id': 2, 'name': '可乐', 'category': '饮品', 'price': 5.0},
+    {'id': 3, 'name': '橙汁', 'category': '饮品', 'price': 8.0},
+    {'id': 4, 'name': '咖啡', 'category': '饮品', 'price': 10.0},
+    {'id': 5, 'name': '方便面', 'category': '食品', 'price': 6.0},
+    {'id': 6, 'name': '饼干', 'category': '食品', 'price': 5.0},
+    {'id': 7, 'name': '水果拼盘', 'category': '食品', 'price': 15.0},
+    {'id': 8, 'name': '毛巾', 'category': '日用品', 'price': 0.0},
+    {'id': 9, 'name': '洗漱套装', 'category': '日用品', 'price': 0.0},
+    {'id': 10, 'name': '拖鞋', 'category': '日用品', 'price': 0.0},
+    {'id': 11, 'name': '充电器', 'category': '其他', 'price': 10.0},
+    {'id': 12, 'name': '数据线', 'category': '其他', 'price': 8.0},
   ];
 
   Future<ApiResult<List<dynamic>>> getDeliveryOrders({

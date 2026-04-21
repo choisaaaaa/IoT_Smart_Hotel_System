@@ -281,12 +281,12 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       case 'curtain_open':
       case 'curtain_close':
       case 'curtain_half':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId});
+        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 1});
         break;
       case 'ac_26':
       case 'ac_cool':
       case 'ac_low':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId});
+        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 1});
         break;
       case 'wifi':
         _sendMessage('WiFi密码');
