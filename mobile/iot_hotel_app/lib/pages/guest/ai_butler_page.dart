@@ -273,34 +273,50 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
   void _handleQuickAction(String action) {
     switch (action) {
       case 'light_on':
+        _sendMessage('请打开所有灯光');
+        break;
       case 'light_off':
+        _sendMessage('请关闭所有灯光');
+        break;
       case 'light_reading':
+        _sendMessage('请打开阅读灯');
+        break;
       case 'device_control':
+        _sendMessage('请显示房间设备状态');
+        break;
       case 'device':
+        _sendMessage('帮我查看房间设备');
+        break;
       case 'curtain':
       case 'curtain_open':
+        _sendMessage('请打开窗帘');
+        break;
       case 'curtain_close':
+        _sendMessage('请关闭窗帘');
+        break;
       case 'curtain_half':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 1});
+        _sendMessage('请把窗帘开到一半');
         break;
       case 'ac_26':
       case 'ac_cool':
+        _sendMessage('请把空调调到26度');
+        break;
       case 'ac_low':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 1});
+        _sendMessage('请把空调温度调低一些');
         break;
       case 'wifi':
-        _sendMessage('WiFi密码');
+        _sendMessage('WiFi密码是什么？');
         break;
       case 'room_service':
       case 'service':
       case 'recommend':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 2});
+        _sendMessage('我需要客房送餐服务');
         break;
       case 'call_front_desk':
       case 'front_desk':
       case 'transfer':
       case 'call':
-        context.push('/room-service', extra: {'bookingId': widget.bookingId, 'initialTab': 3});
+        _sendMessage('请帮我转接前台');
         break;
       case 'checkout':
         if (widget.bookingId != null) {

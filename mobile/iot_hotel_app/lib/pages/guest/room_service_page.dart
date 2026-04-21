@@ -151,7 +151,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         _mqttService.disconnect();
       }
     } catch (e) {
-      debugPrint('鉁?checkinStatus: $e');
+      debugPrint('检查入住状态错误: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -175,10 +175,28 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         setState(() => _devices = result.data ?? []);
       }
     } catch (e) {
-      debugPrint('鉁?devices: $e');
+      debugPrint('获取设备错误: $e');
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _refreshData() async {
+    // 重新检查入住状态并刷新设备列表
+    await _checkCheckinStatus();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已刷新'),
+          duration: Duration(seconds: 1),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _checkCheckinStatus();
   }
 
   Future<void> _toggleDevice(dynamic device) async {
@@ -190,7 +208,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           .controlDevice(device['id'], commandType: 'toggle', commandValue: newStatus);
       if (result.success) _fetchDevices();
     } catch (e) {
-      debugPrint('鉁?toggleDevice: $e');
+      debugPrint('切换设备错误: $e');
     }
   }
 
@@ -265,6 +283,13 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
         title: Text('$roomNumber号房 · 客房服务', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: '刷新',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -282,15 +307,18 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _AiButlerTab(roomId: _currentStay?.roomId, bookingId: _currentStay?.id),
-          _buildDeviceControlTab(),
-          _DeliveryTab(roomId: _currentStay?.roomId, roomNumber: _currentStay?.roomNumber, currentStay: _currentStay),
-          _ContactFrontDeskTab(roomId: _currentStay?.roomId),
-          _MoreServicesTab(isCheckedIn: _currentStay != null),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _AiButlerTab(roomId: _currentStay?.roomId, bookingId: _currentStay?.id),
+            _buildDeviceControlTab(),
+            _DeliveryTab(roomId: _currentStay?.roomId, roomNumber: _currentStay?.roomNumber, currentStay: _currentStay),
+            _ContactFrontDeskTab(roomId: _currentStay?.roomId),
+            _MoreServicesTab(isCheckedIn: _currentStay != null),
+          ],
+        ),
       ),
     );
   }
@@ -541,6 +569,22 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
   final _noteController = TextEditingController();
   final Map<int, int> _quantities = {};
 
+  // 分类映射表（英文 -> 中文）
+  final Map<String, String> _categoryMap = {
+    'beverage': '饮品',
+    'food': '食品',
+    'daily': '日用品',
+    'other': '其他',
+    '饮品': '饮品',
+    '食品': '食品',
+    '日用品': '日用品',
+    '其他': '其他',
+  };
+
+  String _getCategoryDisplayName(String category) {
+    return _categoryMap[category] ?? category;
+  }
+
   @override
   void dispose() {
     _noteController.dispose();
@@ -569,7 +613,7 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
                   .map((c) => Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: FilterChip(
-                          label: Text(c),
+                          label: Text(_getCategoryDisplayName(c)),
                           selected: _selectedCategory == c,
                           onSelected: (_) =>
                               setState(() => _selectedCategory = c),
@@ -603,7 +647,7 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
                                     fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text(
-                              '¥${item['price']} · ${item['category']}',
+                              '¥${item['price']} · ${_getCategoryDisplayName(item['category'] as String)}',
                               style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary),

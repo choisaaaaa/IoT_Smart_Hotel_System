@@ -241,6 +241,7 @@ class MQTTService {
       'hotel/device/command/result',
       'hotel/security/event',
       'hotel/room/control/result',
+      'hotel/room/+/scene',
       'hotel/call/signaling/+',
       'hotel/call/audio/+',
       'hotel/ai/request/room/+',
@@ -272,6 +273,11 @@ class MQTTService {
     // 处理客房服务相关消息
     if (topic.startsWith('hotel/service/')) {
       await this.handleServiceRequest(topic, data);
+      return;
+    }
+    // 处理房间场景控制
+    if (topic.startsWith('hotel/room/') && topic.endsWith('/scene')) {
+      await this.handleSceneControl(topic, data);
       return;
     }
 
@@ -812,6 +818,78 @@ class MQTTService {
         error: '查询失败',
         timestamp: new Date().toISOString()
       });
+    }
+  }
+
+  /**
+   * 处理房间场景控制
+   * 场景: welcome=欢迎模式, sleep=睡眠模式, leave=外出模式
+   */
+  private async handleSceneControl(topic: string, data: any) {
+    try {
+      const topicParts = topic.split('/');
+      const roomId = topicParts[2]; // hotel/room/{roomId}/scene
+
+      const scene = data.scene || data.type;
+      const timestamp = data.timestamp || new Date().toISOString();
+
+      logger.info(`[场景控制] 房间 ${roomId} - 场景: ${scene}`);
+
+      // 根据不同场景下发设备控制指令
+      const controlTopic = `hotel/device/command/room/${roomId}`;
+      
+      switch (scene) {
+        case 'welcome':
+          // 欢迎模式：开灯、开窗帘、空调调到舒适温度
+          await this.publish(controlTopic, {
+            device_type: 'all',
+            action: 'on',
+            timestamp
+          });
+          logger.info(`[场景控制] ${roomId} 欢迎模式：设备已开启`);
+          break;
+        case 'sleep':
+          // 睡眠模式：关灯、关窗帘、空调调到26度
+          await this.publish(controlTopic, {
+            device_type: 'light',
+            action: 'off',
+            timestamp
+          });
+          await this.publish(controlTopic, {
+            device_type: 'curtain',
+            action: 'close',
+            timestamp
+          });
+          await this.publish(controlTopic, {
+            device_type: 'ac',
+            action: 'set_temperature',
+            value: 26,
+            timestamp
+          });
+          logger.info(`[场景控制] ${roomId} 睡眠模式：灯光关闭，窗帘关闭，空调26度`);
+          break;
+        case 'leave':
+          // 外出模式：关闭所有设备
+          await this.publish(controlTopic, {
+            device_type: 'all',
+            action: 'off',
+            timestamp
+          });
+          logger.info(`[场景控制] ${roomId} 外出模式：所有设备已关闭`);
+          break;
+        default:
+          logger.warn(`[场景控制] 未知场景: ${scene}`);
+      }
+
+      // 发送场景执行结果
+      await this.publish(`hotel/room/${roomId}/scene/result`, {
+        success: true,
+        scene: scene,
+        message: `${scene}模式已激活`,
+        timestamp
+      });
+    } catch (error) {
+      logger.error('[场景控制] 处理失败:', error.message);
     }
   }
 

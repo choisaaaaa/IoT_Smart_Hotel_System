@@ -155,7 +155,8 @@ class OrderTimeoutService {
 
   calculateAutoCheckoutTime(checkOutDate: string): Date {
     const checkout = new Date(checkOutDate);
-    checkout.setHours(12, 0, 0, 0);
+    // 设置为退房日期当天的00:00:00，确保当天自动退房
+    checkout.setHours(0, 0, 0, 0);
     return checkout;
   }
 }
