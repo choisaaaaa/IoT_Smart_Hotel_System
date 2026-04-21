@@ -19,7 +19,7 @@
             </a-select-option>
           </a-select>
           
-          <a-button type="primary" ghost @click="handleOpenRatePlanModal">
+          <a-button type="primary" @click="handleOpenRatePlanModal">
             管理方案
           </a-button>
         </a-space>

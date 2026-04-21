@@ -15,7 +15,7 @@
           <div class="hotel-id">集团编号: {{ hotelStore.hotelInfo?.id || '-' }}</div>
         </div>
         <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
-          <a-button type="primary" ghost @click="() => { inventoryModalVisible = true; fetchTodayInventory(); }">
+          <a-button type="primary" @click="() => { inventoryModalVisible = true; fetchTodayInventory(); }">
             <template #icon><ShopOutlined /></template>
             今日可售余量管理
           </a-button>
@@ -126,7 +126,7 @@
                           {{ c.coupon_name }} ({{ c.coupon_type === 'discount' ? c.discount_value + '折' : '减¥' + c.discount_value }})
                         </a-select-option>
                       </a-select>
-                      <a-button type="primary" ghost @click="showIssueCouponModal">
+                      <a-button type="primary" @click="showIssueCouponModal">
                         发放优惠券
                       </a-button>
                     </div>
@@ -258,7 +258,7 @@
     </a-modal>
             <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
               <a-space style="margin-bottom: 8px;">
-                <a-button size="small" @click="fetchTodayBookings">刷新</a-button>
+                <a-button size="small" type="primary" @click="fetchTodayBookings">刷新</a-button>
                 <a-button size="small" type="primary" :disabled="selectedBookingKeys.length === 0" @click="checkInSelectedBooking">
                   办理选中预订
                 </a-button>
