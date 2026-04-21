@@ -287,6 +287,7 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const userPhone = req.user?.phone;
     const roomId = req.params.id;
+    logger.info(`[getGuestRoomDevices] 用户ID: ${userId}, 房间ID: ${roomId}`);
     
     if (!userId) {
       return res.status(401).json(errorResponse('未授权'));
@@ -324,6 +325,73 @@ export const getGuestRoomDevices = async (req: AuthRequest, res: Response) => {
     if (bookings.length === 0) {
       return res.status(403).json(errorResponse('无权访问该房间的设备'));
     }
+
+    // 查询房间设备
+    const [devices]: any = await pool.execute(
+      `SELECT d.id, d.device_id, d.device_name, d.device_type, d.device_status, d.firmware_version, d.last_seen
+       FROM devices d
+       INNER JOIN rooms r ON r.room_id = d.id
+       WHERE r.id = ?`,
+      [roomId]
+    );
+
+    res.json(successResponse(devices, '获取房间设备成功'));
+  } catch (error: any) {
+    logger.error('获取房间设备失败:', error.message);
+    res.status(500).json(errorResponse(error.message || '获取房间设备失败'));
+  }
+};
+
+/**
+ * 获取顾客当前入住房间的设备列表
+ */
+export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const userPhone = req.user?.phone;
+    logger.info(`[getMyRoomDevices] 用户ID: ${userId}, 手机号: ${userPhone}`);
+    if (!userId) {
+      return res.status(401).json(errorResponse('未授权'));
+    }
+
+    const pool = (await import('../config/database')).default;
+    
+    // 查询用户当前有效的入住记录（优先通过user_id，其次通过guest_phone）
+    let bookings: any[] = [];
+    
+    if (userId) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
+         FROM bookings b
+         JOIN rooms r ON b.room_id = r.id
+         WHERE b.user_id = ? AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         ORDER BY b.check_in_date DESC
+         LIMIT 1`,
+        [userId]
+      );
+      bookings = rows;
+    }
+
+    if (bookings.length === 0 && userPhone) {
+      const [rows]: any = await pool.execute(
+        `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
+         FROM bookings b
+         JOIN rooms r ON b.room_id = r.id
+         WHERE b.guest_phone = ? AND b.status IN ('checked_in', 'confirmed')
+         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         ORDER BY b.check_in_date DESC
+         LIMIT 1`,
+        [userPhone]
+      );
+      bookings = rows;
+    }
+
+    if (bookings.length === 0) {
+      return res.status(404).json(errorResponse('当前没有入住记录'));
+    }
+
+    const roomId = bookings[0].room_id;
 
     // 查询房间设备
     const [devices]: any = await pool.execute(

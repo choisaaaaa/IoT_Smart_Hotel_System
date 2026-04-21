@@ -124,6 +124,7 @@ class _CompactLogInterceptor extends Interceptor {
     // 屏蔽环境监测API的错误日志
     if (!path.contains('/environment')) {
       debugPrint('✗ $code ${path.split('/').last} - $msg');
+      debugPrint('✗ 完整路径: $path');
     }
     handler.next(err);
   }

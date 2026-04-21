@@ -4,6 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { isCustomer, isGuest } from '../utils/role';
+import mqttService from '../services/mqtt.service';
 
 export const get = async (req: AuthRequest, res: Response) => {
   try {
@@ -151,7 +152,41 @@ export const create = async (req: AuthRequest, res: Response) => {
       'INSERT INTO delivery_orders (order_no, room_id, booking_id, guest_id, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [orderNo, room_id, booking_id || currentBooking.id, guest_id || null, item_name, quantity, note || '', 'pending']
     );
-    
+
+    // 获取房间号用于 MQTT 通知
+    const [roomRows] = await pool.query<RowDataPacket[]>(
+      'SELECT room_number, hotel_id FROM rooms WHERE id = ?',
+      [room_id]
+    );
+    const roomNumber = (roomRows[0] as any)?.room_number || room_id;
+    const hotelId = (roomRows[0] as any)?.hotel_id;
+
+    // 构建 MQTT 通知消息
+    const mqttMessage = {
+      type: 'delivery_order_created',
+      order_id: result.insertId,
+      order_no: orderNo,
+      room_id: room_id,
+      room_number: roomNumber,
+      hotel_id: hotelId,
+      item_name: item_name,
+      quantity: quantity,
+      note: note || '',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      message: `房间 ${roomNumber} 请求送物: ${item_name} x${quantity}`,
+      announce: true,  // 标记需要播报
+    };
+
+    // 发送 MQTT 通知到前台
+    const mqttTopic = `hotel/${hotelId}/reception/announce`;
+    const mqttResult = await mqttService.publish(mqttTopic, mqttMessage);
+
+    // 记录详细日志
+    logger.info(`[送物订单] 创建成功 - 订单号: ${orderNo}, 房间: ${roomNumber}, 物品: ${item_name} x${quantity}`);
+    logger.info(`[MQTT通知] 主题: ${mqttTopic}, 发送结果: ${mqttResult ? '成功' : '失败'}`);
+    logger.info(`[MQTT消息内容] ${JSON.stringify(mqttMessage)}`);
+
     res.json(successResponse({ id: result.insertId, order_no: orderNo }, '创建送物订单成功'));
   } catch (error) {
     logger.error('创建送物订单失败:', error.message);

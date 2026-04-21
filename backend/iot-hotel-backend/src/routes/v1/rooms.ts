@@ -7,6 +7,8 @@ const router = Router();
 
 console.log('[Rooms Router] 开始注册路由...');
 
+// 注意：具体路由必须放在参数路由之前，否则会被参数路由拦截
+router.get('/guest/my-room/devices', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getMyRoomDevices);
 router.get('/guest/my-room', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getGuestRoom);
 router.get('/guest/:id/devices', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getGuestRoomDevices);
 

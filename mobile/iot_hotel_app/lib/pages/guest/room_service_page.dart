@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -365,14 +366,37 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     return Expanded(
       child: GestureDetector(
         onTap: () async {
-          final result = await ref.read(deviceServiceProvider).controlDevice(
-            _devices.isNotEmpty ? _devices[0]['id'] : 0,
-            commandType: 'scene',
-            commandValue: scene
-          );
-          if (result.success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已激活 $title'), backgroundColor: color));
-            _fetchDevices();
+          // 通过 MQTT 发送场景命令，避免权限问题
+          final roomNumber = _currentStay?.roomNumber ?? _currentStay?.roomId.toString();
+          if (roomNumber == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('请先办理入住'), backgroundColor: AppColors.error),
+            );
+            return;
+          }
+
+          // 构建场景命令
+          final sceneCommand = {
+            'type': 'scene',
+            'scene': scene,
+            'room_id': roomNumber,
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+
+          // 通过 MQTT 发布场景命令
+          final mqttTopic = 'hotel/room/$roomNumber/scene';
+          final mqttPayload = jsonEncode(sceneCommand);
+          await _mqttService.publish(mqttTopic, mqttPayload);
+
+          // 记录 MQTT 发送日志
+          debugPrint('[智能场景] MQTT 命令已发送');
+          debugPrint('[智能场景] 主题: $mqttTopic');
+          debugPrint('[智能场景] 内容: $mqttPayload');
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('已激活 $title'), backgroundColor: color),
+            );
           }
         },
         child: Container(
@@ -685,12 +709,16 @@ class _DeliveryTabState extends ConsumerState<_DeliveryTab> {
         final result = await ref.read(deliveryServiceProvider).createDeliveryOrder(orderData);
         if (result.success) {
           successCount++;
+          // 记录成功日志
+          debugPrint('[客房服务] 送物订单创建成功 - 物品: ${item['name']}, 数量: ${item['quantity']}');
+          debugPrint('[客房服务] 订单数据: $orderData');
         } else {
           failCount++;
+          debugPrint('[客房服务] 送物订单创建失败 - 错误: ${result.message}');
         }
       } catch (e) {
         failCount++;
-        debugPrint('鉁?createDelivery: $e');
+        debugPrint('[客房服务] 创建送物订单异常: $e');
       }
     }
 

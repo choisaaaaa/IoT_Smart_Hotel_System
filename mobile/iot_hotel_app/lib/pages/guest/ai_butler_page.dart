@@ -161,7 +161,10 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
           }).toList();
         }
       } else {
-        reply = result.message ?? '服务暂时不可用，请稍后再试。';
+        // API 调用失败，自动转接前台
+        reply = '抱歉，AI服务暂时不可用，正在为您转接前台...';
+        action = 'transfer';
+        target = 'front_desk';
       }
 
       setState(() => _isLoading = false);
@@ -173,7 +176,9 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _startTypewriterEffect('抱歉，服务暂时不可用。您可以尝试联系前台获取帮助。');
+        _startTypewriterEffect('抱歉，服务暂时不可用，正在为您转接前台...');
+        // 发生异常时自动转接前台
+        _handleTransferToFrontDesk();
       }
     }
   }

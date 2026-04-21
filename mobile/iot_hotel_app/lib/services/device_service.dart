@@ -126,7 +126,26 @@ class DeviceService {
   }
 
   Future<ApiResult<List<dynamic>>> getMyRoomDevices({int? roomId}) async {
-    return getDevices(roomId: roomId);
+    try {
+      // 使用顾客专用端点，避免权限问题
+      final response = await _dioClient.get(
+        '${ApiConstants.rooms}/guest/my-room/devices',
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final data = response.data['data'];
+        if (data is List) return ApiResult.success(List<dynamic>.from(data));
+        if (data is Map && data.containsKey('list')) {
+          return ApiResult.success(List<dynamic>.from(data['list'] ?? []));
+        }
+        if (data is Map && data.containsKey('devices')) {
+          return ApiResult.success(List<dynamic>.from(data['devices'] ?? []));
+        }
+        return ApiResult.success([]);
+      }
+      return ApiResult.failure(response.data['message'] ?? '获取房间设备失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
   }
 
   Future<ApiResult<Map<String, dynamic>>> controlDevice(int id, {
