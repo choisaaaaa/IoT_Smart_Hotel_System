@@ -193,7 +193,22 @@ async function fetchDevices() {
   loading.value = true
   try {
     const res: any = await deviceApi.getDeviceList()
-    devices.value = res.data || []
+    console.log('Device API response:', res)
+    // 处理后端返回的数据结构 { success: true, data: [...] }
+    if (res && res.success && Array.isArray(res.data)) {
+      devices.value = res.data
+    } else if (res && Array.isArray(res.data)) {
+      devices.value = res.data
+    } else if (Array.isArray(res)) {
+      devices.value = res
+    } else {
+      devices.value = []
+      console.warn('Unexpected API response format:', res)
+    }
+  } catch (err) {
+    console.error('Failed to fetch devices:', err)
+    message.error('获取设备列表失败')
+    devices.value = []
   } finally {
     loading.value = false
   }
@@ -202,9 +217,20 @@ async function fetchDevices() {
 async function fetchRooms() {
   try {
     const res: any = await roomApi.getRoomList({ pageSize: 1000 })
-    rooms.value = res.data?.list || []
+    console.log('Room API response:', res)
+    // 处理后端返回的数据结构
+    if (res && res.success && res.data) {
+      rooms.value = res.data.list || res.data || []
+    } else if (res && res.data) {
+      rooms.value = res.data.list || res.data || []
+    } else if (Array.isArray(res)) {
+      rooms.value = res
+    } else {
+      rooms.value = []
+    }
   } catch (err) {
     console.error('Failed to fetch rooms:', err)
+    rooms.value = []
   }
 }
 
