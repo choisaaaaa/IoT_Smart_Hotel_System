@@ -9,6 +9,7 @@ set(EXTRA_COMPONENT_DIRS
     "../common_components/hal"
     "../common_components/services"
     "../common_components/config"
+    "../common_components/crypto"
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

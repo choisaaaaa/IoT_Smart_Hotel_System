@@ -14,6 +14,7 @@
 #include "service_mqtt.h"
 #include "service_network.h"
 #include "driver_rc522.h"
+#include "card_mifare_payload.h"
 #include "global_config.h"
 
 static const char *TAG = "FRONT_DESK_MAIN";
@@ -29,6 +30,7 @@ static char target_room_id[16] = "301";
 static uint32_t s_command_seq = 1000;
 static uint32_t s_call_seq = 1;
 static const uint8_t k_default_card_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static uint8_t s_card_aes_key[16];
 static char s_last_card_room_id[16] = "";
 static uint8_t s_last_uid[10] = {0};
 static uint8_t s_last_uid_len = 0;
@@ -256,23 +258,22 @@ static void publish_front_command_result(int cmd_id, const char *cmd_type, bool 
     cJSON_Delete(reply);
 }
 
-static bool parse_room_id_from_card_payload(const char *payload, char *out_room_id, size_t out_size) {
-    const char prefix[] = "ROOM:";
-    if (payload == NULL || out_room_id == NULL || out_size == 0) {
-        return false;
+static void load_card_aes_key(void) {
+    char hex[40] = {0};
+    if (service_network_read_nvs_string("HotelCard_AES128Hex", hex, sizeof(hex)) == ESP_OK &&
+        card_mifare_parse_hex_key(hex, s_card_aes_key)) {
+        ESP_LOGI(TAG, "房卡扇区密文 AES-128 密钥已从 NVS HotelCard_AES128Hex 加载");
+        return;
     }
-    if (strncmp(payload, prefix, strlen(prefix)) != 0) {
-        return false;
+    if (card_mifare_parse_hex_key(GLOBAL_CARD_AES128_HEX_DEFAULT, s_card_aes_key)) {
+        ESP_LOGW(TAG, "房卡 AES 使用 global_config 默认密钥，生产环境请写入 NVS");
     }
-    copy_str_safe(out_room_id, out_size, payload + strlen(prefix));
-    return (out_room_id[0] != '\0');
 }
 
 static bool handle_front_card_command(const char *cmd_type, cJSON *root, const char **out_msg) {
     cJSON *owned_command_value = NULL;
     cJSON *command_value = parse_command_value_object(root, &owned_command_value);
-    if (strcmp(cmd_type, "issue_card") == 0) {
-        char payload[32] = {0};
+    if (strcmp(cmd_type, "issue_card") == 0 || strcmp(cmd_type, "write_blank_card") == 0) {
         const char *room_id = target_room_id;
         if (cJSON_IsObject(command_value)) {
             cJSON *room_item = cJSON_GetObjectItem(command_value, "room_id");
@@ -281,16 +282,24 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
         }
 
-        snprintf(payload, sizeof(payload), "ROOM:%s", room_id);
-        esp_err_t err = driver_rc522_write_sector(1, k_default_card_key, (const uint8_t *)payload);
-        if (err != ESP_OK) {
-            *out_msg = "开卡失败";
+        uint8_t block[16] = {0};
+        if (!card_mifare_encrypt_room_payload(room_id, s_card_aes_key, block)) {
+            *out_msg = "房号无效或过长，无法组包";
             if (owned_command_value != NULL) {
                 cJSON_Delete(owned_command_value);
             }
             return false;
         }
-        *out_msg = "开卡成功";
+
+        esp_err_t err = driver_rc522_write_sector(1, k_default_card_key, block);
+        if (err != ESP_OK) {
+            *out_msg = (strcmp(cmd_type, "write_blank_card") == 0) ? "空白卡写入失败" : "开卡失败";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return false;
+        }
+        *out_msg = (strcmp(cmd_type, "write_blank_card") == 0) ? "空白卡写入成功" : "开卡成功";
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
@@ -301,6 +310,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         uint8_t sector_data[16] = {0};
         esp_err_t err = driver_rc522_read_sector(1, k_default_card_key, sector_data);
         if (err != ESP_OK) {
+            ESP_LOGW(TAG, "非法卡: 未检测到有效房卡 (%s)", esp_err_to_name(err));
             *out_msg = "未检测到有效房卡";
             if (owned_command_value != NULL) {
                 cJSON_Delete(owned_command_value);
@@ -309,7 +319,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         }
 
         char room_id[16] = {0};
-        if (parse_room_id_from_card_payload((const char *)sector_data, room_id, sizeof(room_id))) {
+        if (card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id))) {
             copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
             *out_msg = "刷卡通过";
             if (owned_command_value != NULL) {
@@ -317,7 +327,8 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
             return true;
         }
-        *out_msg = "刷卡失败";
+        ESP_LOGW(TAG, "非法卡: 扇区内容无法解密或非本系统房卡");
+        *out_msg = "扇区内容无法解密或非本系统房卡";
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
@@ -550,6 +561,7 @@ void app_main(void) {
     snprintf(device_id, sizeof(device_id), "front_desk_%s", front_id);
     load_nvs_string_with_fallback("Room_ID", target_room_id, sizeof(target_room_id), "301");
     load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);
+    load_card_aes_key();
 
     // 3. 初始化底层硬件驱动
     driver_rc522_init();

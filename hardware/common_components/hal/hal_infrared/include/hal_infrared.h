@@ -44,6 +44,12 @@ esp_err_t hal_infrared_send_ac_command(ir_brand_type_t brand, const ir_ac_cmd_t 
  */
 esp_err_t hal_infrared_learn_code(uint8_t *out_buffer, size_t max_len, uint32_t timeout_ms);
 
+/**
+ * @brief 红外对射一次采样：发射短载波后看接收头是否收到
+ * @param out_obstructed true 表示接收端未收到（视为光束被遮挡）
+ */
+esp_err_t hal_infrared_barrier_poll(bool *out_obstructed);
+
 #ifdef __cplusplus
 }
 #endif

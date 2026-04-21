@@ -22,6 +22,12 @@ esp_err_t driver_ir_rx_init(int gpio_num);
  */
 esp_err_t driver_ir_rx_poll_nec(uint8_t *out_addr, uint8_t *out_cmd, bool *out_updated);
 
+/**
+ * 解调接收头数字输出电平（常见 VS1838：空闲高、收到 38kHz 载波时为低）
+ * @return 0/1 为电平，未初始化返回 -1
+ */
+int driver_ir_rx_demod_level(void);
+
 #ifdef __cplusplus
 }
 #endif

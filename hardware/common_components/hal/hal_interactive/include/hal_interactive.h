@@ -10,7 +10,7 @@ extern "C" {
 
 // 定义常见的交互按键 ID (6个按键)
 typedef enum {
-    BTN_ROOM_PTT = 0,    // 客房: 呼叫前台
+    BTN_ROOM_PTT = 0,    // 客房: PTT（见 GLOBAL_PTT_BTN_PIN，默认 GPIO1：短按接听/挂断，长按唤醒 Agent）
     BTN_ROOM_SOS,        // 客房: SOS 报警
     BTN_ROOM_SCENE,      // 客房: 场景切换
     BTN_FRONT_CLEAR,     // 前台: 警报解除

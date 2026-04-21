@@ -10,7 +10,16 @@ static int s_pin_b = -1;
 static int s_pin_btn = -1;
 static uint8_t s_prev_ab = 0;
 static int s_step_acc = 0;
-static int s_prev_btn_level = 1;
+
+/** SW 消抖：连续 N 次采样同电平才翻转稳定态（N * 调用周期 ≈ 有效消抖时间）。
+ *  A/B 任一跳变且尚未稳定按下时清零累计，旋转越快越常清理，减轻 SW 误触。
+ *  调用方建议 8～10ms 周期调 driver_ec11_poll（见客房 main EC11_TASK_PERIOD）。 */
+#define EC11_SW_LOW_STABLE   12
+#define EC11_SW_HIGH_STABLE  12
+static uint8_t s_sw_low_run = 0;
+static uint8_t s_sw_high_run = 0;
+static bool s_sw_stable_pressed = false;
+static bool s_sw_was_stable_pressed = false;
 
 // 四相编码器状态转移表：每次合法跳变记 +/-1，累计到 +/-4 视为一步
 static const int8_t s_quad_table[16] = {
@@ -67,7 +76,10 @@ esp_err_t driver_ec11_init(int pin_a, int pin_b, int pin_btn)
 
     s_prev_ab = read_ab();
     s_step_acc = 0;
-    s_prev_btn_level = (pin_btn >= 0) ? gpio_get_level(pin_btn) : 1;
+    s_sw_low_run = 0;
+    s_sw_high_run = 0;
+    s_sw_stable_pressed = false;
+    s_sw_was_stable_pressed = false;
     s_inited = true;
 
     HAL_LOGI(TAG, "EC11 initialized A=%d B=%d BTN=%d", pin_a, pin_b, pin_btn);
@@ -86,25 +98,61 @@ esp_err_t driver_ec11_poll(driver_ec11_direction_t *out_dir, bool *out_btn_press
     }
 
     uint8_t curr_ab = read_ab();
+    const bool ab_changed = (curr_ab != s_prev_ab);
     uint8_t idx = (uint8_t)((s_prev_ab << 2) | curr_ab);
     s_step_acc += s_quad_table[idx];
     s_prev_ab = curr_ab;
 
+    bool rotated = false;
     if (s_step_acc >= 4) {
         *out_dir = DRIVER_EC11_DIR_CW;
         s_step_acc = 0;
+        rotated = true;
     } else if (s_step_acc <= -4) {
         *out_dir = DRIVER_EC11_DIR_CCW;
         s_step_acc = 0;
+        rotated = true;
     }
 
-    if (s_pin_btn >= 0 && out_btn_pressed != NULL) {
-        int curr_btn = gpio_get_level(s_pin_btn);
-        if (s_prev_btn_level == 1 && curr_btn == 0) {
+    if (s_pin_btn >= 0) {
+        const bool cancel_sw_debounce = (ab_changed || rotated) && !s_sw_stable_pressed;
+        if (cancel_sw_debounce) {
+            s_sw_low_run = 0;
+            s_sw_high_run = 0;
+        } else {
+            int lv = gpio_get_level(s_pin_btn);
+            if (lv == 0) {
+                s_sw_high_run = 0;
+                if (s_sw_low_run < 255) {
+                    s_sw_low_run++;
+                }
+                if (s_sw_low_run >= EC11_SW_LOW_STABLE) {
+                    s_sw_stable_pressed = true;
+                }
+            } else {
+                s_sw_low_run = 0;
+                if (s_sw_high_run < 255) {
+                    s_sw_high_run++;
+                }
+                if (s_sw_high_run >= EC11_SW_HIGH_STABLE) {
+                    s_sw_stable_pressed = false;
+                }
+            }
+        }
+
+        if (s_sw_stable_pressed && !s_sw_was_stable_pressed && out_btn_pressed != NULL) {
             *out_btn_pressed = true;
         }
-        s_prev_btn_level = curr_btn;
+        s_sw_was_stable_pressed = s_sw_stable_pressed;
     }
 
     return ESP_OK;
+}
+
+bool driver_ec11_sw_stable_pressed(void)
+{
+    if (!s_inited || s_pin_btn < 0) {
+        return false;
+    }
+    return s_sw_stable_pressed;
 }
