@@ -1,4 +1,5 @@
 import mqtt, { MqttClient, IClientOptions } from 'mqtt';
+import fs from 'fs';
 import config from '../config';
 import logger from '../utils/logger';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
@@ -110,6 +111,10 @@ class MQTTService {
 
   connect(): Promise<boolean> {
     return new Promise((resolve) => {
+      // 根据环境配置TLS选项
+      const isProduction = process.env.NODE_ENV === 'production';
+      const useTLS = process.env.MQTT_USE_TLS === 'true' || isProduction;
+      
       const options: IClientOptions = {
         keepalive: 60,
         clean: true,
@@ -118,10 +123,36 @@ class MQTTService {
         username: config.mqtt.username || undefined,
         password: config.mqtt.password || undefined,
         clientId: `iot_hotel_server_${Date.now()}`,
-        rejectUnauthorized: false
+        rejectUnauthorized: isProduction ? true : false // 生产环境必须验证证书
       };
+      
+      // 配置TLS证书
+      if (useTLS) {
+        try {
+          const caPath = process.env.MQTT_CA_CERT_PATH;
+          const certPath = process.env.MQTT_CLIENT_CERT_PATH;
+          const keyPath = process.env.MQTT_CLIENT_KEY_PATH;
+          
+          if (caPath && fs.existsSync(caPath)) {
+            options.ca = fs.readFileSync(caPath);
+            logger.info('MQTT TLS CA证书已加载');
+          } else if (isProduction) {
+            logger.warn('生产环境建议配置MQTT CA证书');
+          }
+          
+          if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+            options.cert = fs.readFileSync(certPath);
+            options.key = fs.readFileSync(keyPath);
+            logger.info('MQTT TLS客户端证书已加载');
+          }
+        } catch (error) {
+          logger.error('加载MQTT TLS证书失败:', error.message);
+        }
+      }
 
-      const url = `mqtt://${config.mqtt.host}:${config.mqtt.port}`;
+      const protocol = useTLS ? 'mqtts' : 'mqtt';
+      const port = useTLS ? (parseInt(config.mqtt.port as any) || 8883) : (parseInt(config.mqtt.port as any) || 1883);
+      const url = `${protocol}://${config.mqtt.host}:${port}`;
       
       try {
         this.client = mqtt.connect(url, options);

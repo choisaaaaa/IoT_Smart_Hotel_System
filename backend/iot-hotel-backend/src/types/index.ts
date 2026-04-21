@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 
+/**
+ * 用户认证请求接口
+ */
 export interface AuthRequest extends Request {
   user?: {
     id: number;
@@ -11,12 +14,30 @@ export interface AuthRequest extends Request {
   };
 }
 
-export interface DeviceRequest extends Request {
-  device?: {
-    id: number;
-    deviceId: string;
-    deviceType: string;
-  };
+/**
+ * 设备信息接口
+ */
+export interface DeviceInfo {
+  id: number;
+  deviceId: string;
+  hotelId: number;
+  status: string;
+  auditStatus: string;
+}
+
+/**
+ * 设备认证请求接口
+ */
+export interface DeviceAuthRequest extends Request {
+  device?: DeviceInfo;
+}
+
+/**
+ * 组合认证请求接口（用户+设备）
+ */
+export interface CombinedAuthRequest extends Request {
+  user?: AuthRequest['user'];
+  device?: DeviceInfo;
 }
 
 export interface ApiResponse<T = any> {
