@@ -370,7 +370,10 @@ void task_floor_sensor_report(void *pvParameters) {
         hal_sensors_read_all(&env_data);
         run_floor_local_policy(&env_data);
         publish_sensor_data("temperature", env_data.temperature, "℃");
-        publish_sensor_data("light", 450.0, "lux"); // 模拟走廊光照
+        publish_sensor_data("humidity", env_data.humidity, "%");
+        publish_sensor_data("air_quality_adc", env_data.air_quality_adc, "adc");
+        publish_sensor_data("light_adc", env_data.light_adc, "adc");
+        publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
     }
 }
 

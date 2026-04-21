@@ -980,7 +980,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Room terminal (main)
 #
-CONFIG_ROOM_TERMINAL_NET_TEST_MODE=y
+CONFIG_ROOM_TERMINAL_NET_TEST_MODE=n
 # end of Room terminal (main)
 
 #

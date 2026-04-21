@@ -31,11 +31,11 @@ extern "C" {
 #define GLOBAL_ENABLE_MESSAGE_SIGNATURE          0
 
 // 驱动分层预开发：允许 mock 兜底，后续可逐模块切换为 0
-#define GLOBAL_ENABLE_MOCK_NETWORK               1
-#define GLOBAL_ENABLE_MOCK_SENSORS               1
-#define GLOBAL_ENABLE_MOCK_AUDIO                 1
-#define GLOBAL_ENABLE_MOCK_INFRARED              1
-#define GLOBAL_ENABLE_MOCK_RC522                 1
+#define GLOBAL_ENABLE_MOCK_NETWORK               0
+#define GLOBAL_ENABLE_MOCK_SENSORS               0
+#define GLOBAL_ENABLE_MOCK_AUDIO                 0
+#define GLOBAL_ENABLE_MOCK_INFRARED              0
+#define GLOBAL_ENABLE_MOCK_RC522                 0
 
 // ==========================================
 // 统一硬件引脚分配 (ESP32-S3 冻结引脚)
