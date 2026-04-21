@@ -320,6 +320,219 @@ class DeviceController {
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
+
+  /**
+   * 获取设备传感器历史数据
+   */
+  async getSensorData(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      let hotelId = user?.hotel_id;
+      if (isSystemAdmin(user?.role)) {
+        hotelId = req.query.hotel_id || hotelId;
+      }
+
+      const deviceId = parseInt(req.params.id);
+      const { sensor_type, start_time, end_time, page = 1, pageSize = 20 } = req.query;
+
+      // 验证设备权限
+      const [devices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id, hotel_id FROM devices WHERE id = ?',
+        [deviceId]
+      );
+
+      if (devices.length === 0) {
+        return res.status(404).json({ success: false, message: 'Device not found' });
+      }
+
+      const device = devices[0];
+
+      if (hotelId && device.hotel_id !== hotelId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
+      }
+
+      let sql = 'SELECT * FROM sensor_data WHERE device_id = ?';
+      const params: any[] = [device.device_id];
+
+      if (sensor_type) {
+        sql += ' AND sensor_type = ?';
+        params.push(sensor_type);
+      }
+
+      if (start_time) {
+        sql += ' AND created_at >= ?';
+        params.push(start_time);
+      }
+
+      if (end_time) {
+        sql += ' AND created_at <= ?';
+        params.push(end_time);
+      }
+
+      // 获取总数
+      const [countResult] = await pool.query<RowDataPacket[]>(
+        sql.replace('SELECT *', 'SELECT COUNT(*) as total'),
+        params
+      );
+      const total = countResult[0]?.total || 0;
+
+      // 分页查询
+      sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      params.push(parseInt(pageSize as string), (parseInt(page as string) - 1) * parseInt(pageSize as string));
+
+      const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+
+      res.json({
+        success: true,
+        data: {
+          list: rows,
+          pagination: {
+            page: parseInt(page as string),
+            pageSize: parseInt(pageSize as string),
+            total
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Get sensor data error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * 获取设备最新传感器数据
+   */
+  async getLatestSensorData(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      let hotelId = user?.hotel_id;
+      if (isSystemAdmin(user?.role)) {
+        hotelId = req.query.hotel_id || hotelId;
+      }
+
+      const deviceId = parseInt(req.params.id);
+
+      // 验证设备权限
+      const [devices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id, hotel_id FROM devices WHERE id = ?',
+        [deviceId]
+      );
+
+      if (devices.length === 0) {
+        return res.status(404).json({ success: false, message: 'Device not found' });
+      }
+
+      const device = devices[0];
+
+      if (hotelId && device.hotel_id !== hotelId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
+      }
+
+      // 获取每种类型的最新数据
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT s1.* FROM sensor_data s1
+         INNER JOIN (
+           SELECT sensor_type, MAX(created_at) as max_created_at
+           FROM sensor_data
+           WHERE device_id = ?
+           GROUP BY sensor_type
+         ) s2 ON s1.sensor_type = s2.sensor_type AND s1.created_at = s2.max_created_at
+         WHERE s1.device_id = ?`,
+        [device.device_id, device.device_id]
+      );
+
+      res.json({
+        success: true,
+        data: rows
+      });
+    } catch (error) {
+      logger.error('Get latest sensor data error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * 查询设备指令执行历史
+   */
+  async getCommandHistory(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      let hotelId = user?.hotel_id;
+      if (isSystemAdmin(user?.role)) {
+        hotelId = req.query.hotel_id || hotelId;
+      }
+
+      const deviceId = parseInt(req.params.id);
+      const { command_type, status, start_date, end_date, page = 1, pageSize = 20 } = req.query;
+
+      // 验证设备权限
+      const [devices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id, hotel_id FROM devices WHERE id = ?',
+        [deviceId]
+      );
+
+      if (devices.length === 0) {
+        return res.status(404).json({ success: false, message: 'Device not found' });
+      }
+
+      const device = devices[0];
+
+      if (hotelId && device.hotel_id !== hotelId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
+      }
+
+      let sql = 'SELECT * FROM control_commands WHERE device_id = ?';
+      const params: any[] = [device.device_id];
+
+      if (command_type) {
+        sql += ' AND command_type = ?';
+        params.push(command_type);
+      }
+
+      if (status) {
+        sql += ' AND command_status = ?';
+        params.push(status);
+      }
+
+      if (start_date) {
+        sql += ' AND created_at >= ?';
+        params.push(start_date);
+      }
+
+      if (end_date) {
+        sql += ' AND created_at <= ?';
+        params.push(end_date + ' 23:59:59');
+      }
+
+      // 获取总数
+      const [countResult] = await pool.query<RowDataPacket[]>(
+        sql.replace('SELECT *', 'SELECT COUNT(*) as total'),
+        params
+      );
+      const total = countResult[0]?.total || 0;
+
+      // 分页查询
+      sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      params.push(parseInt(pageSize as string), (parseInt(page as string) - 1) * parseInt(pageSize as string));
+
+      const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+
+      res.json({
+        success: true,
+        data: {
+          list: rows,
+          pagination: {
+            page: parseInt(page as string),
+            pageSize: parseInt(pageSize as string),
+            total
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Get command history error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
 }
 
 export default new DeviceController();
