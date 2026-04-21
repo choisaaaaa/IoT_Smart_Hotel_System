@@ -59,5 +59,6 @@ hardware/**/*.bin
 docs/08-部署运维/云服务器部署指南.md
 backend/iot-hotel-backend/.env服务器
 
-tests/
+# 注意：tests/ 文件夹现在包含重要的测试用例，需要提交到仓库
+# tests/
 tests.zip

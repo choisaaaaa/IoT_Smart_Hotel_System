@@ -1,6 +1,15 @@
 import request from 'supertest';
-import app from '../../app';
+import app from '../src/app';
 
+/**
+ * 预订模块 API 测试
+ *
+ * 傻瓜教程：
+ * 这个文件测试预订相关的所有接口，包括：
+ * 1. 预订列表查询
+ * 2. 创建预订
+ * 3. 更新预订状态
+ */
 describe('预订模块 API 测试', () => {
   const mockToken = 'Bearer mock_jwt_token';
 

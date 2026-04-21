@@ -1,0 +1,34 @@
+占位文件
+
+【配图编号】08
+【配图名称】部署架构图
+【所属章节】附录
+【文件格式】PNG + 源文件
+【内容要求】Docker部署架构
+
+【架构组件】
+- Nginx反向代理
+- Node.js后端服务
+- MySQL数据库
+- Redis缓存
+- MQTT Broker (Mosquitto)
+- 前端静态资源
+
+【容器关系】
+```
+docker-compose
+├── nginx
+├── backend
+├── mysql
+├── redis
+└── mosquitto
+```
+
+【工具建议】Draw.io
+【交付标准】
+- 分辨率：300dpi
+- 文件大小：< 5MB
+- 命名规范：附录3_部署架构图.png
+- 需同时提交源文件（.drawio）
+
+请替换此占位文件为实际图片

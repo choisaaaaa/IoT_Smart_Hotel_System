@@ -1,7 +1,16 @@
-import { hashPassword, comparePassword } from '../../utils/password';
-import { generateToken, verifyToken } from '../../utils/jwt';
-import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../../utils/role';
+import { hashPassword, comparePassword } from '../src/utils/password';
+import { generateToken, verifyToken } from '../src/utils/jwt';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../src/utils/role';
 
+/**
+ * 认证工具测试
+ *
+ * 傻瓜教程：
+ * 这个文件测试认证相关的工具函数，包括：
+ * 1. 密码哈希和验证
+ * 2. JWT Token 生成和验证
+ * 3. 角色权限判断
+ */
 describe('认证工具测试', () => {
   describe('密码工具', () => {
     it('应该能正确哈希和验证密码', async () => {
