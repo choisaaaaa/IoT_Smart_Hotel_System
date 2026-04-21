@@ -20,7 +20,8 @@ redisClient.connect().catch(err => {
 });
 
 // 启用信任代理（用于Nginx反向代理）
-app.set('trust proxy', true);
+// 设置为特定IP地址，避免 express-rate-limit 的安全警告
+app.set('trust proxy', ['127.0.0.1', '8.134.166.69']);
 
 // Helmet安全头配置
 app.use(helmet({
