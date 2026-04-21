@@ -4,9 +4,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "global_config.h"
+#include "driver_buzzer_active.h"
 
 static const char *TAG = "HAL_INTERACTIVE";
 static const TickType_t k_button_debounce_ticks = pdMS_TO_TICKS(30);
+static bool s_buzzer_ready = false;
 
 // 定义6个按键引脚，按 interactive_button_id_t 枚举顺序
 static const int button_pins[] = {
@@ -49,22 +51,25 @@ esp_err_t hal_interactive_init(void) {
         }
     }
 
-    // 可在此处追加初始化 driver_rgb_led 或 driver_buzzer_active 等
+    esp_err_t buzzer_err = driver_buzzer_active_init(GLOBAL_BUZZER_PIN, true);
+    if (buzzer_err != ESP_OK) {
+        ESP_LOGE(TAG, "蜂鸣器初始化失败 GPIO%d: %s", GLOBAL_BUZZER_PIN, esp_err_to_name(buzzer_err));
+        s_buzzer_ready = false;
+    } else {
+        s_buzzer_ready = true;
+        ESP_LOGI(TAG, "蜂鸣器已就绪 GPIO%d", GLOBAL_BUZZER_PIN);
+    }
     
     return ESP_OK;
 }
 
 esp_err_t hal_interactive_beep(uint8_t count, uint32_t duration_ms) {
     ESP_LOGI(TAG, "蜂鸣器鸣叫: 共 %d 次，时长 %d ms", count, duration_ms);
-    // 这里仅做简单占位输出。如果连接了 driver_buzzer_active，直接调用它
-    // 简单实现为了不依赖太多多余代码，避免过度复杂逻辑
-    for (int i = 0; i < count; i++) {
-        // gpio_set_level(GLOBAL_BUZZER_PIN, 1);
-        vTaskDelay(pdMS_TO_TICKS(duration_ms));
-        // gpio_set_level(GLOBAL_BUZZER_PIN, 0);
-        vTaskDelay(pdMS_TO_TICKS(50));
+    if (!s_buzzer_ready) {
+        ESP_LOGW(TAG, "蜂鸣器未就绪，跳过鸣叫");
+        return ESP_ERR_INVALID_STATE;
     }
-    return ESP_OK;
+    return driver_buzzer_active_beep(count, duration_ms, 50);
 }
 
 esp_err_t hal_interactive_set_led_color(uint16_t led_index, uint8_t r, uint8_t g, uint8_t b) {

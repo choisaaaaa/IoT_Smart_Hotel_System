@@ -5,15 +5,10 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include "cJSON.h"
-#ifndef CONFIG_FRONT_DESK_NET_TEST_MODE
-#define CONFIG_FRONT_DESK_NET_TEST_MODE 1
-#endif
-#if CONFIG_FRONT_DESK_NET_TEST_MODE
-#include "esp_timer.h"
-#endif
 
 #include "hal_interactive.h"
 #include "service_mqtt.h"
@@ -26,12 +21,49 @@ static char device_id[32] = "front_desk_01"; // 规范命名 (6.1.1)
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FRONT_HEARTBEAT_TASK_PERIOD = pdMS_TO_TICKS(60000);
 static const TickType_t FRONT_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(50);
+static const TickType_t FRONT_RC522_TASK_PERIOD = pdMS_TO_TICKS(200);
+static const TickType_t FRONT_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
 static volatile bool s_network_ready = false;
+static uint32_t s_reconnect_count = 0;
 static char target_room_id[16] = "301";
 static uint32_t s_command_seq = 1000;
 static uint32_t s_call_seq = 1;
 static const uint8_t k_default_card_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static char s_last_card_room_id[16] = "";
+static uint8_t s_last_uid[10] = {0};
+static uint8_t s_last_uid_len = 0;
+static bool s_last_uid_valid = false;
+
+static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
+{
+    if (out_owned_json != NULL) {
+        *out_owned_json = NULL;
+    }
+    if (root == NULL) {
+        return NULL;
+    }
+
+    cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
+    if (cJSON_IsObject(command_value)) {
+        return command_value;
+    }
+    if (!cJSON_IsString(command_value) || command_value->valuestring == NULL) {
+        return NULL;
+    }
+
+    cJSON *parsed = cJSON_Parse(command_value->valuestring);
+    if (!cJSON_IsObject(parsed)) {
+        if (parsed != NULL) {
+            cJSON_Delete(parsed);
+        }
+        ESP_LOGW(TAG, "command_value 不是合法 JSON 对象字符串");
+        return NULL;
+    }
+    if (out_owned_json != NULL) {
+        *out_owned_json = parsed;
+    }
+    return parsed;
+}
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) return;
@@ -81,6 +113,86 @@ static void publish_front_event(const char *event_type, const char *detail) {
 
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+static void uid_to_hex(const uint8_t *uid, uint8_t uid_len, char *out_hex, size_t out_size) {
+    if (out_hex == NULL || out_size == 0) {
+        return;
+    }
+    out_hex[0] = '\0';
+    if (uid == NULL || uid_len == 0) {
+        return;
+    }
+
+    size_t pos = 0;
+    for (uint8_t i = 0; i < uid_len; i++) {
+        if (pos + 2 >= out_size) {
+            break;
+        }
+        int written = snprintf(out_hex + pos, out_size - pos, "%02X", uid[i]);
+        if (written <= 0) {
+            break;
+        }
+        pos += (size_t)written;
+    }
+}
+
+static void publish_card_uid_event(const uint8_t *uid, uint8_t uid_len) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char uid_hex[32] = {0};
+    char timestamp[32];
+    uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "event_type", "card_uid_detected");
+    cJSON_AddStringToObject(root, "card_uid", uid_hex);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+    ESP_LOGI(TAG, "RC522 检测到卡片 UID=%s", uid_hex);
+}
+
+static void publish_health_report(void) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    wifi_ap_record_t ap_info = {0};
+    int rssi = 0;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        rssi = ap_info.rssi;
+    }
+
+    char timestamp[32];
+    char topic[128];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+    snprintf(topic, sizeof(topic), "hotel/health/front_desk/%s", device_id);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
+    cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
+    cJSON_AddNumberToObject(root, "rssi", rssi);
+    cJSON_AddNumberToObject(root, "reconnect_counts", (double)s_reconnect_count);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+    ESP_LOGI(TAG, "健康上报已发送: topic=%s rssi=%d reconnect=%lu",
+             topic, rssi, (unsigned long)s_reconnect_count);
     free(json_str);
     cJSON_Delete(root);
 }
@@ -157,7 +269,8 @@ static bool parse_room_id_from_card_payload(const char *payload, char *out_room_
 }
 
 static bool handle_front_card_command(const char *cmd_type, cJSON *root, const char **out_msg) {
-    cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
+    cJSON *owned_command_value = NULL;
+    cJSON *command_value = parse_command_value_object(root, &owned_command_value);
     if (strcmp(cmd_type, "issue_card") == 0) {
         char payload[32] = {0};
         const char *room_id = target_room_id;
@@ -172,11 +285,15 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         esp_err_t err = driver_rc522_write_sector(1, k_default_card_key, (const uint8_t *)payload);
         if (err != ESP_OK) {
             *out_msg = "开卡失败";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
             return false;
         }
-        // 预开发模式：写卡成功后自动放置一张“当前卡”，方便后续刷卡验卡测试
-        driver_rc522_mock_present_card((const uint8_t *)payload, (uint16_t)strlen(payload));
         *out_msg = "开卡成功";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         return true;
     }
 
@@ -185,6 +302,9 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         esp_err_t err = driver_rc522_read_sector(1, k_default_card_key, sector_data);
         if (err != ESP_OK) {
             *out_msg = "未检测到有效房卡";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
             return false;
         }
 
@@ -192,12 +312,21 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         if (parse_room_id_from_card_payload((const char *)sector_data, room_id, sizeof(room_id))) {
             copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
             *out_msg = "刷卡通过";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
             return true;
         }
         *out_msg = "刷卡失败";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         return false;
     }
 
+    if (owned_command_value != NULL) {
+        cJSON_Delete(owned_command_value);
+    }
     return false;
 }
 
@@ -209,8 +338,15 @@ static void front_desk_command_callback(const char *topic, const char *data, int
     }
 
     cJSON *cmd_id_item = cJSON_GetObjectItem(root, "command_id");
+    cJSON *device_id_item = cJSON_GetObjectItem(root, "device_id");
     cJSON *cmd_type_item = cJSON_GetObjectItem(root, "command_type");
-    if (!cJSON_IsNumber(cmd_id_item) || !cJSON_IsString(cmd_type_item)) {
+    if (!cJSON_IsNumber(cmd_id_item) || !cJSON_IsString(device_id_item) || !cJSON_IsString(cmd_type_item)) {
+        ESP_LOGW(TAG, "指令字段缺失: 需要 command_id/device_id/command_type");
+        cJSON_Delete(root);
+        return;
+    }
+    if (strcmp(device_id_item->valuestring, device_id) != 0) {
+        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s", device_id_item->valuestring, device_id);
         cJSON_Delete(root);
         return;
     }
@@ -306,12 +442,14 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         
         // 发布规范的上线状态
         publish_device_online_status();
+        publish_health_report();
         
         // 声光提示：蓝灯常亮，短鸣2声表示上线成功
         hal_interactive_set_led_color(0, 0, 0, 255); 
         hal_interactive_beep(2, 100);
     } else {
         s_network_ready = false;
+        s_reconnect_count++;
         ESP_LOGW(TAG, "网络已断开，前台进入离线降级模式");
     }
 }
@@ -328,6 +466,14 @@ void task_front_heartbeat(void *pvParameters) {
     }
 }
 
+void task_front_health_report(void *pvParameters) {
+    (void)pvParameters;
+    while (1) {
+        vTaskDelay(FRONT_HEALTH_TASK_PERIOD);
+        publish_health_report();
+    }
+}
+
 // 按键事件任务：前台按钮触发事件与下行控制
 void task_front_button_events(void *pvParameters) {
     (void)pvParameters;
@@ -339,12 +485,14 @@ void task_front_button_events(void *pvParameters) {
         bool broadcast_pressed = hal_interactive_is_button_pressed(BTN_FRONT_BROADCAST);
 
         if (clear_pressed && !prev_clear_pressed) {
+            ESP_LOGI(TAG, "前台按键触发: 清除键");
             publish_front_event("front_clear_pressed", "前台消音/解除按钮触发");
             publish_room_command(target_room_id, "hangup_call");
             hal_interactive_beep(1, 80);
         }
 
         if (broadcast_pressed && !prev_broadcast_pressed) {
+            ESP_LOGI(TAG, "前台按键触发: 广播键");
             publish_front_event("front_broadcast_pressed", "前台广播按钮触发");
             publish_room_command(target_room_id, "incoming_call");
             hal_interactive_beep(2, 80);
@@ -356,89 +504,37 @@ void task_front_button_events(void *pvParameters) {
     }
 }
 
-#if CONFIG_FRONT_DESK_NET_TEST_MODE
-
-static void net_test_mqtt_cb(const char *topic, const char *data, int data_len)
-{
-    ESP_LOGI(TAG, "[NET-TEST] RX topic=%s len=%d", topic, data_len);
-    if (data != NULL && data_len > 0) {
-        size_t n = (size_t)data_len < 255u ? (size_t)data_len : 255u;
-        char buf[256];
-        memcpy(buf, data, n);
-        buf[n] = '\0';
-        ESP_LOGI(TAG, "[NET-TEST] payload: %s", buf);
-    }
-}
-
-static void net_test_on_network(bool connected, const char *ip_address)
-{
-    if (connected) {
-        ESP_LOGI(TAG, "[NET-TEST] WiFi OK, IP=%s", ip_address ? ip_address : "?");
-        esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "[NET-TEST] MQTT start failed: %s", esp_err_to_name(err));
-            return;
-        }
-        const char *topic = "hotel/net_test/broadcast";
-        err = service_mqtt_subscribe(topic, net_test_mqtt_cb);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "[NET-TEST] subscribe failed: %s", esp_err_to_name(err));
-        }
-        vTaskDelay(pdMS_TO_TICKS(800));
-        char pay[160];
-        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"msg\":\"online\"}", device_id);
-        service_mqtt_publish(topic, pay);
-    } else {
-        ESP_LOGW(TAG, "[NET-TEST] WiFi disconnected");
-    }
-}
-
-static void net_test_heartbeat_task(void *pvParameters)
-{
+// RC522 轮询任务：持续读卡，检测到新卡后上报 UID
+void task_front_rc522_poll(void *pvParameters) {
     (void)pvParameters;
-    const char *topic = "hotel/net_test/broadcast";
-    char pay[192];
+
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(15000));
-        int64_t us = esp_timer_get_time();
-        snprintf(pay, sizeof(pay), "{\"from\":\"%s\",\"uptime_s\":%lld}",
-                 device_id, (long long)(us / 1000000));
-        service_mqtt_publish(topic, pay);
-        ESP_LOGI(TAG, "[NET-TEST] heartbeat sent");
+        uint8_t uid[10] = {0};
+        uint8_t uid_len = 0;
+        esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
+
+        if (err == ESP_OK && uid_len > 0) {
+            bool is_new_card = (!s_last_uid_valid) ||
+                               (uid_len != s_last_uid_len) ||
+                               (memcmp(uid, s_last_uid, uid_len) != 0);
+            if (is_new_card) {
+                memcpy(s_last_uid, uid, uid_len);
+                s_last_uid_len = uid_len;
+                s_last_uid_valid = true;
+                publish_card_uid_event(uid, uid_len);
+                hal_interactive_beep(1, 80);
+            }
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            s_last_uid_valid = false;
+            s_last_uid_len = 0;
+        }
+
+        vTaskDelay(FRONT_RC522_TASK_PERIOD);
     }
 }
-
-#endif /* CONFIG_FRONT_DESK_NET_TEST_MODE */
 
 // 主入口
 void app_main(void) {
-#if CONFIG_FRONT_DESK_NET_TEST_MODE
-    ESP_LOGW(TAG, "========== NET TEST MODE（无外设：仅配网 + MQTT）==========");
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    char front_id[16] = {0};
-    load_nvs_string_with_fallback("FrontDesk_ID", front_id, sizeof(front_id), "01");
-    snprintf(device_id, sizeof(device_id), "front_desk_%s", front_id);
-    load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri),
-                                  GLOBAL_MQTT_BROKER_URI);
-
-    ESP_LOGI(TAG, "[NET-TEST] client_id=%s", device_id);
-    ESP_LOGI(TAG, "[NET-TEST] broker=%s", mqtt_broker_uri);
-    ESP_LOGI(TAG, "[NET-TEST] topic: hotel/net_test/broadcast");
-
-    ESP_ERROR_CHECK(service_network_provisioning_start(net_test_on_network));
-    xTaskCreate(net_test_heartbeat_task, "net_hb", 4096, NULL, 5, NULL);
-
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(60000));
-        ESP_LOGI(TAG, "[NET-TEST] main alive");
-    }
-#else
     ESP_LOGI(TAG, "========== 🛎️ 智慧前台管理端 启动 ==========");
 
     // 1. 初始化系统非易失性存储 (NVS)
@@ -464,9 +560,10 @@ void app_main(void) {
 
     // 5. 创建任务；main 仅保留守护
     xTaskCreate(task_front_heartbeat, "front_heartbeat_task", 4096, NULL, 5, NULL);
+    xTaskCreate(task_front_health_report, "front_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_front_button_events, "front_button_task", 3072, NULL, 4, NULL);
+    xTaskCreate(task_front_rc522_poll, "front_rc522_task", 4096, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }
-#endif /* CONFIG_FRONT_DESK_NET_TEST_MODE */
 }

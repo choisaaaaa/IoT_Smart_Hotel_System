@@ -4,11 +4,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include "cJSON.h"
 #ifndef CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
-#define CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE 1
+#define CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE 0
 #endif
 #if CONFIG_FLOOR_CONTROLLER_NET_TEST_MODE
 #include "esp_timer.h"
@@ -28,8 +29,10 @@ static char device_id[32] = "floor_UNKNOWN";
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
 static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
+static const TickType_t FLOOR_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
 static volatile bool s_network_ready = false;
 static bool s_corridor_light_on = false;
+static uint32_t s_reconnect_count = 0;
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) return;
@@ -47,6 +50,37 @@ static void load_nvs_string_with_fallback(const char *key, char *out, size_t out
     } else {
         out[out_size - 1] = '\0';
     }
+}
+
+static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
+{
+    if (out_owned_json != NULL) {
+        *out_owned_json = NULL;
+    }
+    if (root == NULL) {
+        return NULL;
+    }
+
+    cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
+    if (cJSON_IsObject(command_value)) {
+        return command_value;
+    }
+    if (!cJSON_IsString(command_value) || command_value->valuestring == NULL) {
+        return NULL;
+    }
+
+    cJSON *parsed = cJSON_Parse(command_value->valuestring);
+    if (!cJSON_IsObject(parsed)) {
+        if (parsed != NULL) {
+            cJSON_Delete(parsed);
+        }
+        ESP_LOGW(TAG, "command_value 不是合法 JSON 对象字符串");
+        return NULL;
+    }
+    if (out_owned_json != NULL) {
+        *out_owned_json = parsed;
+    }
+    return parsed;
 }
 
 static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_success, const char *result_msg) {
@@ -113,6 +147,40 @@ static void publish_floor_event(const char *event_type, const char *detail) {
 
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+static void publish_health_report(void) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    wifi_ap_record_t ap_info = {0};
+    int rssi = 0;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        rssi = ap_info.rssi;
+    }
+
+    char timestamp[32];
+    char topic[128];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+    snprintf(topic, sizeof(topic), "hotel/health/floor/%s", device_id);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "floor");
+    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
+    cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
+    cJSON_AddNumberToObject(root, "rssi", rssi);
+    cJSON_AddNumberToObject(root, "reconnect_counts", (double)s_reconnect_count);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+    ESP_LOGI(TAG, "健康上报已发送: topic=%s rssi=%d reconnect=%lu",
+             topic, rssi, (unsigned long)s_reconnect_count);
     free(json_str);
     cJSON_Delete(root);
 }
@@ -221,10 +289,34 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     ESP_LOGI(TAG, "==== 收到云端 MQTT 楼控群控指令 ====");
     
     cJSON *root = cJSON_ParseWithLength(data, data_len);
-    if (root == NULL) return;
+    if (root == NULL) {
+        ESP_LOGW(TAG, "指令 JSON 解析失败");
+        return;
+    }
 
     cJSON *cmd_id_item = cJSON_GetObjectItem(root, "command_id");
+    cJSON *device_id_item = cJSON_GetObjectItem(root, "device_id");
     cJSON *cmd_type_item = cJSON_GetObjectItem(root, "command_type");
+    cJSON *owned_command_value = NULL;
+    parse_command_value_object(root, &owned_command_value);
+
+    if (!cJSON_IsNumber(cmd_id_item) || !cJSON_IsString(device_id_item) || !cJSON_IsString(cmd_type_item)) {
+        ESP_LOGW(TAG, "指令字段缺失: 需要 command_id/device_id/command_type");
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        cJSON_Delete(root);
+        return;
+    }
+
+    if (strcmp(device_id_item->valuestring, device_id) != 0) {
+        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s", device_id_item->valuestring, device_id);
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        cJSON_Delete(root);
+        return;
+    }
 
     if (cJSON_IsNumber(cmd_id_item) && cJSON_IsString(cmd_type_item)) {
         int cmd_id = cmd_id_item->valueint;
@@ -233,6 +325,9 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
         bool exec_success = execute_floor_command(cmd_type, &result_msg);
         publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
         publish_floor_runtime_status();
+    }
+    if (owned_command_value != NULL) {
+        cJSON_Delete(owned_command_value);
     }
     cJSON_Delete(root);
 }
@@ -253,8 +348,10 @@ void on_network_status_changed(bool connected, const char* ip_address) {
 
         vTaskDelay(pdMS_TO_TICKS(1000));
         publish_device_online_status();
+        publish_health_report();
     } else {
         s_network_ready = false;
+        s_reconnect_count++;
         ESP_LOGW(TAG, "网络已断开，楼控进入离线降级模式");
     }
 }
@@ -284,11 +381,20 @@ void task_floor_button_events(void *pvParameters) {
     while (1) {
         bool alarm_pressed = hal_interactive_is_button_pressed(BTN_FLOOR_ALARM);
         if (alarm_pressed && !prev_alarm_pressed) {
+            ESP_LOGI(TAG, "楼控按键触发: 报警键");
             publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发");
             hal_interactive_beep(2, 100);
         }
         prev_alarm_pressed = alarm_pressed;
         vTaskDelay(FLOOR_BUTTON_TASK_PERIOD);
+    }
+}
+
+void task_floor_health_report(void *pvParameters) {
+    (void)pvParameters;
+    while (1) {
+        vTaskDelay(FLOOR_HEALTH_TASK_PERIOD);
+        publish_health_report();
     }
 }
 
@@ -398,6 +504,7 @@ void app_main(void) {
 
     // 5. 创建环境采样上报任务；main 仅保留守护
     xTaskCreate(task_floor_sensor_report, "floor_sensor_task", 4096, NULL, 5, NULL);
+    xTaskCreate(task_floor_health_report, "floor_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_button_events, "floor_button_task", 3072, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));

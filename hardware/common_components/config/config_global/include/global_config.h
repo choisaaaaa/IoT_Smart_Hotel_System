@@ -64,7 +64,10 @@ extern "C" {
 #define GLOBAL_OLED_HEIGHT         64
 #define GLOBAL_OLED_RST_GPIO       (-1)
 
-// UART 总线 (RD-03雷达)
+// 毫米波雷达：安信可 S3KM1110 等焊盘为 3V3/GND/OT1/RX/OT2（常见无模组侧 TX），
+// 杜邦线基准为 OT2 数字输出接 MCU，与 driver_rd03_simple 一致。
+#define GLOBAL_RD03_OT2_PIN        16
+// 若使用带模组 TX/RX 的 UART 版本，与上项二选一（勿在同一 MCU 脚上同时接 OT2 与 UART RX）。
 #define GLOBAL_UART_RD03_TX_PIN    15
 #define GLOBAL_UART_RD03_RX_PIN    16
 
@@ -72,7 +75,6 @@ extern "C" {
 #define GLOBAL_ADC_MQ2_PIN         4
 #define GLOBAL_ADC_LDR_PIN         5
 #define GLOBAL_ADC_NTC_PIN         6
-#define GLOBAL_ADC_POT_PIN         7
 
 // 继电器与红外
 #define GLOBAL_RELAY_CH1_PIN       17 // 灯光
@@ -84,19 +86,19 @@ extern "C" {
 
 // EC11 旋转编码器
 #define GLOBAL_EC11_A_PIN          2
-#define GLOBAL_EC11_B_PIN          43
-#define GLOBAL_EC11_SW_PIN         44
+#define GLOBAL_EC11_B_PIN          38
+#define GLOBAL_EC11_SW_PIN         4
 
 // 独立按键 (低有效)
 #define GLOBAL_BTN_ROOM_1_PIN      26 // 客房: SOS
 #define GLOBAL_BTN_ROOM_2_PIN      28 // 客房: 场景/睡眠
-#define GLOBAL_BTN_FRONT_1_PIN     29 // 前台: 消音
-#define GLOBAL_BTN_FRONT_2_PIN     30 // 前台: 广播
+#define GLOBAL_BTN_FRONT_1_PIN     5  // 前台: 消音
+#define GLOBAL_BTN_FRONT_2_PIN     6  // 前台: 广播
 #define GLOBAL_BTN_FLOOR_1_PIN     19 // 楼控: 报警
 
 // 其他输出
 #define GLOBAL_BUZZER_PIN          38 // 蜂鸣器 (高有效)
-#define GLOBAL_RGB_LED_PIN         27 // RGB 灯带
+#define GLOBAL_RGB_LED_PIN         21 // RGB 灯带(可选)
 
 #ifdef __cplusplus
 }

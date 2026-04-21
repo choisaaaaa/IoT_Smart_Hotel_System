@@ -2,7 +2,7 @@ menu "Front desk terminal (main)"
 
     config FRONT_DESK_NET_TEST_MODE
         bool "仅配网 + MQTT 联调（跳过全部外设初始化）"
-        default y
+        default n
         help
             启用后 app_main 只执行：NVS、WiFi 配网、MQTT 连接，
             并在 hotel/net_test/broadcast 上订阅/心跳，便于多块板互通验证。
