@@ -1,6 +1,14 @@
-import { calculateSignature, verifySignature } from '../../utils/signature';
-import logger from '../../utils/logger';
+import { calculateSignature, verifySignature } from '../src/utils/signature';
+import logger from '../src/utils/logger';
 
+/**
+ * 工具函数测试
+ *
+ * 傻瓜教程：
+ * 这个文件测试各种工具函数，包括：
+ * 1. 签名生成和验证
+ * 2. 日志工具
+ */
 describe('工具函数测试', () => {
   describe('签名工具', () => {
     it('应该能正确生成和验证签名', () => {

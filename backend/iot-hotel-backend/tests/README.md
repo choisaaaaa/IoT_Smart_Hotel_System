@@ -55,22 +55,20 @@ npm test -- device-group.test.ts
 ## 测试结构说明
 
 ```
-src/__tests__/
-├── setup.ts                    # 测试环境配置
-├── integration/                # 集成测试
-│   ├── api.test.ts            # 基础API测试
-│   ├── booking.test.ts        # 预订相关测试
-│   └── hardware/              # 【新增】硬件接口测试
-│       ├── device-group.test.ts      # 设备分组测试
-│       ├── device-alarm.test.ts      # 设备告警测试
-│       ├── rfid-access.test.ts       # RFID门禁测试
-│       ├── ir-remote.test.ts         # 红外遥控测试
-│       ├── scene.test.ts             # 场景模式测试
-│       ├── energy.test.ts            # 能耗管理测试
-│       └── firmware.test.ts          # 固件升级测试
-└── unit/                       # 单元测试
-    ├── auth.test.ts
-    └── utils.test.ts
+tests/
+├── hardware/                   # 【硬件接口测试】
+│   ├── device-group.test.ts   # 设备分组测试
+│   ├── device-alarm.test.ts   # 设备告警测试
+│   ├── rfid-access.test.ts    # RFID门禁测试
+│   ├── ir-remote.test.ts      # 红外遥控测试
+│   ├── scene.test.ts          # 场景模式测试
+│   ├── energy.test.ts         # 能耗管理测试
+│   └── firmware.test.ts       # 固件升级测试
+├── api.test.ts                # 【软件接口测试】基础API测试
+├── booking.test.ts            # 【软件接口测试】预订模块测试
+├── auth.test.ts               # 【单元测试】认证工具测试
+├── utils.test.ts              # 【单元测试】工具函数测试
+└── README.md                  # 本教程
 ```
 
 ---
@@ -90,7 +88,7 @@ npm test
 npm test -- --testNamePattern="设备|硬件|RFID|红外|场景|能耗|固件"
 
 # 方法2：使用文件路径匹配
-npm test -- hardware/
+npm test -- tests/hardware/
 
 # 方法3：运行特定文件
 npm test -- device-group.test.ts

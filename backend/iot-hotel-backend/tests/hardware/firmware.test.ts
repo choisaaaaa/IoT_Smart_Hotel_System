@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../../app';
+import app from '../../src/app';
 
 /**
  * 固件升级管理测试

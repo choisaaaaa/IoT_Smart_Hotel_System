@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../../app';
+import app from '../../src/app';
 
 // RFID门禁管理测试
 // 傻瓜教程：这个文件测试RFID房卡和门禁记录相关的所有接口

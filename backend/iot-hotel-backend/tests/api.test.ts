@@ -1,6 +1,17 @@
 import request from 'supertest';
-import app from '../../app';
+import app from '../src/app';
 
+/**
+ * API 集成测试
+ *
+ * 傻瓜教程：
+ * 这个文件测试基础API接口，包括：
+ * 1. 健康检查
+ * 2. 认证接口
+ * 3. 受保护接口
+ * 4. 限流测试
+ * 5. 404处理
+ */
 describe('API 集成测试', () => {
   describe('健康检查接口', () => {
     it('GET / 应该返回系统信息', async () => {
