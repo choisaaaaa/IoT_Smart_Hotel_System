@@ -1,5 +1,5 @@
-import axios from 'axios'
-import type { AxiosInstance } from 'axios'
+import request from './request'
+import type { ApiResponse } from '@/types'
 
 export interface FrequentGuest {
   id?: number
@@ -13,43 +13,23 @@ export interface FrequentGuest {
 }
 
 class GuestService {
-  private api: AxiosInstance
-
-  constructor() {
-    this.api = axios.create({
-      baseURL: '/api/v1',
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
-  }
-
   async list() {
-    const res = await this.api.get('/frequent-guests')
+    const res = await request.get<ApiResponse<{ guests: FrequentGuest[] }>>('/frequent-guests')
     return res.data
   }
 
   async create(data: FrequentGuest) {
-    const res = await this.api.post('/frequent-guests', data)
+    const res = await request.post<ApiResponse<FrequentGuest>>('/frequent-guests', data)
     return res.data
   }
 
   async update(id: number, data: FrequentGuest) {
-    const res = await this.api.put(`/frequent-guests/${id}`, data)
+    const res = await request.put<ApiResponse<FrequentGuest>>(`/frequent-guests/${id}`, data)
     return res.data
   }
 
   async remove(id: number) {
-    const res = await this.api.delete(`/frequent-guests/${id}`)
+    const res = await request.delete<ApiResponse<any>>(`/frequent-guests/${id}`)
     return res.data
   }
 }

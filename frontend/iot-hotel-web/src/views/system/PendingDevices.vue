@@ -2,10 +2,22 @@
   <div class="pending-devices">
     <a-card title="待审核设备" :bordered="false">
       <template #extra>
-        <a-button type="primary" @click="fetchPendingDevices">
-          <SyncOutlined /> 刷新
-        </a-button>
+        <a-space>
+          <a-button type="primary" @click="fetchPendingDevices" :loading="loading">
+            <SyncOutlined /> 刷新
+          </a-button>
+          <a-button @click="showDebugInfo = !showDebugInfo">
+            {{ showDebugInfo ? '隐藏' : '显示' }}调试信息
+          </a-button>
+        </a-space>
       </template>
+
+      <!-- 调试信息面板 -->
+      <a-alert v-if="showDebugInfo" type="info" style="margin-bottom: 16px;">
+        <template #message>
+          <div>API响应: <pre style="margin: 0; white-space: pre-wrap;">{{ debugInfo }}</pre></div>
+        </template>
+      </a-alert>
 
       <a-alert
         v-if="pendingDevices.length === 0"
@@ -16,8 +28,16 @@
         style="margin-bottom: 16px"
       />
 
+      <a-alert
+        v-else-if="!loading && pendingDevices.length === 0"
+        message="暂无待审核设备"
+        description="当前没有待审核的MQTT设备。请确保：1. 仿真器已连接MQTT并配置正确的酒店ID 2. 仿真器已发送注册请求"
+        type="info"
+        show-icon
+        style="margin-top: 16px"
+      />
       <a-table
-        v-else
+        v-else-if="pendingDevices.length > 0"
         :columns="columns"
         :data-source="pendingDevices"
         :loading="loading"
@@ -109,6 +129,10 @@ const auditVisible = ref(false)
 const auditLoading = ref(false)
 const currentDevice = ref<any>({})
 
+// 调试信息
+const showDebugInfo = ref(false)
+const debugInfo = ref('')
+
 const auditForm = ref({
   room_id: undefined as number | undefined,
   area: ''
@@ -129,9 +153,24 @@ const fetchPendingDevices = async () => {
   loading.value = true
   try {
     const res: any = await deviceApi.getDeviceList({ audit_status: 'pending' })
-    pendingDevices.value = res?.data?.data || []
+    console.log('Pending devices API response:', res)
+    // 记录调试信息
+    debugInfo.value = JSON.stringify(res, null, 2)
+    // 处理后端返回的数据结构 { success: true, data: [...] }
+    if (res && res.success && Array.isArray(res.data)) {
+      pendingDevices.value = res.data
+      message.success(`获取到 ${res.data.length} 个待审核设备`)
+    } else if (Array.isArray(res)) {
+      pendingDevices.value = res
+      message.success(`获取到 ${res.length} 个待审核设备`)
+    } else {
+      pendingDevices.value = []
+      message.warning('暂无待审核设备')
+    }
   } catch (error) {
     message.error('获取待审核设备失败')
+    console.error('Fetch pending devices error:', error)
+    debugInfo.value = `错误: ${error}`
   } finally {
     loading.value = false
   }
@@ -140,9 +179,15 @@ const fetchPendingDevices = async () => {
 const fetchRooms = async () => {
   try {
     const res: any = await roomApi.getRoomList()
-    rooms.value = res?.data?.data || []
+    // 后端返回 { code: 200, data: { list: [...], total: ... } }
+    if (res && res.code === 200 && res.data && res.data.list) {
+      rooms.value = res.data.list
+    } else {
+      rooms.value = []
+    }
   } catch (error) {
     console.error('获取房间列表失败', error)
+    rooms.value = []
   }
 }
 

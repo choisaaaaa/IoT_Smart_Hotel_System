@@ -7,35 +7,46 @@ function shouldClearAuth(error: any): boolean {
   if (!msg) {
     return false
   }
+  // 只有当明确提示令牌过期或非法时才清除，避免因偶发的 header 丢失导致全站登出
   return (
-    msg.includes('认证令牌') ||
     msg.includes('令牌验证失败') ||
-    msg.includes('未提供认证令牌') ||
-    msg.includes('token') ||
-    msg.includes('unauthorized')
+    msg.includes('token expired') ||
+    msg.includes('invalid token') ||
+    msg.includes('jwt expired')
   )
 }
 
 function getAuthToken(): string {
-  const rawToken = localStorage.getItem('auth_token')
-  if (rawToken && rawToken !== 'null' && rawToken !== 'undefined') {
-    return rawToken
-  }
-  const rawUserInfo = localStorage.getItem('user_info')
-  if (!rawUserInfo) {
-    return ''
-  }
-  try {
-    const parsed = JSON.parse(rawUserInfo)
-    const fallback = parsed?.token
-    if (fallback && fallback !== 'null' && fallback !== 'undefined') {
-      localStorage.setItem('auth_token', fallback)
-      return fallback
+  // 优先尝试从 localStorage 直接获取
+  let token = localStorage.getItem('auth_token')
+
+  // 如果没有，尝试从 user_info 中恢复
+  if (!token || token === 'null' || token === 'undefined' || token === '') {
+    const rawUserInfo = localStorage.getItem('user_info')
+    if (rawUserInfo) {
+      try {
+        const parsed = JSON.parse(rawUserInfo)
+        token = parsed?.token || parsed?.accessToken || ''
+      } catch (_) {
+        token = ''
+      }
     }
-  } catch (_) {
+  }
+
+  if (!token) return ''
+
+  // 确保返回的是干净的字符串，不包含 "Bearer " 前缀
+  // 兼容各种可能的错误格式，如 "Bearer null", "Bearer undefined"
+  if (typeof token === 'string' && token.toLowerCase().startsWith('bearer ')) {
+    token = token.substring(7).trim()
+  }
+
+  // 最终验证：如果 token 看起来不合法，返回空
+  if (token === 'null' || token === 'undefined' || token === '') {
     return ''
   }
-  return ''
+
+  return token
 }
 
 const request = axios.create({
@@ -49,8 +60,25 @@ const request = axios.create({
 request.interceptors.request.use(
   (config) => {
     const token = getAuthToken()
+
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      // 更加标准且鲁棒的 Header 设置方式
+      if (typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', `Bearer ${token}`)
+      } else {
+        if (!config.headers) {
+          config.headers = {} as any
+        }
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    }
+
+    // 在 GET 请求后添加随机时间戳，彻底避免浏览器/代理缓存 304 问题
+    if (config.method === 'get') {
+      config.params = {
+        ...config.params,
+        _t: Date.now()
+      }
     }
     return config
   },
@@ -73,9 +101,11 @@ request.interceptors.response.use(
     return response.data
   },
   (error) => {
+    console.error('[Axios Response Error]', error.response || error)
     if (error.response) {
       const status = error.response.status
       const serverMsg = error.response?.data?.message
+
       switch (status) {
         case 401:
           message.error(serverMsg || '登录已过期，请重新登录')

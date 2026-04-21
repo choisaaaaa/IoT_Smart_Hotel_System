@@ -96,7 +96,7 @@ const currentDevice = ref<any>({})
 
 const filteredDevices = computed(() => {
   return devices.value.filter(d => {
-    const matchSearch = !searchKey.value || 
+    const matchSearch = !searchKey.value ||
       d.device_id.toLowerCase().includes(searchKey.value.toLowerCase()) ||
       d.device_name.toLowerCase().includes(searchKey.value.toLowerCase())
     const matchHotel = !filterHotel.value || d.hotel_id === filterHotel.value
@@ -115,12 +115,15 @@ const fetchDevices = async () => {
   loading.value = true
   try {
     const res: any = await deviceApi.getDeviceList()
-    const payload = res?.data
-    devices.value = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload)
-        ? payload
-        : []
+    // 后端返回 { success: true, data: [...] }
+    if (res && res.success && Array.isArray(res.data)) {
+      devices.value = res.data
+    } else {
+      devices.value = []
+    }
+  } catch (error) {
+    console.error('获取设备列表失败:', error)
+    devices.value = []
   } finally {
     loading.value = false
   }
@@ -129,13 +132,16 @@ const fetchDevices = async () => {
 const fetchHotels = async () => {
   try {
     const res: any = await hotelManageApi.getAllHotels()
-    const payload = res?.data
-    hotels.value = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload)
-        ? payload
-        : []
-  } catch (error) {}
+    // 后端返回 { code: 200, data: [...] }
+    if (res && res.code === 200 && Array.isArray(res.data)) {
+      hotels.value = res.data
+    } else {
+      hotels.value = []
+    }
+  } catch (error) {
+    console.error('获取酒店列表失败:', error)
+    hotels.value = []
+  }
 }
 
 const showDetail = (record: any) => {

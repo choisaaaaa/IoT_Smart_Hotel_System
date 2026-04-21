@@ -38,7 +38,7 @@ class DeviceController {
       if (hotelId === undefined || hotelId === null) {return res.status(401).json({ success: false, message: 'Unauthorized' });}
 
       const id = parseInt(req.params.id);
-      const { status, room_id, area } = req.body;
+      const { status, room_id, area, device_name } = req.body;
 
       if (!id || !['approved', 'rejected'].includes(status)) {
         return res.status(400).json({ success: false, message: 'Invalid parameters' });
@@ -50,7 +50,7 @@ class DeviceController {
         return res.status(404).json({ success: false, message: 'Device not found' });
       }
 
-      const result = await deviceService.auditDevice(id, status, { room_id, area });
+      const result = await deviceService.auditDevice(id, status, { room_id, area, device_name });
       res.json({
         success: true,
         message: `Device ${status} successfully`,
@@ -74,7 +74,7 @@ class DeviceController {
       let customerRoomId: number | undefined;
 
       if (isSystemAdmin(user?.role)) {
-        targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
+        targetHotelId = hotel_id ? parseInt(hotel_id as string) : (user?.hotel_id || 1);
       } else if (isCustomer(user?.role) || isGuest(user?.role)) {
         const [bookings]: any = await pool.query(
           `SELECT room_id FROM bookings WHERE (user_id = ? OR guest_phone = ?) AND status = 'checked_in' ORDER BY id DESC LIMIT 1`,

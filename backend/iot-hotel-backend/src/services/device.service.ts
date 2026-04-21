@@ -44,7 +44,7 @@ class DeviceService {
    */
   async registerDevice(data: Partial<DeviceData> & { hotel_id: number }) {
     const { device_id, device_type, device_name, firmware_version, ip_address, mac_address, hotel_id } = data;
-    
+
     if (!device_id) {
       throw new Error('Device ID is required');
     }
@@ -58,10 +58,10 @@ class DeviceService {
 
       if (rows.length > 0) {
         const device = rows[0] as DeviceData;
-        
+
         // 更新现有设备信息
         await pool.query<ResultSetHeader>(
-          `UPDATE devices SET 
+          `UPDATE devices SET
             firmware_version = COALESCE(?, firmware_version),
             ip_address = COALESCE(?, ip_address),
             mac_address = COALESCE(?, mac_address),
@@ -72,6 +72,10 @@ class DeviceService {
           [firmware_version, ip_address, mac_address, hotel_id, device_id]
         );
 
+        // 清除相关缓存，确保设备状态更新
+        await CacheService.delete(CacheService.deviceKeys.info(device.id!));
+        await CacheService.deletePattern('device:list:*');
+
         return {
           status: 'existing',
           audit_status: device.audit_status,
@@ -81,23 +85,27 @@ class DeviceService {
         // 创建新设备，状态为待审核
         await pool.query<ResultSetHeader>(
           `INSERT INTO devices (
-            device_id, device_type, device_name, device_key, 
-            device_status, firmware_version, last_seen, 
+            device_id, device_type, device_name, device_key,
+            device_status, firmware_version, last_seen,
             audit_status, ip_address, mac_address, hotel_id
           ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)`,
           [
-            device_id, 
-            device_type || 'unknown', 
-            device_name || `New Device ${device_id}`, 
+            device_id,
+            device_type || 'unknown',
+            device_name || `New Device ${device_id}`,
             '', // 初始 key 为空，审核通过后再生成
-            'online', 
-            firmware_version, 
-            'pending', 
-            ip_address, 
+            'online',
+            firmware_version,
+            'pending',
+            ip_address,
             mac_address,
             hotel_id
           ]
         );
+
+        // 清除待审核设备列表缓存，确保新注册设备能立即显示
+        await CacheService.delete(CacheService.deviceKeys.pending());
+        await CacheService.deletePattern('device:list:*');
 
         return {
           status: 'new',
@@ -114,7 +122,7 @@ class DeviceService {
   /**
    * 管理员审核设备
    */
-  async auditDevice(id: number, status: 'approved' | 'rejected', assignment?: { room_id?: number; area?: string }) {
+  async auditDevice(id: number, status: 'approved' | 'rejected', assignment?: { room_id?: number; area?: string; device_name?: string }) {
     try {
       let device_key = '';
       if (status === 'approved') {
@@ -122,7 +130,7 @@ class DeviceService {
         device_key = crypto.randomBytes(16).toString('hex');
       }
 
-      const { room_id, area } = assignment || {};
+      const { room_id, area, device_name } = assignment || {};
 
       await pool.query<ResultSetHeader>(
         `UPDATE devices SET
@@ -130,9 +138,10 @@ class DeviceService {
           device_key = CASE WHEN ? = 'approved' THEN ? ELSE device_key END,
           room_id = ?,
           area = ?,
+          device_name = COALESCE(?, device_name),
           updated_at = NOW()
         WHERE id = ?`,
-        [status, status, device_key, room_id || null, area || null, id]
+        [status, status, device_key, room_id || null, area || null, device_name || null, id]
       );
 
       // 清除相关缓存

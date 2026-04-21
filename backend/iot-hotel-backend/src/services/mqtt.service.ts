@@ -6,6 +6,8 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import { calculateSignature, verifySignature } from '../utils/signature';
 import { AIButlerService } from './ai-butler.service';
 
+import CacheService from './cache.service';
+
 interface DeviceStatusPayload {
   device_id: string;
   hotel_id?: number;
@@ -52,7 +54,7 @@ class MQTTService {
   // 内部辅助方法：获取设备元数据
   private async getDeviceMetadata(deviceId: string) {
     let device = this.deviceCache.get(deviceId);
-    
+
     if (!device) {
       const [rows] = await pool.query<RowDataPacket[]>(
         'SELECT audit_status, device_key, hotel_id FROM devices WHERE device_id = ?',
@@ -98,7 +100,7 @@ class MQTTService {
       }
 
       const payloadStr = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
-      
+
       await pool.query(
         `INSERT INTO mqtt_communication_logs (hotel_id, device_id, topic, payload, direction, qos, retain)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -114,7 +116,7 @@ class MQTTService {
       // 根据环境配置TLS选项
       const isProduction = process.env.NODE_ENV === 'production';
       const useTLS = process.env.MQTT_USE_TLS === 'true' || isProduction;
-      
+
       const options: IClientOptions = {
         keepalive: 60,
         clean: true,
@@ -125,21 +127,21 @@ class MQTTService {
         clientId: `iot_hotel_server_${Date.now()}`,
         rejectUnauthorized: isProduction ? true : false // 生产环境必须验证证书
       };
-      
+
       // 配置TLS证书
       if (useTLS) {
         try {
           const caPath = process.env.MQTT_CA_CERT_PATH;
           const certPath = process.env.MQTT_CLIENT_CERT_PATH;
           const keyPath = process.env.MQTT_CLIENT_KEY_PATH;
-          
+
           if (caPath && fs.existsSync(caPath)) {
             options.ca = fs.readFileSync(caPath);
             logger.info('MQTT TLS CA证书已加载');
           } else if (isProduction) {
             logger.warn('生产环境建议配置MQTT CA证书');
           }
-          
+
           if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
             options.cert = fs.readFileSync(certPath);
             options.key = fs.readFileSync(keyPath);
@@ -153,7 +155,7 @@ class MQTTService {
       const protocol = useTLS ? 'mqtts' : 'mqtt';
       const port = useTLS ? (parseInt(config.mqtt.port as any) || 8883) : (parseInt(config.mqtt.port as any) || 1883);
       const url = `${protocol}://${config.mqtt.host}:${port}`;
-      
+
       try {
         this.client = mqtt.connect(url, options);
       } catch (error) {
@@ -196,7 +198,7 @@ class MQTTService {
 
         // 记录入站消息
         await this.logCommunication(topic, msgStr, 'in', packet.qos, packet.retain);
-        
+
         try {
           const data = JSON.parse(msgStr);
           await this.handleMessage(topic, data, message);
@@ -218,15 +220,15 @@ class MQTTService {
       logger.warn(`MQTT重连次数已达上限(${this.maxReconnectAttempts})，停止自动重连`);
       return;
     }
-    
+
     const delay = Math.min(
       this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
       30000
     );
-    
+
     this.reconnectAttempts++;
     logger.info(`MQTT将在 ${delay/1000}s 后尝试第 ${this.reconnectAttempts} 次重连...`);
-    
+
     setTimeout(() => {
       this.connect().catch(() => {});
     }, delay);
@@ -350,7 +352,7 @@ class MQTTService {
   async handleCallSignaling(topic: string, data: any) {
     const callId = topic.split('/').pop();
     logger.info(`收到硬件通话信令 [${callId}]: ${JSON.stringify(data)}`);
-    
+
     if (this.wsInstance) {
       // 将硬件发出的信令转发给对应的 Web/App 客户端
       // 硬件通常发给与其通话的对象，data 中应包含 target_type 和 target_id
@@ -370,23 +372,23 @@ class MQTTService {
     // 硬件发送的是原始音频二进制流
     if (this.wsInstance) {
       let call = this.callCache.get(callId);
-      
+
       if (!call) {
         // 只有缓存不中时才查询数据库
         const [rows] = await pool.query<RowDataPacket[]>(
           'SELECT caller_type, caller_id, callee_type, callee_id FROM calls WHERE call_id = ?',
           [callId]
         );
-        
+
         if (rows.length > 0) {
           call = rows[0] as any;
           this.callCache.set(callId, call!);
-          
+
           // 设置定时清理，防止内存泄漏（30分钟后过期）
           setTimeout(() => this.callCache.delete(callId), 30 * 60 * 1000);
         }
       }
-      
+
       if (call) {
         // 硬件通常是 callee (房间)，发给 caller (前台/App)
         this.wsInstance.emitToClient(call.caller_type, call.caller_id, 'audio_chunk', {
@@ -405,7 +407,7 @@ class MQTTService {
 
     try {
       const aiButler = AIButlerService.getInstance();
-      
+
       // 如果硬件发送的是音频数据（base64）
       const aiResponse = await aiButler.processRequest({
         roomId: roomId,
@@ -417,9 +419,9 @@ class MQTTService {
       // 将 AI 的回复发送回硬件
       const responseTopic = `hotel/ai/response/room/${roomId}`;
       await this.publish(responseTopic, {
-        text: aiResponse.text,
-        audio_data: aiResponse.audioUrl, // processRequest 返回的是 base64 字符串
-        action: aiResponse.action,
+        response: aiResponse.text,
+        audio_base64: aiResponse.audioUrl, // ai-butler.service.ts 中返回的是 base64 字符串，对应这里的 audio_base64
+        actions: aiResponse.action ? [{ type: aiResponse.action }] : [],
         ticket_data: aiResponse.ticketData
       });
 
@@ -433,34 +435,38 @@ class MQTTService {
     try {
       const now = new Date();
       const hotelId = data.hotel_id || 1; // 如果未提供，默认归属到 ID 为 1 的酒店
-      
+
       // 使用 INSERT ... ON DUPLICATE KEY UPDATE 兼容新设备注册和旧设备更新
       await pool.query<ResultSetHeader>(
         `INSERT INTO devices (
-          device_id, device_type, device_name, device_key, 
-          device_status, firmware_version, last_seen, 
+          device_id, device_type, device_name, device_key,
+          device_status, firmware_version, last_seen,
           audit_status, hotel_id, created_at, updated_at
         ) VALUES (?, ?, ?, '', ?, ?, ?, 'pending', ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
+        ON DUPLICATE KEY UPDATE
           device_status = VALUES(device_status),
           last_seen = VALUES(last_seen),
           firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
           hotel_id = VALUES(hotel_id),
           updated_at = VALUES(updated_at)`,
         [
-          data.device_id, 
-          (data as any).device_type || 'unknown', 
-          `New Device ${data.device_id}`, 
-          data.status, 
-          data.firmware_version || null, 
-          now, 
+          data.device_id,
+          (data as any).device_type || 'unknown',
+          `New Device ${data.device_id}`,
+          data.status,
+          data.firmware_version || null,
+          now,
           hotelId,
-          now, 
+          now,
           now
         ]
       );
 
       logger.info(`设备状态更新 (MQTT): ${data.device_id} -> ${data.status}`);
+
+      // 清除相关缓存，确保设备列表和信息即时更新
+      await CacheService.delete(CacheService.deviceKeys.pending());
+      await CacheService.deletePattern('device:list:*');
 
       // 关键修复：设备状态更新只发送给所属酒店的前台
       if (hotelId && this.wsInstance) {
@@ -479,7 +485,7 @@ class MQTTService {
   async handleSensorData(data: SensorDataPayload, hotelId?: number) {
     try {
       const sensorType = data.sensor_type || 'unknown';
-      
+
       await pool.query<ResultSetHeader>(
         `INSERT INTO sensor_data (device_id, sensor_type, sensor_value, created_at)
          VALUES (?, ?, ?, NOW())
@@ -506,8 +512,8 @@ class MQTTService {
     try {
       if (data.command_id) {
         await pool.query<ResultSetHeader>(
-          `UPDATE control_commands SET 
-            command_status = ?, 
+          `UPDATE control_commands SET
+            command_status = ?,
             executed_at = NOW()
            WHERE id = ?`,
           [data.status, data.command_id]
@@ -607,7 +613,7 @@ class MQTTService {
 
       // 获取当前入住信息
       const [bookingRows] = await pool.query<RowDataPacket[]>(
-        `SELECT id, guest_id FROM bookings 
+        `SELECT id, guest_id FROM bookings
          WHERE room_id = ? AND status = 'checked_in'
          LIMIT 1`,
         [actualRoomId]
@@ -771,8 +777,8 @@ class MQTTService {
     try {
       // 查询进行中的送物订单
       const [deliveryRows] = await pool.query<RowDataPacket[]>(
-        `SELECT id, order_no, item_name, quantity, status, created_at 
-         FROM delivery_orders 
+        `SELECT id, order_no, item_name, quantity, status, created_at
+         FROM delivery_orders
          WHERE room_id = ? AND status IN ('pending', 'delivering')
          ORDER BY created_at DESC`,
         [roomId]
@@ -780,8 +786,8 @@ class MQTTService {
 
       // 查询进行中的维修工单
       const [maintenanceRows] = await pool.query<RowDataPacket[]>(
-        `SELECT id, ticket_no, fault_type, fault_description, status, created_at 
-         FROM maintenance_tickets 
+        `SELECT id, ticket_no, fault_type, fault_description, status, created_at
+         FROM maintenance_tickets
          WHERE room_id = ? AND status IN ('pending', 'assigned', 'processing')
          ORDER BY created_at DESC`,
         [roomId]
@@ -917,10 +923,17 @@ class MQTTService {
 
       payload.signature = calculateSignature(payload, device_key);
 
-      // 4. 发布到 MQTT
-      await this.publish('hotel/device/command', payload);
+      // 4. 发布到 MQTT (发布到特定设备的 sub-topic: hotel/device/command/{type}/{id})
+      const [deviceRows] = await pool.query<RowDataPacket[]>(
+        'SELECT device_type FROM devices WHERE device_id = ?',
+        [deviceId]
+      );
+      const deviceType = deviceRows.length > 0 ? deviceRows[0].device_type : 'unknown';
+      const specificTopic = `hotel/device/command/${deviceType}/${deviceId}`;
 
-      logger.info(`发送设备指令 (已签名): #${commandId} -> ${deviceId}/${commandType}=${commandValue}`);
+      await this.publish(specificTopic, payload);
+
+      logger.info(`发送设备指令 (已签名): #${commandId} -> ${specificTopic}/${commandType}=${commandValue}`);
       return commandId;
     } catch (error) {
       logger.error('发送设备指令失败:', error.message);

@@ -63,11 +63,12 @@ const getDeviceTypeName = (type: string) => {
 const fetchDevices = async () => {
   loading.value = true
   try {
-    const res = await request.get('/devices', { params: { audit_status: 'approved' } })
-    // 前台端只关心发卡器等主控设备
-    devices.value = res.data.success ? res.data.data : []
+    const res: any = await request.get('/devices', { params: { audit_status: 'approved' } })
+    // 后端返回 { success: true, data: [...] }
+    devices.value = res && res.success && Array.isArray(res.data) ? res.data : []
   } catch (error) {
     message.error('获取设备列表失败')
+    console.error('获取设备列表失败:', error)
   } finally {
     loading.value = false
   }

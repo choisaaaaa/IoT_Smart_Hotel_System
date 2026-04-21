@@ -56,7 +56,7 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173'
     ];
-    
+
     // 允许无origin的请求（如移动应用、Postman）
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -86,6 +86,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 实时请求日志中间件
+app.use((req, res, next) => {
+  logger.info(`[Incoming Request] ${req.method} ${req.url} - Auth Header: ${req.headers.authorization ? 'Present' : 'Missing'}`);
+  next();
+});
+
 app.use(expressWinston.logger({
   winstonInstance: logger,
   meta: false,

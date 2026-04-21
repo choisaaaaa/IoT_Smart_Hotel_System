@@ -6,6 +6,7 @@ import { successResponse, errorResponse, sendSuccess, sendError } from '../../ty
 import { authenticate } from '../../middleware/auth';
 import crypto from 'crypto';
 import db from '../../config/database';
+import logger from '../../utils/logger';
 import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, isGuest, CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
@@ -130,6 +131,7 @@ router.get('/qr-status', async (req, res) => {
     };
 
     const jwtToken = generateToken(jwtPayload);
+    logger.info(`[Auth] User logged in via QR Status: ${user.username}, Role: ${role}, Token generated`);
 
     await db.execute(
       `UPDATE api_tokens SET is_used = 1, status = 'used', used_at = NOW() WHERE id = ?`,
@@ -280,6 +282,7 @@ router.post('/scan-login', async (req, res) => {
     };
 
     const jwtToken = generateToken(jwtPayload);
+    logger.info(`[Auth] User logged in via QR/Token: ${user.username}, Role: ${role}, Token generated`);
 
     // 标记 Token 为已使用
     await db.execute(
@@ -389,6 +392,7 @@ router.post('/login', async (req, res) => {
     };
 
     const jwtToken = generateToken(jwtPayload);
+    logger.info(`[Auth] User logged in: ${user.username}, Role: ${role}, Token: ${jwtToken.substring(0, 10)}...`);
 
     // 创建登录会话
     const sessionToken = crypto.randomBytes(32).toString('hex');

@@ -155,8 +155,8 @@
                       >
                         <template #addonBefore>减</template>
                       </a-input-number>
-                      <a-button 
-                        :type="isAuthorized ? 'default' : 'primary'" 
+                      <a-button
+                        :type="isAuthorized ? 'default' : 'primary'"
                         :danger="isAuthorized"
                         @click="openAuthorizeModal"
                       >
@@ -259,9 +259,9 @@
             <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
               <a-space style="margin-bottom: 8px;">
                 <a-button size="small" type="primary" @click="fetchTodayBookings">刷新</a-button>
-                <a-button 
-                  size="small" 
-                  type="primary" 
+                <a-button
+                  size="small"
+                  type="primary"
                   :disabled="selectedBookingKeys.length === 0"
                   :class="{ 'disabled-primary-btn': selectedBookingKeys.length === 0 }"
                   @click="checkInSelectedBooking"
@@ -561,10 +561,10 @@ async function handleUpdateInventory() {
 
 async function fetchManagers() {
   try {
-    const res: any = await userApi.getUserList({ 
-      role: 'hotel_admin', 
+    const res: any = await userApi.getUserList({
+      role: 'hotel_admin',
       hotel_id: hotelStore.hotelInfo?.id,
-      pageSize: 100 
+      pageSize: 100
     })
     managers.value = res.data?.users || []
   } catch (error) {
@@ -581,7 +581,7 @@ function openAuthorizeModal() {
     message.info('已解除授权，重置折扣')
     return
   }
-  
+
   authForm.manager_id = undefined
   authForm.password = ''
   fetchManagers()
@@ -647,11 +647,11 @@ async function handleCardOp() {
       id_last_four: idLastFour.value
     })
 
-    if (res.data.success) {
+    if (res.success) {
       message.success(cardOpType.value === 'issue' ? '房卡发放指令已下发' : '房卡收回指令已下发')
       cardModalVisible.value = false
     } else {
-      message.error(res.data.message || '操作失败')
+      message.error(res.message || '操作失败')
     }
   } catch (error: any) {
     message.error(error.response?.data?.message || '设备通信失败')
@@ -821,9 +821,9 @@ async function updateEstimatedPrice() {
 }
 
 watch(() => [
-  checkinForm.room_id, 
-  checkinForm.check_in_date, 
-  checkinForm.check_out_date, 
+  checkinForm.room_id,
+  checkinForm.check_in_date,
+  checkinForm.check_out_date,
   checkinForm.phone,
   checkinForm.coupon_id,
   checkinForm.manual_discount,
@@ -870,10 +870,10 @@ function getMemberByPhone(phone: string): any {
 
 function getLevelName(member: any): string {
   if (!member) return '已注册'
-  
+
   // 优先使用后端返回的标签
   if (member.level_label) return member.level_label
-  
+
   const levels: Record<string, string> = {
     'diamond': '钻石会员',
     'platinum': '铂金会员',
@@ -881,12 +881,12 @@ function getLevelName(member: any): string {
     'silver': '银会员',
     'standard': '普通会员'
   }
-  
+
   // 以关键字 member_level 为准进行映射
   if (member.member_level && levels[member.member_level]) {
     return levels[member.member_level]
   }
-  
+
   // 兜底显示数字等级
   return member.level ? `LEVEL ${member.level}` : '已注册'
 }
@@ -990,18 +990,18 @@ function fillByBooking(booking: any) {
   if (booking.check_in_date) checkinForm.check_in_date = dayjs(booking.check_in_date)
   if (booking.check_out_date) checkinForm.check_out_date = dayjs(booking.check_out_date)
   if (booking.payment_method) checkinForm.payment_method = booking.payment_method
-  
+
   // 重置授权状态
   isAuthorized.value = false
   checkinForm.manual_discount = 1.0
   checkinForm.manual_reduce = 0
-  
+
   companions.value = []
-  
+
   if (booking.room_id) {
     // 即使房间不是 vacant 状态，只要是订单绑定的房间，也要回填
     checkinForm.room_id = booking.room_id
-    
+
     // 如果该房间不在当前显示的空房列表中，我们手动构造一个临时的 room 对象，确保 UI 能显示房号
     const roomInList = availableRooms.value.find(item => item.id === booking.room_id)
     if (!roomInList) {
@@ -1032,7 +1032,7 @@ async function handleCheckIn() {
     message.warning('正在办理入住中，请勿重复点击')
     return
   }
-  
+
   if (!checkinForm.guest_name || !checkinForm.phone) {
     message.warning('请填写客人姓名和联系电话'); return
   }
@@ -1043,7 +1043,7 @@ async function handleCheckIn() {
   submitting.value = true
   try {
     let existingBookingId: number | null = fillingBookingId.value
-    
+
     if (!existingBookingId) {
       try {
         const lookupRes: any = await bookingApi.lookupBooking(checkinForm.phone)
@@ -1069,7 +1069,7 @@ async function handleCheckIn() {
       message.success(`入住成功！${checkinForm.guest_name} 的预订已确认入住`)
     } else {
       if (!checkinForm.room_id) {
-        message.warning('请选择一间空房'); 
+        message.warning('请选择一间空房');
         submitting.value = false
         return
       }
@@ -1088,7 +1088,7 @@ async function handleCheckIn() {
     }
 
     lastCreatedBookingId.value = res.data?.id || existingBookingId
-    
+
     // 自动打开对应房号的发卡弹窗
     openCardModal('issue', {
       id: res.data?.id || existingBookingId,
@@ -1101,15 +1101,15 @@ async function handleCheckIn() {
       fetchTodayBookings(),
       hotelStore.fetchRooms({ pageSize: 300 })
     ])
-    
+
     // 强制刷新今日预定清单，确保已入住的订单从列表中移除
     setTimeout(() => {
       fetchTodayBookings()
     }, 500)
-    
+
     // 入住成功后重置表单，防止重复提交
     resetCheckinForm()
-    
+
   } catch (error: any) {
     console.error('办理入住失败:', error)
     message.error(error?.response?.data?.message || '办理入住失败')

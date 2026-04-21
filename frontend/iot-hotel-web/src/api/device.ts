@@ -8,7 +8,7 @@ export const deviceApi = {
   getDeviceDetail: (id: number) =>
     request.get<ApiResponse<DeviceInfo>>(`/devices/${id}`),
 
-  auditDevice: (id: number, data: { status: 'approved' | 'rejected'; room_id?: number; area?: string }) =>
+  auditDevice: (id: number, data: { status: 'approved' | 'rejected'; room_id?: number; area?: string; device_name?: string }) =>
     request.put<ApiResponse<any>>(`/devices/${id}/audit`, data),
 
   deleteDevice: (id: number) =>

@@ -16,8 +16,8 @@ export const get = async (req: AuthRequest, res: Response) => {
       const queryHotelId = req.query.hotel_id;
       if (queryHotelId) {
         hotelId = parseInt(queryHotelId as string);
-      } else if (!hotelId) {
-        hotelId = 1;
+      } else if (!hotelId || hotelId === 0) {
+        hotelId = 1; // 默认指向主门店
       }
     } else if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
       const queryHotelId = req.query.hotel_id;

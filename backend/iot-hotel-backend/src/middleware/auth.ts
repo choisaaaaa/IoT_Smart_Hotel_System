@@ -11,9 +11,15 @@ import crypto from 'crypto';
  * 验证请求中的Bearer Token
  */
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+  // 允许 OPTIONS 请求通过（CORS 预检）
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader) {
+    logger.warn(`[Auth] 未提供认证令牌: ${req.method} ${req.url} - IP: ${req.ip}`);
     res.status(401).json({
       code: 401,
       message: '未提供认证令牌',
@@ -23,8 +29,9 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   }
 
   const token = authHeader.replace(/Bearer /i, '').trim();
-  
+
   if (!token) {
+    logger.warn(`[Auth] 认证令牌格式无效: ${req.method} ${req.url}`);
     res.status(401).json({
       code: 401,
       message: '认证令牌无效',
@@ -38,14 +45,16 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     if (!decoded) {
       throw new Error('Token verification failed');
     }
-    
+
+    // 确保 hotel_id 存在，如果是 system_admin 且没有 hotel_id，默认设为 0
     req.user = {
       ...decoded,
-      role: normalizeRole(decoded.role)
+      role: normalizeRole(decoded.role),
+      hotel_id: decoded.hotel_id || 0
     };
     next();
   } catch (error: any) {
-    logger.error('JWT验证失败:', error.message);
+    logger.error(`[Auth] JWT验证失败: ${error.message} - Token: ${token.substring(0, 15)}...`);
     res.status(401).json({
       code: 401,
       message: '令牌验证失败: ' + (error.message || 'Unauthorized'),
@@ -87,8 +96,8 @@ export function authorize(roles: string[]): any {
  * 验证设备ID和设备密钥的有效性
  */
 export async function deviceAuthMiddleware(
-  req: DeviceAuthRequest, 
-  res: Response, 
+  req: DeviceAuthRequest,
+  res: Response,
   next: NextFunction
 ): Promise<void> {
   const deviceId = req.headers['x-device-id'] as string;
@@ -166,7 +175,7 @@ export async function deviceAuthMiddleware(
         .createHmac('sha256', deviceKey)
         .update(payload)
         .digest('hex');
-      
+
       if (signature !== expectedSignature) {
         logger.warn(`设备签名验证失败: ${deviceId}`);
         res.status(401).json({
@@ -209,8 +218,8 @@ export async function deviceAuthMiddleware(
  * 不强制要求认证，但如果提供则验证
  */
 export async function optionalDeviceAuthMiddleware(
-  req: DeviceAuthRequest, 
-  res: Response, 
+  req: DeviceAuthRequest,
+  res: Response,
   next: NextFunction
 ): Promise<void> {
   const deviceId = req.headers['x-device-id'] as string;

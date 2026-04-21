@@ -1005,77 +1005,46 @@ export class AIButlerService {
           timeout: 15000
         });
 
-        const finalText = finalResponse.data?.choices?.[0]?.message?.content || toolResults[0].result;
-
-        logger.info(`📝 [工具调用] 最终回复文本: "${finalText.substring(0, 80)}${finalText.length > 80 ? '...' : ''}" (${finalText.length}字)`);
-
-        const transferMatch = finalText.match(/\[TRANSFER:(\w+)\]/);
-        if (transferMatch) {
-          const cleanText = finalText.replace(/\[TRANSFER:\w+\]/g, '');
-          return {
-            text: cleanText || '正在为您转接前台...',
-            audioUrl: '',
-            action: 'transfer',
-            target: transferMatch[1]
-          };
-        }
-
+        const finalContent = finalResponse.data.choices[0].message.content;
+        
+        // 5. 将最终文本转为语音
         let audioBase64 = '';
         try {
-          audioBase64 = await this.textToSpeech(finalText);
-          if (!audioBase64) {
-            logger.warn('TTS返回空音频，使用纯文本模式');
-          }
+          audioBase64 = await this.textToSpeech(finalContent);
         } catch (ttsError) {
-          logger.warn('TTS合成失败，使用纯文本模式:', ttsError.message);
+          logger.warn('TTS合成失败:', ttsError.message);
         }
 
-        logger.info(`🔊 [工具调用] 返回前端: text="${finalText.substring(0, 50)}..." audio=${audioBase64 ? audioBase64.length + 'chars' : '无'}`);
-
         return {
-          text: finalText,
+          text: finalContent,
           audioUrl: audioBase64,
-          action: 'reply',
+          action: llmResult.tool_calls[0].function.name, // 记录第一个动作
           ticketData: ticketData,
-          hotelName: session.hotelName // 包含酒店名称
+          hotelName: session.hotelName
         };
       }
 
       const aiReply = llmResult.content;
-
-      logger.info(`📝 [普通回复] AI回复文本: "${aiReply.substring(0, 80)}${aiReply.length > 80 ? '...' : ''}" (${aiReply.length}字)`);
+      
+      // 5. 将回复文本转为语音
+      let audioBase64 = '';
+      try {
+        audioBase64 = await this.textToSpeech(aiReply);
+      } catch (ttsError) {
+        logger.warn('TTS合成失败:', ttsError.message);
+      }
 
       const transferMatch = aiReply.match(/\[TRANSFER:(\w+)\]/);
       const action = transferMatch ? 'transfer' : 'reply';
       const target = transferMatch ? transferMatch[1] : undefined;
       const cleanText = aiReply.replace(/\[TRANSFER:\w+\]/g, '');
 
-      if (action === 'transfer') {
-        return {
-          text: cleanText || '正在为您转接前台...',
-          audioUrl: '',
-          action,
-          target
-        };
-      }
-
-      let audioBase64 = '';
-      try {
-        audioBase64 = await this.textToSpeech(cleanText);
-        if (!audioBase64) {
-          logger.warn('TTS返回空音频，使用纯文本模式');
-        }
-      } catch (ttsError) {
-        logger.warn('TTS合成失败，使用纯文本模式:', ttsError.message);
-      }
-
-      logger.info(`🔊 [普通回复] 返回前端: text="${cleanText.substring(0, 50)}..." audio=${audioBase64 ? audioBase64.length + 'chars' : '无'}`);
-
       return {
         text: cleanText,
         audioUrl: audioBase64,
         action,
-        target
+        target,
+        hotelName: session.hotelName
       };
     } catch (error) {
       logger.error('AI管家处理请求失败:', error.message);

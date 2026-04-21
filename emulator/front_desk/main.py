@@ -61,127 +61,143 @@ class FrontDeskEmulator(BaseDeviceEmulator):
     def __init__(self, root):
         self.device_id = "front_desk_01"
         
-        # 先初始化子类特有属性（在调用父类__init__之前）
+        # 业务状态
         self.rfid = RFIDCardSimulator()
         self.target_room_var = tk.StringVar(value="301")
         self.last_card_room = ""
-        self.led_color = (0, 0, 255)  # 默认蓝色
-        self.front_id_var = tk.StringVar(value="01")  # 用于配置对话框
+        self.front_id_var = tk.StringVar(value="01")
+        self.led_color = (0, 0, 255) # 默认蓝色
         
         super().__init__(
             root=root,
             title=f"智慧酒店 - 前台管理端仿真器 ({self.device_id})",
             device_id=self.device_id,
             device_type="front_desk",
-            width=900,
-            height=700
+            width=950,
+            height=800
         )
-    
-    def _create_ui(self):
-        """创建UI界面"""
-        super()._create_ui()
+
+    def _init_biz_ui(self):
+        """初始化前台特有业务界面"""
+        # 1. RFID 房卡管理卡片
+        self._create_card(self.biz_frame, "RFID 智能房卡读写器").pack(fill=tk.X, pady=(0, 20))
+        rfid_body = self.last_card_body
         
-        # 创建内容面板
-        content_frame = ttk.Frame(self.main_frame)
-        content_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        content_frame.columnconfigure(0, weight=1)
-        content_frame.columnconfigure(1, weight=1)
+        # 卡片可视化区域
+        viz_container = tk.Frame(rfid_body, bg="white")
+        viz_container.pack(fill=tk.X, pady=10)
         
-        # 左侧面板 - RFID和状态
-        self._create_left_panel(content_frame)
+        # 卡片图形
+        self.card_canvas = tk.Canvas(viz_container, width=240, height=140, bg="white", highlightthickness=0)
+        self.card_canvas.pack(side=tk.LEFT, padx=20)
         
-        # 右侧面板 - 快捷操作
-        self._create_right_panel(content_frame)
-    
-    def _create_left_panel(self, parent):
-        """创建左侧面板"""
-        left_frame = ttk.LabelFrame(parent, text="RFID卡管理", padding="10")
-        left_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
+        # 卡片状态信息
+        info_f = tk.Frame(viz_container, bg="white")
+        info_f.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # 卡片可视化
-        card_frame = ttk.Frame(left_frame)
-        card_frame.pack(fill=tk.X, pady=10)
+        tk.Label(info_f, text="当前卡片状态:", font=("Arial", 10), bg="white", fg=self.colors['text_secondary']).pack(anchor=tk.W)
+        self.card_status_var = tk.StringVar(value="未检出有效卡片")
+        tk.Label(info_f, textvariable=self.card_status_var, font=("Arial", 12, "bold"), bg="white", fg=self.colors['primary']).pack(anchor=tk.W, pady=5)
         
-        self.card_canvas = tk.Canvas(card_frame, width=150, height=100, bg="#f0f0f0", highlightthickness=1)
-        self.card_canvas.pack()
-        
-        # 先创建状态变量，再绘制卡片
-        self.card_status_var = tk.StringVar(value="无卡")
+        tk.Label(info_f, text="目标房间号:", font=("Arial", 10), bg="white", fg=self.colors['text_secondary']).pack(anchor=tk.W, pady=(10, 0))
+        room_input_f = tk.Frame(info_f, bg="#f5f5f5", padx=2, pady=2)
+        room_input_f.pack(anchor=tk.W, pady=5)
+        tk.Entry(room_input_f, textvariable=self.target_room_var, font=("Arial", 12, "bold"), width=10, bd=0, bg="#f5f5f5").pack(padx=10, pady=5)
+
         self._draw_card()
+
+        # RFID 操作按钮
+        btn_grid = tk.Frame(rfid_body, bg="white")
+        btn_grid.pack(fill=tk.X, pady=15)
         
-        ttk.Label(card_frame, textvariable=self.card_status_var, font=("Arial", 10)).pack(pady=5)
+        btn_style = {"width": 12, "relief": tk.FLAT, "font": ("Arial", 10, "bold"), "pady": 10}
         
-        # 操作按钮
-        btn_frame = ttk.Frame(left_frame)
-        btn_frame.pack(fill=tk.X, pady=10)
+        tk.Button(btn_grid, text="🆕 开卡写入", bg=self.colors['primary'], fg="white", command=self._issue_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
+        tk.Button(btn_grid, text="🔍 验卡读取", bg=self.colors['success'], fg="white", command=self._verify_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
+        tk.Button(btn_grid, text="📟 模拟刷卡", bg=self.colors['warning'], fg="white", command=self._swipe_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
+        tk.Button(btn_grid, text="🗑️ 移除卡片", bg="#595959", fg="white", command=self._remove_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
+
+        # 2. 快捷语音与控制
+        self._create_card(self.biz_frame, "客房语音与远程控制").pack(fill=tk.X, pady=(0, 20))
+        ctrl_body = self.last_card_body
         
-        ttk.Button(btn_frame, text="开卡", command=self._issue_card, width=12).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="验卡", command=self._verify_card, width=12).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="模拟刷卡", command=self._swipe_card, width=12).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="移除卡", command=self._remove_card, width=12).pack(side=tk.LEFT, padx=5)
+        # 语音呼叫
+        call_f = tk.Frame(ctrl_body, bg="white")
+        call_f.pack(fill=tk.X, pady=10)
+        tk.Label(call_f, text="📢 应急广播呼叫:", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
+        tk.Button(call_f, text="发送语音提醒", bg=self.colors['danger'], fg="white", command=self._broadcast_call, **btn_style).pack(side=tk.RIGHT)
         
-        # 目标房间设置
-        room_frame = ttk.Frame(left_frame)
-        room_frame.pack(fill=tk.X, pady=10)
+        # 挂断
+        hangup_f = tk.Frame(ctrl_body, bg="white")
+        hangup_f.pack(fill=tk.X, pady=10)
+        tk.Label(hangup_f, text="🔇 停止呼叫/消音:", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
+        tk.Button(hangup_f, text="强制挂断", bg="#595959", fg="white", command=self._hangup_call, **btn_style).pack(side=tk.RIGHT)
+
+        # 3. 硬件外设模拟
+        self._create_card(self.biz_frame, "硬件交互外设模拟").pack(fill=tk.BOTH, expand=True)
+        hw_body = self.last_card_body
         
-        ttk.Label(room_frame, text="目标房间:").pack(side=tk.LEFT)
-        ttk.Entry(room_frame, textvariable=self.target_room_var, width=10).pack(side=tk.LEFT, padx=5)
+        # 指示灯和蜂鸣器按钮
+        led_container = tk.Frame(hw_body, bg="white")
+        led_container.pack(side=tk.LEFT, fill=tk.Y, padx=10)
         
-        # LED状态指示
-        led_frame = ttk.LabelFrame(left_frame, text="状态指示灯", padding="10")
-        led_frame.pack(fill=tk.X, pady=10)
-        
-        self.led_canvas = tk.Canvas(led_frame, width=50, height=50, bg="white", highlightthickness=1)
-        self.led_canvas.pack()
+        self.led_canvas = tk.Canvas(led_container, width=60, height=60, bg="white", highlightthickness=0)
+        self.led_canvas.pack(pady=5)
         self._update_led()
+        tk.Label(led_container, text="状态指示灯", font=("Arial", 9), bg="white", fg=self.colors['text_secondary']).pack()
+
+        # 蜂鸣器操作
+        buzzer_container = tk.Frame(hw_body, bg="white")
+        buzzer_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20)
         
-        ttk.Label(led_frame, text="蓝=在线 绿=成功 红=错误").pack(pady=5)
-    
-    def _create_right_panel(self, parent):
-        """创建右侧面板"""
-        right_frame = ttk.LabelFrame(parent, text="快捷操作", padding="10")
-        right_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-        
-        # 呼叫控制
-        call_frame = ttk.LabelFrame(right_frame, text="语音呼叫", padding="10")
-        call_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(call_frame, text="📢 广播呼叫", command=self._broadcast_call, width=20).pack(pady=5)
-        ttk.Button(call_frame, text="🔇 消音/挂断", command=self._hangup_call, width=20).pack(pady=5)
-        
-        # 目标房间显示
-        ttk.Label(call_frame, text="当前目标房间:").pack(pady=(10, 0))
-        ttk.Label(call_frame, textvariable=self.target_room_var, font=("Arial", 14, "bold")).pack()
-        
-        # 蜂鸣器模拟
-        buzzer_frame = ttk.LabelFrame(right_frame, text="蜂鸣器", padding="10")
-        buzzer_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(buzzer_frame, text="短鸣(成功)", command=lambda: self._beep(1), width=15).pack(pady=2)
-        ttk.Button(buzzer_frame, text="双鸣(错误)", command=lambda: self._beep(2), width=15).pack(pady=2)
+        tk.Label(buzzer_container, text="蜂鸣器手动测试:", font=("Arial", 10), bg="white").pack(anchor=tk.W, pady=5)
+        tk.Button(buzzer_container, text="🔊 短鸣(操作成功)", bg=self.colors['success'], fg="white", 
+                  command=lambda: self._beep(1), **btn_style).pack(fill=tk.X, pady=5)
+        tk.Button(buzzer_container, text="🔇 双鸣(异常提醒)", bg=self.colors['danger'], fg="white", 
+                  command=lambda: self._beep(2), **btn_style).pack(fill=tk.X, pady=5)
+
+    def _connect(self):
+        """覆盖基类连接方法，增加命令注册"""
+        super()._connect()
+        if self.connected:
+            self._register_command_handlers()
+            self._on_connected()
+
+    def _disconnect(self):
+        """覆盖基类断开连接方法"""
+        super()._disconnect()
+        self._on_disconnected()
     
     def _draw_card(self):
-        """绘制卡片"""
+        """绘制卡片可视化界面"""
         self.card_canvas.delete("all")
+        # 居中坐标
+        cx, cy = 120, 70
         if self.rfid.has_card:
-            # 有卡 - 绘制卡片
-            self.card_canvas.create_rectangle(20, 20, 130, 80, fill="#FFD700", outline="#B8860B", width=2)
-            self.card_canvas.create_text(75, 50, text="房卡", font=("Arial", 12, "bold"))
+            # 有卡 - 绘制金色房卡
+            self.card_canvas.create_rectangle(cx-100, cy-60, cx+100, cy+60, 
+                                             fill="#FFD700", outline="#B8860B", width=3, round=10)
+            # 装饰性芯片
+            self.card_canvas.create_rectangle(cx-80, cy-20, cx-50, cy+10, fill="#C0C0C0", outline="#A0A0A0")
+            
+            self.card_canvas.create_text(cx+10, cy-10, text="HOTEL SMART CARD", font=("Arial", 10, "bold"), fill="#8B4513")
             if self.rfid.card_data:
                 room_id = self.rfid.card_data.get("room_id", "")
-                self.card_canvas.create_text(75, 70, text=f"房间{room_id}", font=("Arial", 9))
-            self.card_status_var.set(f"有卡 - 房间{self.rfid.card_data.get('room_id', '')}" if self.rfid.card_data else "有卡")
+                self.card_canvas.create_text(cx+10, cy+20, text=f"ROOM: {room_id}", font=("Consolas", 14, "bold"), fill="#333")
+            self.card_status_var.set(f"已插入: 房间 {self.rfid.card_data.get('room_id', '???')}" if self.rfid.card_data else "空白卡片")
         else:
-            # 无卡
-            self.card_canvas.create_rectangle(20, 20, 130, 80, fill="#f0f0f0", outline="#cccccc", dash=(4, 2))
-            self.card_canvas.create_text(75, 50, text="无卡", font=("Arial", 10), fill="#999")
-            self.card_status_var.set("无卡")
+            # 无卡 - 虚线占位
+            self.card_canvas.create_rectangle(cx-100, cy-60, cx+100, cy+60, 
+                                             fill="#f9f9f9", outline="#dddddd", dash=(5, 5), width=2)
+            self.card_canvas.create_text(cx, cy, text="请插入房卡", font=("Microsoft YaHei", 10), fill="#999")
+            self.card_status_var.set("读卡器空闲")
     
     def _update_led(self, r=0, g=0, b=255):
-        """更新LED颜色"""
+        """更新LED颜色并保存状态"""
+        self.led_color = (r, g, b)
         color = f"#{r:02x}{g:02x}{b:02x}"
         self.led_canvas.delete("all")
-        self.led_canvas.create_oval(10, 10, 40, 40, fill=color, outline="")
+        self.led_canvas.create_oval(10, 10, 50, 50, fill=color, outline="")
     
     def _beep(self, count=1):
         """蜂鸣器提示"""
