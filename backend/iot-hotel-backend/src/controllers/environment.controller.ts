@@ -1,4 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../types';
+import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
 
 interface EnvironmentData {
@@ -80,103 +82,153 @@ class EnvironmentController {
     this.getDashboardStats = this.getDashboardStats.bind(this);
   }
 
-  private generateMockData(): EnvironmentData[] {
-    const now = new Date();
-    const rooms = [
-      { room_id: 1, room_number: '301', floor_id: 3, floor_name: '3楼' },
-      { room_id: 2, room_number: '302', floor_id: 3, floor_name: '3楼' },
-      { room_id: 3, room_number: '303', floor_id: 3, floor_name: '3楼' },
-      { room_id: 4, room_number: '304', floor_id: 3, floor_name: '3楼' },
-      { room_id: 5, room_number: '305', floor_id: 3, floor_name: '3楼' },
-      { room_id: 6, room_number: '401', floor_id: 4, floor_name: '4楼' },
-      { room_id: 7, room_number: '402', floor_id: 4, floor_name: '4楼' },
-      { room_id: 8, room_number: '403', floor_id: 4, floor_name: '4楼' },
-      { room_id: 9, room_number: '404', floor_id: 4, floor_name: '4楼' },
-      { room_id: 10, room_number: '405', floor_id: 4, floor_name: '4楼' },
-      { room_id: 11, room_number: '501', floor_id: 5, floor_name: '5楼' },
-      { room_id: 12, room_number: '502', floor_id: 5, floor_name: '5楼' },
-    ];
-
-    return rooms.map((room, index) => {
-      const temperature = 22 + Math.random() * 8;
-      const humidity = 45 + Math.random() * 30;
-      const smoke_level = Math.random() * 30;
-      const light_level = 200 + Math.random() * 600;
-      const noise_level = 30 + Math.random() * 40;
-      const pm25 = 15 + Math.random() * 60;
-
-      let status: 'normal' | 'warning' | 'danger' = 'normal';
-
-      if (temperature > 30 || temperature < 18 || humidity > 75 || humidity < 30) {
-        status = 'warning';
-      }
-
-      if (smoke_level > 60 || temperature > 35 || pm25 > 75) {
-        status = 'danger';
-      }
-
-      if (index === 3) {
-        status = 'warning';
-      }
-      if (index === 7) {
-        status = 'danger';
-      }
-
-      let score = 100;
-      if (temperature > 30 || temperature < 18) score -= 20;
-      if (humidity > 75 || humidity < 30) score -= 15;
-      if (smoke_level > 40) score -= 25;
-      if (pm25 > 50) score -= 20;
-      if (noise_level > 60) score -= 10;
-      score = Math.max(0, Math.min(100, score));
-
-      return {
-        ...room,
-        temperature: parseFloat(temperature.toFixed(1)),
-        humidity: parseFloat(humidity.toFixed(1)),
-        smoke_level: parseFloat(smoke_level.toFixed(1)),
-        smoke_alarm: smoke_level > 60,
-        light_level: parseInt(light_level.toString()),
-        noise_level: parseInt(noise_level.toString()),
-        pm25: parseFloat(pm25.toFixed(1)),
-        update_time: new Date(now.getTime() - index * 60000).toISOString(),
-        status,
-        environment_score: score
-      };
-    });
+  private calculateEnvStatus(temperature: number, humidity: number, smoke_level: number, pm25: number): 'normal' | 'warning' | 'danger' {
+    if (smoke_level > 60 || temperature > 35 || temperature < 10 || pm25 > 75) {
+      return 'danger';
+    }
+    if (temperature > 30 || temperature < 18 || humidity > 75 || humidity < 30) {
+      return 'warning';
+    }
+    return 'normal';
   }
 
-  async getEnvironmentData(req: Request, res: Response) {
+  private calculateEnvScore(temperature: number, humidity: number, smoke_level: number, pm25: number, noise_level: number): number {
+    let score = 100;
+    if (temperature > 30 || temperature < 18) score -= 20;
+    if (humidity > 75 || humidity < 30) score -= 15;
+    if (smoke_level > 40) score -= 25;
+    if (pm25 > 50) score -= 20;
+    if (noise_level > 60) score -= 10;
+    return Math.max(0, Math.min(100, score));
+  }
+
+  async getEnvironmentData(req: AuthRequest, res: Response) {
     try {
       const { floor_id, room_id, status } = req.query;
+      const hotelId = req.user?.hotel_id || 0;
 
-      let data = this.generateMockData();
+      const [devices] = await pool.query<RowDataPacket[]>(
+        `SELECT d.device_id, d.device_type, d.device_name, d.room_id, d.device_status,
+                r.room_number, r.floor
+         FROM devices d
+         LEFT JOIN rooms r ON d.room_id = r.id
+         WHERE d.device_type IN ('room', 'floor')
+           AND (d.hotel_id = ? OR ? = 0)
+         ORDER BY d.device_id`,
+        [hotelId, hotelId]
+      );
+
+      if (devices.length === 0) {
+        const emptySummary = {
+          avg_temperature: 0, avg_humidity: 0, avg_smoke_level: 0,
+          avg_noise_level: 0, avg_pm25: 0, avg_environment_score: 0,
+          normal_count: 0, warning_count: 0, danger_count: 0, total_rooms: 0
+        };
+        res.json({ success: true, data: { list: [], total: 0, summary: emptySummary, update_time: new Date().toISOString() } });
+        return;
+      }
+
+      const deviceIds = devices.map((d: any) => d.device_id);
+      const placeholders = deviceIds.map(() => '?').join(',');
+
+      const [sensorRows] = await pool.query<RowDataPacket[]>(
+        `SELECT sd.device_id, sd.sensor_type, sd.sensor_value, sd.created_at
+         FROM sensor_data sd
+         INNER JOIN (
+           SELECT device_id, sensor_type, MAX(created_at) as max_time
+           FROM sensor_data
+           WHERE device_id IN (${placeholders})
+           GROUP BY device_id, sensor_type
+         ) latest ON sd.device_id = latest.device_id
+                   AND sd.sensor_type = latest.sensor_type
+                   AND sd.created_at = latest.max_time`,
+        deviceIds
+      );
+
+      const sensorMap = new Map<string, Map<string, { value: string; time: string }>>();
+      for (const row of sensorRows) {
+        if (!sensorMap.has(row.device_id)) {
+          sensorMap.set(row.device_id, new Map());
+        }
+        sensorMap.get(row.device_id)!.set(row.sensor_type, {
+          value: row.sensor_value,
+          time: row.created_at
+        });
+      }
+
+      const envList: EnvironmentData[] = [];
+
+      for (const device of devices) {
+        const sensors = sensorMap.get(device.device_id);
+        const hasSensorData = sensors && sensors.size > 0;
+        const temperature = sensors?.has('temperature') ? parseFloat(sensors.get('temperature')!.value) || 0 : 0;
+        const humidity = sensors?.has('humidity') ? parseFloat(sensors.get('humidity')!.value) || 0 : 0;
+        const smoke_level = sensors?.has('smoke') ? parseFloat(sensors.get('smoke')!.value) || 0 : 0;
+        const light_level = sensors?.has('light') ? parseFloat(sensors.get('light')!.value) || 0 : 0;
+
+        let latestTime = '';
+        if (sensors) {
+          for (const [, v] of sensors) {
+            if (v.time > latestTime) latestTime = v.time;
+          }
+        }
+
+        const floorId = device.floor || 0;
+        const roomId = device.room_id || 0;
+        const roomNumber = device.room_number || device.device_id;
+
+        const envStatus = hasSensorData
+          ? this.calculateEnvStatus(temperature, humidity, smoke_level, 0)
+          : 'warning' as const;
+        const envScore = hasSensorData
+          ? this.calculateEnvScore(temperature, humidity, smoke_level, 0, 0)
+          : 50;
+
+        envList.push({
+          room_id: roomId,
+          room_number: roomNumber,
+          floor_id: floorId,
+          floor_name: floorId > 0 ? `${floorId}楼` : '公共区域',
+          temperature,
+          humidity,
+          smoke_level,
+          smoke_alarm: smoke_level > 60,
+          light_level,
+          noise_level: 0,
+          pm25: 0,
+          update_time: latestTime || new Date().toISOString(),
+          status: envStatus,
+          environment_score: envScore
+        });
+      }
+
+      let filteredList = envList;
 
       if (floor_id) {
-        data = data.filter(item => item.floor_id === parseInt(floor_id as string));
+        filteredList = filteredList.filter(item => item.floor_id === parseInt(floor_id as string));
       }
 
       if (room_id) {
-        data = data.filter(item => item.room_id === parseInt(room_id as string));
+        filteredList = filteredList.filter(item => item.room_id === parseInt(room_id as string));
       }
 
       if (status) {
-        data = data.filter(item => item.status === status);
+        filteredList = filteredList.filter(item => item.status === status);
       }
 
-      const summary = this.calculateSummary(data);
+      const summary = this.calculateSummary(filteredList);
 
       res.json({
         success: true,
         data: {
-          list: data,
-          total: data.length,
+          list: filteredList,
+          total: filteredList.length,
           summary,
           update_time: new Date().toISOString()
         }
       });
     } catch (error) {
-      logger.debug('Get environment data error:', error.message);
+      logger.error('Get environment data error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
@@ -222,148 +274,193 @@ class EnvironmentController {
     };
   }
 
-  async getEnvironmentHistory(req: Request, res: Response) {
+  async getEnvironmentHistory(req: AuthRequest, res: Response) {
     try {
-      const { room_id, hours = 24 } = req.query;
+      const { room_id, device_id, hours = 24 } = req.query;
       const hoursNum = parseInt(hours as string);
+      const hotelId = req.user?.hotel_id || 0;
 
-      const now = new Date();
-      const historyData = [];
+      let query = `
+        SELECT sd.device_id, sd.sensor_type, sd.sensor_value, sd.created_at
+        FROM sensor_data sd
+        INNER JOIN devices d ON sd.device_id = d.device_id
+        WHERE sd.created_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+          AND (d.hotel_id = ? OR ? = 0)
+      `;
+      const params: any[] = [hoursNum, hotelId, hotelId];
 
-      for (let i = hoursNum; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 3600000);
-        historyData.push({
-          time: time.toISOString(),
-          temperature: 22 + Math.random() * 8,
-          humidity: 45 + Math.random() * 30,
-          smoke_level: Math.random() * 25,
-          noise_level: 30 + Math.random() * 35,
-          pm25: 15 + Math.random() * 50
-        });
+      if (room_id) {
+        query += ` AND d.room_id = ?`;
+        params.push(parseInt(room_id as string));
       }
+
+      if (device_id) {
+        query += ` AND sd.device_id = ?`;
+        params.push(device_id);
+      }
+
+      query += ` ORDER BY sd.created_at ASC`;
+
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
+      const timeMap = new Map<string, { temperature: number; humidity: number; smoke_level: number; noise_level: number; pm25: number }>();
+
+      for (const row of rows) {
+        const timeKey = new Date(row.created_at).toISOString().slice(0, 16);
+        if (!timeMap.has(timeKey)) {
+          timeMap.set(timeKey, { temperature: 0, humidity: 0, smoke_level: 0, noise_level: 0, pm25: 0 });
+        }
+        const entry = timeMap.get(timeKey)!;
+        const val = parseFloat(row.sensor_value) || 0;
+
+        switch (row.sensor_type) {
+          case 'temperature':
+            entry.temperature = val;
+            break;
+          case 'humidity':
+            entry.humidity = val;
+            break;
+          case 'smoke':
+            entry.smoke_level = val;
+            break;
+        }
+      }
+
+      const historyData = Array.from(timeMap.entries()).map(([time, data]) => ({
+        time,
+        ...data
+      }));
 
       res.json({
         success: true,
         data: {
-          room_id: room_id || 'all',
+          room_id: room_id || device_id || 'all',
           history: historyData,
           period: `${hoursNum}h`
         }
       });
     } catch (error) {
-      logger.debug('Get environment history error:', error.message);
+      logger.error('Get environment history error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async getFireAlarms(req: Request, res: Response) {
+  async getFireAlarms(req: AuthRequest, res: Response) {
     try {
       const { status, severity, limit = 50 } = req.query;
+      const hotelId = req.user?.hotel_id || 0;
 
-      const mockAlarms: FireAlarmRecord[] = [
-        {
-          id: 1,
-          room_id: 8,
-          room_number: '403',
-          alarm_type: 'smoke',
-          severity: 'critical',
-          value: 78.5,
-          threshold: 60,
-          triggered_at: new Date(Date.now() - 1800000).toISOString(),
-          status: 'active',
-          description: '烟雾浓度严重超标，可能存在火灾风险'
-        },
-        {
-          id: 2,
-          room_id: 4,
-          room_number: '304',
-          alarm_type: 'temperature',
-          severity: 'high',
-          value: 36.2,
-          threshold: 35,
-          triggered_at: new Date(Date.now() - 3600000).toISOString(),
-          status: 'acknowledged',
-          handled_by: 'admin1',
-          description: '房间温度过高，空调可能故障'
-        },
-        {
-          id: 3,
-          room_id: 11,
-          room_number: '501',
-          alarm_type: 'smoke',
-          severity: 'medium',
-          value: 55.3,
-          threshold: 60,
-          triggered_at: new Date(Date.now() - 7200000).toISOString(),
-          status: 'resolved',
-          resolved_at: new Date(Date.now() - 3600000).toISOString(),
-          handled_by: 'reception_01',
-          description: '轻微烟雾异常，已确认为烹饪引起'
-        },
-        {
-          id: 4,
-          room_id: 6,
-          room_number: '401',
-          alarm_type: 'manual',
-          severity: 'high',
-          value: 0,
-          threshold: 0,
-          triggered_at: new Date(Date.now() - 10800000).toISOString(),
-          status: 'false_alarm',
-          handled_by: 'admin1',
-          description: '住客误触手动报警按钮'
-        },
-        {
-          id: 5,
-          room_id: 2,
-          room_number: '302',
-          alarm_type: 'smoke',
-          severity: 'low',
-          value: 48.7,
-          threshold: 60,
-          triggered_at: new Date(Date.now() - 14400000).toISOString(),
-          status: 'resolved',
-          resolved_at: new Date(Date.now() - 12600000).toISOString(),
-          handled_by: 'system',
-          description: '短暂烟雾波动，已自动恢复'
-        }
-      ];
-
-      let filteredAlarms = mockAlarms;
+      let query = `
+        SELECT da.*, r.room_number
+        FROM device_alarms da
+        LEFT JOIN rooms r ON da.room_id = r.id
+        WHERE (da.hotel_id = ? OR ? = 0)
+      `;
+      const params: any[] = [hotelId, hotelId];
 
       if (status) {
-        filteredAlarms = filteredAlarms.filter(alarm => alarm.status === status);
+        const statusMap: Record<string, string> = {
+          active: 'pending',
+          acknowledged: 'processing',
+          resolved: 'resolved',
+          false_alarm: 'ignored'
+        };
+        query += ` AND da.status = ?`;
+        params.push(statusMap[status as string] || status);
       }
 
       if (severity) {
-        filteredAlarms = filteredAlarms.filter(alarm => alarm.severity === severity);
+        const severityMap: Record<string, string> = {
+          critical: 'emergency',
+          high: 'critical',
+          medium: 'warning',
+          low: 'info'
+        };
+        query += ` AND da.alarm_level = ?`;
+        params.push(severityMap[severity as string] || severity);
       }
+
+      query += ` ORDER BY da.created_at DESC LIMIT ?`;
+      params.push(parseInt(limit as string));
+
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
+      const mapAlarmType = (type: string): any => {
+        switch (type) {
+          case 'fire': return 'smoke';
+          case 'intrusion': return 'manual';
+          default: return type || 'smoke';
+        }
+      };
+
+      const mapAlarmLevel = (level: string): any => {
+        switch (level) {
+          case 'emergency': return 'critical';
+          case 'critical': return 'high';
+          case 'warning': return 'medium';
+          case 'info': return 'low';
+          default: return level || 'low';
+        }
+      };
+
+      const mapAlarmStatus = (s: string): any => {
+        switch (s) {
+          case 'pending': return 'active';
+          case 'processing': return 'acknowledged';
+          case 'resolved': return 'resolved';
+          case 'ignored': return 'false_alarm';
+          default: return s;
+        }
+      };
+
+      const alarms: FireAlarmRecord[] = rows.map((row: any) => ({
+        id: row.id,
+        room_id: row.room_id || 0,
+        room_number: row.room_number || String(row.room_id || '-'),
+        alarm_type: mapAlarmType(row.alarm_type),
+        severity: mapAlarmLevel(row.alarm_level),
+        value: 0,
+        threshold: 0,
+        triggered_at: row.created_at?.toISOString?.() || row.created_at,
+        resolved_at: row.handled_at?.toISOString?.() || row.handled_at,
+        status: mapAlarmStatus(row.status),
+        handled_by: row.handled_by?.toString(),
+        description: row.alarm_content || row.alarm_type
+      }));
+
+      const activeCount = alarms.filter(a => a.status === 'active').length;
+      const acknowledgedCount = alarms.filter(a => a.status === 'acknowledged').length;
+      const resolvedCount = alarms.filter(a => a.status === 'resolved').length;
+      const falseAlarmCount = alarms.filter(a => a.status === 'false_alarm').length;
 
       res.json({
         success: true,
         data: {
-          alarms: filteredAlarms.slice(0, parseInt(limit as string)),
-          total: filteredAlarms.length,
+          alarms,
+          total: alarms.length,
           summary: {
-            active_count: mockAlarms.filter(a => a.status === 'active').length,
-            acknowledged_count: mockAlarms.filter(a => a.status === 'acknowledged').length,
-            resolved_today: mockAlarms.filter(a => a.status === 'resolved').length,
-            false_alarm_count: mockAlarms.filter(a => a.status === 'false_alarm').length
+            active_count: activeCount,
+            acknowledged_count: acknowledgedCount,
+            resolved_today: resolvedCount,
+            false_alarm_count: falseAlarmCount
           }
         }
       });
     } catch (error) {
-      logger.debug('Get fire alarms error:', error.message);
+      logger.error('Get fire alarms error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async acknowledgeAlarm(req: Request, res: Response) {
+  async acknowledgeAlarm(req: AuthRequest, res: Response) {
     try {
       const alarmId = parseInt(req.params.id);
       const { handler, notes } = req.body;
 
-      logger.debug(`Alarm ${alarmId} acknowledged by ${handler}: ${notes}`);
+      await pool.query(
+        `UPDATE device_alarms SET status = 'processing', handled_by = ?, handled_at = NOW(), handle_remark = ? WHERE id = ?`,
+        [handler, notes || '', alarmId]
+      );
 
       res.json({
         success: true,
@@ -376,17 +473,20 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.debug('Acknowledge alarm error:', error.message);
+      logger.error('Acknowledge alarm error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async resolveAlarm(req: Request, res: Response) {
+  async resolveAlarm(req: AuthRequest, res: Response) {
     try {
       const alarmId = parseInt(req.params.id);
       const { resolution, handler } = req.body;
 
-      logger.debug(`Alarm ${alarmId} resolved by ${handler}: ${resolution}`);
+      await pool.query(
+        `UPDATE device_alarms SET status = 'resolved', handled_by = ?, handled_at = NOW(), handle_remark = ? WHERE id = ?`,
+        [handler, resolution, alarmId]
+      );
 
       res.json({
         success: true,
@@ -399,103 +499,84 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.debug('Resolve alarm error:', error.message);
+      logger.error('Resolve alarm error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async getRoomDevices(req: Request, res: Response) {
+  async getRoomDevices(req: AuthRequest, res: Response) {
     try {
       const { room_id } = req.query;
+      const hotelId = req.user?.hotel_id || 0;
 
-      const allDevices: DeviceInfo[] = [
-        { device_id: 'AC_001', device_type: 'ac', device_name: '智能空调', room_id: 1, status: 'online', is_running: true, current_value: 24, unit: '°C', last_maintenance: '2026-03-15' },
-        { device_id: 'LIGHT_001', device_type: 'light', device_name: '主灯', room_id: 1, status: 'online', is_running: true, current_value: 80, unit: '%' },
-        { device_id: 'LIGHT_002', device_type: 'light', device_name: '床头灯', room_id: 1, status: 'online', is_running: false, current_value: 0, unit: '%' },
-        { device_id: 'WINDOW_001', device_type: 'window_sensor', device_name: '窗户传感器', room_id: 1, status: 'online', is_running: true, current_value: 0, unit: '' },
-        { device_id: 'DOOR_001', device_type: 'door_sensor', device_name: '门磁传感器', room_id: 1, status: 'online', is_running: true, current_value: 1, unit: '' },
-        { device_id: 'CURTAIN_001', device_type: 'curtain', device_name: '智能窗帘', room_id: 1, status: 'online', is_running: false, current_value: 100, unit: '%' },
-
-        { device_id: 'AC_002', device_type: 'ac', device_name: '智能空调', room_id: 2, status: 'online', is_running: true, current_value: 26, unit: '°C' },
-        { device_id: 'LIGHT_003', device_type: 'light', device_name: '主灯', room_id: 2, status: 'online', is_running: true, current_value: 100, unit: '%' },
-        { device_id: 'AC_003', device_type: 'ac', device_name: '智能空调', room_id: 3, status: 'offline', is_running: false, current_value: 0, unit: '°C' },
-        { device_id: 'LIGHT_004', device_type: 'light', device_name: '主灯', room_id: 3, status: 'online', is_running: true, current_value: 60, unit: '%' },
-
-        { device_id: 'AC_004', device_type: 'ac', device_name: '智能空调', room_id: 4, status: 'online', is_running: true, current_value: 28, unit: '°C', last_maintenance: '2026-02-20' },
-        { device_id: 'LIGHT_005', device_type: 'light', device_name: '主灯', room_id: 4, status: 'error', is_running: false, current_value: 0, unit: '%' },
-        { device_id: 'SMOKE_001', device_type: 'smoke_detector', device_name: '烟雾探测器', room_id: 4, status: 'online', is_running: true, current_value: 45, unit: '%', battery_level: 85 },
-
-        { device_id: 'AC_005', device_type: 'ac', device_name: '智能空调', room_id: 5, status: 'online', is_running: false, current_value: 22, unit: '°C' },
-        { device_id: 'HUMIDITY_001', device_type: 'humidifier', device_name: '加湿器', room_id: 5, status: 'online', is_running: true, current_value: 55, unit: '%' },
-
-        { device_id: 'AC_006', device_type: 'ac', device_name: '智能空调', room_id: 6, status: 'online', is_running: true, current_value: 23, unit: '°C' },
-        { device_id: 'LIGHT_006', device_type: 'light', device_name: '主灯', room_id: 6, status: 'online', is_running: true, current_value: 90, unit: '%' },
-        { device_id: 'TV_001', device_type: 'tv', device_name: '智能电视', room_id: 6, status: 'online', is_running: true, current_value: 1, unit: '' },
-
-        { device_id: 'AC_007', device_type: 'ac', device_name: '智能空调', room_id: 7, status: 'online', is_running: true, current_value: 25, unit: '°C' },
-        { device_id: 'LIGHT_007', device_type: 'light', device_name: '主灯', room_id: 7, status: 'online', is_running: false, current_value: 0, unit: '%' },
-
-        { device_id: 'AC_008', device_type: 'ac', device_name: '智能空调', room_id: 8, status: 'online', is_running: true, current_value: 36, unit: '°C' },
-        { device_id: 'SMOKE_002', device_type: 'smoke_detector', device_name: '烟雾探测器', room_id: 8, status: 'online', is_running: true, current_value: 78, unit: '%', battery_level: 92 },
-        { device_id: 'LIGHT_008', device_type: 'light', device_name: '主灯', room_id: 8, status: 'online', is_running: true, current_value: 100, unit: '%' },
-
-        { device_id: 'AC_009', device_type: 'ac', device_name: '智能空调', room_id: 9, status: 'online', is_running: false, current_value: 20, unit: '°C' },
-        { device_id: 'LIGHT_009', device_type: 'light', device_name: '主灯', room_id: 9, status: 'online', is_running: true, current_value: 70, unit: '%' },
-
-        { device_id: 'AC_010', device_type: 'ac', device_name: '智能空调', room_id: 10, status: 'online', is_running: true, current_value: 24, unit: '°C' },
-        { device_id: 'LIGHT_010', device_type: 'light', device_name: '主灯', room_id: 10, status: 'online', is_running: true, current_value: 85, unit: '%' },
-
-        { device_id: 'AC_011', device_type: 'ac', device_name: '智能空调', room_id: 11, status: 'online', is_running: true, current_value: 23, unit: '°C' },
-        { device_id: 'SMOKE_003', device_type: 'smoke_detector', device_name: '烟雾探测器', room_id: 11, status: 'online', is_running: true, current_value: 55, unit: '%', battery_level: 78 },
-        { device_id: 'LIGHT_011', device_type: 'light', device_name: '主灯', room_id: 11, status: 'online', is_running: true, current_value: 95, unit: '%' },
-
-        { device_id: 'AC_012', device_type: 'ac', device_name: '智能空调', room_id: 12, status: 'online', is_running: true, current_value: 25, unit: '°C' },
-        { device_id: 'LIGHT_012', device_type: 'light', device_name: '主灯', room_id: 12, status: 'online', is_running: false, current_value: 0, unit: '%' },
-        { device_id: 'CURTAIN_002', device_type: 'curtain', device_name: '智能窗帘', room_id: 12, status: 'online', is_running: true, current_value: 50, unit: '%' }
-      ];
-
-      let filteredDevices = allDevices;
+      let query = `
+        SELECT d.device_id, d.device_type, d.device_name, d.room_id, d.device_status,
+               d.last_seen, r.room_number
+        FROM devices d
+        LEFT JOIN rooms r ON d.room_id = r.id
+        WHERE (d.hotel_id = ? OR ? = 0)
+      `;
+      const params: any[] = [hotelId, hotelId];
 
       if (room_id) {
-        filteredDevices = allDevices.filter(device => device.room_id === parseInt(room_id as string));
+        query += ` AND d.room_id = ?`;
+        params.push(parseInt(room_id as string));
       }
 
-      const onlineCount = filteredDevices.filter(d => d.status === 'online').length;
-      const offlineCount = filteredDevices.filter(d => d.status === 'offline').length;
-      const errorCount = filteredDevices.filter(d => d.status === 'error').length;
-      const runningCount = filteredDevices.filter(d => d.is_running).length;
+      query += ` ORDER BY d.device_id`;
+
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
+      const devices: DeviceInfo[] = rows.map((row: any) => {
+        const status = row.device_status === 'online' ? 'online' as const
+          : row.device_status === 'error' ? 'error' as const
+          : 'offline' as const;
+
+        return {
+          device_id: row.device_id,
+          device_type: row.device_type,
+          device_name: row.device_name || row.device_id,
+          room_id: row.room_id || 0,
+          status,
+          is_running: row.device_status === 'online',
+          current_value: 0,
+          unit: '',
+          last_maintenance: row.last_seen
+        };
+      });
+
+      const onlineCount = devices.filter(d => d.status === 'online').length;
+      const offlineCount = devices.filter(d => d.status === 'offline').length;
+      const errorCount = devices.filter(d => d.status === 'error').length;
+      const runningCount = devices.filter(d => d.is_running).length;
 
       res.json({
         success: true,
         data: {
-          devices: filteredDevices,
-          total: filteredDevices.length,
+          devices,
+          total: devices.length,
           summary: {
             online_count: onlineCount,
             offline_count: offlineCount,
             error_count: errorCount,
             running_count: runningCount,
-            total_devices: filteredDevices.length,
-            online_rate: filteredDevices.length > 0 ? Math.round((onlineCount / filteredDevices.length) * 100) : 0
+            total_devices: devices.length,
+            online_rate: devices.length > 0 ? Math.round((onlineCount / devices.length) * 100) : 0
           }
         }
       });
     } catch (error) {
-      logger.debug('Get room devices error:', error.message);
+      logger.error('Get room devices error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async controlDevice(req: Request, res: Response) {
+  async controlDevice(req: AuthRequest, res: Response) {
     try {
       const deviceId = req.params.id;
       const { action, value } = req.body;
 
       logger.debug(`Control device ${deviceId}: action=${action}, value=${value}`);
-
-      setTimeout(() => {
-        logger.debug(`Device ${deviceId} command executed successfully`);
-      }, 1000);
 
       res.json({
         success: true,
@@ -509,28 +590,19 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.debug('Control device error:', error.message);
+      logger.error('Control device error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async getEnergyConsumption(req: Request, res: Response) {
+  async getEnergyConsumption(req: AuthRequest, res: Response) {
     try {
       const { room_id, period = 'today' } = req.query;
 
       const mockEnergyData: EnergyConsumption[] = [
-        { room_id: 1, room_number: '301', floor_id: 3, today_kwh: 12.5, yesterday_kwh: 14.2, this_month_kwh: 385.6, peak_usage: 3.2, peak_time: '19:30', devices_count: 5, efficiency_rating: 'A' },
-        { room_id: 2, room_number: '302', floor_id: 3, today_kwh: 8.3, yesterday_kwh: 9.1, this_month_kwh: 278.4, peak_usage: 2.1, peak_time: '21:00', devices_count: 2, efficiency_rating: 'A' },
-        { room_id: 3, room_number: '303', floor_id: 3, today_kwh: 15.7, yesterday_kwh: 16.8, this_month_kwh: 456.2, peak_usage: 4.5, peak_time: '20:15', devices_count: 2, efficiency_rating: 'B' },
-        { room_id: 4, room_number: '304', floor_id: 3, today_kwh: 18.9, yesterday_kwh: 17.5, this_month_kwh: 512.8, peak_usage: 5.2, peak_time: '18:45', devices_count: 3, efficiency_rating: 'C' },
-        { room_id: 5, room_number: '305', floor_id: 3, today_kwh: 6.2, yesterday_kwh: 7.8, this_month_kwh: 198.5, peak_usage: 1.8, peak_time: '22:30', devices_count: 2, efficiency_rating: 'A' },
-        { room_id: 6, room_number: '401', floor_id: 4, today_kwh: 10.4, yesterday_kwh: 11.2, this_month_kwh: 342.1, peak_usage: 2.8, peak_time: '20:00', devices_count: 3, efficiency_rating: 'A' },
-        { room_id: 7, room_number: '402', floor_id: 4, today_kwh: 7.8, yesterday_kwh: 8.5, this_month_kwh: 245.3, peak_usage: 2.0, peak_time: '21:30', devices_count: 2, efficiency_rating: 'A' },
-        { room_id: 8, room_number: '403', floor_id: 4, today_kwh: 22.3, yesterday_kwh: 20.1, this_month_kwh: 589.4, peak_usage: 6.1, peak_time: '17:30', devices_count: 3, efficiency_rating: 'D' },
-        { room_id: 9, room_number: '404', floor_id: 4, today_kwh: 9.1, yesterday_kwh: 10.3, this_month_kwh: 298.7, peak_usage: 2.5, peak_time: '19:00', devices_count: 2, efficiency_rating: 'A' },
-        { room_id: 10, room_number: '405', floor_id: 4, today_kwh: 13.6, yesterday_kwh: 12.9, this_month_kwh: 412.5, peak_usage: 3.8, peak_time: '20:45', devices_count: 2, efficiency_rating: 'B' },
-        { room_id: 11, room_number: '501', floor_id: 5, today_kwh: 11.2, yesterday_kwh: 13.4, this_month_kwh: 367.8, peak_usage: 3.0, peak_time: '18:30', devices_count: 3, efficiency_rating: 'A' },
-        { room_id: 12, room_number: '502', floor_id: 5, today_kwh: 8.9, yesterday_kwh: 9.6, this_month_kwh: 268.9, peak_usage: 2.3, peak_time: '21:15', devices_count: 3, efficiency_rating: 'A' }
+        { room_id: 1, room_number: '101', floor_id: 1, today_kwh: 12.5, yesterday_kwh: 14.2, this_month_kwh: 385.6, peak_usage: 3.2, peak_time: '19:30', devices_count: 5, efficiency_rating: 'A' },
+        { room_id: 2, room_number: '102', floor_id: 1, today_kwh: 8.3, yesterday_kwh: 9.1, this_month_kwh: 278.4, peak_usage: 2.1, peak_time: '21:00', devices_count: 2, efficiency_rating: 'A' },
+        { room_id: 3, room_number: '111', floor_id: 1, today_kwh: 15.7, yesterday_kwh: 16.8, this_month_kwh: 456.2, peak_usage: 4.5, peak_time: '20:15', devices_count: 2, efficiency_rating: 'B' },
       ];
 
       let filteredData = mockEnergyData;
@@ -562,144 +634,118 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.debug('Get energy consumption error:', error.message);
+      logger.error('Get energy consumption error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async getEventLogs(req: Request, res: Response) {
+  async getEventLogs(req: AuthRequest, res: Response) {
     try {
       const { event_type, severity, limit = 100 } = req.query;
+      const hotelId = req.user?.hotel_id || 0;
 
-      const now = new Date();
-      const mockLogs: EventLog[] = [
-        {
-          id: 1,
-          event_type: 'fire_alarm',
-          room_id: 8,
-          room_number: '403',
-          title: '🚨 火警警报 - 烟雾超标',
-          description: '403房烟雾浓度达到78.5%，超过安全阈值（60%），请立即检查！',
-          severity: 'critical',
-          created_at: new Date(now.getTime() - 1800000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 2,
-          event_type: 'device_error',
-          room_id: 4,
-          room_number: '304',
-          title: '⚠️ 设备故障 - 主灯异常',
-          description: '304房主灯控制器响应超时，可能需要维修或更换',
-          severity: 'warning',
-          created_at: new Date(now.getTime() - 3600000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 3,
-          event_type: 'environment_warning',
-          room_id: 4,
-          room_number: '304',
-          title: '🌡️ 温度警告',
-          description: '304房温度达到36.2°C，超过舒适温度上限（35°C）',
-          severity: 'error',
-          created_at: new Date(now.getTime() - 3600000).toISOString(),
-          resolved: true,
-          resolved_at: new Date(now.getTime() - 1800000).toISOString(),
-          handled_by: 'admin1'
-        },
-        {
-          id: 4,
-          event_type: 'device_control',
-          room_id: 1,
-          room_number: '301',
-          title: '📱 远程控制 - 调节空调温度',
-          description: '管理员将301房空调温度从26°C调节至24°C',
-          severity: 'info',
-          created_at: new Date(now.getTime() - 7200000).toISOString(),
-          resolved: true,
-          handled_by: 'reception_01'
-        },
-        {
-          id: 5,
-          event_type: 'maintenance',
-          room_id: 3,
-          room_number: '303',
-          title: '🔧 维护提醒 - 空调保养',
-          description: '303房空调已运行超过2000小时，建议进行例行维护保养',
-          severity: 'info',
-          created_at: new Date(now.getTime() - 10800000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 6,
-          event_type: 'energy_alert',
-          room_id: 8,
-          room_number: '403',
-          title: '⚡ 能耗预警',
-          description: '403房今日能耗已达22.3kWh，较昨日同期增长15%，请注意节能',
-          severity: 'warning',
-          created_at: new Date(now.getTime() - 14400000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 7,
-          event_type: 'fire_alarm',
-          room_id: 11,
-          room_number: '501',
-          title: '🔥 火警警报 - 已解除',
-          description: '501房烟雾浓度异常（55.3%），经现场核查为住客烹饪引起，已恢复正常',
-          severity: 'warning',
-          created_at: new Date(now.getTime() - 7200000).toISOString(),
-          resolved: true,
-          resolved_at: new Date(now.getTime() - 3600000).toISOString(),
-          handled_by: 'reception_01'
-        },
-        {
-          id: 8,
-          event_type: 'device_error',
-          room_id: 3,
-          room_number: '303',
-          title: '❌ 设备离线 - 空调掉线',
-          description: '303房智能空调失去连接，最后在线时间：2小时前',
-          severity: 'error',
-          created_at: new Date(now.getTime() - 18000000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 9,
-          event_type: 'environment_warning',
-          room_id: 8,
-          room_number: '403',
-          title: '💨 PM2.5偏高',
-          description: '403房PM2.5浓度达到68μg/m³，建议开启空气净化或通风',
-          severity: 'warning',
-          created_at: new Date(now.getTime() - 21600000).toISOString(),
-          resolved: false
-        },
-        {
-          id: 10,
-          event_type: 'device_control',
-          room_id: 12,
-          room_number: '502',
-          title: '🪟 远程控制 - 调节窗帘',
-          description: '自动根据光照强度将502房窗帘开度调节至50%',
-          severity: 'info',
-          created_at: new Date(now.getTime() - 25200000).toISOString(),
-          resolved: true,
-          handled_by: 'system'
+      const [alarmRows] = await pool.query<RowDataPacket[]>(
+        `SELECT da.*, r.room_number
+         FROM device_alarms da
+         LEFT JOIN rooms r ON da.room_id = r.id
+         WHERE (da.hotel_id = ? OR ? = 0)
+         ORDER BY da.created_at DESC
+         LIMIT ?`,
+        [hotelId, hotelId, parseInt(limit as string)]
+      );
+
+      const [securityRows] = await pool.query<RowDataPacket[]>(
+        `SELECT se.*, r.room_number
+         FROM security_events se
+         LEFT JOIN devices d ON se.device_id = d.device_id
+         LEFT JOIN rooms r ON d.room_id = r.id
+         WHERE (d.hotel_id = ? OR ? = 0)
+         ORDER BY se.created_at DESC
+         LIMIT ?`,
+        [hotelId, hotelId, parseInt(limit as string)]
+      );
+
+      const mapEventType = (alarmType: string, source: string): any => {
+        if (source === 'security') {
+          switch (alarmType) {
+            case 'fire_alarm': return 'fire_alarm';
+            case 'intrusion': return 'device_error';
+            default: return 'environment_warning';
+          }
         }
-      ];
+        switch (alarmType) {
+          case 'fire': return 'fire_alarm';
+          case 'offline': return 'device_error';
+          case 'sensor_error': return 'device_error';
+          case 'intrusion': return 'environment_warning';
+          default: return 'device_error';
+        }
+      };
 
-      let filteredLogs = mockLogs;
+      const mapSeverity = (level: string): any => {
+        switch (level) {
+          case 'emergency':
+          case 'critical':
+            return 'critical';
+          case 'error':
+          case 'high':
+            return 'error';
+          case 'warning':
+          case 'medium':
+            return 'warning';
+          default:
+            return 'info';
+        }
+      };
 
+      const allLogs: EventLog[] = [];
+
+      for (const row of alarmRows) {
+        const createdAt = row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at);
+        const handledAt = row.handled_at instanceof Date ? row.handled_at.toISOString() : (row.handled_at ? String(row.handled_at) : undefined);
+        allLogs.push({
+          id: row.id,
+          event_type: mapEventType(row.alarm_type, 'alarm'),
+          room_id: row.room_id || 0,
+          room_number: row.room_number || String(row.room_id || '-'),
+          title: row.alarm_content || row.alarm_type,
+          description: row.alarm_content || row.alarm_type,
+          severity: mapSeverity(row.alarm_level),
+          created_at: createdAt,
+          resolved: row.status === 'resolved' || row.status === 'ignored',
+          resolved_at: handledAt,
+          handled_by: row.handled_by?.toString()
+        });
+      }
+
+      for (const row of securityRows) {
+        const createdAt = row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at);
+        const eventData = row.event_data ? (typeof row.event_data === 'string' ? row.event_data : JSON.stringify(row.event_data)) : '{}';
+        allLogs.push({
+          id: 10000 + row.id,
+          event_type: mapEventType(row.event_type, 'security'),
+          room_id: 0,
+          room_number: row.room_number || row.device_id,
+          title: row.event_type,
+          description: eventData,
+          severity: mapSeverity(row.event_level),
+          created_at: createdAt,
+          resolved: false,
+        });
+      }
+
+      allLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      let filteredLogs = allLogs;
       if (event_type) {
         filteredLogs = filteredLogs.filter(log => log.event_type === event_type);
       }
-
       if (severity) {
         filteredLogs = filteredLogs.filter(log => log.severity === severity);
       }
+
+      const criticalCount = filteredLogs.filter(l => l.severity === 'critical' && !l.resolved).length;
+      const unresolvedCount = filteredLogs.filter(l => !l.resolved).length;
 
       res.json({
         success: true,
@@ -707,9 +753,9 @@ class EnvironmentController {
           logs: filteredLogs.slice(0, parseInt(limit as string)),
           total: filteredLogs.length,
           summary: {
-            critical_count: mockLogs.filter(l => l.severity === 'critical' && !l.resolved).length,
-            unresolved_count: mockLogs.filter(l => !l.resolved).length,
-            today_total: mockLogs.filter(l => {
+            critical_count: criticalCount,
+            unresolved_count: unresolvedCount,
+            today_total: filteredLogs.filter(l => {
               const logDate = new Date(l.created_at);
               const today = new Date();
               return logDate.toDateString() === today.toDateString();
@@ -718,51 +764,149 @@ class EnvironmentController {
         }
       });
     } catch (error) {
-      logger.debug('Get event logs error:', error.message);
+      logger.error('Get event logs error:', (error as Error).message, (error as Error).stack);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
-  async getDashboardStats(req: Request, res: Response) {
+  async getDashboardStats(req: AuthRequest, res: Response) {
     try {
-      const envData = this.generateMockData();
-      const summary = this.calculateSummary(envData);
+      const hotelId = req.user?.hotel_id || 0;
+
+      const [deviceRows] = await pool.query<RowDataPacket[]>(
+        `SELECT device_status, COUNT(*) as count FROM devices WHERE (hotel_id = ? OR ? = 0) GROUP BY device_status`,
+        [hotelId, hotelId]
+      );
+
+      const [sensorRows] = await pool.query<RowDataPacket[]>(
+        `SELECT sd.sensor_type, AVG(CAST(sd.sensor_value AS DECIMAL(10,2))) as avg_value
+         FROM sensor_data sd
+         INNER JOIN devices d ON sd.device_id = d.device_id
+         WHERE sd.created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+           AND (d.hotel_id = ? OR ? = 0)
+           AND sd.sensor_type IN ('temperature', 'humidity', 'smoke')
+         GROUP BY sd.sensor_type`,
+        [hotelId, hotelId]
+      );
+
+      const [alarmRows] = await pool.query<RowDataPacket[]>(
+        `SELECT alarm_level, status, COUNT(*) as count
+         FROM device_alarms
+         WHERE (hotel_id = ? OR ? = 0)
+         GROUP BY alarm_level, status`,
+        [hotelId, hotelId]
+      );
+
+      let avgTemperature = 0;
+      let avgHumidity = 0;
+      let avgSmoke = 0;
+
+      for (const row of sensorRows) {
+        switch (row.sensor_type) {
+          case 'temperature':
+            avgTemperature = parseFloat(row.avg_value) || 0;
+            break;
+          case 'humidity':
+            avgHumidity = parseFloat(row.avg_value) || 0;
+            break;
+          case 'smoke':
+            avgSmoke = parseFloat(row.avg_value) || 0;
+            break;
+        }
+      }
+
+      let totalDevices = 0;
+      let onlineDevices = 0;
+      let offlineDevices = 0;
+      let errorDevices = 0;
+
+      for (const row of deviceRows) {
+        totalDevices += row.count;
+        if (row.device_status === 'online') onlineDevices = row.count;
+        else if (row.device_status === 'offline') offlineDevices = row.count;
+        else if (row.device_status === 'error') errorDevices = row.count;
+      }
+
+      let pendingAlarms = 0;
+      let totalAlarms = 0;
+      const byLevel: Record<string, number> = {};
+
+      for (const row of alarmRows) {
+        totalAlarms += row.count;
+        if (row.status === 'pending') pendingAlarms += row.count;
+        byLevel[row.alarm_level] = (byLevel[row.alarm_level] || 0) + row.count;
+      }
+
+      let environmentScore = 85;
+      if (errorDevices > 0) environmentScore -= (errorDevices * 10);
+      if (pendingAlarms > 0) environmentScore -= (pendingAlarms * 5);
+      if (offlineDevices > 3) environmentScore -= 10;
+      if (avgTemperature > 30 || avgTemperature < 18) environmentScore -= 10;
+      if (avgHumidity > 75 || avgHumidity < 30) environmentScore -= 5;
+      environmentScore = Math.max(0, Math.min(100, environmentScore));
+
+      let airQuality = '优';
+      if (avgTemperature > 30 || avgTemperature < 15) airQuality = '差';
+      else if (avgTemperature > 28 || avgTemperature < 18) airQuality = '良';
+      if (avgHumidity > 80 || avgHumidity < 20) airQuality = '差';
+      else if (avgHumidity > 70 || avgHumidity < 30) airQuality = airQuality === '优' ? '良' : airQuality;
+
+      const [smokeDetectorRows] = await pool.query<RowDataPacket[]>(
+        `SELECT COUNT(*) as total,
+                SUM(CASE WHEN device_status = 'online' THEN 1 ELSE 0 END) as online_count
+         FROM devices
+         WHERE device_type IN ('floor', 'room')
+           AND (hotel_id = ? OR ? = 0)`,
+        [hotelId, hotelId]
+      );
+
+      const detectorsTotal = smokeDetectorRows[0]?.total || 0;
+      const detectorsOnline = smokeDetectorRows[0]?.online_count || 0;
 
       const dashboardStats = {
         environment: {
-          ...summary,
-          air_quality: summary.avg_pm25 <= 35 ? '优' : summary.avg_pm25 <= 75 ? '良' : summary.avg_pm25 <= 115 ? '轻度污染' : '中度污染'
+          avg_temperature: parseFloat(avgTemperature.toFixed(1)),
+          avg_humidity: parseFloat(avgHumidity.toFixed(1)),
+          avg_smoke_level: parseFloat(avgSmoke.toFixed(1)),
+          avg_noise_level: 0,
+          avg_pm25: 0,
+          avg_environment_score: environmentScore,
+          normal_count: onlineDevices,
+          warning_count: offlineDevices,
+          danger_count: errorDevices,
+          total_rooms: totalDevices,
+          air_quality: airQuality,
         },
         fire_safety: {
-          active_alarms: 1,
-          today_alarms: 3,
-          detectors_online: 12,
-          detectors_total: 12,
-          last_drill: '2026-04-01',
-          system_status: 'normal' as const
+          active_alarms: pendingAlarms,
+          today_alarms: totalAlarms,
+          detectors_online: detectorsOnline,
+          detectors_total: detectorsTotal,
+          system_status: pendingAlarms > 0 ? 'alert' as const : 'normal' as const
         },
         devices: {
-          total: 32,
-          online: 29,
-          offline: 1,
-          error: 2,
-          running: 18,
-          maintenance_due: 3
+          total: totalDevices,
+          online: onlineDevices,
+          offline: offlineDevices,
+          error: errorDevices,
+          running: onlineDevices,
+          maintenance_due: 0
         },
         energy: {
-          today_total: 145.9,
-          yesterday_total: 152.4,
-          savings_percent: 4.3,
-          monthly_estimate: 4342.5,
-          monthly_cost: 3691.13,
+          today_total: 0,
+          yesterday_total: 0,
+          savings_percent: 0,
+          monthly_estimate: 0,
+          monthly_cost: 0,
           peak_hour: '19:00-20:00'
         },
         alerts: {
-          critical: 1,
-          warning: 4,
-          info: 5,
-          unresolved: 6
-        }
+          critical: byLevel['emergency'] || byLevel['critical'] || 0,
+          warning: byLevel['warning'] || byLevel['medium'] || 0,
+          info: byLevel['info'] || byLevel['low'] || 0,
+          unresolved: pendingAlarms
+        },
+        environment_score: environmentScore
       };
 
       res.json({
@@ -770,7 +914,7 @@ class EnvironmentController {
         data: dashboardStats
       });
     } catch (error) {
-      logger.debug('Get dashboard stats error:', error.message);
+      logger.error('Get dashboard stats error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }

@@ -59,7 +59,7 @@ class MQTTClient:
         self._stop_health = threading.Event()
         self._health_thread = None
 
-        self.audit_status = "pending"
+        self.audit_status = "approved" if device_key else "pending"
         self.on_message = None
         self.on_ai_response = None
 
@@ -98,9 +98,10 @@ class MQTTClient:
         self.logger.info(f"接收 [{topic}]: {payload}")
         self.log_buffer.log("RX", f"[{topic}] {payload}")
 
-        if topic in self.subscriptions and self.subscriptions[topic]:
+        callback = self.subscriptions.get(topic)
+        if callback and callable(callback):
             try:
-                self.subscriptions[topic](topic, payload)
+                callback(topic, payload)
             except Exception as e:
                 self.logger.error(f"处理消息失败: {e}")
 
@@ -137,12 +138,20 @@ class MQTTClient:
 
             if composite_key in self.command_handlers:
                 handler = self.command_handlers[composite_key]
-                result = handler(data)
-                self.publish_command_result(cmd_id, cmd_type, result)
+                if handler and callable(handler):
+                    result = handler(data)
+                    self.publish_command_result(cmd_id, cmd_type, result)
+                else:
+                    self.logger.warning(f"命令处理器不可用: {composite_key}")
+                    self.publish_command_result(cmd_id, cmd_type, False, f"处理器不可用: {composite_key}")
             elif cmd_type in self.command_handlers:
                 handler = self.command_handlers[cmd_type]
-                result = handler(data)
-                self.publish_command_result(cmd_id, cmd_type, result)
+                if handler and callable(handler):
+                    result = handler(data)
+                    self.publish_command_result(cmd_id, cmd_type, result)
+                else:
+                    self.logger.warning(f"命令处理器不可用: {cmd_type}")
+                    self.publish_command_result(cmd_id, cmd_type, False, f"处理器不可用: {cmd_type}")
             else:
                 self.logger.warning(f"未知命令: {cmd_type}={cmd_value}")
                 self.publish_command_result(cmd_id, cmd_type, False, f"未知命令: {cmd_type}={cmd_value}")
@@ -253,7 +262,9 @@ class MQTTClient:
         topic = f"{TOPIC_DEVICE_STATUS_PREFIX}/{self.device_type}/{self.device_id}"
         payload = {
             "device_id": self.device_id,
+            "device_type": self.device_type,
             "status": "online",
+            "hotel_id": self.hotel_id,
             "battery_level": 100,
             "signal_strength": -50,
             "uptime": int(time.time()),

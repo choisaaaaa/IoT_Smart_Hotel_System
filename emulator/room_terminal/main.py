@@ -64,7 +64,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             self._log(f"已同步房间信息: ID={self.room_id}, 编号={self.room_number_var.get()}")
 
             if old_room_id != self.room_id and self.mqtt_client and self.connected:
-                new_topic = TOPIC_AI_RESPONSE.format(self.room_id)
+                new_topic = TOPIC_AI_RESPONSE.format(self.device_id)
                 self.mqtt_client.subscribe(new_topic)
                 self._log(f"已重新订阅 AI 主题: {new_topic}")
 
@@ -399,8 +399,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
 
         if self.mqtt_client and self.connected:
             self.ai_status_var.set("思考中...")
-            self.mqtt_client.publish(TOPIC_AI_REQUEST.format(self.room_id), {
-                "room_id": self.room_id,
+            self.mqtt_client.publish(TOPIC_AI_REQUEST.format(self.device_id), {
+                "room_id": self.device_id,
                 "device_id": self.device_id,
                 "text": text,
                 "timestamp": datetime.now().isoformat()
@@ -481,8 +481,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
 
             if self.mqtt_client and self.connected:
                 self.ai_status_var.set("思考中...")
-                self.mqtt_client.publish(TOPIC_AI_REQUEST.format(self.room_id), {
-                    "room_id": self.room_id,
+                self.mqtt_client.publish(TOPIC_AI_REQUEST.format(self.device_id), {
+                    "room_id": self.device_id,
                     "device_id": self.device_id,
                     "audio_data": audio_base64,
                     "timestamp": datetime.now().isoformat()
@@ -519,7 +519,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             })
 
     def _on_connected(self):
-        ai_topic = TOPIC_AI_RESPONSE.format(self.room_id)
+        ai_topic = TOPIC_AI_RESPONSE.format(self.device_id)
         self.mqtt_client.subscribe(ai_topic)
         self._log(f"已订阅 AI 主题: {ai_topic}")
 
@@ -634,7 +634,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         text = data.get('response') or data.get('text')
         self.root.after(0, lambda: self._add_chat("assistant", text))
         self.root.after(0, lambda: self.ai_status_var.set("空闲"))
-        self._log(f"AI 回复: {text}")
+        self._log(f"AI 回复已收到 (长度:{len(text or '')})")
 
 
 if __name__ == "__main__":

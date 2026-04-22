@@ -45,7 +45,31 @@ class MQTTService {
   private callCache: Map<string, { caller_type: string, caller_id: any, callee_type: string, callee_id: any }> = new Map();
   private deviceCache: Map<string, { audit_status: string, device_key: string, hotel_id?: number }> = new Map();
 
-  constructor() {}
+  constructor() {
+    this.startOfflineCheck();
+  }
+
+  private startOfflineCheck() {
+    const OFFLINE_TIMEOUT_MS = 5 * 60 * 1000;
+    const CHECK_INTERVAL_MS = 60 * 1000;
+
+    setInterval(async () => {
+      try {
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT device_id FROM devices WHERE device_status = 'online' AND last_seen < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`
+        );
+        if (rows.length > 0) {
+          const deviceIds = rows.map((r: any) => r.device_id);
+          await pool.query(
+            `UPDATE devices SET device_status = 'offline', updated_at = NOW() WHERE device_status = 'online' AND last_seen < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`
+          );
+          logger.info(`心跳超时离线检测: ${deviceIds.join(', ')} 已标记为离线`);
+        }
+      } catch (error) {
+        logger.error('心跳超时离线检测失败:', (error as Error).message);
+      }
+    }, CHECK_INTERVAL_MS);
+  }
 
   setWebSocket(ws: any) {
     this.wsInstance = ws;
@@ -237,6 +261,8 @@ class MQTTService {
   private subscribeAllTopics() {
     const topics = [
       'hotel/device/status',
+      'hotel/device/status/+',
+      'hotel/device/status/+/+',
       'hotel/device/data/+',
       'hotel/device/command/result',
       'hotel/security/event',
@@ -409,7 +435,7 @@ class MQTTService {
     const roomId = topic.split('/').pop();
     if (!roomId) {return;}
 
-    logger.info(`收到硬件端 AI 请求 [房间 ${roomId}]: ${JSON.stringify(data)}`);
+    logger.info(`收到硬件端 AI 请求 [房间 ${roomId}]: text=${data.text || '(音频)'}`);
 
     try {
       const aiButler = AIButlerService.getInstance();
@@ -431,7 +457,7 @@ class MQTTService {
         ticket_data: aiResponse.ticketData
       });
 
-      logger.info(`已发送 AI 回复到硬件 [房间 ${roomId}]`);
+      logger.info(`已发送 AI 回复到硬件 [房间 ${roomId}] (长度:${(aiResponse.text||'').length})`);
     } catch (error) {
       logger.error(`处理硬件 AI 请求失败: ${error.message}`);
     }
@@ -499,7 +525,11 @@ class MQTTService {
         [data.device_id, sensorType, String(data.value)]
       );
 
-      // 关键修复：传感器数据更新只发送给所属酒店的前台
+      await pool.query(
+        `UPDATE devices SET last_seen = NOW(), device_status = 'online', updated_at = NOW() WHERE device_id = ?`,
+        [data.device_id]
+      );
+
       if (hotelId && this.wsInstance) {
         const hotelRoom = `front_desk_hotel_${hotelId}`;
         this.wsInstance.emit('sensor_data_update', {

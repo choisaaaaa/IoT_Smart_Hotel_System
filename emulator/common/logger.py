@@ -3,7 +3,15 @@
 """
 import logging
 import sys
+import os
 from datetime import datetime
+
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 
 class Logger:
@@ -13,14 +21,11 @@ class Logger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
         
-        # 清除已有处理器
         self.logger.handlers.clear()
         
-        # 创建控制台处理器
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
         
-        # 设置格式
         formatter = logging.Formatter(
             '%(asctime)s [%(name)s] %(levelname)s: %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'

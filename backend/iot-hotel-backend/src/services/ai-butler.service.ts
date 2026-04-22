@@ -187,6 +187,20 @@ export class AIButlerService {
    */
   async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
     try {
+      let actualRoomId = roomId;
+
+      const [deviceRows] = await pool.query<RowDataPacket[]>(
+        `SELECT d.room_id, r.room_number FROM devices d
+         LEFT JOIN rooms r ON d.room_id = r.id
+         WHERE d.device_id = ? AND d.room_id IS NOT NULL`,
+        [roomId]
+      );
+
+      if (deviceRows.length > 0 && deviceRows[0].room_id) {
+        actualRoomId = String(deviceRows[0].room_id);
+        logger.info(`通过设备ID ${roomId} 解析到房间ID ${actualRoomId}`);
+      }
+
       const [guests] = await pool.query<RowDataPacket[]>(
         `SELECT g.*, r.room_number, r.hotel_id, h.hotel_name, b.check_in_date, b.check_out_date
          FROM guests g
@@ -197,7 +211,7 @@ export class AIButlerService {
          AND g.check_out_time IS NULL
          ORDER BY g.check_in_time DESC
          LIMIT 1`,
-        [roomId, roomId]
+        [actualRoomId, actualRoomId]
       );
 
       if (guests.length === 0) {
@@ -412,10 +426,9 @@ export class AIButlerService {
   private async controlDevice(args: any, session: GuestSession): Promise<string> {
     const { device_type, action, value } = args;
 
-    // 查询房间设备
     const [devices] = await pool.query<RowDataPacket[]>(
       `SELECT d.* FROM devices d
-       WHERE d.room_id = ? AND d.device_status = 'online'`,
+       WHERE d.room_id = ? AND d.device_type IN ('room', 'floor')`,
       [session.roomDbId]
     );
 
@@ -423,65 +436,50 @@ export class AIButlerService {
       return '抱歉，您房间暂时没有可控制的智能设备，请联系前台。';
     }
 
-    // 根据设备类型筛选目标设备
-    let targetDevices = devices;
-    if (device_type !== 'all') {
-      const typeMap: Record<string, string> = {
-        'light': 'smart_light',
-        'ac': 'smart_ac',
-        'curtain': 'smart_curtain',
-        'tv': 'smart_tv',
-        'lock': 'smart_lock'
-      };
-      targetDevices = devices.filter((d: any) => d.device_type === typeMap[device_type]);
-    }
+    const device = devices[0];
+    const command = this.buildDeviceCommand(device_type, action, value);
+    logger.debug(`通过AI发送设备指令到 ${device.device_id}:`, command);
 
-    if (targetDevices.length === 0) {
-      const typeName = { light: '灯光', ac: '空调', curtain: '窗帘', tv: '电视', lock: '门锁' }[device_type] || device_type;
-      return `抱歉，您房间没有找到${typeName}设备。`;
-    }
+    const topic = `hotel/device/command/room/${device.device_id}`;
+    await mqttService.publish(topic, {
+      device_id: device.device_id,
+      ...command
+    });
 
-    // 发送MQTT指令
-    const results: string[] = [];
-    for (const device of targetDevices) {
-      const command = this.buildDeviceCommand(device_type, action, value);
-      logger.info(`通过AI发送设备指令到 ${device.device_id}:`, command);
-
-      // 通过MQTT发送指令到对应的 Topic
-      const topic = `hotel/device/command/room/${session.roomId}`;
-      await mqttService.publish(topic, {
-        device_id: device.device_id,
-        ...command
-      });
-
-      const actionText = this.getActionText(action, value, device_type);
-      results.push(`${device.device_name || device.device_id}${actionText}`);
-    }
-
-    return `已为您${results.join('、')}。`;
+    const actionText = this.getActionText(action, value, device_type);
+    return `已为您${device.device_name || device.device_id}${actionText}。`;
   }
 
   /**
    * 构建设备控制指令
    */
   private buildDeviceCommand(deviceType: string, action: string, value?: number): any {
-    const baseCommand = { timestamp: Date.now() };
+    const cmdTypeMap: Record<string, string> = {
+      'light': 'light',
+      'ac': 'air',
+      'curtain': 'curtain',
+      'tv': 'tv',
+      'lock': 'door',
+      'all': 'scene'
+    };
+
+    const cmdType = cmdTypeMap[deviceType] || deviceType;
 
     switch (action) {
       case 'on':
       case 'open':
-        return { ...baseCommand, command: 'turn_on', status: 'on' };
+        return { command_type: cmdType, command_value: 'on' };
       case 'off':
       case 'close':
-        return { ...baseCommand, command: 'turn_off', status: 'off' };
+        return { command_type: cmdType, command_value: 'off' };
       case 'toggle':
-        return { ...baseCommand, command: 'toggle' };
+        return { command_type: cmdType, command_value: cmdType === 'light' ? 'on' : 'toggle' };
       case 'set_temperature':
-        return { ...baseCommand, command: 'set_temperature', temperature: value || 24 };
+        return { command_type: 'air', command_value: `temp:${value || 24}` };
       case 'set_brightness':
-        return { ...baseCommand, command: 'set_brightness', brightness: value || 100 };
+        return { command_type: 'light', command_value: 'on' };
       default:
-        return { ...baseCommand, command: action, value };
+        return { command_type: cmdType, command_value: action };
     }
   }
 
@@ -702,7 +700,7 @@ export class AIButlerService {
     const cleanText = this.cleanTextForTTS(text);
     if (!cleanText.trim()) {return '';}
 
-    logger.info(`🎙️ [TTS] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
+    logger.debug(`🎙️ [TTS] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
 
     try {
       const audio = await this.superHumanTTS(cleanText);
@@ -727,7 +725,7 @@ export class AIButlerService {
   private async superHumanTTS(text: string): Promise<string> {
     return new Promise((resolve, reject) => {
       try {
-        logger.info(`🎙️ [超拟人] 开始合成: "${text.substring(0, 30)}..."`);
+        logger.debug(`🎙️ [超拟人] 开始合成: "${text.substring(0, 30)}..."`);
 
         const url = 'wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6';
         const host = 'cbm01.cn-huabei-1.xf-yun.com';
@@ -785,7 +783,7 @@ export class AIButlerService {
                 isResolved = true;
                 if (audioChunks.length > 0) {
                   const fullAudio = Buffer.concat(audioChunks as Uint8Array[]);
-                  logger.info(`🎉 [超拟人] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
+                  logger.debug(`🎉 [超拟人] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
                   resolve(fullAudio.toString('base64'));
                 } else {
                   reject(new Error('无音频数据'));
@@ -826,7 +824,7 @@ export class AIButlerService {
   private async ttsV2(text: string): Promise<string> {
     return new Promise((resolve, reject) => {
       try {
-        logger.info(`🎙️ [TTS v2] 开始合成: "${text.substring(0, 30)}..."`);
+        logger.debug(`🎙️ [TTS v2] 开始合成: "${text.substring(0, 30)}..."`);
 
         const url = 'wss://tts-api.xfyun.cn/v2/tts';
         const host = 'tts-api.xfyun.cn';
@@ -886,7 +884,7 @@ export class AIButlerService {
                 isResolved = true;
                 if (audioChunks.length > 0) {
                   const fullAudio = Buffer.concat(audioChunks as Uint8Array[]);
-                  logger.info(`🎉 [TTS v2] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
+                  logger.debug(`🎉 [TTS v2] 合成成功！${fullAudio.length} bytes (${audioChunks.length}块)`);
                   resolve(fullAudio.toString('base64'));
                 } else {
                   reject(new Error('无音频数据'));
@@ -953,7 +951,7 @@ export class AIButlerService {
         };
       }
 
-      logger.info(`房间 ${roomId} 语音输入: ${userText}`);
+      logger.debug(`房间 ${roomId} 语音输入: ${userText}`);
 
       // 3. 大语言模型处理（支持Function Calling）
       const llmResult = await this.chatWithLLM(userText, session);
@@ -967,7 +965,7 @@ export class AIButlerService {
           const functionName = toolCall.function.name;
           const functionArgs = JSON.parse(toolCall.function.arguments);
 
-          logger.info(`执行工具: ${functionName}`, functionArgs);
+          logger.debug(`执行工具: ${functionName}`, functionArgs);
 
           const toolResult = await this.executeToolCall(functionName, functionArgs, session);
           

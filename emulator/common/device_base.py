@@ -701,5 +701,11 @@ class BaseDeviceEmulator:
         self.biz_canvas.unbind_all("<MouseWheel>")
 
     def run(self):
-        """运行主循环"""
+        if self.device_key_var.get() and self.broker_var.get():
+            self.root.after(1500, self._auto_connect)
         self.root.mainloop()
+
+    def _auto_connect(self):
+        if not self.connected:
+            self._log("检测到已有配置，自动连接中...")
+            self._connect()

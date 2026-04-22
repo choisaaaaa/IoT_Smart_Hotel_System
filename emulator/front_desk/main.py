@@ -273,7 +273,8 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                 payload = {
                     "card_uid": uid_hex,
                     "room_id": room_id,
-                    "device_id": self.device_id
+                    "device_id": self.device_id,
+                    "device_key": self.mqtt_client.device_key
                 }
                 self._log(f"正在请求后端验证卡片权限: {verify_url}")
                 response = requests.post(verify_url, json=payload, timeout=5)
