@@ -6,7 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/mqtt/mqtt_service.dart';
+import '../../core/constants/mqtt_constants.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../services/auth_service.dart';
+import '../../core/services/app_realtime_provider.dart';
+import '../../core/services/realtime_service.dart';
+import '../../components/alarm_alert_overlay.dart';
+import '../../components/incoming_call_overlay.dart';
+import '../../components/device_control_panel.dart';
 import '../../services/device_service.dart';
 import '../../services/delivery_service.dart';
 import '../../services/voice_call_service.dart';
@@ -32,6 +39,10 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   List<dynamic> _devices = [];
   final MqttService _mqttService = MqttService();
   String? _lastUserId;
+  StreamSubscription? _realtimeEventSub;
+  StreamSubscription? _securityEventSub;
+  StreamSubscription? _incomingCallSub;
+  StreamSubscription? _deviceStatusSub;
 
   @override
   void initState() {
@@ -40,6 +51,46 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     WidgetsBinding.instance.addObserver(this);
     _lastUserId = ref.read(authStateProvider).userId;
     _checkCheckinStatus();
+    _initRealtimeListeners();
+  }
+
+  void _initRealtimeListeners() {
+    final authState = ref.read(authStateProvider);
+    final userId = authState.userId?.toString() ?? 'guest_app';
+
+    ref.read(authServiceProvider).getCurrentHotelId().then((hotelId) {
+      final isStaff = ['hotel_admin', 'system_admin', 'staff'].contains(authState.role);
+      final clientType = isStaff ? 'front_desk' : 'app';
+
+      ref.read(appRealtimeProvider.notifier).init(
+        userId: userId,
+        clientType: clientType,
+        hotelId: hotelId,
+      );
+
+      if (isStaff && hotelId != null) {
+        ref.read(appRealtimeProvider.notifier).joinHotelRoom(hotelId);
+      }
+    });
+
+    _securityEventSub = RealtimeService().securityEvents.listen((data) {
+      if (!mounted) return;
+      final eventType = data['event_type'] as String? ?? '';
+      if (['fire_alarm', 'sos_alarm', 'fire_alarm_linked', 'global_alarm'].contains(eventType)) {
+        final alarm = AlarmInfo.fromSecurityEvent(data);
+        GlobalAlarmOverlay.show(context, ref, alarm);
+      }
+    });
+
+    _incomingCallSub = RealtimeService().incomingCallEvents.listen((data) {
+      if (!mounted) return;
+      IncomingCallOverlay.show(context, ref, data);
+    });
+
+    _deviceStatusSub = RealtimeService().deviceStatusUpdates.listen((data) {
+      if (!mounted) return;
+      _fetchDevices();
+    });
   }
 
   @override
@@ -68,6 +119,10 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _mqttService.disconnect();
+    _realtimeEventSub?.cancel();
+    _securityEventSub?.cancel();
+    _incomingCallSub?.cancel();
+    _deviceStatusSub?.cancel();
     super.dispose();
   }
 
@@ -161,9 +216,22 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   Future<void> _connectMqtt() async {
     await _mqttService.connect();
     if (_mqttService.isConnected) {
-      _mqttService.subscribe('hotel/room/+/status');
-      _mqttService.onMessage('hotel/room/', (message) {
+      _mqttService.subscribe(MqttConstants.deviceStatusWildcard);
+      _mqttService.subscribe(MqttConstants.securityEventTopic);
+      _mqttService.onMessage('hotel/device/status/', (message) {
         _fetchDevices();
+      });
+      _mqttService.onMessage('hotel/device/security/event', (message) {
+        try {
+          final data = jsonDecode(message) as Map<String, dynamic>;
+          final eventType = data['event_type'] as String? ?? '';
+          if (['fire_alarm', 'sos_alarm', 'fire_alarm_linked', 'global_alarm'].contains(eventType)) {
+            final alarm = AlarmInfo.fromSecurityEvent(data);
+            if (mounted) GlobalAlarmOverlay.show(context, ref, alarm);
+          }
+        } catch (e) {
+          debugPrint('解析安防事件失败: $e');
+        }
       });
     }
   }
@@ -370,12 +438,15 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final device = _devices[index];
+                              final deviceType = device['device_type'] ?? device['type'] ?? 'unknown';
+                              final isOn = (device['device_status'] ?? device['status'] ?? 'off') == 'on' ||
+                                  (device['device_status'] ?? device['status'] ?? 'off') == 'unlocked';
                               return _DeviceControlTile(
-                                icon: _getDeviceIcon(device['device_type'] ?? device['type']),
+                                icon: _getDeviceIcon(deviceType),
                                 name: device['device_name'] ?? '未知设备',
-                                status: (device['device_status'] ?? device['status'] ?? 'off') == 'on' ? '开启' : '关闭',
-                                isOn: (device['device_status'] ?? device['status'] ?? 'off') == 'on',
-                                onTap: () => _toggleDevice(device),
+                                status: isOn ? '开启' : '关闭',
+                                isOn: isOn,
+                                onTap: () => _showDeviceControlPanel(device),
                               );
                             },
                             childCount: _devices.length,
@@ -409,7 +480,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           };
 
           // 通过 MQTT 发布场景命令
-          final mqttTopic = 'hotel/room/$roomNumber/scene';
+          final mqttTopic = MqttConstants.sceneTopic(roomNumber);
           final mqttPayload = jsonEncode(sceneCommand);
           await _mqttService.publish(mqttTopic, mqttPayload);
 
@@ -441,6 +512,19 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDeviceControlPanel(Map<String, dynamic> device) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DeviceControlPanel(
+        device: device,
+        deviceService: ref.read(deviceServiceProvider),
+        onCommandSent: _fetchDevices,
       ),
     );
   }

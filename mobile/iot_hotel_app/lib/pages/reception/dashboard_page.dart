@@ -22,6 +22,7 @@ import 'voice_calls_page.dart';
 import 'bills_page.dart';
 import 'price_settings_page.dart';
 import '../admin/environment_monitor_page.dart';
+import 'environment_monitor_page.dart';
 import '../admin/price_calendar_page.dart';
 import '../admin/coupon_manage_page.dart';
 
@@ -51,6 +52,7 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
     _DrawerItem(icon: Icons.delivery_dining_rounded, label: '客房送物', pageKey: 'delivery'),
     _DrawerItem(icon: Icons.phone_in_talk_rounded, label: '语音通话', pageKey: 'voice_calls'),
     _DrawerItem(icon: Icons.thermostat_rounded, label: '环境监测', pageKey: 'environment'),
+    _DrawerItem(icon: Icons.security_rounded, label: '报警面板', pageKey: 'alarms'),
     _DividerItem(),
     _DrawerItem(icon: Icons.price_change_rounded, label: '房价设置', pageKey: 'price_settings'),
     _DrawerItem(icon: Icons.calendar_today_rounded, label: '价格日历', pageKey: 'price_calendar'),
@@ -105,6 +107,8 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
         return const VoiceCallsPage();
       case 'environment':
         return const EnvironmentMonitorPage();
+      case 'alarms':
+        return const ReceptionEnvironmentPage();
       case 'price_settings':
         return const PriceSettingsPage();
       case 'price_calendar':
@@ -145,6 +149,7 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
       case 'delivery': return '客房送物';
       case 'voice_calls': return '语音通话';
       case 'environment': return '环境监测';
+      case 'alarms': return '报警面板';
       case 'price_settings': return '房价设置';
       case 'price_calendar': return '价格日历';
       case 'coupons': return '优惠券管理';

@@ -160,6 +160,24 @@ class AiButlerService {
       if (quickActions != null) 'quick_actions': quickActions,
     });
   }
+
+  Future<ApiResult<void>> broadcast({required int roomId, required String message}) async {
+    try {
+      final response = await _dioClient.post(
+        '${ApiConstants.aiButler}/broadcast',
+        data: {
+          'room_id': roomId,
+          'message': message,
+        },
+      );
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure(response.data['message'] ?? '广播发送失败');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
 }
 
 final aiButlerServiceProvider = Provider<AiButlerService>((ref) => AiButlerService());

@@ -24,6 +24,8 @@ import 'coupon_manage_page.dart';
 import 'user_manage_page.dart';
 import 'room_type_manage_page.dart';
 import 'review_manage_page.dart';
+import 'device_logs_page.dart';
+import 'knowledge_base_manage_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({super.key});
@@ -53,6 +55,8 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     _MoreItem(icon: Icons.local_offer_rounded, label: '优惠券', pageKey: 'coupon'),
     _MoreItem(icon: Icons.people_rounded, label: '用户', pageKey: 'user'),
     _MoreItem(icon: Icons.hotel_rounded, label: '房型', pageKey: 'room_type'),
+    _MoreItem(icon: Icons.article_rounded, label: '设备日志', pageKey: 'device_logs'),
+    _MoreItem(icon: Icons.menu_book_rounded, label: '知识库', pageKey: 'knowledge_base'),
   ];
 
   late final List<Widget> _mainPages;
@@ -92,6 +96,8 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       case 'coupon': page = const CouponManagePage(); break;
       case 'user': page = const UserManagePage(); break;
       case 'room_type': page = const RoomTypeManagePage(); break;
+      case 'device_logs': page = const DeviceLogsPage(); break;
+      case 'knowledge_base': page = const KnowledgeBaseManagePage(); break;
       default: return;
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));

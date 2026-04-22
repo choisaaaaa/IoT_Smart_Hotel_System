@@ -22,8 +22,13 @@ import '../pages/reception/room_availability_page.dart';
 import '../pages/reception/voice_calls_page.dart';
 import '../pages/reception/bills_page.dart';
 import '../pages/reception/price_settings_page.dart';
+import '../pages/reception/environment_monitor_page.dart';
 import '../pages/system/dashboard_page.dart';
 import '../pages/system/system_settings_page.dart';
+import '../pages/system/mqtt_manage_page.dart';
+import '../pages/system/pending_devices_page.dart';
+import '../pages/admin/device_logs_page.dart';
+import '../pages/admin/knowledge_base_manage_page.dart';
 import '../pages/guest/main_shell_page.dart';
 import '../pages/guest/hotel_list_page.dart';
 import '../pages/guest/hotel_detail_page.dart';
@@ -353,11 +358,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/reception/voice-calls', builder: (context, state) => const VoiceCallsPage()),
       GoRoute(path: '/reception/bills', builder: (context, state) => const BillsPage()),
       GoRoute(path: '/reception/price-settings', builder: (context, state) => const PriceSettingsPage()),
-      GoRoute(path: '/reception/environment', builder: (context, state) => const EnvironmentMonitorPage()),
+      GoRoute(path: '/reception/environment', builder: (context, state) => const ReceptionEnvironmentPage()),
       GoRoute(path: '/reception/price-calendar', builder: (context, state) => const PriceCalendarPage()),
       GoRoute(path: '/reception/coupons', builder: (context, state) => const CouponManagePage()),
       // System routes
       GoRoute(path: '/system/settings', builder: (context, state) => const SystemSettingsPage()),
+      GoRoute(path: '/system/mqtt', builder: (context, state) => const MqttManagePage()),
+      GoRoute(path: '/system/pending-devices', builder: (context, state) => const PendingDevicesPage()),
+      GoRoute(path: '/admin/device-logs', builder: (context, state) => const DeviceLogsPage()),
+      GoRoute(path: '/admin/knowledge-base', builder: (context, state) => const KnowledgeBaseManagePage()),
     ],
   );
 });

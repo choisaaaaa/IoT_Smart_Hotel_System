@@ -4,8 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../services/auth_service.dart';
+import '../../core/services/app_realtime_provider.dart';
+import '../../core/services/realtime_service.dart';
+import '../../components/alarm_alert_overlay.dart';
+import '../../components/incoming_call_overlay.dart';
 import '../../services/voice_call_service.dart';
 import '../../services/room_service.dart';
+import '../../services/ai_butler_service.dart';
 
 class VoiceCallsPage extends ConsumerStatefulWidget {
   const VoiceCallsPage({super.key});
@@ -22,13 +28,50 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   final List<Map<String, dynamic>> _callHistory = [];
   List<dynamic> _rooms = [];
   StreamSubscription? _callEventSubscription;
+  StreamSubscription? _securityEventSub;
+  StreamSubscription? _incomingCallSub;
   bool _isLoading = true;
+  bool _onDuty = true;
+  String _dutyRole = 'receptionist';
+  final _broadcastController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _initCallService();
     _loadRooms();
+    _initRealtimeListeners();
+  }
+
+  void _initRealtimeListeners() {
+    final authState = ref.read(authStateProvider);
+    final userId = authState.userId?.toString() ?? 'reception_app';
+
+    ref.read(authServiceProvider).getCurrentHotelId().then((hotelId) {
+      ref.read(appRealtimeProvider.notifier).init(
+        userId: userId,
+        clientType: 'front_desk',
+        hotelId: hotelId,
+      );
+
+      if (hotelId != null) {
+        ref.read(appRealtimeProvider.notifier).joinHotelRoom(hotelId);
+      }
+    });
+
+    _securityEventSub = RealtimeService().securityEvents.listen((data) {
+      if (!mounted) return;
+      final eventType = data['event_type'] as String? ?? '';
+      if (['fire_alarm', 'sos_alarm', 'fire_alarm_linked', 'global_alarm'].contains(eventType)) {
+        final alarm = AlarmInfo.fromSecurityEvent(data);
+        GlobalAlarmOverlay.show(context, ref, alarm);
+      }
+    });
+
+    _incomingCallSub = RealtimeService().incomingCallEvents.listen((data) {
+      if (!mounted) return;
+      IncomingCallOverlay.show(context, ref, data);
+    });
   }
 
   Future<void> _loadRooms() async {
@@ -168,18 +211,97 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   void _toggleOnlineStatus() {
     if (_isOnline) {
       _callService.unregisterClient();
+      ref.read(appRealtimeProvider.notifier).setDutyStatus(false);
       setState(() {
         _isOnline = false;
         _clientName = null;
         _onlineStatus = null;
+        _onDuty = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已下线')),
       );
     } else {
-      final userId = 'reception_${DateTime.now().millisecondsSinceEpoch}';
+      final userId = ref.read(authStateProvider).userId?.toString() ?? 'reception_${DateTime.now().millisecondsSinceEpoch}';
       _callService.registerClient(userId);
+      ref.read(appRealtimeProvider.notifier).setDutyStatus(true, role: _dutyRole);
+      setState(() => _onDuty = true);
     }
+  }
+
+  Future<void> _broadcastToRoom(dynamic room) async {
+    final roomNumber = room['room_number']?.toString() ?? room['id']?.toString() ?? '';
+    final message = _broadcastController.text.trim();
+    if (message.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入广播内容'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+
+    try {
+      final aiButlerService = AiButlerService();
+      await aiButlerService.broadcast(roomId: int.tryParse(roomNumber) ?? 0, message: message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已向 $roomNumber 号房发送广播'), backgroundColor: AppColors.success),
+        );
+        _broadcastController.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('广播发送失败: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  void _showBroadcastDialog(dynamic room) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom + 16, left: 16, right: 16, top: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.campaign, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text('房间广播 - ${room['room_number']}号房', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _broadcastController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: '输入广播内容（将通过AI管家TTS朗读）',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () { _broadcastToRoom(room); Navigator.pop(ctx); },
+                icon: const Icon(Icons.send),
+                label: const Text('发送广播'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _makeCall(String calleeId, String calleeType, String calleeName) async {
@@ -230,6 +352,9 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   @override
   void dispose() {
     _callEventSubscription?.cancel();
+    _securityEventSub?.cancel();
+    _incomingCallSub?.cancel();
+    _broadcastController.dispose();
     super.dispose();
   }
 
@@ -427,6 +552,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
           onTap: isOnline && _isOnline
               ? () => _makeCall(roomId, 'guest_room', '${room['room_number']}号房')
               : null,
+          onBroadcast: _isOnline ? () => _showBroadcastDialog(room) : null,
         );
       },
     );
@@ -595,6 +721,7 @@ class _CallButton extends StatelessWidget {
   final IconData icon;
   final bool isOnline;
   final VoidCallback? onTap;
+  final VoidCallback? onBroadcast;
 
   const _CallButton({
     required this.name,
@@ -602,6 +729,7 @@ class _CallButton extends StatelessWidget {
     required this.icon,
     required this.isOnline,
     this.onTap,
+    this.onBroadcast,
   });
 
   @override
@@ -667,6 +795,27 @@ class _CallButton extends StatelessWidget {
                 color: isOnline ? Colors.green : Colors.grey,
               ),
             ),
+            if (onBroadcast != null) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: onBroadcast,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.campaign, size: 10, color: AppColors.secondary),
+                      SizedBox(width: 2),
+                      Text('广播', style: TextStyle(fontSize: 9, color: AppColors.secondary)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

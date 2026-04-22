@@ -825,7 +825,7 @@ const fetchFrequentGuests = async () => {
   try {
     guestsLoading.value = true
     const res = await guestService.list()
-    frequentGuests.value = res.data.guests
+    frequentGuests.value = res?.data?.guests || []
   } catch (error) {
     console.error('获取联系人失败:', error)
   } finally {

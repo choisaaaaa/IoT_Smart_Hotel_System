@@ -946,11 +946,12 @@ export class AIButlerService {
     const command = this.buildDeviceCommand(device_type, action, value);
     logger.debug(`通过AI发送设备指令到 ${device.device_id}:`, command);
 
-    const topic = `hotel/device/command/room/${device.device_id}`;
-    await mqttService.publish(topic, {
-      device_id: device.device_id,
-      ...command
-    });
+    await mqttService.sendDeviceCommand(
+      device.device_id,
+      command.command_type,
+      command.command_value,
+      'ai_butler'
+    );
 
     const actionText = this.getActionText(action, value, device_type);
     return `已为您${device.device_name || device.device_id}${actionText}。`;

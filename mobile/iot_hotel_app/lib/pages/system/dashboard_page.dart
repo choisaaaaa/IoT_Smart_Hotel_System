@@ -16,6 +16,7 @@ import '../../services/user_service.dart';
 import '../../services/device_service.dart';
 import '../../models/hotel.dart';
 import 'system_settings_page.dart';
+import 'mqtt_manage_page.dart';
 
 class SystemDashboardPage extends ConsumerStatefulWidget {
   const SystemDashboardPage({super.key});
@@ -34,6 +35,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
     _NavItem(icon: Icons.people_rounded, label: '账户'),
     _NavItem(icon: Icons.fact_check_rounded, label: '审核'),
     _NavItem(icon: Icons.rate_review_rounded, label: '评价'),
+    _NavItem(icon: Icons.wifi_tethering_rounded, label: 'MQTT'),
     _NavItem(icon: Icons.settings_rounded, label: '设置'),
   ];
 
@@ -46,6 +48,7 @@ class _SystemDashboardPageState extends ConsumerState<SystemDashboardPage> {
       const _UsersTab(),
       const _ReviewTab(),
       const _SystemReviewControlTab(),
+      const MqttManagePage(),
       const SystemSettingsPage(),
     ];
 
@@ -285,6 +288,7 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
           const SizedBox(height: 12),
           _quickAction(Icons.add_business, '新增酒店', () => _showCreateHotelDialog()),
           _quickAction(Icons.person_add, '新增用户', () => _showCreateUserDialog()),
+          _quickAction(Icons.pending_actions, '待审核设备', () => context.push('/system/pending-devices')),
         ]),
       ),
     );
