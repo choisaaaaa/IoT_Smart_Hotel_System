@@ -1,7 +1,7 @@
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import crypto from 'crypto';
-import { hashDeviceKey, encryptDeviceKey, generateSecureDeviceKey, verifyDeviceKey, getKeyStorageFormat } from '../utils/device-key';
+import { hashDeviceKey, encryptDeviceKey, decryptDeviceKey, generateSecureDeviceKey, verifyDeviceKey, getKeyStorageFormat } from '../utils/device-key';
 import CacheService from './cache.service';
 
 export interface DeviceData {
@@ -101,10 +101,26 @@ class DeviceService {
         );
         const updatedDevice = updatedRows[0] as any;
 
+        let rawDeviceKeyForResponse: string | null = null;
+        if (updatedDevice.audit_status === 'approved') {
+          if (updatedDevice.device_key_encrypted) {
+            try {
+              rawDeviceKeyForResponse = decryptDeviceKey(updatedDevice.device_key_encrypted);
+            } catch {
+              rawDeviceKeyForResponse = null;
+            }
+          } else if (updatedDevice.device_key) {
+            const format = getKeyStorageFormat(updatedDevice.device_key);
+            if (format === 'plaintext') {
+              rawDeviceKeyForResponse = updatedDevice.device_key;
+            }
+          }
+        }
+
         return {
           status: 'existing',
           audit_status: updatedDevice.audit_status,
-          device_key: updatedDevice.audit_status === 'approved' ? updatedDevice.device_key : null,
+          device_key: rawDeviceKeyForResponse,
           room_id: updatedDevice.room_id,
           room_number: updatedDevice.room_number,
           area: updatedDevice.area,

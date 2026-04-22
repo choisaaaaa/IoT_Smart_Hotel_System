@@ -1220,7 +1220,7 @@ class MQTTService {
     try {
       // 1. 获取设备密钥以计算签名
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT device_key FROM devices WHERE device_id = ? AND audit_status = "approved"',
+        'SELECT device_key, device_key_encrypted FROM devices WHERE device_id = ? AND audit_status = "approved"',
         [deviceId]
       );
 
@@ -1229,7 +1229,12 @@ class MQTTService {
         return null;
       }
 
-      const { device_key } = rows[0] as { device_key: string };
+      const { device_key, device_key_encrypted } = rows[0] as { device_key: string; device_key_encrypted?: string };
+      const signingKey = getRawKeyForSigning(device_key_encrypted || device_key, device_key);
+      if (!signingKey) {
+        logger.error(`无法获取设备 ${deviceId} 的签名密钥`);
+        return null;
+      }
 
       // 2. 存入数据库
       const [result] = await pool.query<ResultSetHeader>(
@@ -1250,7 +1255,7 @@ class MQTTService {
         timestamp
       };
 
-      payload.signature = calculateSignature(payload, device_key);
+      payload.signature = calculateSignature(payload, signingKey);
 
       // 4. 发布到 MQTT (发布到特定设备的 sub-topic: hotel/device/command/{type}/{id})
       const [deviceRows] = await pool.query<RowDataPacket[]>(

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { isSystemAdmin } from '../utils/role';
+import { verifyDeviceKey } from '../utils/device-key';
 
 class IrRemoteController {
   /**
@@ -325,11 +326,11 @@ class IrRemoteController {
 
       // 验证设备密钥
       const [devices] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM devices WHERE device_id = ? AND device_key = ? AND room_id = ?',
-        [device_id, device_key, room_id]
+        'SELECT id, device_key FROM devices WHERE device_id = ? AND room_id = ?',
+        [device_id, room_id]
       );
 
-      if (devices.length === 0) {
+      if (devices.length === 0 || !verifyDeviceKey(device_key, devices[0].device_key)) {
         return res.status(401).json({ success: false, message: 'Invalid device credentials' });
       }
 
