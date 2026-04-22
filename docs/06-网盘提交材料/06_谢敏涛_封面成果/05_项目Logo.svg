@@ -1,0 +1,149 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 深色酷炫渐变背景（图标底板） -->
+    <linearGradient id="badgeBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#001529;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#003a8c;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 霓虹描边渐变 -->
+    <linearGradient id="neonStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1890ff" />
+      <stop offset="100%" style="stop-color:#69c0ff" />
+    </linearGradient>
+
+    <!-- 云朵填充渐变 -->
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e6f7ff;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#bae7ff;stop-opacity:0.6" />
+    </linearGradient>
+
+    <!-- 发光滤镜 -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <filter id="strongGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- 背景：完全透明 -->
+
+  <!-- ================= 徽章图标区域 ================= -->
+  <g transform="translate(0, 20)">
+    
+    <!-- 外层科技感切角边框 -->
+    <rect x="165" y="95" width="182" height="182" rx="24" fill="none" stroke="url(#neonStroke)" stroke-width="2" opacity="0.6" />
+    
+    <!-- 主底板：深色切角方块 -->
+    <rect x="175" y="105" width="162" height="162" rx="18" fill="url(#badgeBg)" />
+    
+    <!-- 底板内发光/反光斜切 -->
+    <path d="M 175 123 L 193 105 L 337 105 L 337 155 L 175 155 Z" fill="#ffffff" opacity="0.03" />
+    
+    <!-- 底板内框装饰 -->
+    <rect x="185" y="115" width="142" height="142" rx="10" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.15" />
+    <rect x="190" y="120" width="132" height="132" rx="8" fill="none" stroke="url(#neonStroke)" stroke-width="1" opacity="0.4" />
+
+    <!-- ========== 左上角云朵 ========== -->
+    <g filter="url(#softGlow)">
+      <circle cx="195" cy="150" r="14" fill="url(#cloudGrad)" stroke="#69c0ff" stroke-width="2" />
+      <circle cx="178" cy="157" r="11" fill="url(#cloudGrad)" stroke="#69c0ff" stroke-width="2" />
+      <circle cx="212" cy="157" r="10" fill="url(#cloudGrad)" stroke="#69c0ff" stroke-width="2" />
+      <circle cx="188" cy="165" r="9" fill="url(#cloudGrad)" stroke="#69c0ff" stroke-width="2" />
+      <circle cx="202" cy="165" r="8" fill="url(#cloudGrad)" stroke="#69c0ff" stroke-width="2" />
+      
+      <!-- 云朵底部连接弧 -->
+      <path d="M 174 157 Q 188 170, 204 165" fill="none" stroke="#69c0ff" stroke-width="2" stroke-linecap="round" opacity="0.8" />
+    </g>
+
+    <!-- ========== MQTT 连接线：云朵 → 房屋门禁 ========== -->
+    <!-- 采用流畅的曲线，终点精确对准门禁发光圆点 (256, 228) -->
+    <g filter="url(#softGlow)">
+      <!-- 主连接线：从云朵右侧引出，向下再向右上，最终垂直下落至门禁 -->
+      <path d="M 216 163 C 230 158, 240 175, 245 195 C 248 205, 252 215, 256 222" fill="none" stroke="#40a9ff" stroke-width="3" stroke-linecap="round" />
+    </g>
+    
+    <!-- 连接线上的中间节点（数据包） -->
+    <g filter="url(#glow)">
+      <circle cx="245" cy="195" r="3.5" fill="#e6f7ff" />
+      <circle cx="245" cy="195" r="1.8" fill="#ffffff" />
+    </g>
+
+    <!-- 门禁处的终点加强节点（与连接线末端融合） -->
+    <g filter="url(#glow)">
+      <circle cx="256" cy="228" r="4" fill="#e6f7ff" opacity="0.6" />
+    </g>
+
+    <!-- ========== 可爱风房屋 ========== -->
+    <g filter="url(#softGlow)">
+      <!-- 屋顶（圆润三角形） -->
+      <polygon points="256,135 215,185 297,185" fill="none" stroke="#e6f7ff" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" />
+      
+      <!-- 墙体（圆角矩形） -->
+      <rect x="225" y="185" width="62" height="52" rx="8" fill="none" stroke="#e6f7ff" stroke-width="7" />
+      
+      <!-- 左侧圆窗 -->
+      <rect x="233" y="193" width="10" height="16" rx="5" fill="url(#neonStroke)" opacity="0.8" />
+      
+      <!-- 右侧圆窗 -->
+      <rect x="269" y="193" width="10" height="16" rx="5" fill="url(#neonStroke)" opacity="0.8" />
+
+      <!-- 智能门禁（圆润拱门） -->
+      <path d="M 248 237 L 248 220 Q 256 212, 264 220 L 264 237" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+      <!-- 门禁中心圆点（连接线终点目标） -->
+      <circle cx="256" cy="228" r="2.5" fill="#ffffff" />
+    </g>
+
+    <!-- ========== MQTT 动态波纹（房屋下方） ========== -->
+    <g filter="url(#strongGlow)">
+      <!-- 第一道波纹 -->
+      <path d="M 230 250 Q 256 268, 282 250" fill="none" stroke="#69c0ff" stroke-width="6" stroke-linecap="round" />
+      <!-- 第二道波纹 -->
+      <path d="M 236 262 Q 256 278, 276 262" fill="none" stroke="#1890ff" stroke-width="5" stroke-linecap="round" />
+      <!-- 第三道波纹 -->
+      <path d="M 243 273 Q 256 285, 269 273" fill="none" stroke="#40a9ff" stroke-width="4" stroke-linecap="round" />
+    </g>
+
+    <!-- 数据节点 -->
+    <g filter="url(#glow)">
+      <circle cx="256" cy="250" r="5" fill="#e6f7ff" />
+      <circle cx="256" cy="250" r="2.5" fill="#ffffff" />
+      
+      <circle cx="256" cy="262" r="4" fill="#e6f7ff" />
+      <circle cx="256" cy="262" r="2" fill="#ffffff" />
+      
+      <circle cx="256" cy="273" r="3" fill="#e6f7ff" />
+      <circle cx="256" cy="273" r="1.5" fill="#ffffff" />
+      
+      <circle cx="230" cy="250" r="4" fill="#69c0ff" />
+      <circle cx="282" cy="250" r="4" fill="#69c0ff" />
+      <circle cx="236" cy="262" r="3.5" fill="#1890ff" />
+      <circle cx="276" cy="262" r="3.5" fill="#1890ff" />
+    </g>
+
+    <!-- 右下角装饰点阵 -->
+    <circle cx="305" cy="235" r="1.5" fill="#ffffff" opacity="0.6" />
+    <circle cx="312" cy="240" r="1.5" fill="#ffffff" opacity="0.4" />
+    <circle cx="315" cy="230" r="1.5" fill="#ffffff" opacity="0.8" />
+  </g>
+
+  <!-- ================= 标准字区域 ================= -->
+  <g transform="translate(0, -20)">
+    <text x="256" y="375" font-family="'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif" font-size="36" font-weight="800" fill="#141414" text-anchor="middle" letter-spacing="4">慧宿智联</text>
+    
+    <line x1="200" y1="390" x2="312" y2="390" stroke="#1890ff" stroke-width="2" opacity="0.5" />
+
+    <text x="256" y="420" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#434343" text-anchor="middle" letter-spacing="6">SMART HOTEL LINK</text>
+    
+    <rect x="215" y="432" width="82" height="1.5" fill="url(#neonStroke)" opacity="0.6" />
+  </g>
+</svg>

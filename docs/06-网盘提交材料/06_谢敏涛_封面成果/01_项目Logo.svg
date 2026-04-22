@@ -1,0 +1,53 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 定义主色调渐变：体现科技与云端感 -->
+    <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1890ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#69c0ff;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="houseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0050b3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1890ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景：透明（符合交付标准） -->
+
+  <!-- ================= 核心图形区域 ================= -->
+  
+  <!-- 1. 房屋轮廓（酒店/建筑属性） -->
+  <!-- 屋顶 -->
+  <polygon points="256,90 180,190 332,190" fill="none" stroke="url(#cloudGradient)" stroke-width="12" stroke-linejoin="round"/>
+  <!-- 墙体 -->
+  <rect x="200" y="190" width="112" height="90" rx="6" fill="none" stroke="url(#houseGradient)" stroke-width="12"/>
+  
+  <!-- 2. 房屋内部细节（智能/物联网节点） -->
+  <!-- 智能门禁 -->
+  <path d="M 240 280 L 240 250 Q 256 240, 272 250 L 272 280" fill="none" stroke="#1890ff" stroke-width="6" stroke-linecap="round"/>
+  <!-- 两侧智能窗 -->
+  <rect x="220" y="200" width="15" height="25" rx="4" fill="url(#cloudGradient)"/>
+  <rect x="277" y="200" width="15" height="25" rx="4" fill="url(#cloudGradient)"/>
+
+  <!-- 3. 云端连接（Cloud 元素） -->
+  <!-- 几何云朵拼合 -->
+  <circle cx="330" cy="140" r="35" fill="url(#cloudGradient)"/>
+  <circle cx="375" cy="165" r="28" fill="url(#cloudGradient)"/>
+  <circle cx="285" cy="165" r="28" fill="url(#cloudGradient)"/>
+  <rect x="285" y="140" width="90" height="53" rx="15" fill="url(#cloudGradient)"/>
+
+  <!-- 4. 动态线条（MQTT 实时通信流） -->
+  <!-- 连接房屋与云端的折线，象征数据通信 -->
+  <polyline points="256,235 280,215 310,225 335,180" fill="none" stroke="#1890ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- MQTT 连接端点 -->
+  <circle cx="256" cy="235" r="6" fill="#ffffff" stroke="#1890ff" stroke-width="4"/>
+  <circle cx="335" cy="180" r="6" fill="#ffffff" stroke="#1890ff" stroke-width="4"/>
+
+  <!-- ================= 标准字区域 ================= -->
+  
+  <!-- 中文标准字：慧宿智联 -->
+  <text x="256" y="430" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif" font-size="34" font-weight="bold" fill="#262626" text-anchor="middle" letter-spacing="2">慧宿智联</text>
+  
+  <!-- 英文标准字：Smart Hotel Link -->
+  <text x="256" y="465" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="16" fill="#595959" text-anchor="middle" letter-spacing="4">Smart Hotel Link</text>
+</svg>
