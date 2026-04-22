@@ -47,20 +47,6 @@
             </a-col>
 
             <a-col :xs="24" :sm="12" :md="8">
-              <a-card class="stat-card energy-card" hoverable>
-                <a-statistic
-                  title="今日能耗"
-                  :value="dashboardStats.energy?.today_total || 0"
-                  suffix="kWh"
-                  :value-style="{ color: '#faad14', fontSize: '28px' }"
-                >
-                  <template #prefix><ThunderboltOutlined style="font-size: 28px;" /></template>
-                </a-statistic>
-                <div class="sub-info">较昨日节省: {{ dashboardStats.energy?.savings_percent || 0 }}% | 预估月费: ¥{{ dashboardStats.energy?.monthly_cost || 0 }}</div>
-              </a-card>
-            </a-col>
-
-            <a-col :xs="24" :sm="12" :md="8">
               <a-card class="stat-card alert-card" hoverable>
                 <a-statistic
                   title="待处理告警"
@@ -123,10 +109,6 @@
         <DeviceManagementPanel />
       </a-tab-pane>
 
-      <a-tab-pane key="energy" tab="⚡ 能耗统计">
-        <EnergyConsumptionPanel />
-      </a-tab-pane>
-
       <a-tab-pane key="events" tab="📋 事件日志">
         <EventLogPanel />
       </a-tab-pane>
@@ -140,7 +122,6 @@ import {
   FireOutlined,
   SafetyCertificateOutlined,
   ApartmentOutlined,
-  ThunderboltOutlined,
   BellOutlined,
   TrophyOutlined
 } from '@ant-design/icons-vue'
@@ -148,7 +129,6 @@ import { environmentApi } from '@/api/environment'
 import EnvironmentDataPanel from './components/EnvironmentDataPanel.vue'
 import FireAlarmPanel from './components/FireAlarmPanel.vue'
 import DeviceManagementPanel from './components/DeviceManagementPanel.vue'
-import EnergyConsumptionPanel from './components/EnergyConsumptionPanel.vue'
 import EventLogPanel from './components/EventLogPanel.vue'
 
 const activeTab = ref('overview')
@@ -202,7 +182,6 @@ onMounted(() => {
   animation: pulse 2s infinite;
 }
 .device-card { border-left-color: #722ed1; }
-.energy-card { border-left-color: #faad14; }
 .alert-card { border-left-color: #ff7875; }
 .score-card { border-left-color: #52c41a; }
 
