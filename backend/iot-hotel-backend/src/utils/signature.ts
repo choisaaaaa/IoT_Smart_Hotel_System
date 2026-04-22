@@ -3,7 +3,7 @@ import crypto from 'crypto';
 /**
  * 将对象键进行排序，确保签名的一致性
  */
-function sortObject(obj: any): any {
+export function sortObject(obj: any): any {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }

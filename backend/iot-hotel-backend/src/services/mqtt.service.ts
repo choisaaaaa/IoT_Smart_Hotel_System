@@ -3,7 +3,7 @@ import fs from 'fs';
 import config from '../config';
 import logger from '../utils/logger';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
-import { calculateSignature, verifySignature } from '../utils/signature';
+import { calculateSignature, verifySignature, sortObject } from '../utils/signature';
 import { verifyDeviceKey, getRawKeyForSigning } from '../utils/device-key';
 import { AIButlerService } from './ai-butler.service';
 import { getVoiceGateway } from './voice-gateway.service';
@@ -410,9 +410,11 @@ class MQTTService {
       
       // 调试日志：打印实际接收的数据和计算的签名
       const calculatedSig = calculateSignature(payloadWithoutSignature, signingKey);
+      const signingPayloadStr = JSON.stringify(sortObject(payloadWithoutSignature));
       logger.info(`[签名调试] 设备: ${deviceId}, 主题: ${topic}`);
       logger.info(`[签名调试] 原始消息: ${JSON.stringify(data)}`);
-      logger.info(`[签名调试] 用于签名的数据: ${JSON.stringify(payloadWithoutSignature)}`);
+      logger.info(`[签名调试] 签名原文: ${signingPayloadStr}`);
+      logger.info(`[签名调试] 签名密钥: ${signingKey.substring(0, 8)}...`);
       logger.info(`[签名调试] 接收到的签名: ${signature}`);
       logger.info(`[签名调试] 计算的签名: ${calculatedSig}`);
       logger.info(`[签名调试] 数据类型: value=${typeof data.value}, timestamp=${typeof data.timestamp}`);

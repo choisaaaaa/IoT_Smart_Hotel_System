@@ -265,11 +265,11 @@ class MQTTClient:
             payload_copy['timestamp'] = datetime.now().isoformat()
 
         sign_payload = {k: v for k, v in payload_copy.items() if k != 'signature'}
-        # 递归排序以确保与后端一致
         sorted_payload = self._sort_object(sign_payload)
-        # 关键：与后端 JavaScript JSON.stringify 保持一致
-        # 默认行为：转义非 ASCII 字符 (如 ℃ -> \u2103)
-        sign_str = json.dumps(sorted_payload, sort_keys=True)
+        sign_str = json.dumps(sorted_payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+
+        self.logger.debug(f"[签名调试] 签名原文: {sign_str}")
+        self.logger.debug(f"[签名调试] 签名密钥: {self.device_key[:8]}...")
 
         signature = hmac_mod.new(
             self.device_key.encode('utf-8'),
@@ -293,8 +293,7 @@ class MQTTClient:
                         payload['timestamp'] = datetime.now().isoformat()
                     payload['signature'] = self._generate_signature(payload)
 
-                # 与后端保持一致：默认转义非 ASCII 字符
-                payload = json.dumps(payload)
+                payload = json.dumps(payload, ensure_ascii=False)
 
             result = self.client.publish(topic, payload, qos=1)
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
