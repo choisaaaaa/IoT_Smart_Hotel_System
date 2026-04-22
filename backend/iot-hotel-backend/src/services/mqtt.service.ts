@@ -83,7 +83,7 @@ class MQTTService {
 
     if (!device) {
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT audit_status, device_key, hotel_id FROM devices WHERE device_id = ?',
+        'SELECT audit_status, device_key, device_key_encrypted, hotel_id FROM devices WHERE device_id = ?',
         [deviceId]
       );
       device = rows[0] as any;
@@ -400,7 +400,9 @@ class MQTTService {
       const { signature, ...payloadWithoutSignature } = data;
       
       // 获取用于签名的原始密钥（支持新的加密存储格式）
-      const signingKey = getRawKeyForSigning(device.device_key_encrypted || device.device_key, device.device_key);
+      // device_key_encrypted 存储 AES 加密的原始密钥，device_key 存储哈希值
+      const encryptedKey = device.device_key_encrypted || device.device_key;
+      const signingKey = getRawKeyForSigning(encryptedKey, device.device_key);
       if (!signingKey) {
         logger.error(`设备 ${deviceId} 无法获取签名密钥`);
         return;
