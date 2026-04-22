@@ -246,7 +246,7 @@ class MQTTClient:
             payload_dict['timestamp'] = datetime.now().isoformat()
 
         sign_payload = {k: v for k, v in payload_dict.items() if k != 'signature'}
-        sign_str = json.dumps(sign_payload, ensure_ascii=False, separators=(',', ':'))
+        sign_str = json.dumps(sign_payload, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
 
         signature = hmac_mod.new(
             self.device_key.encode('utf-8'),
