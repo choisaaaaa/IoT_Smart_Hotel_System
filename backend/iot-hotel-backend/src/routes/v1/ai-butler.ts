@@ -97,6 +97,70 @@ router.post('/chat',
 );
 
 /**
+ * @route POST /api/v1/ai-butler/asr
+ * @desc 纯语音识别接口 - 识别语音并用AI优化文本（去重、修正口语化）
+ * @access Private
+ */
+router.post('/asr',
+  authenticate,
+  [
+    body('audio').notEmpty().withMessage('音频数据不能为空')
+  ],
+  async (req, res) => {
+    try {
+      const { audio } = req.body;
+
+      // 调用ASR进行语音识别
+      const recognizedText = await aiButlerService.speechToText(audio);
+
+      if (!recognizedText.trim()) {
+        return res.json({
+          code: 200,
+          message: 'success',
+          data: {
+            text: '',
+            recognized: false,
+            message: '未能识别到语音内容，请重试'
+          }
+        });
+      }
+
+      // 使用AI对ASR识别结果进行语义优化（去重、修正口语化表达）
+      let optimizedText = recognizedText;
+      try {
+        optimizedText = await aiButlerService.optimizeAsrText(recognizedText);
+        logger.info(`[ASR优化] 原始: "${recognizedText}" -> 优化: "${optimizedText}"`);
+      } catch (optimizeError) {
+        logger.warn('[ASR优化] AI优化失败，使用原始识别结果:', optimizeError.message);
+        // 优化失败时使用原始识别结果
+      }
+
+      res.json({
+        code: 200,
+        message: 'success',
+        data: {
+          text: optimizedText,
+          recognized: true,
+          originalText: recognizedText, // 保留原始识别结果供调试
+          message: '识别成功'
+        }
+      });
+    } catch (error) {
+      logger.error('语音识别失败:', error.message);
+      res.status(500).json({
+        code: 500,
+        message: '语音识别失败',
+        data: {
+          text: '',
+          recognized: false,
+          message: error.message
+        }
+      });
+    }
+  }
+);
+
+/**
  * @route POST /api/v1/ai-butler/verify
  * @desc 验证房间入住状态
  * @access Private

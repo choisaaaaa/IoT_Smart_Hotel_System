@@ -788,7 +788,7 @@ function initSpeechRecognition() {
   recognition.onresult = (event: any) => {
     let finalTranscript = ''
     let interimTranscript = ''
-    
+
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript
       if (event.results[i].isFinal) {
@@ -797,14 +797,22 @@ function initSpeechRecognition() {
         interimTranscript += transcript
       }
     }
-    
-    // 如果有最终结果，处理它
+
+    // 如果有最终结果，直接显示在聊天窗口（不调用AI处理）
     if (finalTranscript) {
       console.log('[语音识别] 识别结果:', finalTranscript)
-      handleUserInput(finalTranscript)
       stopListening()
+
+      // 直接添加到聊天窗口作为用户消息，不调用AI
+      messages.value.push({
+        type: 'user',
+        text: finalTranscript,
+        time: now().format('HH:mm')
+      })
+      scrollToBottom()
     } else if (interimTranscript) {
-      // 可以在这里显示临时结果给用户
+      // 临时结果显示在输入框
+      userInput.value = interimTranscript
       console.log('[语音识别] 临时结果:', interimTranscript)
     }
   }
@@ -863,6 +871,14 @@ function startListening() {
 }
 
 function doStartListening() {
+  // 开始识别前，停止所有可能正在播放的AI语音，避免声音回授被识别
+  // 停止AI管家TTS音频
+  if (audioPlayer.value) {
+    audioPlayer.value.pause()
+    audioPlayer.value.currentTime = 0
+    isPlayingAudio.value = false
+  }
+
   try {
     recognition.start()
   } catch (e: any) {

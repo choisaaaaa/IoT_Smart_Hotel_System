@@ -5,6 +5,35 @@ import crypto from 'crypto';
 import WebSocket from 'ws';
 import { KnowledgeBaseService } from './knowledge-base.service';
 import mqttService from './mqtt.service';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
+// 确保 .env 被加载 - 尝试多个可能的路径
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../../.env'),
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    logger.info(`[AI-Butler] 已加载环境变量: ${envPath}`);
+    envLoaded = true;
+    break;
+  }
+}
+
+if (!envLoaded) {
+  logger.warn('[AI-Butler] 未找到.env文件，使用已加载的环境变量');
+}
+
+// 调试：打印关键环境变量（只显示前10位）
+logger.info('[AI-Butler] 环境变量检查:');
+logger.info(`  ALIYUN_ACCESS_KEY: ${process.env.ALIYUN_ACCESS_KEY ? process.env.ALIYUN_ACCESS_KEY.substring(0, 10) + '...' : '未设置'}`);
+logger.info(`  ZHIPU_API_KEY: ${process.env.ZHIPU_API_KEY ? process.env.ZHIPU_API_KEY.substring(0, 10) + '...' : '未设置'}`);
 
 interface AIRequest {
   roomId: string;
@@ -25,6 +54,7 @@ interface AIResponse {
   toolCalls?: any[];
   ticketData?: any;
   hotelName?: string;
+  recognizedText?: string; // 语音识别原始结果
 }
 
 interface GuestSession {
@@ -45,13 +75,39 @@ export class AIButlerService {
   private sessions: Map<string, GuestSession> = new Map();
 
   // API配置
-  private zhipuApiKey = process.env.ZHIPU_API_KEY || '';
-  private xfyunAppId = process.env.XFYUN_APP_ID || '';
-  private xfyunApiKey = process.env.XFYUN_API_KEY || '';
-  private xfyunApiSecret = process.env.XFYUN_API_SECRET || '';
-  private aliyunAccessKey = process.env.ALIYUN_ACCESS_KEY || '';
-  private aliyunAccessSecret = process.env.ALIYUN_ACCESS_SECRET || '';
-  private aliyunAppKey = process.env.ALIYUN_APP_KEY || '';
+  private zhipuApiKey: string;
+  private xfyunAppId: string;
+  private xfyunApiKey: string;
+  private xfyunApiSecret: string;
+  private aliyunAccessSecret: string;
+  private aliyunAppKey: string;
+  private aliyunAccessKey: string;
+
+  private constructor() {
+    // 在构造函数中初始化所有环境变量，确保 .env 已加载
+    this.zhipuApiKey = process.env.ZHIPU_API_KEY || '';
+    this.xfyunAppId = process.env.XFYUN_APP_ID || '';
+    this.xfyunApiKey = process.env.XFYUN_API_KEY || '';
+    this.xfyunApiSecret = process.env.XFYUN_API_SECRET || '';
+    this.aliyunAccessSecret = process.env.ALIYUN_ACCESS_SECRET || '';
+    this.aliyunAppKey = process.env.ALIYUN_APP_KEY || '';
+    // 支持 DASHSCOPE_API_KEY 和 ALIYUN_ACCESS_KEY 两种环境变量名
+    this.aliyunAccessKey = process.env.DASHSCOPE_API_KEY || process.env.ALIYUN_ACCESS_KEY || '';
+    
+    logger.info('[AI-Butler] 服务初始化完成，API Key状态:');
+    logger.info(`  DASHSCOPE_API_KEY: ${process.env.DASHSCOPE_API_KEY ? process.env.DASHSCOPE_API_KEY.substring(0, 10) + '...' : '未设置'}`);
+    logger.info(`  ALIYUN_ACCESS_KEY: ${process.env.ALIYUN_ACCESS_KEY ? process.env.ALIYUN_ACCESS_KEY.substring(0, 10) + '...' : '未设置'}`);
+    logger.info(`  ZHIPU_API_KEY: ${this.zhipuApiKey ? this.zhipuApiKey.substring(0, 10) + '...' : '未设置'}`);
+  }
+
+  /**
+   * 重新加载环境变量（用于调试）
+   */
+  public reloadEnv(): void {
+    this.aliyunAccessKey = process.env.ALIYUN_ACCESS_KEY || '';
+    logger.info('[AI-Butler] 重新加载环境变量:');
+    logger.info(`  ALIYUN_ACCESS_KEY: ${this.aliyunAccessKey ? this.aliyunAccessKey.substring(0, 10) + '...' : '未设置'}`);
+  }
 
   // 工具定义（Function Calling）
   private tools = [
@@ -322,68 +378,453 @@ export class AIButlerService {
   }
 
   /**
-   * 语音识别 - 阿里云百炼ASR (使用FunASR模型)
-   * 文档: https://help.aliyun.com/document_detail/2712536.html
+   * 语音识别 - 阿里云百炼Fun-ASR
    */
   async speechToText(audioBase64: string): Promise<string> {
     try {
+      // 关键修复：在方法调用时重新读取环境变量，确保获取最新值
+      const currentApiKey = process.env.ALIYUN_ACCESS_KEY || '';
+      
+      // 调试：检查API Key
+      logger.info(`[speechToText] this.aliyunAccessKey: "${this.aliyunAccessKey}"`);
+      logger.info(`[speechToText] process.env.ALIYUN_ACCESS_KEY: "${currentApiKey?.substring(0, 10)}..."`);
+      
+      // 如果实例属性为空但环境变量有值，更新实例属性
+      if (!this.aliyunAccessKey && currentApiKey) {
+        logger.info('[speechToText] 更新实例属性为环境变量值');
+        this.aliyunAccessKey = currentApiKey;
+      }
+      
       // 检查 API Key 是否配置
       if (!this.aliyunAccessKey) {
-        logger.error('阿里云百炼ASR: ALIYUN_ACCESS_KEY 未配置');
+        logger.error('阿里云百炼Fun-ASR: ALIYUN_ACCESS_KEY 未配置');
         return '';
       }
 
-      // 百炼语音识别API - 只需要API Key
-      const url = 'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription';
-
-      const response = await axios.post(url, {
-        model: 'paraformer-realtime-v2',  // 使用实时语音识别模型
-        input: {
-          audio: audioBase64  // base64编码的音频数据
-        },
-        parameters: {
-          format: 'pcm',
-          sample_rate: 16000,
-          language_hints: ['zh', 'en']  // 支持中英文
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.aliyunAccessKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      // 解析响应
-      if (response.data && response.data.output) {
-        const result = response.data.output;
-        if (result.text) {
-          logger.info(`百炼ASR识别成功: "${result.text}"`);
-          return result.text;
-        }
-      }
-
-      logger.warn('百炼ASR响应格式异常:', response.data);
-      return '';
+      // 将base64音频转换为Buffer
+      const audioBuffer = Buffer.from(audioBase64, 'base64');
+      
+      // 确保音频格式正确（WAV格式）
+      const preparedBuffer = this.prepareAudioData(audioBuffer);
+      
+      // 使用Fun-ASR进行语音识别
+      return await this.recognizeWithFunASR(preparedBuffer);
+      
     } catch (error: any) {
-      const status = error.response?.status;
-      const data = error.response?.data;
-      
-      // 详细错误日志
-      if (status === 401) {
-        logger.error('百炼ASR认证失败: API Key无效或已过期');
-      } else if (status === 429) {
-        logger.error('百炼ASR请求过于频繁，请稍后重试');
-      } else {
-        logger.error('百炼ASR识别失败:', {
-          message: error.message,
-          status,
-          details: data
-        });
-      }
-      
+      logger.error('语音识别处理失败:', error.message || error);
       return '';
     }
+  }
+
+  /**
+   * 优化ASR识别文本 - 去除重复、修正口语化表达
+   * 使用智谱AI进行语义优化
+   */
+  async optimizeAsrText(rawText: string): Promise<string> {
+    try {
+      if (!this.zhipuApiKey) {
+        logger.warn('[ASR优化] 智谱API Key未配置，跳过优化');
+        return rawText;
+      }
+
+      const prompt = `你是一个语音识别文本优化助手。请优化以下语音识别结果：
+"${rawText}"
+
+优化要求：
+1. 去除重复的词语（如"酒店的酒店的"→"酒店的"）
+2. 修正口语化表达，使其更通顺
+3. 修正语音识别错误的同音词
+4. 保持原意不变
+5. 只输出优化后的文本，不要任何解释
+
+优化后的文本：`;
+
+      const response = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        model: 'glm-4-flash',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 200
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.zhipuApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      if (response.data?.choices?.[0]?.message?.content) {
+        const optimized = response.data.choices[0].message.content.trim();
+        return optimized || rawText;
+      }
+
+      return rawText;
+    } catch (error) {
+      logger.error('[ASR优化] AI优化失败:', error.message);
+      return rawText;
+    }
+  }
+
+  /**
+   * 准备音频数据 - 确保格式正确
+   */
+  private prepareAudioData(buffer: Buffer): Buffer {
+    // 检测音频格式
+    const magicBytes = buffer.slice(0, 12).toString('hex');
+    logger.info(`[音频格式检测] 前12字节hex: ${magicBytes}`);
+    
+    // WAV: 52 49 46 46 ... 57 41 56 45 (RIFF ... WAVE)
+    // AMR: 23 21 (%)
+    // AAC: often starts with FF
+    // OPUS: 4F 67 67 53 (OggS)
+    
+    if (this.isWavFormat(buffer)) {
+      logger.info('检测到WAV格式音频');
+      return buffer;
+    }
+    
+    // 检查是否是AMR (23 21)
+    if (magicBytes.startsWith('2321')) {
+      logger.info('检测到AMR格式，Fun-ASR支持但需要设置format=amr');
+      // AMR直接返回，但需要修改run-task参数
+      return buffer;
+    }
+    
+    // 检查是否是AAC相关 (FF)
+    if (magicBytes.startsWith('ff') || magicBytes.startsWith('fff')) {
+      logger.info('检测到可能为AAC/MP4格式');
+      return buffer;
+    }
+    
+    // 默认当作PCM处理，包装成WAV
+    logger.info('非WAV格式，当作PCM包装为WAV');
+    return this.wrapPcmToWav(buffer);
+  }
+
+  /**
+   * 将PCM数据包装为WAV格式
+   */
+  private wrapPcmToWav(pcmData: Buffer): Buffer {
+    const sampleRate = 16000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const dataSize = pcmData.length;
+    const fileSize = 44 + dataSize;
+    
+    const wavBuffer = Buffer.alloc(fileSize);
+    
+    // RIFF chunk
+    wavBuffer.write('RIFF', 0);
+    wavBuffer.writeUInt32LE(fileSize - 8, 4);
+    wavBuffer.write('WAVE', 8);
+    
+    // fmt chunk
+    wavBuffer.write('fmt ', 12);
+    wavBuffer.writeUInt32LE(16, 16);
+    wavBuffer.writeUInt16LE(1, 20);
+    wavBuffer.writeUInt16LE(numChannels, 22);
+    wavBuffer.writeUInt32LE(sampleRate, 24);
+    wavBuffer.writeUInt32LE(byteRate, 28);
+    wavBuffer.writeUInt16LE(blockAlign, 32);
+    wavBuffer.writeUInt16LE(bitsPerSample, 34);
+    
+    // data chunk
+    wavBuffer.write('data', 36);
+    wavBuffer.writeUInt32LE(dataSize, 40);
+    pcmData.copy(wavBuffer, 44);
+    
+    return wavBuffer;
+  }
+
+  /**
+   * 检查是否是WAV格式
+   */
+  private isWavFormat(buffer: Buffer): boolean {
+    return buffer.length > 44 && 
+           buffer.toString('ascii', 0, 4) === 'RIFF' && 
+           buffer.toString('ascii', 8, 12) === 'WAVE';
+  }
+
+  /**
+   * 从WAV文件中提取PCM数据
+   */
+  private extractPcmFromWav(wavBuffer: Buffer): Buffer {
+    // WAV文件头部44字节
+    // 从第44字节开始是PCM数据
+    const dataOffset = 44;
+    
+    // 读取data chunk的大小（位于36-40字节）
+    const dataSize = wavBuffer.readUInt32LE(40);
+    
+    logger.debug(`WAV文件: 总大小=${wavBuffer.length}, PCM数据偏移=${dataOffset}, PCM数据大小=${dataSize}`);
+    
+    // 提取PCM数据
+    return wavBuffer.slice(dataOffset, dataOffset + dataSize);
+  }
+
+  /**
+   * 使用WebSocket连接阿里云百炼Fun-ASR实时语音识别
+   * 参考文档: https://help.aliyun.com/zh/model-studio/real-time-speech-recognition
+   * 认证方式: 通过URL参数传递token
+   */
+  private recognizeWithFunASR(audioBuffer: Buffer): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const fullText: string[] = [];
+      let ws: WebSocket | null = null;
+      let isResolved = false;
+      let taskStarted = false;
+      // 生成32位随机ID（阿里云要求）
+      const taskId = `${Date.now()}${Math.random().toString(36).substr(2, 15)}`.slice(0, 32);
+
+      try {
+        // 调试：检查API Key
+        logger.info(`[DEBUG] this.aliyunAccessKey 类型: ${typeof this.aliyunAccessKey}`);
+        logger.info(`[DEBUG] this.aliyunAccessKey 值: "${this.aliyunAccessKey}"`);
+        logger.info(`[DEBUG] this.aliyunAccessKey 长度: ${this.aliyunAccessKey?.length || 0}`);
+        
+        // 构建WebSocket URL（注意：URL末尾有斜杠）
+        const wsUrl = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
+        const apiKey = this.aliyunAccessKey || '';
+        
+        logger.info('正在连接百炼Fun-ASR WebSocket...');
+        logger.info(`API Key前10位: ${apiKey ? apiKey.substring(0, 10) : '空'}`);
+        logger.info(`WebSocket URL: ${wsUrl}`);
+        
+        // 使用 Authorization header 进行认证（官方推荐方式）
+        // 注意：bearer 要小写
+        ws = new WebSocket(wsUrl, {
+          headers: {
+            Authorization: `bearer ${apiKey}`
+          }
+        });
+
+        ws.on('open', () => {
+          logger.info('百炼Fun-ASR WebSocket连接已建立');
+
+          // 发送run-task指令
+          // 参考: https://help.aliyun.com/zh/model-studio/real-time-speech-recognition
+          const runTaskMessage = {
+            header: {
+              action: 'run-task',
+              task_id: taskId,
+              streaming: 'duplex'
+            },
+            payload: {
+              task_group: 'audio',
+              task: 'asr',
+              function: 'recognition',
+              model: 'fun-asr-realtime',
+              parameters: {
+                sample_rate: 16000,
+                format: 'wav'
+              },
+              input: {}
+            }
+          };
+          
+          try {
+            ws!.send(JSON.stringify(runTaskMessage));
+            logger.info('已发送run-task指令:', JSON.stringify(runTaskMessage));
+          } catch (error) {
+            logger.error('发送run-task指令失败:', error);
+            if (!isResolved) {
+              isResolved = true;
+              reject(new Error('发送run-task指令失败'));
+            }
+          }
+        });
+
+        ws.on('message', (data) => {
+          try {
+            // 按照官方示例，直接解析JSON
+            const message = JSON.parse(data.toString());
+            
+            logger.info(`收到Fun-ASR事件: ${message.header?.event}`);
+            
+            if (!message.header || !message.header.event) {
+              logger.warn('收到无效消息格式');
+              return;
+            }
+
+            switch (message.header.event) {
+              case 'task-started':
+                logger.info('Fun-ASR任务已启动，开始发送音频流');
+                taskStarted = true;
+                this.sendAudioStream(ws!, audioBuffer, taskId);
+                break;
+
+              case 'result-generated':
+                // 打印完整payload以便调试
+                logger.info(`result-generated payload: ${JSON.stringify(message.payload)}`);
+                const text = message.payload?.output?.sentence?.text || '';
+                if (text) {
+                  fullText.push(text);
+                  logger.info(`Fun-ASR识别片段: "${text}"`);
+                } else {
+                  logger.warn('Fun-ASR result-generated 但 text 为空');
+                }
+                break;
+
+              case 'task-finished':
+                logger.info('Fun-ASR任务完成');
+                if (!isResolved) {
+                  isResolved = true;
+                  const result = fullText.join('');
+                  logger.info(`百炼Fun-ASR识别成功: "${result}"`);
+                  resolve(result);
+                  ws!.close();
+                }
+                break;
+
+              case 'task-failed':
+                const errorMsg = message.header.error_message || 'Fun-ASR任务失败';
+                logger.error(`Fun-ASR任务失败: ${errorMsg}`);
+                if (!isResolved) {
+                  isResolved = true;
+                  ws!.close();
+                  reject(new Error(errorMsg));
+                }
+                break;
+
+              default:
+                logger.debug('Fun-ASR其他事件:', message.header.event);
+            }
+          } catch (e) {
+            // 如果JSON解析失败，可能是二进制数据，忽略
+            logger.debug('解析消息失败，可能是二进制音频数据');
+          }
+        });
+
+        ws.on('error', (error) => {
+          logger.error('百炼Fun-ASR WebSocket错误:', error);
+          if (!isResolved) {
+            isResolved = true;
+            reject(new Error(`WebSocket错误: ${error.message || '未知错误'}`));
+          }
+        });
+
+        ws.on('close', (code: number, reason: Buffer) => {
+          const reasonStr = reason.toString() || '无原因';
+          logger.info(`百炼Fun-ASR WebSocket连接已关闭 - 代码: ${code}, 原因: ${reasonStr}`);
+          logger.info(`[DEBUG] close事件触发时 - taskStarted: ${taskStarted}, fullText: [${fullText.join(', ')}]`);
+          
+          if (!isResolved) {
+            isResolved = true;
+            
+            // 1000 = 正常关闭, 1005 = 无状态码, 其他为异常
+            if (code === 1007) {
+              reject(new Error(`连接被关闭(1007 Invalid payload data): 请检查音频数据格式或API Key是否正确`));
+            } else if (!taskStarted) {
+              reject(new Error(`任务未启动连接已关闭(代码:${code})，未收到任何响应消息`));
+            } else {
+              const result = fullText.join('');
+              if (result) {
+                logger.info(`百炼Fun-ASR识别完成: "${result}"`);
+                resolve(result);
+              } else {
+                reject(new Error(`WebSocket连接关闭(代码:${code})，未获取到识别结果`));
+              }
+            }
+          }
+        });
+
+        // 超时处理 - 增加到60秒给足处理时间
+        const timeoutId = setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            const result = fullText.join('');
+            if (result) {
+              logger.info(`百炼Fun-ASR超时但返回结果: "${result}"`);
+              resolve(result);
+            } else {
+              reject(new Error('百炼Fun-ASR识别超时(60秒)'));
+            }
+            try {
+              ws!.close();
+            } catch (e) {
+              // 忽略关闭错误
+            }
+          }
+        }, 60000);
+
+      } catch (error) {
+        logger.error('百炼Fun-ASR WebSocket初始化失败:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * 发送音频流
+   */
+  private sendAudioStream(ws: WebSocket, audioBuffer: Buffer, taskId: string): void {
+    if (!audioBuffer || audioBuffer.length === 0) {
+      logger.error('音频数据为空，无法发送');
+      return;
+    }
+    
+    const chunkSize = 3200; // 100ms @ 16kHz, 16bit, mono
+    let offset = 0;
+    let chunkCount = 0;
+    
+    logger.info(`[音频发送] 总大小: ${audioBuffer.length} bytes, chunkSize: ${chunkSize}`);
+
+    const sendNextChunk = () => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        logger.warn(`WebSocket连接已关闭，停止发送音频`);
+        return;
+      }
+
+      if (offset < audioBuffer.length) {
+        const endOffset = Math.min(offset + chunkSize, audioBuffer.length);
+        const chunk = audioBuffer.slice(offset, endOffset);
+        
+        if (chunk.length === 0) {
+          logger.warn('音频块为空，跳过');
+          offset += chunkSize;
+          setTimeout(sendNextChunk, 100);
+          return;
+        }
+        
+        try {
+          ws.send(chunk);
+          chunkCount++;
+          offset += chunk.length;
+          
+          // 每5个块记录一次
+          if (chunkCount % 5 === 0) {
+            logger.debug(`已发送 ${chunkCount} 块, 进度: ${offset}/${audioBuffer.length}`);
+          }
+          
+          setTimeout(sendNextChunk, 100);
+        } catch (error) {
+          logger.error('发送音频块失败:', error);
+        }
+      } else {
+        logger.info(`音频流发送完成，共 ${chunkCount} 个块，发送finish-task`);
+        try {
+          const finishTaskMessage = {
+            header: {
+              action: 'finish-task',
+              task_id: taskId,
+              streaming: 'duplex'
+            },
+            payload: {
+              input: {}
+            }
+          };
+          ws.send(JSON.stringify(finishTaskMessage));
+          logger.debug('finish-task已发送');
+        } catch (error) {
+          logger.error('发送finish-task失败:', error);
+        }
+      }
+    };
+
+    // 开始发送音频
+    logger.info(`开始发送音频流，总大小: ${audioBuffer.length} 字节`);
+    sendNextChunk();
   }
 
   /**
@@ -1002,17 +1443,20 @@ export class AIButlerService {
       }
     }
 
+    let recognizedText = ''; // 在try外部声明，让catch也能访问
     try {
       // 2. 语音识别（如果有音频）
       let userText = text || '';
       if (audioData && !text) {
-        userText = await this.speechToText(audioData);
+        recognizedText = await this.speechToText(audioData);
+        userText = recognizedText;
       }
 
       if (!userText.trim()) {
         return {
           text: '抱歉，我没有听清楚，请再说一遍。',
-          audioUrl: ''
+          audioUrl: '',
+          recognizedText: recognizedText // 返回原始识别结果供前端显示
         };
       }
 
@@ -1088,9 +1532,10 @@ export class AIButlerService {
         return {
           text: finalContent,
           audioUrl: audioBase64,
-          action: llmResult.tool_calls[0].function.name, // 记录第一个动作
+          action: llmResult.tool_calls[0].function.name,
           ticketData: ticketData,
-          hotelName: session.hotelName
+          hotelName: session.hotelName,
+          recognizedText: recognizedText
         };
       }
 
@@ -1114,14 +1559,16 @@ export class AIButlerService {
         audioUrl: audioBase64,
         action,
         target,
-        hotelName: session.hotelName
+        hotelName: session.hotelName,
+        recognizedText: recognizedText
       };
     } catch (error) {
       logger.error('AI管家处理请求失败:', error.message);
       return {
         text: '抱歉，服务暂时不可用，为您转接前台。',
         action: 'transfer',
-        target: 'front_desk'
+        target: 'front_desk',
+        recognizedText: recognizedText
       };
     }
   }

@@ -152,7 +152,7 @@
                 >
                   <SendOutlined />
                 </a-button>
-                <!-- 语音输入按钮 -->
+                <!-- 语音输入按钮 - 点击开始/停止模式 -->
                 <a-button
                   shape="circle"
                   size="large"
@@ -161,14 +161,11 @@
                     listening: isListening,
                     'voice-btn-disabled': !microphonePermission
                   }"
-                  @mousedown="microphonePermission ? startListening() : requestMicrophonePermission()"
-                  @mouseup="microphonePermission ? stopListening() : null"
-                  @mouseleave="microphonePermission ? stopListening() : null"
-                  @touchstart="microphonePermission ? startListening() : requestMicrophonePermission()"
-                  @touchend="microphonePermission ? stopListening() : null"
-                  :title="microphonePermission ? '按住说话' : '点击启用麦克风'"
+                  @click="handleVoiceButtonClick"
+                  :title="microphonePermission ? (isListening ? '点击停止录音' : '点击开始录音') : '点击启用麦克风'"
                 >
-                  <AudioOutlined v-if="microphonePermission" />
+                  <AudioOutlined v-if="microphonePermission && !isListening" />
+                  <LoadingOutlined v-else-if="isListening" spin />
                   <AudioMutedOutlined v-else />
                 </a-button>
               </div>
@@ -541,6 +538,12 @@ let recognition: any = null
 let recognitionTimeout: any = null
 let isRecognitionActive = false
 
+// 后端ASR录音状态
+const isRecording = ref(false)
+let mediaRecorder: MediaRecorder | null = null
+let audioChunks: Blob[] = []
+let recordingTimeout: any = null
+
 // 服务中心状态
 const showDeliveryModal = ref(false)
 const deliveryLoading = ref(false)
@@ -781,147 +784,324 @@ function toggleAudio() {
   else { audioPlayer.value.play(); isPlayingAudio.value = true }
 }
 
-// 语音识别相关函数
+// 语音识别相关函数 - 使用后端Fun-ASR
 function initSpeechRecognition() {
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  // 检查浏览器是否支持MediaRecorder
+  if (!window.MediaRecorder) {
+    console.warn('[语音识别] 浏览器不支持MediaRecorder')
+    message.warning('您的浏览器不支持语音输入')
+    return
+  }
+  console.log('[语音识别] 已初始化（使用后端Fun-ASR）')
+}
 
-  if (!SpeechRecognition) {
-    console.warn('[语音识别] 浏览器不支持语音识别')
+// 开始录音并发送到后端ASR
+async function startListening() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    message.warning('您的浏览器不支持语音输入')
     return
   }
 
-  recognition = new SpeechRecognition()
-  recognition.lang = 'zh-CN'
-  recognition.continuous = false
-  recognition.interimResults = true
+  if (isRecording.value) {
+    // 如果正在录音，则停止
+    stopRecording()
+    return
+  }
 
-  recognition.onstart = () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000
+      }
+    })
+
+    // 使用MediaRecorder录制音频
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+      ? 'audio/webm' 
+      : 'audio/mp4'
+    
+    mediaRecorder = new MediaRecorder(stream, { mimeType })
+    audioChunks = []
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = async () => {
+      console.log('[录音] 停止，开始处理音频...')
+      isListening.value = false
+      isRecording.value = false
+      
+      // 停止所有音轨
+      stream.getTracks().forEach(track => track.stop())
+      
+      // 发送音频到后端
+      await sendAudioToBackend()
+    }
+
+    mediaRecorder.onerror = (event) => {
+      console.error('[录音] 错误:', event)
+      message.error('录音失败，请重试')
+      stopRecording()
+    }
+
+    // 开始录音
+    mediaRecorder.start(100) // 每100ms收集一次数据
     isListening.value = true
-    isRecognitionActive = true
-    console.log('[语音识别] 开始聆听')
+    isRecording.value = true
+    microphonePermission.value = true
+    
+    console.log('[录音] 开始录制')
+    message.info('🎤 正在聆听，请说话...')
 
-    // 设置最大聆听时间（10秒）
-    recognitionTimeout = setTimeout(() => {
-      if (isRecognitionActive) {
-        console.log('[语音识别] 达到最大聆听时间，自动停止')
-        stopListening()
+    // 设置最大录音时间（10秒）
+    recordingTimeout = setTimeout(() => {
+      if (isRecording.value) {
+        console.log('[录音] 达到最大录音时间，自动停止')
+        stopRecording()
       }
     }, 10000)
+
+  } catch (error: any) {
+    console.error('[录音] 启动失败:', error)
+    handleMicrophoneError(error)
+  }
+}
+
+// 停止录音
+function stopRecording() {
+  if (recordingTimeout) {
+    clearTimeout(recordingTimeout)
+    recordingTimeout = null
   }
 
-  recognition.onend = () => {
-    isListening.value = false
-    isRecognitionActive = false
-
-    if (recognitionTimeout) {
-      clearTimeout(recognitionTimeout)
-      recognitionTimeout = null
-    }
-
-    console.log('[语音识别] 聆听结束')
-  }
-
-  recognition.onresult = (event: any) => {
-    let finalTranscript = ''
-    let interimTranscript = ''
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript
-      } else {
-        interimTranscript += transcript
-      }
-    }
-
-    if (finalTranscript) {
-      console.log('[语音识别] 识别结果:', finalTranscript)
-      inputText.value = finalTranscript
-      sendMessage()
-      stopListening()
-    } else if (interimTranscript) {
-      inputText.value = interimTranscript
-    }
-  }
-
-  recognition.onerror = (event: any) => {
-    console.error('[语音识别] 错误:', event.error)
-    isListening.value = false
-    isRecognitionActive = false
-
-    if (recognitionTimeout) {
-      clearTimeout(recognitionTimeout)
-      recognitionTimeout = null
-    }
-
-    switch (event.error) {
-      case 'no-speech':
-        message.info('没有检测到语音，请再试一次')
-        break
-      case 'audio-capture':
-        message.error('无法访问麦克风，请检查设备')
-        break
-      case 'not-allowed':
-        message.error('麦克风权限被拒绝')
-        microphonePermission.value = false
-        break
-      case 'network':
-        message.error('网络错误，语音识别失败')
-        break
-      default:
-        message.error('语音识别失败，请重试')
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try {
+      mediaRecorder.stop()
+      console.log('[录音] 手动停止')
+    } catch (e) {
+      console.error('[录音] 停止失败:', e)
     }
   }
 }
 
-function startListening() {
-  if (!recognition) {
-    message.warning('语音识别未初始化，请刷新页面重试')
+// 将音频发送到后端进行ASR识别
+async function sendAudioToBackend() {
+  if (audioChunks.length === 0) {
+    message.info('没有检测到语音，请再试一次')
     return
   }
 
-  if (isRecognitionActive) {
-    try {
-      recognition.stop()
-    } catch (e) {
-      // 忽略停止错误
-    }
-    setTimeout(() => doStartListening(), 100)
-  } else {
-    doStartListening()
-  }
-}
-
-function doStartListening() {
   try {
-    recognition.start()
-  } catch (e: any) {
-    console.error('[语音识别] 启动失败:', e)
-    if (e.name === 'NotAllowedError') {
-      message.error('麦克风权限被拒绝，请在浏览器设置中允许访问')
-      microphonePermission.value = false
+    message.loading('正在识别语音...', 0)
+
+    // 合并音频块
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+
+    // 将WebM转换为WAV格式（阿里云Fun-ASR支持wav）
+    const wavBlob = await convertToWav(audioBlob)
+
+    // 转换为base64
+    const base64Audio = await blobToBase64(wavBlob)
+
+    // 发送到后端ASR接口（纯语音识别，不经过AI处理）
+    const res: any = await request.post('/ai-butler/asr', {
+      audio: base64Audio
+    }, {
+      timeout: 60000  // ASR识别需要更长时间，设置60秒超时
+    })
+
+    message.destroy()
+    
+    console.log('[ASR] 后端返回的完整响应:', JSON.stringify(res))
+    console.log('[ASR] res.code:', res.code)
+    console.log('[ASR] res.data:', res.data)
+
+    if (res.code === 200 && res.data) {
+      const result = res.data
+      const recognizedText = result.text || ''
+
+      console.log('[ASR] 提取的识别结果文本:', recognizedText)
+
+      if (recognizedText) {
+        console.log('[ASR] 开始发送识别结果到AI')
+        // 直接调用sendMessage发送到AI
+        inputText.value = recognizedText
+        await sendMessage()
+      } else {
+        message.info('没有识别到有效语音，请再试一次')
+      }
     } else {
-      message.error('语音识别启动失败，请重试')
+      console.error('[ASR] 识别失败或响应格式异常:', res)
+      message.error('语音识别失败，请重试')
     }
-    isListening.value = false
-    isRecognitionActive = false
+  } catch (error) {
+    message.destroy()
+    console.error('[ASR] 发送音频失败:', error)
+    message.error('语音识别失败，请检查网络连接')
   }
 }
 
-function stopListening() {
-  if (recognition && isRecognitionActive) {
-    try {
-      recognition.stop()
-      console.log('[语音识别] 手动停止')
-    } catch (e) {
-      console.error('[语音识别] 停止失败:', e)
+// Blob转Base64
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64 = reader.result as string
+      // 移除data:audio/wav;base64,前缀
+      const base64Data = base64.split(',')[1]
+      resolve(base64Data)
     }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+// 将WebM音频转换为WAV格式
+async function convertToWav(webmBlob: Blob): Promise<Blob> {
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    sampleRate: 16000
+  })
+  
+  try {
+    // 读取WebM数据
+    const arrayBuffer = await webmBlob.arrayBuffer()
+    
+    // 解码音频数据
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+    
+    // 转换为单声道、16kHz、16bit PCM
+    const numberOfChannels = 1
+    const sampleRate = 16000
+    const length = Math.floor(audioBuffer.duration * sampleRate)
+    const offlineContext = new OfflineAudioContext(numberOfChannels, length, sampleRate)
+    
+    const source = offlineContext.createBufferSource()
+    source.buffer = audioBuffer
+    source.connect(offlineContext.destination)
+    source.start()
+    
+    const renderedBuffer = await offlineContext.startRendering()
+    
+    // 创建WAV文件
+    return audioBufferToWav(renderedBuffer)
+  } finally {
+    audioContext.close()
+  }
+}
+
+// 将AudioBuffer转换为WAV Blob
+function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
+  const numberOfChannels = audioBuffer.numberOfChannels
+  const sampleRate = audioBuffer.sampleRate
+  const format = 1 // PCM
+  const bitDepth = 16
+  
+  const bytesPerSample = bitDepth / 8
+  const blockAlign = numberOfChannels * bytesPerSample
+  
+  const dataLength = audioBuffer.length * numberOfChannels * bytesPerSample
+  const buffer = new ArrayBuffer(44 + dataLength)
+  const view = new DataView(buffer)
+  
+  // 写入WAV头部
+  writeString(view, 0, 'RIFF')
+  view.setUint32(4, 36 + dataLength, true)
+  writeString(view, 8, 'WAVE')
+  writeString(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, format, true)
+  view.setUint16(22, numberOfChannels, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * blockAlign, true)
+  view.setUint16(32, blockAlign, true)
+  view.setUint16(34, bitDepth, true)
+  writeString(view, 36, 'data')
+  view.setUint32(40, dataLength, true)
+  
+  // 写入PCM数据
+  const offset = 44
+  const channelData = audioBuffer.getChannelData(0) // 单声道
+  
+  for (let i = 0; i < audioBuffer.length; i++) {
+    const sample = Math.max(-1, Math.min(1, channelData[i]))
+    const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF
+    view.setInt16(offset + i * 2, intSample, true)
+  }
+  
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i))
+  }
+}
+
+// 处理麦克风错误
+function handleMicrophoneError(error: any) {
+  isListening.value = false
+  isRecording.value = false
+  
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+        message.error('麦克风权限被拒绝，请点击麦克风图标重新授权')
+        microphonePermission.value = false
+        break
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        message.error('未找到麦克风设备，请检查硬件连接')
+        break
+      case 'NotReadableError':
+      case 'TrackStartError':
+        message.error('麦克风被其他应用占用，请关闭其他使用麦克风的程序')
+        break
+      default:
+        message.error('无法获取麦克风权限，请检查浏览器设置')
+    }
+  } else {
+    message.error('无法获取麦克风权限，请检查浏览器设置')
+  }
+}
+
+// 录音开始时间
+let recordingStartTime: number = 0
+const MIN_RECORDING_DURATION = 500 // 最少录音时长500ms
+
+// 处理语音按钮点击 - 点击开始/停止模式
+async function handleVoiceButtonClick() {
+  if (!microphonePermission.value) {
+    // 没有权限，先请求权限
+    await requestMicrophonePermission()
+    return
   }
 
-  if (recognitionTimeout) {
-    clearTimeout(recognitionTimeout)
-    recognitionTimeout = null
+  if (isRecording.value) {
+    // 正在录音，检查是否达到最小时长
+    const recordingDuration = Date.now() - recordingStartTime
+    if (recordingDuration < MIN_RECORDING_DURATION) {
+      message.info(`录音时间太短，请至少录音${MIN_RECORDING_DURATION / 1000}秒`)
+      return
+    }
+    // 停止录音
+    stopRecording()
+  } else {
+    // 开始录音
+    recordingStartTime = Date.now()
+    startListening()
   }
+}
+
+// 兼容旧代码
+function stopListening() {
+  stopRecording()
 }
 
 async function requestMicrophonePermission() {

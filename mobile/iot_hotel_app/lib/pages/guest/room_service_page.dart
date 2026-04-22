@@ -11,6 +11,7 @@ import '../../services/device_service.dart';
 import '../../services/delivery_service.dart';
 import '../../services/voice_call_service.dart';
 import '../../services/booking_service.dart';
+import '../../services/maintenance_service.dart';
 import '../../models/booking.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
@@ -312,7 +313,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
             _buildDeviceControlTab(),
             _DeliveryTab(roomId: _currentStay?.roomId, roomNumber: _currentStay?.roomNumber, currentStay: _currentStay),
             _ContactFrontDeskTab(roomId: _currentStay?.roomId),
-            _MoreServicesTab(isCheckedIn: _currentStay != null),
+            _MoreServicesTab(isCheckedIn: _currentStay != null, roomId: _currentStay?.roomId, currentStay: _currentStay),
           ],
         ),
       ),
@@ -1334,9 +1335,77 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   }
 }
 
-class _MoreServicesTab extends StatelessWidget {
+class _MoreServicesTab extends ConsumerStatefulWidget {
   final bool isCheckedIn;
-  const _MoreServicesTab({required this.isCheckedIn});
+  final dynamic roomId;
+  final Booking? currentStay;
+  const _MoreServicesTab({required this.isCheckedIn, this.roomId, this.currentStay});
+
+  @override
+  ConsumerState<_MoreServicesTab> createState() => _MoreServicesTabState();
+}
+
+class _MoreServicesTabState extends ConsumerState<_MoreServicesTab> {
+  bool _maintenanceLoading = false;
+  String _faultType = 'electric';
+  String _faultDescription = '';
+  String _priority = 'medium';
+
+  bool _showDeliveryRecordsModal = false;
+  bool _deliveryRecordsLoading = false;
+  List<dynamic> _deliveryRecords = [];
+
+  bool _showMaintenanceRecordsModal = false;
+  bool _maintenanceRecordsLoading = false;
+  List<dynamic> _maintenanceRecords = [];
+
+  final Map<String, String> _faultTypeMap = {
+    'electric': '电力/灯光',
+    'water': '水路/卫浴',
+    'ac': '空调/暖气',
+    'network': '网络/电视',
+    'other': '其他故障',
+  };
+
+  final Map<String, String> _priorityMap = {
+    'low': '普通',
+    'medium': '一般',
+    'high': '紧急',
+    'urgent': '特急',
+  };
+
+  final Map<String, Color> _priorityColorMap = {
+    'low': AppColors.success,
+    'medium': Colors.blue,
+    'high': Colors.orange,
+    'urgent': AppColors.error,
+  };
+
+  final Map<String, Color> _deliveryStatusColorMap = {
+    'pending': Colors.orange,
+    'delivering': Colors.blue,
+    'completed': AppColors.success,
+  };
+
+  final Map<String, String> _deliveryStatusTextMap = {
+    'pending': '待处理',
+    'delivering': '配送中',
+    'completed': '已完成',
+  };
+
+  final Map<String, Color> _maintenanceStatusColorMap = {
+    'pending': Colors.orange,
+    'assigned': Colors.blue,
+    'processing': Colors.purple,
+    'completed': AppColors.success,
+  };
+
+  final Map<String, String> _maintenanceStatusTextMap = {
+    'pending': '待处理',
+    'assigned': '已分配',
+    'processing': '处理中',
+    'completed': '已完成',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1347,6 +1416,8 @@ class _MoreServicesTab extends StatelessWidget {
       {'icon': '🅿️', 'name': '停车服务', 'desc': '代客泊车'},
       {'icon': '🔧', 'name': '报修服务', 'desc': '设备故障报修'},
       {'icon': '📅', 'name': '续住申请', 'desc': '延长住宿时间'},
+      {'icon': '📦', 'name': '我的配送', 'desc': '查看配送记录'},
+      {'icon': '🔨', 'name': '我的报修', 'desc': '查看维修记录'},
     ];
 
     return Stack(
@@ -1363,9 +1434,7 @@ class _MoreServicesTab extends StatelessWidget {
           itemBuilder: (context, index) {
             final svc = services[index];
             return InkWell(
-              onTap: isCheckedIn ? () {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已收到 ${svc['name']} 请求，前台将尽快处理')));
-              } : null,
+              onTap: widget.isCheckedIn ? () => _handleServiceTap(svc['name']!) : null,
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(16),
@@ -1389,7 +1458,7 @@ class _MoreServicesTab extends StatelessWidget {
             );
           },
         ),
-        if (!isCheckedIn)
+        if (!widget.isCheckedIn)
           Container(
             color: Colors.white.withValues(alpha: 0.6),
             child: Center(
@@ -1408,8 +1477,335 @@ class _MoreServicesTab extends StatelessWidget {
               ),
             ),
           ),
+        if (widget.isCheckedIn) ...[
+           if (_showDeliveryRecordsModal) _buildDeliveryRecordsModal(),
+           if (_showMaintenanceRecordsModal) _buildMaintenanceRecordsModal(),
+         ],
       ],
     );
+  }
+
+  void _handleServiceTap(String serviceName) {
+    switch (serviceName) {
+      case '报修服务':
+        _showMaintenanceModalDialog();
+        break;
+      case '我的配送':
+        _showDeliveryRecords();
+        break;
+      case '我的报修':
+        _showMaintenanceRecords();
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已收到 $serviceName 请求，前台将尽快处理')));
+    }
+  }
+
+  void _showMaintenanceModalDialog() {
+    setState(() {
+      _faultType = 'electric';
+      _faultDescription = '';
+      _priority = 'medium';
+    });
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 20),
+              const Text('设施报修', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              const Text('故障类型', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: _faultTypeMap.entries.map((e) => ChoiceChip(
+                  label: Text(e.value),
+                  selected: _faultType == e.key,
+                  onSelected: (_) => setModalState(() => _faultType = e.key),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text('故障描述', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: '请详细描述故障情况...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: (v) => _faultDescription = v,
+              ),
+              const SizedBox(height: 16),
+              const Text('紧急程度', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: _priorityMap.entries.map((e) => ChoiceChip(
+                  label: Text(e.value),
+                  selected: _priority == e.key,
+                  selectedColor: _priorityColorMap[e.key]?.withValues(alpha: 0.3),
+                  onSelected: (_) => setModalState(() => _priority = e.key),
+                )).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  onPressed: _maintenanceLoading ? null : () => _submitMaintenance(ctx),
+                  child: _maintenanceLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('提交报修'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitMaintenance(BuildContext ctx) async {
+    if (_faultDescription.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请描述故障情况')));
+      return;
+    }
+    setState(() => _maintenanceLoading = true);
+    try {
+      final result = await ref.read(maintenanceServiceProvider).createMaintenanceTicket({
+        'room_id': widget.roomId,
+        'fault_type': _faultType,
+        'fault_description': _faultDescription,
+        'priority': _priority,
+      });
+      if (result.success) {
+        Navigator.pop(ctx);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('报修申请已提交，维修人员将尽快联系您'), backgroundColor: AppColors.success));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '提交失败'), backgroundColor: AppColors.error));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('提交失败: $e'), backgroundColor: AppColors.error));
+    } finally {
+      setState(() => _maintenanceLoading = false);
+    }
+  }
+
+  Future<void> _showDeliveryRecords() async {
+    setState(() {
+      _showDeliveryRecordsModal = true;
+      _deliveryRecordsLoading = true;
+    });
+    try {
+      final result = await ref.read(deliveryServiceProvider).getDeliveryOrders(pageSize: 50);
+      if (result.success) {
+        setState(() => _deliveryRecords = result.data ?? []);
+      }
+    } catch (e) {
+      debugPrint('获取配送记录失败: $e');
+    } finally {
+      setState(() => _deliveryRecordsLoading = false);
+    }
+  }
+
+  Widget _buildDeliveryRecordsModal() {
+    return Container(
+      color: Colors.black54,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxHeight: 500),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('我的配送记录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _showDeliveryRecordsModal = false)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _deliveryRecordsLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _deliveryRecords.isEmpty
+                        ? const Center(child: Text('暂无配送记录', style: TextStyle(color: AppColors.textSecondary)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _deliveryRecords.length,
+                            itemBuilder: (context, i) {
+                              final record = _deliveryRecords[i];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  title: Text(record['item_name'] ?? '未知物品'),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('数量: ${record['quantity'] ?? 1}'),
+                                      Text('时间: ${_formatDateTime(record['created_at'])}'),
+                                    ],
+                                  ),
+                                  trailing: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: (_deliveryStatusColorMap[record['status']] ?? Colors.grey).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _deliveryStatusTextMap[record['status']] ?? record['status'] ?? '未知',
+                                      style: TextStyle(color: _deliveryStatusColorMap[record['status']], fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMaintenanceRecords() async {
+    setState(() {
+      _showMaintenanceRecordsModal = true;
+      _maintenanceRecordsLoading = true;
+    });
+    try {
+      final result = await ref.read(maintenanceServiceProvider).getMaintenanceTickets(pageSize: 50);
+      if (result.success) {
+        setState(() => _maintenanceRecords = result.data ?? []);
+      }
+    } catch (e) {
+      debugPrint('获取维修记录失败: $e');
+    } finally {
+      setState(() => _maintenanceRecordsLoading = false);
+    }
+  }
+
+  Widget _buildMaintenanceRecordsModal() {
+    return Container(
+      color: Colors.black54,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxHeight: 500),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('我的维修记录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _showMaintenanceRecordsModal = false)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _maintenanceRecordsLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _maintenanceRecords.isEmpty
+                        ? const Center(child: Text('暂无维修记录', style: TextStyle(color: AppColors.textSecondary)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _maintenanceRecords.length,
+                            itemBuilder: (context, i) {
+                              final record = _maintenanceRecords[i];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  title: Text(_faultTypeMap[record['fault_type']] ?? record['fault_type'] ?? '未知'),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('描述: ${record['fault_description'] ?? '无'}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                                      Text('时间: ${_formatDateTime(record['created_at'])}'),
+                                    ],
+                                  ),
+                                  trailing: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: (_maintenanceStatusColorMap[record['status']] ?? Colors.grey).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _maintenanceStatusTextMap[record['status']] ?? record['status'] ?? '未知',
+                                          style: TextStyle(color: _maintenanceStatusColorMap[record['status']], fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: (_priorityColorMap[record['priority']] ?? Colors.grey).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _priorityMap[record['priority']] ?? record['priority'] ?? '普通',
+                                          style: TextStyle(color: _priorityColorMap[record['priority']], fontSize: 11),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDateTime(dynamic dateTime) {
+    if (dateTime == null) return '-';
+    if (dateTime is String) {
+      try {
+        final dt = DateTime.parse(dateTime);
+        return '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {
+        return dateTime;
+      }
+    }
+    return dateTime.toString();
   }
 }
 

@@ -26,6 +26,8 @@
   "author": "慧宿智联团队",
   "license": "MIT",
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@types/ws": "^8.18.1",
     "axios": "^1.15.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
@@ -36,6 +38,7 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "express-winston": "^4.2.0",
+    "fluent-ffmpeg": "^2.1.3",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.3.3",
@@ -45,7 +48,8 @@
     "socket.io": "^4.7.2",
     "uuid": "^9.0.1",
     "validator": "^13.15.35",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
