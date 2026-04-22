@@ -19,7 +19,10 @@ static const char *TAG = "VOICE_SESSION";
 #define PCM_CHUNK_MAX_SAMPLES    512
 #define B64_BUF_SIZE             ((((PCM_CHUNK_MAX_SAMPLES) * 2 + 2) / 3) * 4 + 8)
 #define DOWNLINK_PCM_MAX_BYTES   32768
-#define VOICE_PLAY_QUEUE_DEPTH   8  /* 每槽对应一次下行 JSON（约 64ms @2048B PCM），8 槽 ≈ 500ms 缓冲 */
+/* 每槽 ≈ 2048 samples = 64 ms 音频（32kHz/16bit）；16 槽 ≈ 1 s 抖动缓冲。
+ * 前提是发送端按 ≥60 ms/chunk 的节奏发，稳态下队列只会占 1–2 项；
+ * 16 是给突发抖动的安全余量，平时延迟仍然只有 1–2 × 64 ms。 */
+#define VOICE_PLAY_QUEUE_DEPTH   16
 
 typedef struct {
     size_t nbytes;
