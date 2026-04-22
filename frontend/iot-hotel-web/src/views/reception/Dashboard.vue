@@ -95,6 +95,7 @@
           <div class="action-name">客房余量</div>
           <div class="action-desc">查看房间状态</div>
         </div>
+
       </div>
     </div>
 
@@ -225,7 +226,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+
 import dayjs from 'dayjs'
 import {
   DashboardOutlined,
@@ -249,7 +250,7 @@ import { useHotelStore } from '@/stores/hotel'
 import { bookingApi } from '@/api/booking'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
-import { roomApi } from '@/api/room'
+import { hotelApi } from '@/api/hotel'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -305,12 +306,17 @@ async function loadStats() {
   try {
     const today = dayjs().format('YYYY-MM-DD')
     
-    // 获取房间统计
-    const roomRes: any = await roomApi.getStats()
-    const roomStats = roomRes.data || {}
+    // 获取酒店统计数据
+    const statsRes: any = await hotelApi.getStatistics()
+    const hotelStats = statsRes?.data || {}
+    
+    // 从 rooms 数组中提取房间统计信息
+    const rooms = hotelStats.rooms || []
+    const totalRooms = rooms.reduce((sum: number, r: any) => sum + (r.count || 0), 0)
+    const occupiedRooms = rooms.find((r: any) => r.room_status === 'occupied')?.count || 0
     
     // 获取今日预订统计
-    const bookingRes: any = await bookingApi.getList({ 
+    const bookingRes: any = await bookingApi.getBookingList({ 
       checkin_date: today,
       pageSize: 100 
     })
@@ -319,8 +325,6 @@ async function loadStats() {
     const todayCheckin = bookings.filter((b: any) => b.status === 'checked_in').length
     const todayCheckout = bookings.filter((b: any) => b.status === 'checked_out').length
     
-    const totalRooms = roomStats.total_rooms || 100
-    const occupiedRooms = roomStats.occupied_rooms || 0
     const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0
     
     stats.value = {
@@ -361,7 +365,7 @@ async function loadPendingDeliveries() {
 async function loadTodayBookings() {
   try {
     const today = dayjs().format('YYYY-MM-DD')
-    const res: any = await bookingApi.getList({ 
+    const res: any = await bookingApi.getBookingList({ 
       checkin_date: today,
       pageSize: 20 
     })

@@ -20,6 +20,7 @@
 #include "hal_actuators.h"
 #include "hal_sensors.h"
 #include "hal_interactive.h"
+#include "hal_canopy.h"
 #include "service_network.h"
 #include "global_config.h"
 
@@ -30,9 +31,15 @@ static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
 static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
 static const TickType_t FLOOR_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
+static const TickType_t FLOOR_CANOPY_POLL_PERIOD = pdMS_TO_TICKS(100);
 static volatile bool s_network_ready = false;
 static bool s_corridor_light_on = false;
 static uint32_t s_reconnect_count = 0;
+
+/** 疑似火灾：DHT11 或 走廊 NTC 任一超温 + MQ2 烟雾 ADC 超阈（现场请标定 MQ2 基线） */
+static const float k_fire_suspect_temp_c = 40.0f;
+static const uint16_t k_fire_suspect_smoke_adc = 400;
+static bool s_fire_suspect_episode_reported = false;
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) return;
@@ -122,6 +129,9 @@ static void publish_floor_runtime_status(void) {
     cJSON_AddStringToObject(root, "device_type", "floor");
     cJSON_AddStringToObject(root, "status", "online");
     cJSON_AddBoolToObject(root, "corridor_light_on", s_corridor_light_on);
+    cJSON_AddBoolToObject(root, "rain_detected", hal_canopy_is_raining());
+    cJSON_AddNumberToObject(root, "canopy_angle_deg", (double)hal_canopy_get_angle());
+    cJSON_AddBoolToObject(root, "canopy_auto", hal_canopy_get_auto());
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
     char *json_str = cJSON_PrintUnformatted(root);
@@ -130,7 +140,7 @@ static void publish_floor_runtime_status(void) {
     cJSON_Delete(root);
 }
 
-static void publish_floor_event(const char *event_type, const char *detail) {
+static void publish_floor_event(const char *event_type, const char *detail, const char *level) {
     if (!s_network_ready) {
         return;
     }
@@ -142,7 +152,7 @@ static void publish_floor_event(const char *event_type, const char *detail) {
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "event_type", event_type);
     cJSON_AddStringToObject(root, "detail", detail);
-    cJSON_AddStringToObject(root, "level", "info");
+    cJSON_AddStringToObject(root, "level", (level != NULL && level[0] != '\0') ? level : "info");
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
     char *json_str = cJSON_PrintUnformatted(root);
@@ -219,13 +229,61 @@ static bool execute_floor_command(const char *cmd_type, const char **out_result_
         return true;
     }
 
+    if (strcmp(cmd_type, "canopy_extend") == 0) {
+        esp_err_t err = hal_canopy_manual_extend();
+        *out_result_msg = (err == ESP_OK) ? "雨棚已手动伸出" : "舵机伸出失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "canopy_retract") == 0) {
+        esp_err_t err = hal_canopy_manual_retract();
+        *out_result_msg = (err == ESP_OK) ? "雨棚已手动收回" : "舵机收回失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "canopy_auto_on") == 0) {
+        hal_canopy_set_auto(true);
+        *out_result_msg = "雨棚已恢复雨量自动控制";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "canopy_auto_off") == 0) {
+        hal_canopy_set_auto(false);
+        *out_result_msg = "已关闭雨量自动控制(需手动伸收)";
+        return true;
+    }
+
     *out_result_msg = "未识别的楼控指令";
     return false;
 }
 
 static void run_floor_local_policy(const sensor_data_t *env_data) {
-    (void)env_data;
-    // 预留楼控本地策略入口（后续可挂光照阈值或时段联动）
+    if (env_data == NULL) {
+        return;
+    }
+
+    const bool hot_dht = env_data->temperature >= k_fire_suspect_temp_c;
+    const bool hot_ntc = env_data->ntc_valid && env_data->ntc_temp_c >= k_fire_suspect_temp_c;
+    const bool hot = hot_dht || hot_ntc;
+    const bool smoky = env_data->air_quality_adc >= k_fire_suspect_smoke_adc;
+
+    if (hot && smoky) {
+        if (!s_fire_suspect_episode_reported && s_network_ready) {
+            char detail[192];
+            snprintf(detail, sizeof(detail),
+                     "DHT=%.1f℃ NTC=%.1f℃(valid=%d) 烟雾ADC=%u 同时超阈，疑似火灾(需人工复核)",
+                     (double)env_data->temperature,
+                     (double)env_data->ntc_temp_c,
+                     env_data->ntc_valid ? 1 : 0,
+                     (unsigned)env_data->air_quality_adc);
+            publish_floor_event("floor_fire_suspected", detail, "warning");
+            ESP_LOGW(TAG, "疑似火灾告警已上报: (DHT或NTC)>=%.0f℃ 且 MQ2ADC>=%u",
+                     (double)k_fire_suspect_temp_c, (unsigned)k_fire_suspect_smoke_adc);
+            s_fire_suspect_episode_reported = true;
+        }
+    } else {
+        s_fire_suspect_episode_reported = false;
+    }
 }
 
 // --- 辅助组包函数 ---
@@ -363,17 +421,32 @@ void task_floor_sensor_report(void *pvParameters) {
 
     while (1) {
         vTaskDelay(FLOOR_SENSOR_TASK_PERIOD); // 每半分钟发一次走廊环境数据
+        hal_sensors_read_all(&env_data);
+        run_floor_local_policy(&env_data);
+
         if (!s_network_ready) {
             continue;
         }
 
-        hal_sensors_read_all(&env_data);
-        run_floor_local_policy(&env_data);
         publish_sensor_data("temperature", env_data.temperature, "℃");
         publish_sensor_data("humidity", env_data.humidity, "%");
         publish_sensor_data("air_quality_adc", env_data.air_quality_adc, "adc");
         publish_sensor_data("light_adc", env_data.light_adc, "adc");
         publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
+        if (env_data.ntc_valid) {
+            publish_sensor_data("ntc_temp_c", (double)env_data.ntc_temp_c, "C");
+        }
+        publish_sensor_data("rain_detected", hal_canopy_is_raining() ? 1.0 : 0.0, "bool");
+        publish_sensor_data("canopy_angle_deg", (double)hal_canopy_get_angle(), "deg");
+    }
+}
+
+static void task_floor_canopy_poll(void *pvParameters)
+{
+    (void)pvParameters;
+    while (1) {
+        vTaskDelay(FLOOR_CANOPY_POLL_PERIOD);
+        hal_canopy_poll();
     }
 }
 
@@ -385,7 +458,7 @@ void task_floor_button_events(void *pvParameters) {
         bool alarm_pressed = hal_interactive_is_button_pressed(BTN_FLOOR_ALARM);
         if (alarm_pressed && !prev_alarm_pressed) {
             ESP_LOGI(TAG, "楼控按键触发: 报警键");
-            publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发");
+            publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发", "alarm");
             hal_interactive_beep(2, 100);
         }
         prev_alarm_pressed = alarm_pressed;
@@ -496,6 +569,9 @@ void app_main(void) {
     hal_actuators_init();
     hal_sensors_init();
     hal_interactive_init();
+    if (hal_canopy_init() != ESP_OK) {
+        ESP_LOGW(TAG, "雨棚模块初始化未完全成功，请检查舵机/雨量接线");
+    }
 
     // 3. 读取并拼接规范的 Client ID
     load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
@@ -509,6 +585,7 @@ void app_main(void) {
     xTaskCreate(task_floor_sensor_report, "floor_sensor_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_health_report, "floor_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_button_events, "floor_button_task", 3072, NULL, 4, NULL);
+    xTaskCreate(task_floor_canopy_poll, "floor_canopy_task", 3072, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

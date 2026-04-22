@@ -30,5 +30,8 @@ export const roomApi = {
     request.delete<ApiResponse<any>>(`/rooms/${id}`, { data: hotelId ? { hotel_id: hotelId } : {} }),
 
   updateRoomStatus: (id: number, status: string, hotelId?: number) =>
-    request.patch<ApiResponse<RoomInfo>>(`/rooms/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) })
+    request.patch<ApiResponse<RoomInfo>>(`/rooms/${id}/status`, { status, ...(hotelId ? { hotel_id: hotelId } : {}) }),
+
+  getStats: () =>
+    request.get<ApiResponse<any>>('/rooms/stats')
 }

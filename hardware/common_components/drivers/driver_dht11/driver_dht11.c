@@ -10,6 +10,7 @@ static const char *TAG = "DRIVER_DHT11";
 static bool s_inited = false;
 static int s_pin = -1;
 static int64_t s_last_read_us = 0;
+static const int k_read_retry_count = 3;
 
 static void set_pin_output(void)
 {
@@ -74,42 +75,81 @@ esp_err_t driver_dht11_read(driver_dht11_data_t *out_data)
         return ESP_ERR_INVALID_STATE;
     }
 
-    uint8_t bytes[5] = {0};
+    esp_err_t last_err = ESP_FAIL;
+    for (int attempt = 0; attempt < k_read_retry_count; attempt++) {
+        uint8_t bytes[5] = {0};
 
-    // 主机起始信号：拉低 >=18ms，再拉高 20~40us
-    set_pin_output();
-    gpio_set_level(s_pin, 0);
-    esp_rom_delay_us(20000);
-    gpio_set_level(s_pin, 1);
-    esp_rom_delay_us(30);
-    set_pin_input();
+        // 主机起始信号：拉低 >=18ms，再拉高 20~40us
+        set_pin_output();
+        gpio_set_level(s_pin, 0);
+        esp_rom_delay_us(20000);
+        gpio_set_level(s_pin, 1);
+        esp_rom_delay_us(35);
+        set_pin_input();
 
-    // 传感器响应：低 ~80us + 高 ~80us
-    ESP_RETURN_ON_ERROR(wait_level(1, 120, NULL), TAG, "response low timeout");
-    ESP_RETURN_ON_ERROR(wait_level(0, 120, NULL), TAG, "response high timeout");
-
-    // 读取 40bit：每 bit 先低电平 ~50us，再高电平（26~28us=0, ~70us=1）
-    for (int i = 0; i < 40; i++) {
-        int high_us = 0;
-        ESP_RETURN_ON_ERROR(wait_level(1, 100, NULL), TAG, "bit low timeout");
-        ESP_RETURN_ON_ERROR(wait_level(0, 120, &high_us), TAG, "bit high timeout");
-
-        int byte_idx = i / 8;
-        bytes[byte_idx] <<= 1;
-        if (high_us > 50) {
-            bytes[byte_idx] |= 1;
+        // 传感器响应：低 ~80us + 高 ~80us，然后进入首个 bit 的低电平起始
+        last_err = wait_level(1, 200, NULL);
+        if (last_err != ESP_OK) {
+            esp_rom_delay_us(2000);
+            continue;
         }
+        last_err = wait_level(0, 200, NULL);
+        if (last_err != ESP_OK) {
+            esp_rom_delay_us(2000);
+            continue;
+        }
+        last_err = wait_level(1, 200, NULL);
+        if (last_err != ESP_OK) {
+            esp_rom_delay_us(2000);
+            continue;
+        }
+
+        // 读取 40bit：每 bit 先低电平 ~50us，再高电平（26~28us=0, ~70us=1）
+        bool frame_ok = true;
+        for (int i = 0; i < 40; i++) {
+            int high_us = 0;
+            // 等待 bit 低电平结束（低 -> 高）
+            last_err = wait_level(0, 140, NULL);
+            if (last_err != ESP_OK) {
+                frame_ok = false;
+                break;
+            }
+            // 测量 bit 高电平宽度（高 -> 低）
+            last_err = wait_level(1, 200, &high_us);
+            if (last_err != ESP_OK) {
+                frame_ok = false;
+                break;
+            }
+
+            int byte_idx = i / 8;
+            bytes[byte_idx] <<= 1;
+            if (high_us > 50) {
+                bytes[byte_idx] |= 1;
+            }
+        }
+
+        if (!frame_ok) {
+            esp_rom_delay_us(2000);
+            continue;
+        }
+
+        uint8_t checksum = (uint8_t)(bytes[0] + bytes[1] + bytes[2] + bytes[3]);
+        if (checksum != bytes[4]) {
+            last_err = ESP_ERR_INVALID_CRC;
+            HAL_LOGW(TAG, "checksum mismatch calc=%u recv=%u (attempt %d/%d)",
+                     checksum, bytes[4], attempt + 1, k_read_retry_count);
+            esp_rom_delay_us(2000);
+            continue;
+        }
+
+        // DHT11 小数位通常为 0
+        out_data->humidity_percent = (float)bytes[0];
+        out_data->temperature_c = (float)bytes[2];
+        s_last_read_us = esp_timer_get_time();
+        return ESP_OK;
     }
 
-    uint8_t checksum = (uint8_t)(bytes[0] + bytes[1] + bytes[2] + bytes[3]);
-    if (checksum != bytes[4]) {
-        HAL_LOGW(TAG, "checksum mismatch calc=%u recv=%u", checksum, bytes[4]);
-        return ESP_ERR_INVALID_CRC;
-    }
-
-    // DHT11 小数位通常为 0
-    out_data->humidity_percent = (float)bytes[0];
-    out_data->temperature_c = (float)bytes[2];
-    s_last_read_us = esp_timer_get_time();
-    return ESP_OK;
+    HAL_LOGE(TAG, "DHT11 read failed after %d retries: %s",
+             k_read_retry_count, esp_err_to_name(last_err));
+    return last_err;
 }

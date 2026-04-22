@@ -12,12 +12,20 @@ function doAutoRegister(s: Socket) {
     const isStaffUser = ['hotel_admin', 'system_admin', 'staff'].includes(userInfo.role)
     const clientType = isStaffUser ? 'front_desk' : 'app'
     const clientId = userInfo.username
+    const hotelId = userInfo.hotel_id
 
     console.log(`[WS] 自动注册客户端: ${clientId} as ${clientType}`)
-    s.emit('register_client', { clientType, clientId })
+    s.emit('register_client', { clientType, clientId, hotelId })
     s.once('registered', (data: any) => {
       console.log('[WS] 自动注册成功:', data)
       appStore.setRegistration(true, data.clientName)
+      
+      // 注册成功后，加入酒店前台房间以接收报警消息
+      if (isStaffUser && hotelId) {
+        const hotelRoom = `front_desk_hotel_${hotelId}`
+        s.emit('join_room', hotelRoom)
+        console.log(`[WS] 已加入酒店房间: ${hotelRoom}`)
+      }
     })
   }
 }
@@ -108,7 +116,57 @@ export function initWebSocket(roomId?: string): Socket {
 
   socket.on('security_event', (data: any) => {
     console.log('[WS] 安防事件:', data)
-    appStore.addNotification('error', `安防事件: ${data.event_type || '未知'} - ${data.description}`)
+    
+    // 处理消防报警和SOS报警，触发弹窗
+    if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm' || 
+        data.event_type === 'fire_alarm_linked' || data.event_type === 'global_alarm') {
+      
+      // 提取位置信息 - 支持多种字段名
+      const eventData = data.data || {}
+      let location = '未知位置'
+      if (eventData.floor_id) {
+        location = `第${eventData.floor_id}层`
+      } else if (eventData.room_number) {
+        location = `${eventData.room_number}房间`
+      } else if (eventData.location) {
+        location = eventData.location
+      } else if (eventData.room_id) {
+        location = `${eventData.room_id}房间`
+      }
+      
+      // 根据设备ID判断设备类型并显示正确位置
+      const deviceId = data.device_id || ''
+      if (deviceId.includes('FLO') && eventData.floor_id) {
+        location = `第${eventData.floor_id}层(楼控)`
+      } else if (deviceId.includes('FRO')) {
+        location = '前台'
+      } else if (deviceId.includes('ROO') && eventData.room_number) {
+        location = `${eventData.room_number}房间`
+      }
+      
+      // 触发报警弹窗
+      appStore.showAlarmModal({
+        id: data.alarm_id || data.device_id || Date.now().toString(),
+        type: data.event_type,
+        level: data.level || 'critical',
+        deviceId: data.device_id,
+        deviceName: data.device_name,
+        location: location,
+        message: eventData.message || data.description || '紧急报警',
+        timestamp: data.timestamp || new Date().toISOString(),
+        floorId: eventData.floor_id,
+        roomId: eventData.room_id || eventData.room_number
+      })
+      
+      // 播放报警提示音
+      try {
+        const audio = new Audio('/alarm-notification.mp3')
+        audio.play().catch(() => {})
+      } catch (e) {}
+    } else {
+      // 其他安防事件只显示通知
+      appStore.addNotification('error', `安防事件: ${data.event_type || '未知'} - ${data.description}`)
+    }
   })
 
   socket.on('room_status_update', (data: any) => {

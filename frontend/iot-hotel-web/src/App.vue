@@ -5,6 +5,9 @@
     <!-- 全局来电弹窗 -->
     <IncomingCallModal />
     
+    <!-- 全局报警弹窗 -->
+    <AlarmAlertModal />
+    
     <!-- 全局通话界面 (统一全系统) -->
     <template v-if="currentCallVisible">
       <!-- 全屏 Modal 模式 (GuestRoom 页面或点击展开时显示) -->
@@ -131,6 +134,7 @@ import {
 import { message } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
+import AlarmAlertModal from '@/components/common/AlarmAlertModal.vue'
 import { useAppStore } from '@/stores/app'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { callApi } from '@/api/call'
@@ -915,6 +919,54 @@ const handleCallRejected = (data: any) => {
   }
 }
 
+const handleSecurityEvent = (data: any) => {
+  console.log('[App] 收到 security_event 事件:', data)
+  
+  // 处理消防报警和SOS报警，触发弹窗
+  if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm' || 
+      data.event_type === 'fire_alarm_linked' || data.event_type === 'global_alarm') {
+    
+    // 提取位置信息
+    const eventData = data.data || {}
+    let location = '未知位置'
+    if (eventData.floor_id) {
+      location = `第${eventData.floor_id}层`
+    } else if (eventData.room_number) {
+      location = `${eventData.room_number}房间`
+    } else if (eventData.location) {
+      location = eventData.location
+    } else if (eventData.room_id) {
+      location = `${eventData.room_id}房间`
+    }
+    
+    // 根据设备ID判断设备类型
+    const deviceId = data.device_id || ''
+    if (deviceId.includes('FLO') && eventData.floor_id) {
+      location = `第${eventData.floor_id}层(楼控)`
+    } else if (deviceId.includes('FRO')) {
+      location = '前台'
+    } else if (deviceId.includes('ROO') && eventData.room_number) {
+      location = `${eventData.room_number}房间`
+    }
+    
+    console.log('[App] 触发报警弹窗:', { location, deviceId, eventType: data.event_type })
+    
+    // 触发报警弹窗
+    appStore.showAlarmModal({
+      id: data.alarm_id || data.device_id || Date.now().toString(),
+      type: data.event_type,
+      level: data.level || 'critical',
+      deviceId: data.device_id,
+      deviceName: data.device_name,
+      location: location,
+      message: eventData.message || data.description || '紧急报警',
+      timestamp: data.timestamp || new Date().toISOString(),
+      floorId: eventData.floor_id,
+      roomId: eventData.room_id || eventData.room_number
+    })
+  }
+}
+
 const handleCallAnswered = async (data: any) => {
   console.log('[App] 收到 call_answered 事件:', data)
 
@@ -1036,6 +1088,7 @@ function setupGlobalWebSocket() {
   socket.off('webrtc_ice_candidate', handleWebRTCIceCandidate)
   socket.off('call_hungup', handleCallHungup)
   socket.off('call_rejected', handleCallRejected)
+  socket.off('security_event', handleSecurityEvent)
   socket.off('audio_chunk')
 
   // 添加新的监听器
@@ -1049,6 +1102,7 @@ function setupGlobalWebSocket() {
   socket.on('webrtc_ice_candidate', handleWebRTCIceCandidate)
   socket.on('call_hungup', handleCallHungup)
   socket.on('call_rejected', handleCallRejected)
+  socket.on('security_event', handleSecurityEvent)
   socket.on('audio_chunk', (data: { call_id: string, chunk: ArrayBuffer }) => {
     if (appStore.currentCall && appStore.currentCall.call_id === data.call_id) {
       playAudioChunk(data.chunk)

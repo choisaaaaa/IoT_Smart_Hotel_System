@@ -392,7 +392,7 @@ router.post('/login', async (req, res) => {
     };
 
     const jwtToken = generateToken(jwtPayload);
-    logger.info(`[Auth] User logged in: ${user.username}, Role: ${role}, Token: ${jwtToken.substring(0, 10)}...`);
+    logger.info(`[Auth] User logged in: ${user.username}, Role: ${role}, UserID: ${user.id}`);
 
     // 创建登录会话
     const sessionToken = crypto.randomBytes(32).toString('hex');
@@ -503,19 +503,62 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 手机号找回密码
+// 发送密码重置验证码
+router.post('/reset-password/send-code', async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return sendError(res, errorResponse('手机号不能为空', 400));
+    }
+
+    // 检查手机号是否已注册
+    const [users]: any = await db.execute(
+      'SELECT id FROM users WHERE phone = ?',
+      [phone]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('该手机号未注册', 404));
+    }
+
+    // 导入短信验证服务
+    const smsService = await import('../../services/sms-verification.service');
+    const result = await smsService.default.generateAndSendCode(phone, 'password_reset');
+
+    if (result.success) {
+      sendSuccess(res, { message: result.message });
+    } else {
+      sendError(res, errorResponse(result.message, 400));
+    }
+  } catch (error) {
+    console.error('发送验证码失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+});
+
+// 手机号找回密码（需要短信验证）
 router.post('/reset-password', async (req, res) => {
   try {
-    const { phone, new_password } = req.body;
+    const { phone, new_password, verification_code } = req.body;
 
-    if (!phone || !new_password) {
-      return sendError(res, errorResponse('手机号和新密码不能为空', 400));
+    if (!phone || !new_password || !verification_code) {
+      return sendError(res, errorResponse('手机号、新密码和验证码不能为空', 400));
     }
 
     if (new_password.length < 6) {
       return sendError(res, errorResponse('密码长度不能少于6位', 400));
     }
 
+    // 验证短信验证码
+    const smsService = await import('../../services/sms-verification.service');
+    const verifyResult = await smsService.default.verifyCode(phone, verification_code, 'password_reset');
+
+    if (!verifyResult.success) {
+      return sendError(res, errorResponse(verifyResult.message, 400));
+    }
+
+    // 检查手机号是否已注册
     const [users]: any = await db.execute(
       'SELECT * FROM users WHERE phone = ?',
       [phone]
@@ -525,12 +568,22 @@ router.post('/reset-password', async (req, res) => {
       return sendError(res, errorResponse('该手机号未注册', 404));
     }
 
+    // 检查新密码是否与旧密码相同
+    const user = users[0];
+    const isSamePassword = await comparePassword(new_password, user.password);
+    if (isSamePassword) {
+      return sendError(res, errorResponse('新密码不能与旧密码相同', 400));
+    }
+
     const hashedPassword = await hashPassword(new_password);
 
     await db.execute(
       'UPDATE users SET password = ? WHERE phone = ?',
       [hashedPassword, phone]
     );
+
+    // 记录密码重置日志
+    logger.info(`用户密码重置成功: ${phone}`);
 
     sendSuccess(res, { message: '密码重置成功' });
   } catch (error) {

@@ -1,4 +1,5 @@
 #include "driver_ldr.h"
+#include "driver_adc_shared.h"
 #include "hal_log.h"
 #include "esp_adc/adc_oneshot.h"
 
@@ -6,6 +7,7 @@ static const char *TAG = "DRIVER_LDR";
 
 static adc_oneshot_unit_handle_t s_adc = NULL;
 static adc_channel_t s_channel;
+static adc_unit_t s_unit = ADC_UNIT_1;
 static bool s_inited = false;
 
 esp_err_t driver_ldr_init(int gpio_num)
@@ -20,14 +22,12 @@ esp_err_t driver_ldr_init(int gpio_num)
         return ESP_ERR_INVALID_ARG;
     }
 
-    adc_oneshot_unit_init_cfg_t unit_cfg = {
-        .unit_id = unit_id,
-    };
-    esp_err_t err = adc_oneshot_new_unit(&unit_cfg, &s_adc);
+    esp_err_t err = driver_adc_shared_acquire(unit_id, &s_adc);
     if (err != ESP_OK) {
-        HAL_LOGE(TAG, "adc_oneshot_new_unit failed: %s", esp_err_to_name(err));
+        HAL_LOGE(TAG, "adc_shared_acquire failed: %s", esp_err_to_name(err));
         return err;
     }
+    s_unit = unit_id;
 
     adc_oneshot_chan_cfg_t chan_cfg = {
         .bitwidth = ADC_BITWIDTH_DEFAULT,
@@ -36,7 +36,7 @@ esp_err_t driver_ldr_init(int gpio_num)
     err = adc_oneshot_config_channel(s_adc, s_channel, &chan_cfg);
     if (err != ESP_OK) {
         HAL_LOGE(TAG, "adc_oneshot_config_channel failed: %s", esp_err_to_name(err));
-        adc_oneshot_del_unit(s_adc);
+        driver_adc_shared_release(s_unit);
         s_adc = NULL;
         return err;
     }

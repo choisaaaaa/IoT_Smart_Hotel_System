@@ -479,24 +479,41 @@ const customMqtt = reactive({
 
 const simulationCommands = computed(() => {
   const type = currentDebug.deviceType
-  const roomId = currentDebug.deviceId.includes('_') 
-    ? currentDebug.deviceId.split('_').pop() 
-    : currentDebug.deviceId
+  const deviceId = currentDebug.deviceId
+  const roomId = deviceId.includes('_') 
+    ? deviceId.split('_').pop() 
+    : deviceId
     
   if (type === 'room') {
     return [
-      { label: '欢迎模式 (Welcome)', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'welcome' } },
-      { label: '睡眠模式 (Sleep)', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'sleep' } },
-      { label: '关灯测试 (Lights Off)', topic: `hotel/device/command/room/${roomId}`, payload: { device_type: 'light', action: 'off' } }
+      { label: '💡 开灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light', command_value: 'on' } },
+      { label: '💡 关灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light', command_value: 'off' } },
+      { label: '🚪 开锁', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'door', command_value: 'unlock' } },
+      { label: '🚪 上锁', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'door', command_value: 'lock' } },
+      { label: '🌙 睡眠模式', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'sleep', device_id: `room_${roomId}` } },
+      { label: '👋 欢迎模式', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'welcome', device_id: `room_${roomId}` } },
+      { label: '📞 模拟来电', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'incoming_call', call_id: `call_${Date.now()}`, broadcast_text: '前台呼叫' } }
     ]
   } else if (type === 'floor') {
     return [
-      { label: '触发消防报警', topic: `hotel/security/event`, payload: { device_id: currentDebug.deviceId, event_type: 'fire_alarm', level: 'danger' } },
-      { label: '同步环境数据', topic: `hotel/device/data/${currentDebug.deviceId}`, payload: { temp: 25, humi: 50, aqi: 'Good' } }
+      { label: '💡 走廊照明-开', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light', command_value: 'on' } },
+      { label: '💡 走廊照明-关', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light', command_value: 'off' } },
+      { label: '📢 开始广播', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'broadcast_start' } },
+      { label: '🔇 停止广播', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'broadcast_stop' } },
+      { label: '🚨 触发消防报警', topic: `hotel/security/event`, payload: { device_id: deviceId, event_type: 'fire_alarm', level: 'critical', data: { floor_id: roomId, message: '消防报警测试' } } },
+      { label: '✅ 确认报警', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_ack' } },
+      { label: '🔄 复位报警', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_reset' } },
+      { label: '🔄 系统复位', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'floor_reset' } }
     ]
   } else if (type === 'front_desk') {
     return [
-      { label: '发卡成功模拟', topic: `hotel/device/command/result`, payload: { device_id: currentDebug.deviceId, command_type: 'room_card_op', status: 'success' } }
+      { label: '🆕 开卡-房间301', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '301', booking_id: 'BK001' } } },
+      { label: '🆕 开卡-房间302', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '302', booking_id: 'BK002' } } },
+      { label: '🔍 验卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
+      { label: '📟 刷卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'swipe_card' } },
+      { label: '🗑️ 退卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'revoke', room_number: '301' } } },
+      { label: '📞 广播呼叫301', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'incoming_call', call_id: `call_${Date.now()}`, broadcast_text: '前台呼叫房间301' } },
+      { label: '🔇 挂断通话', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'hangup_call', call_id: 'call_latest' } }
     ]
   }
   return []
@@ -547,11 +564,19 @@ function formatPayload(p: any) {
 
 async function sendSimulationCommand(sim: any) {
   try {
+    // 添加时间戳和命令ID
+    const payload = {
+      ...sim.payload,
+      timestamp: new Date().toISOString(),
+      command_id: Date.now()
+    }
+    
     await request.post('/mqtt/send', {
       topic: sim.topic,
-      payload: sim.payload
+      payload: payload,
+      qos: 1
     })
-    message.success('模拟指令已发出')
+    message.success(`指令已发送: ${sim.label}`)
     fetchMqttLogs(true)
   } catch (err) {
     message.error('发送失败')

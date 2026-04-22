@@ -3,6 +3,7 @@
 #include "driver_dht11.h"
 #include "driver_mq2.h"
 #include "driver_ldr.h"
+#include "driver_ntc.h"
 #include "driver_rd03_simple.h"
 #include "global_config.h"
 
@@ -11,42 +12,87 @@ static bool s_dht11_ready = false;
 static bool s_mq2_ready = false;
 static bool s_ldr_ready = false;
 static bool s_rd03_ready = false;
+static bool s_ntc_ready = false;
+
+static const driver_ntc_config_t k_ntc_default_10k = {
+    .r_fixed_ohm = 10000.0f,
+    .r_ntc_nominal_ohm = 10000.0f,
+    .beta = 3950.0f,
+    .t0_kelvin = 298.15f,
+};
 
 esp_err_t hal_sensors_init(void) {
-    // 杜邦线基线：DHT11 DATA -> GPIO15（与 docs/22、docs/24 对齐）
-    esp_err_t err = driver_dht11_init(15);
-    if (err == ESP_OK) {
-        s_dht11_ready = true;
-        ESP_LOGI(TAG, "DHT11 初始化成功: GPIO15");
+    esp_err_t err = ESP_OK;
+
+    if (GLOBAL_DHT11_PIN >= 0) {
+        if (GLOBAL_DHT11_PIN == GLOBAL_ADC_MQ2_PIN || GLOBAL_DHT11_PIN == GLOBAL_ADC_LDR_PIN ||
+            (GLOBAL_ADC_NTC_PIN >= 0 && GLOBAL_DHT11_PIN == GLOBAL_ADC_NTC_PIN)) {
+            ESP_LOGW(TAG, "DHT11 GPIO%d 与 ADC/NTC 引脚冲突，请检查引脚映射", GLOBAL_DHT11_PIN);
+        }
+        err = driver_dht11_init(GLOBAL_DHT11_PIN);
+        if (err == ESP_OK) {
+            s_dht11_ready = true;
+            ESP_LOGI(TAG, "DHT11 初始化成功: GPIO%d", GLOBAL_DHT11_PIN);
+        } else {
+            ESP_LOGW(TAG, "DHT11 初始化失败: %s", esp_err_to_name(err));
+        }
     } else {
-        ESP_LOGW(TAG, "DHT11 初始化失败: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "DHT11 未接线（GLOBAL_DHT11_PIN<0），跳过");
     }
 
-    err = driver_mq2_init(GLOBAL_ADC_MQ2_PIN, -1);
-    if (err == ESP_OK) {
-        s_mq2_ready = true;
-        ESP_LOGI(TAG, "MQ2 初始化成功: AO GPIO%d", GLOBAL_ADC_MQ2_PIN);
+    if (GLOBAL_ADC_MQ2_PIN >= 0) {
+        err = driver_mq2_init(GLOBAL_ADC_MQ2_PIN, -1);
+        if (err == ESP_OK) {
+            s_mq2_ready = true;
+            ESP_LOGI(TAG, "MQ2 初始化成功: AO GPIO%d", GLOBAL_ADC_MQ2_PIN);
+        } else {
+            ESP_LOGW(TAG, "MQ2 初始化失败: %s", esp_err_to_name(err));
+        }
     } else {
-        ESP_LOGW(TAG, "MQ2 初始化失败: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "MQ2 未接线（GLOBAL_ADC_MQ2_PIN<0），跳过");
     }
 
-    err = driver_ldr_init(GLOBAL_ADC_LDR_PIN);
-    if (err == ESP_OK) {
-        s_ldr_ready = true;
-        ESP_LOGI(TAG, "光敏初始化成功: AO GPIO%d", GLOBAL_ADC_LDR_PIN);
+    if (GLOBAL_ADC_LDR_PIN >= 0) {
+        err = driver_ldr_init(GLOBAL_ADC_LDR_PIN);
+        if (err == ESP_OK) {
+            s_ldr_ready = true;
+            ESP_LOGI(TAG, "光敏初始化成功: AO GPIO%d", GLOBAL_ADC_LDR_PIN);
+        } else {
+            ESP_LOGW(TAG, "光敏初始化失败: %s", esp_err_to_name(err));
+        }
     } else {
-        ESP_LOGW(TAG, "光敏初始化失败: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "光敏未接线（GLOBAL_ADC_LDR_PIN<0），跳过");
     }
 
-    err = driver_rd03_simple_init(GLOBAL_RD03_OT2_PIN);
-    if (err == ESP_OK) {
-        s_rd03_ready = true;
-        ESP_LOGI(TAG, "毫米波 OT2 初始化成功: GPIO%d", GLOBAL_RD03_OT2_PIN);
+    if (GLOBAL_RD03_OT2_PIN >= 0) {
+        err = driver_rd03_simple_init(GLOBAL_RD03_OT2_PIN);
+        if (err == ESP_OK) {
+            s_rd03_ready = true;
+            ESP_LOGI(TAG, "毫米波 OT2 初始化成功: GPIO%d", GLOBAL_RD03_OT2_PIN);
+        } else {
+            ESP_LOGW(TAG, "毫米波 OT2 初始化失败: %s", esp_err_to_name(err));
+        }
     } else {
-        ESP_LOGW(TAG, "毫米波 OT2 初始化失败: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "毫米波 OT2 未启用（GLOBAL_RD03_OT2_PIN < 0）");
     }
 
-    if (!s_dht11_ready && !s_mq2_ready && !s_ldr_ready && !s_rd03_ready) {
+    if (GLOBAL_ADC_NTC_PIN >= 0) {
+        if ((GLOBAL_ADC_MQ2_PIN >= 0 && GLOBAL_ADC_NTC_PIN == GLOBAL_ADC_MQ2_PIN) ||
+            (GLOBAL_ADC_LDR_PIN >= 0 && GLOBAL_ADC_NTC_PIN == GLOBAL_ADC_LDR_PIN)) {
+            ESP_LOGW(TAG, "NTC GPIO%d 与 MQ2/LDR ADC 脚冲突", GLOBAL_ADC_NTC_PIN);
+        }
+        err = driver_ntc_init(GLOBAL_ADC_NTC_PIN, &k_ntc_default_10k);
+        if (err == ESP_OK) {
+            s_ntc_ready = true;
+            ESP_LOGI(TAG, "NTC 初始化成功: GPIO%d (10k/B3950)", GLOBAL_ADC_NTC_PIN);
+        } else {
+            ESP_LOGW(TAG, "NTC 初始化失败: %s", esp_err_to_name(err));
+        }
+    } else {
+        ESP_LOGI(TAG, "NTC 未接线（GLOBAL_ADC_NTC_PIN<0），跳过");
+    }
+
+    if (!s_dht11_ready && !s_mq2_ready && !s_ldr_ready && !s_rd03_ready && !s_ntc_ready) {
         ESP_LOGE(TAG, "所有传感器初始化失败");
         return ESP_FAIL;
     }
@@ -63,6 +109,8 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
     out_data->air_quality_adc = 0;
     out_data->light_adc = 0;
     out_data->is_human_present = false;
+    out_data->ntc_valid = false;
+    out_data->ntc_temp_c = 0.0f;
 
     if (s_dht11_ready) {
         driver_dht11_data_t dht = {0};
@@ -93,11 +141,31 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         }
     }
 
-    ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u Human=%d",
-             out_data->temperature,
-             out_data->humidity,
-             (unsigned)out_data->air_quality_adc,
-             (unsigned)out_data->light_adc,
-             out_data->is_human_present ? 1 : 0);
+    if (s_ntc_ready) {
+        float t = 0.0f;
+        if (driver_ntc_read_temperature_c(&t) == ESP_OK) {
+            out_data->ntc_temp_c = t;
+            out_data->ntc_valid = true;
+        }
+    }
+
+    if (s_rd03_ready) {
+        ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u NTC=%.1f(valid=%d) Human=%d",
+                 out_data->temperature,
+                 out_data->humidity,
+                 (unsigned)out_data->air_quality_adc,
+                 (unsigned)out_data->light_adc,
+                 (double)out_data->ntc_temp_c,
+                 out_data->ntc_valid ? 1 : 0,
+                 out_data->is_human_present ? 1 : 0);
+    } else {
+        ESP_LOGI(TAG, "传感器读取完成 T=%.1fC H=%.1f%% MQ2=%u LDR=%u NTC=%.1f(valid=%d)",
+                 out_data->temperature,
+                 out_data->humidity,
+                 (unsigned)out_data->air_quality_adc,
+                 (unsigned)out_data->light_adc,
+                 (double)out_data->ntc_temp_c,
+                 out_data->ntc_valid ? 1 : 0);
+    }
     return ESP_OK;
 }

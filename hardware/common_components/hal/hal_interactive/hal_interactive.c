@@ -12,7 +12,7 @@ static bool s_buzzer_ready = false;
 
 // 定义6个按键引脚，按 interactive_button_id_t 枚举顺序
 static const int button_pins[] = {
-    GLOBAL_PTT_BTN_PIN,      // 0: 客房呼叫前台
+    GLOBAL_PTT_BTN_PIN,      // 0: 客房 PTT（默认 GPIO1）
     GLOBAL_BTN_ROOM_1_PIN,   // 1: 客房SOS
     GLOBAL_BTN_ROOM_2_PIN,   // 2: 客房场景
     GLOBAL_BTN_FRONT_1_PIN,  // 3: 前台消音
@@ -51,13 +51,18 @@ esp_err_t hal_interactive_init(void) {
         }
     }
 
-    esp_err_t buzzer_err = driver_buzzer_active_init(GLOBAL_BUZZER_PIN, true);
-    if (buzzer_err != ESP_OK) {
-        ESP_LOGE(TAG, "蜂鸣器初始化失败 GPIO%d: %s", GLOBAL_BUZZER_PIN, esp_err_to_name(buzzer_err));
+    if (GLOBAL_BUZZER_PIN < 0) {
         s_buzzer_ready = false;
+        ESP_LOGI(TAG, "蜂鸣器未接入，已禁用");
     } else {
-        s_buzzer_ready = true;
-        ESP_LOGI(TAG, "蜂鸣器已就绪 GPIO%d", GLOBAL_BUZZER_PIN);
+        esp_err_t buzzer_err = driver_buzzer_active_init(GLOBAL_BUZZER_PIN, true);
+        if (buzzer_err != ESP_OK) {
+            ESP_LOGE(TAG, "蜂鸣器初始化失败 GPIO%d: %s", GLOBAL_BUZZER_PIN, esp_err_to_name(buzzer_err));
+            s_buzzer_ready = false;
+        } else {
+            s_buzzer_ready = true;
+            ESP_LOGI(TAG, "蜂鸣器已就绪 GPIO%d", GLOBAL_BUZZER_PIN);
+        }
     }
     
     return ESP_OK;
@@ -66,8 +71,8 @@ esp_err_t hal_interactive_init(void) {
 esp_err_t hal_interactive_beep(uint8_t count, uint32_t duration_ms) {
     ESP_LOGI(TAG, "蜂鸣器鸣叫: 共 %d 次，时长 %d ms", count, duration_ms);
     if (!s_buzzer_ready) {
-        ESP_LOGW(TAG, "蜂鸣器未就绪，跳过鸣叫");
-        return ESP_ERR_INVALID_STATE;
+        ESP_LOGW(TAG, "蜂鸣器未启用，跳过鸣叫");
+        return ESP_OK;
     }
     return driver_buzzer_active_beep(count, duration_ms, 50);
 }

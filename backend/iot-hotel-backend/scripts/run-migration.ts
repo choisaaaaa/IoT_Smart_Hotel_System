@@ -5,14 +5,29 @@ import path from 'path';
 async function runMigration() {
   console.log('🚀 开始执行数据库迁移...\n');
 
-  const connection = await mysql.createConnection({
-    host: '8.134.166.69',
-    port: 3306,
-    user: 'iot_user',
-    password: 'Iot2026.',
-    database: 'iot_hotel_system',
+  // 从环境变量获取数据库配置
+  const dbConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'iot_hotel_system',
     multipleStatements: true, // 支持执行多条SQL语句
-  });
+  };
+
+  // 验证必要的环境变量
+  if (!process.env.DB_PASSWORD) {
+    console.error('❌ 错误: DB_PASSWORD环境变量未设置');
+    process.exit(1);
+  }
+
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
+    console.warn('⚠️ 警告: 部分数据库环境变量未设置，使用默认值');
+  }
+
+  console.log(`📊 数据库配置: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
+
+  const connection = await mysql.createConnection(dbConfig);
 
   try {
     console.log('✅ 数据库连接成功\n');

@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 
 class LocalStorage {
@@ -7,11 +8,23 @@ class LocalStorage {
   LocalStorage._internal();
 
   SharedPreferences? _prefs;
+  
+  // 加密存储实例，用于存储敏感数据（Token等）
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
 
   Future<SharedPreferences> get _getPrefs async {
     _prefs ??= await SharedPreferences.getInstance();
     return _prefs!;
   }
+
+  // ==================== 普通数据存储（使用SharedPreferences） ====================
 
   Future<void> save(String key, String value) async {
     final prefs = await _getPrefs;
@@ -38,26 +51,40 @@ class LocalStorage {
     await prefs.clear();
   }
 
+  // ==================== 敏感数据存储（使用加密存储） ====================
+
+  /// 保存Token到加密存储
   Future<void> saveToken(String token) async {
-    await save(AppConstants.tokenKey, token);
+    await _secureStorage.write(key: AppConstants.tokenKey, value: token);
   }
 
+  /// 从加密存储读取Token
   Future<String?> getToken() async {
-    return read(AppConstants.tokenKey);
+    return await _secureStorage.read(key: AppConstants.tokenKey);
   }
 
+  /// 保存Session Token到加密存储
   Future<void> saveSessionToken(String token) async {
-    await save(AppConstants.sessionTokenKey, token);
+    await _secureStorage.write(key: AppConstants.sessionTokenKey, value: token);
   }
 
+  /// 从加密存储读取Session Token
   Future<String?> getSessionToken() async {
-    return read(AppConstants.sessionTokenKey);
+    return await _secureStorage.read(key: AppConstants.sessionTokenKey);
   }
 
+  /// 清除所有Token
   Future<void> clearTokens() async {
-    await remove(AppConstants.tokenKey);
-    await remove(AppConstants.sessionTokenKey);
+    await _secureStorage.delete(key: AppConstants.tokenKey);
+    await _secureStorage.delete(key: AppConstants.sessionTokenKey);
   }
+
+  /// 清除所有加密数据
+  Future<void> clearSecureStorage() async {
+    await _secureStorage.deleteAll();
+  }
+
+  // ==================== 非敏感配置数据（使用SharedPreferences） ====================
 
   Future<void> saveUserRole(String role) async {
     await save(AppConstants.userRoleKey, role);

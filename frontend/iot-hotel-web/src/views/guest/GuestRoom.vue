@@ -650,12 +650,16 @@ function typeWriterEffect(text: string, callback?: () => void) {
 async function sendMessage() {
   const text = inputText.value.trim()
   if (!text || aiThinking.value) return
+  // 立即清空输入框
   inputText.value = ''
+  // 强制更新视图
+  await nextTick()
   await sendToAI(text)
 }
 
-function askQuick(q: string) {
+async function askQuick(q: string) {
   inputText.value = ''
+  await nextTick()
   sendToAI(q)
 }
 

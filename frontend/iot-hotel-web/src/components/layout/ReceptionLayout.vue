@@ -106,6 +106,76 @@
         </div>
         
         <div class="header-right">
+          <!-- 报警通知按钮 - 醒目显示 -->
+          <a-popover 
+            v-model:open="alarmNotificationVisible" 
+            trigger="click" 
+            placement="bottomRight" 
+            :overlayStyle="{ width: '420px' }"
+            class="alarm-notification-popover"
+          >
+            <template #content>
+              <div class="alarm-notification-panel">
+                <div class="alarm-notification-header">
+                  <span class="alarm-notification-title">
+                    <WarningFilled class="alarm-title-icon" /> 报警通知
+                  </span>
+                  <a-button type="link" size="small" @click="clearAllAlarms">
+                    全部标记已读
+                  </a-button>
+                </div>
+                <a-divider style="margin: 12px 0;" />
+                <div v-if="alarmNotifications.length === 0" class="alarm-notification-empty">
+                  <CheckCircleOutlined class="empty-icon" />
+                  <p>暂无报警</p>
+                </div>
+                <div v-else class="alarm-notification-list">
+                  <div
+                    v-for="item in alarmNotifications"
+                    :key="item.id"
+                    class="alarm-notification-item"
+                    :class="{ 
+                      unread: !item.read, 
+                      critical: item.level === 'critical',
+                      'animate-pulse': item.level === 'critical' && !item.read 
+                    }"
+                    @click="handleAlarmClick(item)"
+                  >
+                    <div class="alarm-notification-icon" :class="item.level">
+                      <FireFilled v-if="item.type === 'fire_alarm'" />
+                      <AlertFilled v-else-if="item.type === 'sos_alarm'" />
+                      <WarningFilled v-else />
+                    </div>
+                    <div class="alarm-notification-content">
+                      <div class="alarm-notification-title-text">
+                        {{ item.title }}
+                        <a-tag v-if="item.level === 'critical'" color="red" size="small">紧急</a-tag>
+                      </div>
+                      <div class="alarm-notification-desc">{{ item.desc }}</div>
+                      <div class="alarm-notification-time">{{ item.time }}</div>
+                    </div>
+                    <div v-if="!item.read" class="alarm-notification-dot"></div>
+                  </div>
+                </div>
+                <div v-if="alarmNotifications.length > 0" class="alarm-notification-footer">
+                  <a-button type="primary" danger block @click="goToAlarmPanel">
+                    <SafetyOutlined /> 前往报警处理中心
+                  </a-button>
+                </div>
+              </div>
+            </template>
+            <a-badge :count="unreadAlarmCount" :offset="[-2, 4]">
+              <div class="header-icon-btn alarm-btn" :class="{ 
+                active: unreadAlarmCount > 0,
+                'alarm-critical': hasCriticalAlarm 
+              }">
+                <WarningFilled v-if="hasCriticalAlarm" />
+                <BellOutlined v-else />
+              </div>
+            </a-badge>
+          </a-popover>
+
+          <!-- 普通消息通知 -->
           <a-popover 
             v-model:open="notificationVisible" 
             trigger="click" 
@@ -257,7 +327,11 @@ import {
   SettingOutlined,
   WifiOutlined,
   DisconnectOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  WarningFilled,
+  FireFilled,
+  AlertFilled,
+  SafetyOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
@@ -280,6 +354,7 @@ appStore.initUserInfo()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
+const alarmNotificationVisible = ref(false)
 const currentTime = ref(dayjs().format('HH:mm'))
 
 let timeInterval: ReturnType<typeof setInterval>
@@ -334,9 +409,24 @@ interface NotificationItem {
   read: boolean
 }
 
+interface AlarmNotificationItem {
+  id: string
+  type: 'fire_alarm' | 'sos_alarm' | 'smoke' | 'temperature' | 'manual'
+  level: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  desc: string
+  time: string
+  read: boolean
+  deviceId?: string
+  location?: string
+}
+
 const notificationItems = ref<NotificationItem[]>([])
+const alarmNotifications = ref<AlarmNotificationItem[]>([])
 
 const unreadCount = computed(() => notificationItems.value.filter(n => !n.read).length)
+const unreadAlarmCount = computed(() => alarmNotifications.value.filter(n => !n.read).length)
+const hasCriticalAlarm = computed(() => alarmNotifications.value.some(n => n.level === 'critical' && !n.read))
 const currentTitle = computed(() => (route.meta.title as string) || '')
 
 watch(() => route.path, (path) => {
@@ -437,11 +527,112 @@ function clearAllNotifications() {
   notificationItems.value.forEach(n => n.read = true)
 }
 
+function clearAllAlarms() {
+  alarmNotifications.value.forEach(n => n.read = true)
+}
+
+function handleAlarmClick(item: AlarmNotificationItem) {
+  item.read = true
+  alarmNotificationVisible.value = false
+  // 显示报警弹窗
+  appStore.showAlarmModal({
+    id: item.id,
+    type: item.type,
+    level: item.level,
+    deviceId: item.deviceId,
+    location: item.location,
+    message: item.desc,
+    timestamp: new Date().toISOString()
+  })
+}
+
+function goToAlarmPanel() {
+  alarmNotificationVisible.value = false
+  router.push('/reception/environment')
+}
+
+// 加载报警通知
+async function loadAlarmNotifications() {
+  try {
+    const res: any = await environmentApi.getFireAlarms({ status: 'active' })
+    const alarms = res.data?.alarms || []
+    
+    alarmNotifications.value = alarms.map((alarm: any) => ({
+      id: String(alarm.id),
+      type: alarm.alarm_type || 'fire_alarm',
+      level: alarm.severity || 'high',
+      title: `${alarm.room_number || '未知房间'} - ${getAlarmTypeText(alarm.alarm_type)}`,
+      desc: alarm.description || '检测到异常情况',
+      time: dayjs(alarm.triggered_at).fromNow(),
+      read: false,
+      deviceId: alarm.device_id,
+      location: alarm.room_number
+    }))
+  } catch (error) {
+    console.error('加载报警通知失败:', error)
+  }
+}
+
+function getAlarmTypeText(type: string): string {
+  const texts: Record<string, string> = {
+    fire_alarm: '消防报警',
+    sos_alarm: 'SOS报警',
+    smoke: '烟雾探测',
+    temperature: '温度异常',
+    manual: '手动报警'
+  }
+  return texts[type] || type
+}
+
+// WebSocket消息处理
+function handleWebSocketMessage(data: any) {
+  if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm') {
+    // 添加新的报警通知
+    const newAlarm: AlarmNotificationItem = {
+      id: data.alarm_id || Date.now().toString(),
+      type: data.event_type,
+      level: data.level || 'critical',
+      title: `${data.data?.room_number || data.data?.floor_id || '未知位置'} - ${getAlarmTypeText(data.event_type)}`,
+      desc: data.data?.message || '紧急报警',
+      time: '刚刚',
+      read: false,
+      deviceId: data.device_id,
+      location: data.data?.room_number || data.data?.floor_id
+    }
+    
+    // 插入到最前面
+    alarmNotifications.value.unshift(newAlarm)
+    
+    // 显示报警弹窗
+    appStore.showAlarmModal({
+      id: newAlarm.id,
+      type: newAlarm.type,
+      level: newAlarm.level,
+      deviceId: newAlarm.deviceId,
+      location: newAlarm.location,
+      message: newAlarm.desc,
+      timestamp: new Date().toISOString()
+    })
+    
+    // 播放提示音
+    playNotificationSound()
+  }
+}
+
+function playNotificationSound() {
+  try {
+    const audio = new Audio('/notification.mp3')
+    audio.play().catch(() => {})
+  } catch (error) {}
+}
+
 onMounted(() => {
   loadNotifications()
+  loadAlarmNotifications()
   const userRole = appStore.userInfo?.role
   if (userRole && userRole !== 'customer') {
     setInterval(loadNotifications, 30000)
+    setInterval(loadAlarmNotifications, 10000) // 报警检查更频繁
   }
 })
 </script>
@@ -854,5 +1045,172 @@ onMounted(() => {
   background: var(--hotel-gold);
   flex-shrink: 0;
   margin-top: 4px;
+}
+
+/* 报警通知样式 */
+.alarm-btn {
+  position: relative;
+}
+
+.alarm-btn.alarm-critical {
+  background: #ff4d4f !important;
+  color: white !important;
+  animation: alarm-pulse 1s infinite;
+}
+
+@keyframes alarm-pulse {
+  0%, 100% { 
+    background: #ff4d4f;
+    box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.7);
+  }
+  50% { 
+    background: #ff7875;
+    box-shadow: 0 0 0 10px rgba(255, 77, 79, 0);
+  }
+}
+
+.alarm-notification-panel {
+  margin: -12px -16px;
+}
+
+.alarm-notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.alarm-notification-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #ff4d4f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-title-icon {
+  font-size: 18px;
+}
+
+.alarm-notification-empty {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--hotel-text-muted);
+}
+
+.alarm-notification-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.alarm-notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  border-radius: var(--hotel-radius-sm);
+  transition: all 0.3s;
+  position: relative;
+  border-left: 3px solid transparent;
+}
+
+.alarm-notification-item:hover {
+  background: var(--hotel-bg-secondary);
+}
+
+.alarm-notification-item.unread {
+  background: rgba(255, 77, 79, 0.05);
+  border-left-color: #ff4d4f;
+}
+
+.alarm-notification-item.critical {
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.alarm-notification-item.animate-pulse {
+  animation: item-pulse 2s infinite;
+}
+
+@keyframes item-pulse {
+  0%, 100% { background: rgba(255, 77, 79, 0.1); }
+  50% { background: rgba(255, 77, 79, 0.2); }
+}
+
+.alarm-notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hotel-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.alarm-notification-icon.critical {
+  background: rgba(255, 77, 79, 0.15);
+  color: #ff4d4f;
+}
+
+.alarm-notification-icon.high {
+  background: rgba(250, 173, 20, 0.15);
+  color: #faad14;
+}
+
+.alarm-notification-icon.medium,
+.alarm-notification-icon.low {
+  background: rgba(52, 152, 219, 0.15);
+  color: #3498db;
+}
+
+.alarm-notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.alarm-notification-title-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hotel-text);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-notification-desc {
+  font-size: 12px;
+  color: var(--hotel-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.alarm-notification-time {
+  font-size: 11px;
+  color: #999;
+}
+
+.alarm-notification-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  flex-shrink: 0;
+  margin-top: 4px;
+  animation: dot-pulse 1s infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.alarm-notification-footer {
+  padding: 16px;
+  border-top: 1px solid #f0f0f0;
 }
 </style>

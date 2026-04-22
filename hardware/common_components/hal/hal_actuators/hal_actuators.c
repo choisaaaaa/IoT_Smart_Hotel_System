@@ -25,9 +25,11 @@ static int relay_level_from_state(bool state_on)
 esp_err_t hal_actuators_init(void) {
     ESP_LOGI(TAG, "初始化 4路继电器控制");
 
+    bool any_relay = false;
     for (int i = 0; i < 4; i++) {
         int pin = relay_pins[i];
         if (pin >= 0) {
+            any_relay = true;
             if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
                 ESP_LOGE(TAG, "继电器 GPIO%d 非法/不可输出，请检查 global_config 引脚映射", pin);
                 return ESP_ERR_INVALID_ARG;
@@ -53,6 +55,9 @@ esp_err_t hal_actuators_init(void) {
                 return err;
             }
         }
+    }
+    if (!any_relay) {
+        ESP_LOGI(TAG, "四路继电器均未配置（引脚<0），跳过 GPIO；上电并接线后可改工程宏启用");
     }
     return ESP_OK;
 }

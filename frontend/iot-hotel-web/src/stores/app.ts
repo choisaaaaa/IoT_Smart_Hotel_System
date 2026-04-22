@@ -220,6 +220,45 @@ export const useAppStore = defineStore('app', () => {
     return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`
   }
 
+  // --- 报警相关状态 ---
+  const currentAlarm = ref<any>(null)
+  const alarmModalVisible = ref(false)
+  const alarmList = ref<any[]>([])
+
+  function showAlarmModal(alarm: any) {
+    currentAlarm.value = alarm
+    alarmModalVisible.value = true
+  }
+
+  function hideAlarmModal() {
+    alarmModalVisible.value = false
+  }
+
+  function setCurrentAlarm(alarm: any) {
+    currentAlarm.value = alarm
+  }
+
+  function addAlarm(alarm: any) {
+    alarmList.value.unshift(alarm)
+    // 限制列表长度
+    if (alarmList.value.length > 100) {
+      alarmList.value = alarmList.value.slice(0, 100)
+    }
+  }
+
+  function removeAlarm(alarmId: string) {
+    alarmList.value = alarmList.value.filter(a => a.id !== alarmId)
+  }
+
+  function clearAlarms() {
+    alarmList.value = []
+  }
+
+  function refreshAlarmList() {
+    // 触发刷新报警列表的事件
+    window.dispatchEvent(new CustomEvent('refresh-alarm-list'))
+  }
+
   return {
     sidebarCollapsed,
     currentTier,
@@ -255,6 +294,17 @@ export const useAppStore = defineStore('app', () => {
     setCallState,
     setRegistration,
     setWebrtcConfig,
-    resolveImageUrl
+    resolveImageUrl,
+    // 报警相关
+    currentAlarm,
+    alarmModalVisible,
+    alarmList,
+    showAlarmModal,
+    hideAlarmModal,
+    setCurrentAlarm,
+    addAlarm,
+    removeAlarm,
+    clearAlarms,
+    refreshAlarmList
   }
 })
