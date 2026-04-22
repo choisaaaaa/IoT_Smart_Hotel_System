@@ -4,7 +4,7 @@ import config from '../config';
 import logger from '../utils/logger';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import { calculateSignature, verifySignature } from '../utils/signature';
-import { verifyDeviceKey } from '../utils/device-key';
+import { verifyDeviceKey, getRawKeyForSigning } from '../utils/device-key';
 import { AIButlerService } from './ai-butler.service';
 import { getVoiceGateway } from './voice-gateway.service';
 
@@ -399,8 +399,15 @@ class MQTTService {
       // 准备待签名的 Payload (排除 signature)
       const { signature, ...payloadWithoutSignature } = data;
       
+      // 获取用于签名的原始密钥（支持新的加密存储格式）
+      const signingKey = getRawKeyForSigning(device.device_key_encrypted || device.device_key, device.device_key);
+      if (!signingKey) {
+        logger.error(`设备 ${deviceId} 无法获取签名密钥`);
+        return;
+      }
+      
       // 调试日志：打印实际接收的数据和计算的签名
-      const calculatedSig = calculateSignature(payloadWithoutSignature, device.device_key);
+      const calculatedSig = calculateSignature(payloadWithoutSignature, signingKey);
       logger.info(`[签名调试] 设备: ${deviceId}, 主题: ${topic}`);
       logger.info(`[签名调试] 原始消息: ${JSON.stringify(data)}`);
       logger.info(`[签名调试] 用于签名的数据: ${JSON.stringify(payloadWithoutSignature)}`);
@@ -408,7 +415,7 @@ class MQTTService {
       logger.info(`[签名调试] 计算的签名: ${calculatedSig}`);
       logger.info(`[签名调试] 数据类型: value=${typeof data.value}, timestamp=${typeof data.timestamp}`);
       
-      if (!verifySignature(payloadWithoutSignature, signature, device.device_key)) {
+      if (!verifySignature(payloadWithoutSignature, signature, signingKey)) {
         logger.error(`设备消息签名验证失败: ${deviceId} [${topic}]`);
         logger.error(`期望签名: ${calculatedSig}`);
         logger.error(`实际签名: ${signature}`);
