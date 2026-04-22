@@ -400,9 +400,15 @@ class BaseDeviceEmulator:
 
                         # 更新密钥
                         if data.get('device_key'):
-                            self.device_key_var.set(data['device_key'])
+                            old_key = self.device_key_var.get()
+                            new_key = data['device_key']
+                            self.device_key_var.set(new_key)
                             if self.mqtt_client:
-                                self.mqtt_client.device_key = data['device_key']
+                                self.mqtt_client.device_key = new_key
+                            if old_key != new_key:
+                                self._log(f"设备密钥已更新", "INFO")
+                            else:
+                                self._log(f"设备密钥未变更", "DEBUG")
 
                         # 更新审核状态
                         status = data.get('audit_status') or data.get('status')

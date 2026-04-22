@@ -906,12 +906,17 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.subscribe(ai_topic)
         self._log(f"已订阅 AI 主题: {ai_topic}")
 
-        # 使用 room_id 订阅指令主题，与后端发送的主题保持一致
-        # 后端发送指令到 hotel/device/command/room/{roomId}
-        effective_room_id = self.room_id or self.device_id
-        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/{effective_room_id}"
+        # 后端发送指令到 hotel/device/command/room/{device_id}
+        # 同时订阅 device_id 和 room_id 两个主题，确保能收到指令
+        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/{self.device_id}"
         self.mqtt_client.subscribe(cmd_topic)
-        self._log(f"已订阅客房指令主题: {cmd_topic}")
+        self._log(f"已订阅客房指令主题 (device_id): {cmd_topic}")
+
+        # 如果 room_id 与 device_id 不同，也订阅 room_id 主题
+        if self.room_id and self.room_id != self.device_id:
+            room_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/{self.room_id}"
+            self.mqtt_client.subscribe(room_cmd_topic)
+            self._log(f"已订阅客房指令主题 (room_id): {room_cmd_topic}")
 
         # 订阅全局客房指令主题（用于接收全局消警等指令）
         all_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/all"

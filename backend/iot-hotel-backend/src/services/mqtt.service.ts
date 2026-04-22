@@ -398,8 +398,18 @@ class MQTTService {
 
       // 准备待签名的 Payload (排除 signature)
       const { signature, ...payloadWithoutSignature } = data;
+      
+      // 调试日志：打印实际接收的数据和计算的签名
+      const calculatedSig = calculateSignature(payloadWithoutSignature, device.device_key);
+      logger.debug(`签名调试 - 设备: ${deviceId}`);
+      logger.debug(`签名调试 - 接收到的签名: ${signature}`);
+      logger.debug(`签名调试 - 计算的签名: ${calculatedSig}`);
+      logger.debug(`签名调试 - 数据: ${JSON.stringify(payloadWithoutSignature)}`);
+      
       if (!verifySignature(payloadWithoutSignature, signature, device.device_key)) {
         logger.error(`设备消息签名验证失败: ${deviceId} [${topic}]`);
+        logger.error(`期望签名: ${calculatedSig}`);
+        logger.error(`实际签名: ${signature}`);
         return;
       }
 

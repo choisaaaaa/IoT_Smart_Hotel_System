@@ -74,7 +74,8 @@ class MQTTClient:
             self.logger.info(f"MQTT连接成功: {self.broker}:{self.port}")
             self.log_buffer.log("INFO", f"MQTT连接成功")
 
-            for topic in self.subscriptions:
+            # 使用 list() 复制字典键，避免在迭代时修改字典
+            for topic in list(self.subscriptions.keys()):
                 self.client.subscribe(topic)
                 self.logger.info(f"重新订阅: {topic}")
 
@@ -238,16 +239,37 @@ class MQTTClient:
             self.client.subscribe(topic)
             self.logger.info(f"订阅: {topic}")
 
+    def _sort_object(self, obj):
+        """递归排序对象，确保与后端签名算法一致"""
+        if obj is None or not isinstance(obj, (dict, list)):
+            return obj
+        if isinstance(obj, list):
+            return [self._sort_object(item) for item in obj]
+        # 对字典进行排序
+        sorted_keys = sorted(obj.keys())
+        result = {}
+        for key in sorted_keys:
+            result[key] = self._sort_object(obj[key])
+        return result
+
     def _generate_signature(self, payload_dict):
         if not self.device_key:
+            self.logger.warning("无法生成签名: device_key 为空")
             return None
 
-        if 'timestamp' not in payload_dict:
-            payload_dict['timestamp'] = datetime.now().isoformat()
+        # 创建副本以避免修改原始数据
+        import copy
+        payload_copy = copy.deepcopy(payload_dict)
 
-        sign_payload = {k: v for k, v in payload_dict.items() if k != 'signature'}
-        # 使用与后端一致的 JSON 序列化格式（不指定 separators，保持默认空格）
-        sign_str = json.dumps(sign_payload, ensure_ascii=False, sort_keys=True)
+        if 'timestamp' not in payload_copy:
+            payload_copy['timestamp'] = datetime.now().isoformat()
+
+        sign_payload = {k: v for k, v in payload_copy.items() if k != 'signature'}
+        # 递归排序以确保与后端一致
+        sorted_payload = self._sort_object(sign_payload)
+        # 关键：与后端 JavaScript JSON.stringify 保持一致
+        # 默认行为：转义非 ASCII 字符 (如 ℃ -> \u2103)
+        sign_str = json.dumps(sorted_payload, sort_keys=True)
 
         signature = hmac_mod.new(
             self.device_key.encode('utf-8'),
@@ -266,10 +288,13 @@ class MQTTClient:
             if isinstance(payload, dict):
                 # 只要有密钥就进行签名，防止本地审核状态滞后导致的消息被后端拦截
                 if self.device_key:
-                    payload['timestamp'] = datetime.now().isoformat()
-                    payload['signature'] = self._generate_signature(payload.copy())
+                    # 先确保有 timestamp，然后使用相同的 timestamp 生成签名
+                    if 'timestamp' not in payload:
+                        payload['timestamp'] = datetime.now().isoformat()
+                    payload['signature'] = self._generate_signature(payload)
 
-                payload = json.dumps(payload, ensure_ascii=False)
+                # 与后端保持一致：默认转义非 ASCII 字符
+                payload = json.dumps(payload)
 
             result = self.client.publish(topic, payload, qos=1)
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
