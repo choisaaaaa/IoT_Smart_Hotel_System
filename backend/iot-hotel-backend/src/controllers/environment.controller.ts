@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
+import mqttService from '../services/mqtt.service';
 
 interface EnvironmentData {
   room_id: number;
@@ -575,16 +576,82 @@ class EnvironmentController {
     try {
       const deviceId = req.params.id;
       const { action, value } = req.body;
+      const currentUser = req.user as any;
 
-      logger.debug(`Control device ${deviceId}: action=${action}, value=${value}`);
+      logger.info(`收到设备控制请求 - 设备: ${deviceId}, 动作: ${action}, 值: ${value}`);
+
+      // 1. 获取设备信息以确定类型
+      const [devices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_type, device_name FROM devices WHERE device_id = ?',
+        [deviceId]
+      );
+
+      if (devices.length === 0) {
+        res.status(404).json({ success: false, message: '设备不存在' });
+        return;
+      }
+
+      const device = devices[0];
+      let cmdType = '';
+      let cmdValue = '';
+
+      // 2. 根据动作和设备类型映射 MQTT 指令
+      // 这里的映射逻辑应与 emulator/common/config.py 保持一致
+      switch (action) {
+        case 'toggle':
+          cmdType = this.mapDeviceTypeToCmd(device.device_type);
+          cmdValue = 'toggle';
+          break;
+        case 'turn_on':
+        case 'open':
+          cmdType = this.mapDeviceTypeToCmd(device.device_type);
+          cmdValue = (device.device_type === 'curtain' || device.device_type === 'window_sensor') ? 'open' :
+                     (device.device_type === 'door_sensor' || device.device_type === 'lock') ? 'unlock' : 'on';
+          break;
+        case 'turn_off':
+        case 'close':
+          cmdType = this.mapDeviceTypeToCmd(device.device_type);
+          cmdValue = (device.device_type === 'curtain' || device.device_type === 'window_sensor') ? 'close' :
+                     (device.device_type === 'door_sensor' || device.device_type === 'lock') ? 'lock' : 'off';
+          break;
+        case 'set_value':
+          if (device.device_type === 'ac') {
+            cmdType = 'air';
+            cmdValue = `temp:${value || 24}`;
+          } else if (device.device_type === 'light') {
+            cmdType = 'light';
+            cmdValue = value > 0 ? 'on' : 'off'; // 简易处理，后续可支持亮度
+          } else {
+            cmdType = this.mapDeviceTypeToCmd(device.device_type);
+            cmdValue = String(value);
+          }
+          break;
+        default:
+          // 支持直接透传
+          cmdType = this.mapDeviceTypeToCmd(device.device_type);
+          cmdValue = action;
+      }
+
+      // 3. 发送 MQTT 指令
+      const commandId = await mqttService.sendDeviceCommand(
+        deviceId,
+        cmdType,
+        cmdValue,
+        currentUser.username
+      );
+
+      if (!commandId) {
+        res.status(500).json({ success: false, message: '指令发送失败（MQTT 服务异常或设备未审核）' });
+        return;
+      }
 
       res.json({
         success: true,
-        message: `Device command sent: ${action}`,
+        message: `指令已下发: ${cmdType}=${cmdValue}`,
         data: {
+          command_id: commandId,
           device_id: deviceId,
-          action,
-          value,
+          action: cmdValue,
           executed_at: new Date().toISOString(),
           status: 'pending'
         }
@@ -593,6 +660,18 @@ class EnvironmentController {
       logger.error('Control device error:', (error as Error).message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
+  }
+
+  private mapDeviceTypeToCmd(type: string): string {
+    const map: Record<string, string> = {
+      'ac': 'air',
+      'light': 'light',
+      'curtain': 'curtain',
+      'door_sensor': 'door',
+      'lock': 'door',
+      'floor_controller': 'alarm'
+    };
+    return map[type] || type;
   }
 
   async getEnergyConsumption(req: AuthRequest, res: Response) {

@@ -212,7 +212,7 @@ class MQTTService {
 
       this.client.on('message', async (topic: string, message: Buffer, packet: any) => {
         // 通话音频流是二进制，不需要 toString 和 JSON.parse
-        if (topic.startsWith('hotel/call/audio/')) {
+        if (topic.startsWith('hotel/call/audio/') && topic.endsWith('/up')) {
           await this.handleCallAudio(topic, message);
           return;
         }
@@ -269,7 +269,7 @@ class MQTTService {
       'hotel/room/control/result',
       'hotel/room/+/scene',
       'hotel/call/signaling/+',
-      'hotel/call/audio/+',
+      'hotel/call/audio/+/up',
       'hotel/ai/request/room/+',
       // 客房服务相关主题
       'hotel/service/delivery/+/request',
@@ -280,6 +280,14 @@ class MQTTService {
     topics.forEach((topic) => {
       this.subscribe(topic).catch(() => {});
     });
+  }
+
+  /**
+   * 清除特定设备的元数据缓存，通常在后台审核状态变更后调用
+   */
+  public clearDeviceCache(deviceId: string) {
+    this.deviceCache.delete(deviceId);
+    logger.info(`[MQTT] 已手动清除设备缓存: ${deviceId}`);
   }
 
   async handleMessage(topic: string, data: any, message: Buffer) {
@@ -323,8 +331,17 @@ class MQTTService {
           // 允许注册阶段的状态上报
           await this.handleDeviceStatus(data as DeviceStatusPayload);
           return;
+        } else if (topic.startsWith('hotel/call/') || topic.startsWith('hotel/device/data/')) {
+          // 关键修复：允许通话信令、音频流以及基础传感器数据通过（即时预览需求）
+          // 传感器数据允许通过是为了让 Web 端在审核前也能看到设备“在线”并有数据波动
+          if (topic.startsWith('hotel/call/')) {
+            logger.info(`允许未审核设备发送通话数据: ${deviceId} [${topic}]`);
+            if (topic.startsWith('hotel/call/signaling/')) {
+              await this.handleCallSignaling(topic, data);
+            }
+          }
         } else {
-          logger.warn(`未审核通过的设备尝试发送数据: ${deviceId} [${topic}]`);
+          logger.warn(`未审核通过的设备尝试发送业务指令: ${deviceId} [${topic}]`);
           return;
         }
       }
@@ -382,15 +399,95 @@ class MQTTService {
   }
 
   async handleCallSignaling(topic: string, data: any) {
-    const callId = topic.split('/').pop();
+    const callId = topic.split('/').pop() || '';
     logger.info(`收到硬件通话信令 [${callId}]: ${JSON.stringify(data)}`);
+
+    if (data.action === 'initiate') {
+      // 硬件发起呼叫，创建通话记录并通知前台
+      try {
+        const caller_type = data.caller_type || 'room';
+        const caller_id = data.caller_id;
+        const callee_type = data.callee_type || 'front_desk';
+        const callee_id = data.callee_id || 'all';
+        
+        // 获取房间所属酒店 ID 和 真实房号
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id, room_number, hotel_id FROM rooms WHERE room_number = ? OR id = ?',
+          [caller_id, caller_id]
+        );
+        
+        const roomInfo = roomRows[0];
+        const hotelId = roomInfo ? roomInfo.hotel_id : 1;
+        const realRoomNumber = roomInfo ? roomInfo.room_number : caller_id;
+        const dbRoomId = roomInfo ? roomInfo.id : caller_id;
+
+        // 写入数据库
+        await pool.query(
+          `INSERT INTO calls (call_id, caller_type, caller_id, callee_type, callee_id, hotel_id, status, started_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [callId, caller_type, dbRoomId, callee_type, callee_id, hotelId, 'calling']
+        );
+
+        // 通知所有在线前台
+        if (this.wsInstance) {
+          const hotelRoom = `front_desk_hotel_${hotelId}`;
+          this.wsInstance.emit('incoming_call', {
+            call_id: callId,
+            caller_type,
+            caller_id: realRoomNumber, // 发送给前端真实房号
+            callee_type,
+            callee_id,
+            created_at: new Date().toISOString()
+          }, hotelRoom);
+          logger.info(`[MQTT -> WS] 转发硬件呼叫请求到前台: ${hotelRoom}, 房号: ${realRoomNumber}`);
+        }
+      } catch (error) {
+        logger.error('处理硬件发起呼叫失败:', error.message);
+      }
+      return;
+    }
+
+    if (data.action === 'hangup') {
+      // 硬件发起挂断，更新数据库并通知 Web 端
+      try {
+        await pool.query(
+          "UPDATE calls SET status = 'completed', ended_at = NOW() WHERE call_id = ?",
+          [callId]
+        );
+        
+        const [callRows] = await pool.query<RowDataPacket[]>(
+          'SELECT caller_type, caller_id, callee_type, callee_id, hotel_id FROM calls WHERE call_id = ?',
+          [callId]
+        );
+        
+        if (callRows.length > 0) {
+          const call = callRows[0] as any;
+          if (this.wsInstance) {
+            // 广播给房间所属酒店的所有前台
+            const hotelRoom = `front_desk_hotel_${call.hotel_id}`;
+            this.wsInstance.emit('call_hungup', { call_id: callId }, hotelRoom);
+            logger.info(`[MQTT -> WS] 转发硬件挂断信号到前台: ${hotelRoom}`);
+          }
+        }
+      } catch (error) {
+        logger.error('处理硬件挂断失败:', error.message);
+      }
+      return;
+    }
 
     if (this.wsInstance) {
       // 将硬件发出的信令转发给对应的 Web/App 客户端
-      // 硬件通常发给与其通话的对象，data 中应包含 target_type 和 target_id
+      // 识别具体的 WebRTC 信令类型以适配前端监听器
       if (data.target_type && data.target_id) {
-        this.wsInstance.emitToClient(data.target_type, data.target_id, 'webrtc_signal', {
+        let eventName = 'webrtc_signal';
+        if (data.offer) eventName = 'webrtc_offer';
+        else if (data.answer) eventName = 'webrtc_answer';
+        else if (data.candidate) eventName = 'webrtc_ice_candidate';
+
+        this.wsInstance.emitToClient(data.target_type, data.target_id, eventName, {
           call_id: callId,
+          from_type: 'room', // 硬件通常是房间
+          from_id: data.device_id || '',
           ...data
         });
       }
@@ -398,7 +495,9 @@ class MQTTService {
   }
 
   async handleCallAudio(topic: string, message: Buffer) {
-    const callId = topic.split('/').pop();
+    // 主题格式: hotel/call/audio/{callId}/up
+    const parts = topic.split('/');
+    const callId = parts[parts.length - 2];
     if (!callId) {return;}
 
     // 硬件发送的是原始音频二进制流
@@ -422,8 +521,13 @@ class MQTTService {
       }
 
       if (call) {
-        // 硬件通常是 callee (房间)，发给 caller (前台/App)
-        this.wsInstance.emitToClient(call.caller_type, call.caller_id, 'audio_chunk', {
+        // 确定接收方：如果硬件是主叫，发给被叫；如果硬件是被叫，发给主叫
+        // 由于是从 MQTT 来的，说明发送方是硬件（房间）
+        const isHardwareCaller = call.caller_type === 'room';
+        const targetType = isHardwareCaller ? call.callee_type : call.caller_type;
+        const targetId = isHardwareCaller ? call.callee_id : call.caller_id;
+
+        this.wsInstance.emitToClient(targetType, targetId, 'audio_chunk', {
           call_id: callId,
           chunk: message
         });
@@ -466,9 +570,17 @@ class MQTTService {
   async handleDeviceStatus(data: DeviceStatusPayload) {
     try {
       const now = new Date();
-      const hotelId = data.hotel_id || 1; // 如果未提供，默认归属到 ID 为 1 的酒店
+      const hotelId = data.hotel_id || 1; 
 
-      // 使用 INSERT ... ON DUPLICATE KEY UPDATE 兼容新设备注册和旧设备更新
+      // 自动识别设备类型
+      let deviceType = (data as any).device_type;
+      if (!deviceType || deviceType === 'unknown') {
+        if (data.device_id.startsWith('ROO_')) {deviceType = 'room';}
+        else if (data.device_id.startsWith('FLO_')) {deviceType = 'floor_controller';}
+        else if (data.device_id.startsWith('FRN_')) {deviceType = 'front_desk';}
+        else {deviceType = 'unknown';}
+      }
+
       await pool.query<ResultSetHeader>(
         `INSERT INTO devices (
           device_id, device_type, device_name, device_key,
@@ -479,11 +591,11 @@ class MQTTService {
           device_status = VALUES(device_status),
           last_seen = VALUES(last_seen),
           firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
-          hotel_id = VALUES(hotel_id),
+          hotel_id = COALESCE(hotel_id, VALUES(hotel_id)),
           updated_at = VALUES(updated_at)`,
         [
           data.device_id,
-          (data as any).device_type || 'unknown',
+          deviceType,
           `New Device ${data.device_id}`,
           data.status,
           data.firmware_version || null,
@@ -508,6 +620,11 @@ class MQTTService {
           status: data.status,
           timestamp: now.toISOString()
         }, hotelRoom);
+        
+        // 同时触发全量在线状态广播，确保语音通话清单即时更新
+        this.wsInstance.broadcastOnlineStatus().catch(err => 
+          logger.error('状态更新时广播失败:', err.message)
+        );
       }
     } catch (error) {
       logger.error('处理设备状态更新失败:', error.message);
@@ -518,6 +635,7 @@ class MQTTService {
     try {
       const sensorType = data.sensor_type || 'unknown';
 
+      // 1. 更新或插入传感器最新值
       await pool.query<ResultSetHeader>(
         `INSERT INTO sensor_data (device_id, sensor_type, sensor_value, created_at)
          VALUES (?, ?, ?, NOW())
@@ -525,19 +643,27 @@ class MQTTService {
         [data.device_id, sensorType, String(data.value)]
       );
 
+      // 2. 更新设备活跃时间并确保状态为 online
       await pool.query(
         `UPDATE devices SET last_seen = NOW(), device_status = 'online', updated_at = NOW() WHERE device_id = ?`,
         [data.device_id]
       );
 
-      if (hotelId && this.wsInstance) {
-        const hotelRoom = `front_desk_hotel_${hotelId}`;
+      // 3. 获取最新的设备元数据（可能刚插入或更新了状态）
+      const device = await this.getDeviceMetadata(data.device_id);
+      const effectiveHotelId = hotelId || (device ? device.hotel_id : 1);
+
+      if (effectiveHotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${effectiveHotelId}`;
         this.wsInstance.emit('sensor_data_update', {
           device_id: data.device_id,
           sensor_type: sensorType,
           value: data.value,
           timestamp: new Date().toISOString()
         }, hotelRoom);
+
+        // 触发全量在线状态广播，确保设备在掉线重连后能即时出现在清单
+        this.wsInstance.broadcastOnlineStatus().catch(() => {});
       }
     } catch (error) {
       logger.error('处理传感器数据失败:', error.message);

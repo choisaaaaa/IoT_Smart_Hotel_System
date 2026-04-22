@@ -57,18 +57,18 @@ class RFIDCardSimulator:
 
 class FrontDeskEmulator(BaseDeviceEmulator):
     def __init__(self, root):
-        self.device_id = "front_desk_01"
-
         self.rfid = RFIDCardSimulator()
-        self.target_room_var = tk.StringVar(value="301")
+        self.target_room_var = tk.StringVar(value="")
         self.last_card_room = ""
-        self.front_id_var = tk.StringVar(value="01")
+        self.front_id_var = tk.StringVar(value="")
         self.led_color = (0, 0, 255)
+        self.led_wall_colors = ["#ffffff"] * 8  # 8颗客房状态灯
+        self.rooms_mapping = ["", "", "", "", "", "", "", ""]
 
         super().__init__(
             root=root,
             title=f"智慧酒店 - 前台管理端仿真器",
-            device_id=self.device_id,
+            device_id=None, # 让基类自动生成或从配置加载唯一物理ID
             device_type="front_desk",
             width=950,
             height=800
@@ -85,6 +85,20 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         self._log("收到云端配置更新")
 
     def _init_biz_ui(self):
+        self._create_card(self.biz_frame, "客房状态可视化灯墙 (WS2812B x 8)").pack(fill=tk.X, pady=(0, 20))
+        wall_body = self.last_card_body
+
+        self.wall_canvas = tk.Canvas(wall_body, width=800, height=100, bg="#262626", highlightthickness=0)
+        self.wall_canvas.pack(pady=10)
+        self._update_led_wall()
+
+        legend_f = tk.Frame(wall_body, bg="white")
+        legend_f.pack(fill=tk.X)
+        colors_legend = [("⚪ 空置", "#ffffff"), ("🟢 已入住", "#52c41a"), ("🔴 SOS/火警", "#ff4d4f"), ("🟡 清洁中", "#faad14"), ("🔵 维修中", "#1890ff")]
+        for text, color in colors_legend:
+            lbl = tk.Label(legend_f, text=text, font=("Arial", 9), bg="white", fg=color, padx=10)
+            lbl.pack(side=tk.LEFT)
+
         self._create_card(self.biz_frame, "RFID 智能房卡读写器").pack(fill=tk.X, pady=(0, 20))
         rfid_body = self.last_card_body
 
@@ -136,17 +150,29 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         tk.Label(door_f, text="🚪 远程开锁:", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
         tk.Button(door_f, text="远程开门", bg=self.colors['warning'], fg="white", command=self._remote_unlock, **btn_style).pack(side=tk.RIGHT)
 
-        self._create_card(self.biz_frame, "硬件交互外设模拟").pack(fill=tk.BOTH, expand=True)
+        self._create_card(self.biz_frame, "硬件交互外设模拟").pack(fill=tk.X, pady=(0, 20))
         hw_body = self.last_card_body
 
+        # 左侧指示灯
         led_container = tk.Frame(hw_body, bg="white")
         led_container.pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
         self.led_canvas = tk.Canvas(led_container, width=60, height=60, bg="white", highlightthickness=0)
         self.led_canvas.pack(pady=5)
         self._update_led()
-        tk.Label(led_container, text="状态指示灯", font=("Arial", 9), bg="white", fg=self.colors['text_secondary']).pack()
+        tk.Label(led_container, text="运行指示灯", font=("Arial", 9), bg="white", fg=self.colors['text_secondary']).pack()
 
+        # 中间SOS按键
+        sos_container = tk.Frame(hw_body, bg="white")
+        sos_container.pack(side=tk.LEFT, fill=tk.Y, padx=30)
+
+        self.sos_btn = tk.Button(sos_container, text="🆘\nSOS", bg=self.colors['danger'], fg="white",
+                                font=("Arial", 14, "bold"), width=6, height=3, relief=tk.RAISED,
+                                command=self._trigger_sos)
+        self.sos_btn.pack(pady=5)
+        tk.Label(sos_container, text="110一键报警", font=("Arial", 9), bg="white", fg=self.colors['danger']).pack()
+
+        # 右侧蜂鸣器
         buzzer_container = tk.Frame(hw_body, bg="white")
         buzzer_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20)
 
@@ -155,6 +181,24 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                   command=lambda: self._beep(1), **btn_style).pack(fill=tk.X, pady=5)
         tk.Button(buzzer_container, text="🔇 双鸣(异常提醒)", bg=self.colors['danger'], fg="white",
                   command=lambda: self._beep(2), **btn_style).pack(fill=tk.X, pady=5)
+
+        # 4. UART/RS485 接口模拟日志
+        self._create_card(self.biz_frame, "工业级接口模拟 (RS485/UART)").pack(fill=tk.BOTH, expand=True)
+        iface_body = self.last_card_body
+
+        iface_f = tk.Frame(iface_body, bg="white")
+        iface_f.pack(fill=tk.X)
+
+        self.rs485_status = tk.Label(iface_f, text="[RS485] 🚒 消防主机: 运行正常 (MODBUS RTU, ID:01)", font=("Consolas", 9), bg="white", fg="#52c41a")
+        self.rs485_status.pack(anchor=tk.W)
+
+        self.uart_status = tk.Label(iface_f, text="[UART] 🚔 公安终端: 已连接 (SAM模块, 115200bps)", font=("Consolas", 9), bg="white", fg="#52c41a")
+        self.uart_status.pack(anchor=tk.W, pady=(5, 0))
+
+        self.iface_log = scrolledtext.ScrolledText(iface_body, height=4, font=("Consolas", 8), bg="#262626", fg="#d4d4d4", bd=0)
+        self.iface_log.pack(fill=tk.X, pady=10)
+        self._log_iface("System boot: RS485 initialization complete.")
+        self._log_iface("System boot: UART SAM module connected.")
 
     def _connect(self):
         super()._connect()
@@ -184,6 +228,48 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             self.card_canvas.create_text(cx, cy, text="请插入房卡", font=("Microsoft YaHei", 10), fill="#999")
             self.card_status_var.set("读卡器空闲")
 
+    def _update_led_wall(self):
+        self.wall_canvas.delete("all")
+        for i in range(8):
+            x = 50 + i * 100
+            y = 50
+            color = self.led_wall_colors[i]
+            # 绘制LED灯珠
+            self.wall_canvas.create_oval(x-25, y-25, x+25, y+25, fill=color, outline="#444", width=2)
+            # 绘制光晕
+            if color != "#ffffff":
+                self.wall_canvas.create_oval(x-35, y-35, x+35, y+35, outline=color, width=1)
+            # 绘制房号
+            self.wall_canvas.create_text(x, y+45, text=self.rooms_mapping[i], fill="#ccc", font=("Arial", 9))
+
+    def _log_iface(self, msg):
+        timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+        if hasattr(self, 'iface_log'):
+            self.iface_log.insert(tk.END, f"[{timestamp}] {msg}\n")
+            self.iface_log.see(tk.END)
+
+    def _trigger_sos(self):
+        self._log("!!! SOS 110一键报警已触发 !!!", "ERROR")
+        self._beep(3)
+        self._update_led(255, 0, 0)
+        self._log_iface("UART: Sending SOS signal to police terminal...")
+        self._log_iface("RS485: Broadcast alarm signal to fire host...")
+
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish_security_event("sos_alarm", level="critical", event_data={
+                "device_id": self.device_id,
+                "type": "front_desk_sos",
+                "message": "前台物理SOS按键被按下"
+            })
+
+        # 红色闪烁动画
+        def flash(count):
+            if count <= 0: return
+            self.sos_btn.config(bg="white", fg="red")
+            self.root.after(200, lambda: self.sos_btn.config(bg="red", fg="white"))
+            self.root.after(400, lambda: flash(count-1))
+        flash(5)
+
     def _update_led(self, r=0, g=0, b=255):
         self.led_color = (r, g, b)
         color = f"#{r:02x}{g:02x}{b:02x}"
@@ -193,11 +279,13 @@ class FrontDeskEmulator(BaseDeviceEmulator):
     def _beep(self, count=1):
         original_color = self.led_color
         self._update_led(255, 255, 0)
+        self._play_beep(1000 if count == 1 else 2000, 200)
         self.root.after(100, lambda: self._update_led(*original_color))
 
         if count > 1:
             for i in range(1, count):
                 self.root.after(i * 200, lambda: self._update_led(255, 255, 0))
+                self.root.after(i * 200, lambda: self._play_beep(1000 if count == 1 else 2000, 200))
                 self.root.after(i * 200 + 100, lambda: self._update_led(*original_color))
 
     def _issue_card(self):
@@ -334,13 +422,55 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             messagebox.showwarning("警告", "MQTT未连接")
 
     def _on_connected(self):
-        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/{self.device_id}"
+        # 使用物理 ID (unique_device_id) 进行订阅
+        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/{self.unique_device_id}"
         self.mqtt_client.subscribe(cmd_topic)
         self._log(f"已订阅前台指令主题: {cmd_topic}")
+
+        # 订阅客房状态事件以更新灯墙
+        self.mqtt_client.subscribe("hotel/device/event/room/+", self._on_room_event)
+        self.mqtt_client.subscribe("hotel/security/event", self._on_security_event)
 
         self._register_command_handlers()
         self._update_led(0, 0, 255)
         self._beep(2)
+
+    def _on_room_event(self, topic, payload):
+        try:
+            data = json.loads(payload)
+            room_id = topic.split('/')[-1]
+            event = data.get('event')
+            val = data.get('value')
+
+            # 更新灯墙
+            if room_id in self.rooms_mapping:
+                idx = self.rooms_mapping.index(room_id)
+                if event == "check_in":
+                    self.led_wall_colors[idx] = "#52c41a"
+                elif event == "check_out":
+                    self.led_wall_colors[idx] = "#ffffff"
+                elif event == "cleaning":
+                    self.led_wall_colors[idx] = "#faad14"
+                elif event == "maintenance":
+                    self.led_wall_colors[idx] = "#1890ff"
+                self.root.after(0, self._update_led_wall)
+        except:
+            pass
+
+    def _on_security_event(self, topic, payload):
+        try:
+            data = json.loads(payload)
+            event_type = data.get('event_type')
+            if event_type == "fire_alarm" or event_type == "sos_alarm":
+                event_data = data.get('data', {})
+                room_id = event_data.get('room_id') or event_data.get('floor_id')
+                if room_id in self.rooms_mapping:
+                    idx = self.rooms_mapping.index(room_id)
+                    self.led_wall_colors[idx] = "#ff4d4f"
+                    self.root.after(0, self._update_led_wall)
+                self._beep(3)
+        except:
+            pass
 
     def _on_disconnected(self):
         self._update_led(255, 0, 0)

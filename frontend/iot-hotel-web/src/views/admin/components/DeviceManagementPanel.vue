@@ -47,6 +47,8 @@
             <a-select-option value="ac">空调</a-select-option>
             <a-select-option value="light">灯光</a-select-option>
             <a-select-option value="smoke_detector">烟雾探测器</a-select-option>
+            <a-select-option value="floor_controller">楼控节点</a-select-option>
+            <a-select-option value="front_desk">前台模拟器</a-select-option>
             <a-select-option value="curtain">窗帘</a-select-option>
             <a-select-option value="window_sensor">窗户传感器</a-select-option>
             <a-select-option value="door_sensor">门磁传感器</a-select-option>
@@ -92,12 +94,12 @@
                 控制
               </a-button>
               <a-button
-                v-else-if="['light', 'curtain'].includes(record.device_type)"
+                v-else-if="['light', 'curtain', 'lock', 'floor_controller'].includes(record.device_type)"
                 size="small"
                 :disabled="record.status !== 'online'"
                 @click="openControlModal(record)"
               >
-                调节
+                {{ record.device_type === 'floor_controller' ? '联动控制' : (record.device_type === 'lock' ? '开锁' : '调节') }}
               </a-button>
               <a-tag v-else color="blue">只读</a-tag>
             </a-space>
@@ -112,10 +114,14 @@
 
         <a-form-item label="操作类型">
           <a-radio-group v-model:value="controlAction">
-            <a-radio-button value="toggle">开关切换</a-radio-button>
-            <a-radio-button value="set_value">设定值</a-radio-button>
-            <a-radio-button v-if="!currentDevice.is_running" value="turn_on">开启</a-radio-button>
-            <a-radio-button v-if="currentDevice.is_running" value="turn_off">关闭</a-radio-button>
+            <a-radio-button v-if="['ac', 'light', 'curtain'].includes(currentDevice.device_type)" value="toggle">开关切换</a-radio-button>
+            <a-radio-button v-if="['ac', 'light', 'curtain'].includes(currentDevice.device_type)" value="set_value">设定值</a-radio-button>
+            <a-radio-button v-if="currentDevice.device_type === 'lock' || !currentDevice.is_running" value="turn_on">
+              {{ currentDevice.device_type === 'lock' ? '远程开锁' : (currentDevice.device_type === 'floor_controller' ? '手动触发警报' : '开启') }}
+            </a-radio-button>
+            <a-radio-button v-if="currentDevice.device_type === 'lock' || currentDevice.is_running" value="turn_off">
+              {{ currentDevice.device_type === 'lock' ? '远程上锁' : (currentDevice.device_type === 'floor_controller' ? '解除警报' : '关闭') }}
+            </a-radio-button>
           </a-radio-group>
         </a-form-item>
 
@@ -225,7 +231,13 @@ async function fetchDevices() {
 
 function openControlModal(device: DeviceInfo) {
   currentDevice.value = device
-  controlAction.value = 'set_value'
+  if (['ac', 'light', 'curtain'].includes(device.device_type)) {
+    controlAction.value = 'set_value'
+  } else if (device.device_type === 'lock') {
+    controlAction.value = device.is_running ? 'turn_off' : 'turn_on'
+  } else {
+    controlAction.value = 'turn_on'
+  }
   controlValue.value = device.current_value
   controlNote.value = ''
   controlModalVisible.value = true
@@ -279,6 +291,8 @@ function getDeviceTypeText(type: string): string {
     ac: '空调',
     light: '灯光',
     smoke_detector: '烟雾探测器',
+    floor_controller: '楼控节点',
+    front_desk: '前台终端',
     curtain: '窗帘',
     window_sensor: '窗户传感器',
     door_sensor: '门磁传感器',

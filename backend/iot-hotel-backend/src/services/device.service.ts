@@ -170,11 +170,15 @@ class DeviceService {
 
       // 获取当前设备信息，检查是否已有 key
       const [currentRows] = await pool.query<RowDataPacket[]>(
-        'SELECT device_key, audit_status FROM devices WHERE id = ?',
+        'SELECT device_id, device_type, device_key, audit_status FROM devices WHERE id = ?',
         [id]
       );
       
       const currentDevice = currentRows[0];
+      if (!currentDevice) {
+        throw new Error('Device not found');
+      }
+
       let device_key = currentDevice?.device_key || '';
 
       // 只有在第一次从非 approved 变为 approved 时，或者没有 key 时，才生成新 key
@@ -210,6 +214,27 @@ class DeviceService {
           room_number = roomRows[0].room_number;
         }
       }
+
+      // --- 关键修复：同步清除 MQTT 服务缓存并通知硬件 ---
+      const mqttService = require('./mqtt.service').default;
+      mqttService.clearDeviceCache(currentDevice.device_id);
+
+      // 主动推送配置更新到硬件 (包含新的审核状态和密钥)
+      mqttService.publish(`hotel/device/config/${currentDevice.device_type}/${currentDevice.device_id}`, {
+        device_id: currentDevice.device_id,
+        audit_status: status,
+        device_key: status === 'approved' ? device_key : null,
+        room_id: room_id,
+        room_number: room_number,
+        hotel_id: currentDevice.hotel_id,
+        timestamp: new Date().toISOString()
+      });
+
+      // 触发 WebSocket 广播，确保前台界面的在线列表和审核状态同步更新
+      const websocketService = require('./websocket.service').default;
+      websocketService.broadcastOnlineStatus().catch((err: any) => 
+        logger.error('[DeviceService] 审核后广播失败:', err.message)
+      );
 
       return {
         id,

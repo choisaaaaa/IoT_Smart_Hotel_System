@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import pool, { RowDataPacket } from '../../config/database';
 import aiButlerService from '../../services/ai-butler.service';
+import mqttService from '../../services/mqtt.service';
 import { CallService } from '../../services/call.service';
 import websocketService from '../../services/websocket.service';
 import { authenticate } from '../../middleware/auth';
@@ -170,7 +171,7 @@ router.post('/wake',
   async (req, res) => {
     try {
       const { room_id, text } = req.body;
-      
+
       // 唤醒词检测
       const wakeWords = ['小智', '小智小智', 'ai管家', '管家'];
       const isWake = wakeWords.some(word => text.includes(word));
@@ -185,7 +186,7 @@ router.post('/wake',
 
       // 验证入住状态
       const session = await aiButlerService.verifyGuestAccess(room_id);
-      
+
       res.json({
         code: 200,
         message: 'success',
@@ -200,6 +201,88 @@ router.post('/wake',
       res.status(500).json({
         code: 500,
         message: '检测失败',
+        data: null
+      });
+    }
+  }
+);
+
+/**
+ * @route POST /api/v1/ai-butler/broadcast
+ * @desc 房间广播接口（AI语音下发）
+ * @access Private
+ */
+router.post('/broadcast',
+  authenticate,
+  [
+    body('room_id').notEmpty().withMessage('房间号不能为空'),
+    body('text').notEmpty().withMessage('广播文本不能为空')
+  ],
+  async (req, res) => {
+    try {
+      const { room_id, text } = req.body;
+
+      logger.info(`收到房间广播请求: 房间=${room_id}, 文本="${text}"`);
+
+      // 1. 验证房间是否存在并获取设备ID
+      const [devices] = await pool.query<RowDataPacket[]>(
+        `SELECT d.device_id, r.room_number FROM devices d
+         JOIN rooms r ON d.room_id = r.id
+         WHERE (r.room_number = ? OR r.id = ?) AND d.device_type = 'room'
+         LIMIT 1`,
+        [room_id, room_id]
+      );
+
+      if (devices.length === 0) {
+        return res.status(404).json({
+          code: 404,
+          message: '未找到指定房间的智能终端设备',
+          data: null
+        });
+      }
+
+      const deviceId = devices[0].device_id;
+      const actualRoomNumber = devices[0].room_number;
+
+      // 2. 调用TTS合成语音
+      const audioBase64 = await aiButlerService.textToSpeech(text);
+
+      if (!audioBase64) {
+        return res.status(500).json({
+          code: 500,
+          message: '语音合成失败',
+          data: null
+        });
+      }
+
+      // 3. 通过MQTT发布AI响应消息
+      const topic = `hotel/ai/response/room/${deviceId}`;
+      const payload = {
+        device_id: deviceId,
+        room_id: actualRoomNumber,
+        text: text,
+        audio_base64: audioBase64,
+        timestamp: Date.now(),
+        type: 'broadcast'
+      };
+
+      await mqttService.publish(topic, payload);
+
+      logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+
+      res.json({
+        code: 200,
+        message: '广播下发成功',
+        data: {
+          room_id: actualRoomNumber,
+          device_id: deviceId
+        }
+      });
+    } catch (error) {
+      logger.error('下发广播失败:', error.message);
+      res.status(500).json({
+        code: 500,
+        message: '下发广播失败',
         data: null
       });
     }

@@ -24,19 +24,19 @@ from common.config import (
 
 class FloorControllerEmulator(BaseDeviceEmulator):
     def __init__(self, root):
-        self.device_id = "floor_03"
-        self.floor_id_var = tk.StringVar(value="03")
+        self.floor_id_var = tk.StringVar(value="")
 
         self.light_on = False
         self.is_broadcasting = False
         self.is_alarm = False
+        self.led_status_colors = ["#52c41a"] * 5  # 5颗状态灯
 
         self._stop_sensors = threading.Event()
 
         super().__init__(
             root=root,
             title=f"智慧酒店 - 楼控节点仿真器",
-            device_id=self.device_id,
+            device_id=None, # 让基类自动生成或从配置加载唯一物理ID
             device_type="floor",
             width=850,
             height=750
@@ -114,6 +114,21 @@ class FloorControllerEmulator(BaseDeviceEmulator):
                                  font=("Arial", 10, "bold"), fg=self.colors['text_secondary'], bg="white")
         self.bc_status.pack(side=tk.RIGHT, padx=15)
 
+        self._create_card(self.biz_frame, "硬件交互外设模拟 (RGB LED & Buzzer)").pack(fill=tk.X, pady=(0, 20))
+        hw_body = self.last_card_body
+
+        led_f = tk.Frame(hw_body, bg="white")
+        led_f.pack(side=tk.LEFT, padx=10)
+        self.led_canvas = tk.Canvas(led_f, width=250, height=60, bg="white", highlightthickness=0)
+        self.led_canvas.pack()
+        self._update_led_status()
+        tk.Label(led_f, text="RGB 状态指示灯 (WS2812B x 5)", font=("Arial", 9), bg="white", fg=self.colors['text_secondary']).pack()
+
+        buzzer_f = tk.Frame(hw_body, bg="white")
+        buzzer_f.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=20)
+        tk.Button(buzzer_f, text="🔊 蜂鸣器测试", bg=self.colors['primary'], fg="white",
+                  command=lambda: self._beep(1), relief=tk.FLAT, font=("Arial", 9, "bold")).pack(fill=tk.X)
+
         self._create_card(self.biz_frame, "紧急安全警报系统").pack(fill=tk.BOTH, expand=True)
         safe_body = self.last_card_body
 
@@ -125,12 +140,51 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         tk.Button(safe_body, text="手动复位报警系统", command=self._reset_alarm,
                   bg="#595959", fg="white", font=("Arial", 10), relief=tk.FLAT, pady=10).pack(fill=tk.X, pady=5)
 
+    def _update_led_status(self):
+        self.led_canvas.delete("all")
+        for i in range(5):
+            x = 30 + i * 45
+            y = 30
+            color = self.led_status_colors[i]
+            self.led_canvas.create_oval(x-15, y-15, x+15, y+15, fill=color, outline="#444", width=2)
+            if color != "#52c41a":
+                self.led_canvas.create_oval(x-20, y-20, x+20, y+20, outline=color, width=1)
+
+    def _beep(self, count=1):
+        self._play_beep(1000 if count == 1 else 2000, 200)
+        self.led_status_colors[4] = "#ffff00"
+        self._update_led_status()
+        self.root.after(200, lambda: self._reset_led_status())
+
+        if count > 1:
+            for i in range(1, count):
+                self.root.after(i * 400, lambda: self._play_beep(1000 if count == 1 else 2000, 200))
+                self.root.after(i * 400, lambda: self._set_led_color(4, "#ffff00"))
+                self.root.after(i * 400 + 200, lambda: self._reset_led_status())
+
+    def _set_led_color(self, idx, color):
+        self.led_status_colors[idx] = color
+        self._update_led_status()
+
+    def _reset_led_status(self):
+        if self.is_alarm:
+            self.led_status_colors = ["#ff4d4f"] * 5
+        elif self.is_broadcasting:
+            self.led_status_colors = ["#1890ff"] * 5
+        else:
+            self.led_status_colors = ["#52c41a"] * 5
+        self._update_led_status()
+
     def _sensor_loop(self):
         while not self._stop_sensors.is_set():
             if self.mqtt_client and self.connected:
                 temp = round(random.uniform(22, 26), 1)
                 humi = random.randint(40, 60)
                 smoke = random.randint(0, 30)
+                # 随机触发烟雾报警 (0.5% 概率)
+                if random.random() < 0.005:
+                    smoke = random.randint(100, 300)
+
                 light_val = random.randint(100, 500)
 
                 self.root.after(0, lambda: self.temp_var.set(f"{temp}℃"))
@@ -144,6 +198,10 @@ class FloorControllerEmulator(BaseDeviceEmulator):
                 self.mqtt_client.publish_sensor_data(SENSOR_LIGHT, light_val, "lx")
 
                 self._log(f"传感器数据已上报: 温度={temp}℃ 湿度={humi}% 烟雾={smoke}ppm 光照={light_val}lx")
+
+                # 烟雾报警逻辑
+                if smoke > 80 and not self.is_alarm:
+                    self.root.after(0, self._trigger_alarm)
             time.sleep(30)
 
     def _toggle_light(self, from_cloud=False, turn_on=None):
@@ -160,6 +218,10 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self.is_alarm = True
         self.alarm_btn.config(text="🔥 警报生效中...", bg="#000000")
         self._log("紧急警报已触发！正在通知中控室...", "ERROR")
+        self._beep(3)
+        self.led_status_colors = ["#ff4d4f"] * 5
+        self._update_led_status()
+
         if self.mqtt_client and self.connected:
             self.mqtt_client.publish_security_event("fire_alarm", level="critical", event_data={
                 "floor_id": self.floor_id_var.get(),
@@ -171,9 +233,11 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self.is_alarm = False
         self.alarm_btn.config(text="🛑 模拟触发全楼层消防报警", bg=self.colors['danger'])
         self._log("警报已人工复位")
+        self._reset_led_status()
 
     def _on_connected(self):
-        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/floor/{self.device_id}"
+        # 使用物理 ID (unique_device_id) 进行订阅，确保与云端标识一致
+        cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/floor/{self.unique_device_id}"
         self.mqtt_client.subscribe(cmd_topic)
         self._log(f"已订阅楼控指令主题: {cmd_topic}")
 

@@ -40,20 +40,26 @@
       <!-- 调度面板 -->
       <a-card class="duty-management-card" title="话务调度面板" :bodyStyle="{ padding: '16px' }">
         <template #extra>
-          <a-badge :status="appStore.userStatus?.isOnDuty ? 'success' : 'default'" :text="appStore.userStatus?.isOnDuty ? '值班中' : '休息中'" />
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-button type="primary" size="small" @click="openBroadcastModal">
+              <template #icon><SoundOutlined /></template>
+              房间广播
+            </a-button>
+            <a-badge :status="appStore.userStatus?.isOnDuty ? 'success' : 'default'" :text="appStore.userStatus?.isOnDuty ? '值班中' : '休息中'" />
+          </div>
         </template>
-        
+
         <div class="duty-controls">
           <div class="control-item">
             <span class="label">接听状态:</span>
-            <a-switch 
-              :checked="appStore.userStatus?.isOnDuty" 
+            <a-switch
+              :checked="appStore.userStatus?.isOnDuty"
               @change="handleDutySwitch"
-              checked-children="在岗" 
+              checked-children="在岗"
               un-checked-children="离岗"
             />
           </div>
-          
+
           <div class="control-item" v-if="appStore.userStatus?.isOnDuty">
             <span class="label">当值岗位:</span>
             <a-select v-model:value="currentDutyRole" @change="handleRoleChange" style="width: 130px">
@@ -67,10 +73,10 @@
           <a-divider style="margin: 8px 0" />
 
           <div class="mic-check-section">
-            <a-button 
-              block 
+            <a-button
+              block
               :type="micStatus === 'success' ? 'default' : 'primary'"
-              @click="checkMicPermission" 
+              @click="checkMicPermission"
               :loading="micChecking"
             >
               <template #icon>
@@ -86,7 +92,7 @@
         </div>
 
         <a-divider style="margin: 16px 0" />
-        
+
         <div class="online-staff-section">
           <div class="section-header">
             <span class="title">当前值班 ({{ onDutyStaff.length }})</span>
@@ -181,6 +187,22 @@
         </a-button>
       </div>
     </a-modal>
+    <!-- 房间广播弹窗 -->
+    <a-modal v-model:open="broadcastVisible" title="📢 发起房间语音广播" @ok="handleBroadcast" :confirmLoading="broadcasting">
+      <a-form layout="vertical">
+        <a-form-item label="目标房间" required>
+          <a-select v-model:value="broadcastForm.room_id" placeholder="选择或输入房间号" show-search>
+            <a-select-option v-for="room in roomList" :key="room.room_id" :value="room.room_id">
+              {{ room.room_id }} ({{ room.display_name }})
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="广播内容 (由AI自动朗读)" required>
+          <a-textarea v-model:value="broadcastForm.text" placeholder="请输入要广播的内容，如：尊敬的客人，您的外卖已送达前台，请注意查收。" :rows="4" />
+        </a-form-item>
+        <a-alert message="AI 自动朗读" description="下发后，客房内的 AI 管家将自动把文字转为语音播放。此功能用于非实时通话的紧急提醒或温馨提示。" type="info" show-icon />
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -189,9 +211,12 @@ import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
 import { message, Modal, Empty } from 'ant-design-vue'
 import {
   PhoneOutlined, CloseOutlined, HomeOutlined, UserOutlined,
-  TeamOutlined, HistoryOutlined, AppstoreOutlined, AudioOutlined, CheckCircleOutlined, WarningOutlined
+  TeamOutlined, HistoryOutlined, AppstoreOutlined, AudioOutlined, CheckCircleOutlined, WarningOutlined,
+  SoundOutlined
 } from '@ant-design/icons-vue'
 import { callApi } from '@/api/call'
+import { aiButlerApi } from '@/api/ai-butler'
+import type { RoomInfo } from '@/types'
 import request from '@/api/request'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { useAppStore } from '@/stores/app'
@@ -212,9 +237,55 @@ const activeTab = ref('all')
 const onlineStatus = ref<{ web: any[], rooms: any[] }>({ web: [], rooms: [] })
 const fetchCallsTimer = ref<NodeJS.Timeout | null>(null)
 
+// 房间列表用于广播选择
+const roomList = computed(() => {
+  return (hotelStore.rooms as RoomInfo[])
+    .filter((r: RoomInfo) => appStore.userInfo?.role === 'system' || r.hotel_id === appStore.userInfo?.hotel_id)
+    .map((r: RoomInfo) => ({
+      room_id: r.room_number,
+      display_name: `${r.room_name} - ${r.room_status === 'occupied' ? '已入住' : '未入住'}`
+    }))
+})
+
 // 麦克风检测状态
 const micChecking = ref(false)
 const micStatus = ref<'idle' | 'success' | 'error'>('idle')
+
+  // 房间广播
+  const broadcastVisible = ref(false)
+  const broadcastForm = reactive({
+    room_id: '',
+    text: ''
+  })
+  const broadcasting = ref(false)
+
+  const openBroadcastModal = () => {
+    broadcastForm.room_id = ''
+    broadcastForm.text = ''
+    broadcastVisible.value = true
+  }
+
+  const handleBroadcast = async () => {
+    if (!broadcastForm.room_id) {
+      message.warning('请选择房间')
+      return
+    }
+    if (!broadcastForm.text) {
+      message.warning('请输入广播内容')
+      return
+    }
+
+    broadcasting.value = true
+    try {
+      await aiButlerApi.broadcast(broadcastForm.room_id, broadcastForm.text)
+      message.success(`广播已成功下发至 ${broadcastForm.room_id} 房间`)
+      broadcastVisible.value = false
+    } catch (err: any) {
+      message.error(err.response?.data?.message || '广播下发失败')
+    } finally {
+      broadcasting.value = false
+    }
+  }
 
 // 值班状态管理
 const currentDutyRole = ref('reception')
@@ -235,9 +306,9 @@ const getRoleLabel = (role: string) => {
 function handleDutySwitch(checked: boolean) {
   const socket = getSocket()
   if (socket) {
-    socket.emit('set_duty_status', { 
+    socket.emit('set_duty_status', {
       isOnDuty: checked,
-      dutyRole: currentDutyRole.value 
+      dutyRole: currentDutyRole.value
     })
     // 同步更新本地状态，增强 UI 响应速度
     appStore.setUserStatus({
@@ -250,9 +321,9 @@ function handleDutySwitch(checked: boolean) {
 function handleRoleChange(value: string) {
   const socket = getSocket()
   if (socket) {
-    socket.emit('set_duty_status', { 
+    socket.emit('set_duty_status', {
       isOnDuty: appStore.userStatus?.isOnDuty,
-      dutyRole: value 
+      dutyRole: value
     })
   }
 }
@@ -260,19 +331,19 @@ function handleRoleChange(value: string) {
 async function checkMicPermission() {
   micChecking.value = true
   micStatus.value = 'idle'
-  
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     // 成功获取流，说明权限 OK
     micStatus.value = 'success'
     message.success('麦克风权限已就绪，您可以正常通话')
-    
+
     // 释放测试流
     stream.getTracks().forEach(track => track.stop())
   } catch (error: any) {
     console.error('[MicCheck] 权限检测失败:', error)
     micStatus.value = 'error'
-    
+
     if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
       message.error('麦克风权限已被拒绝，请在浏览器地址栏左侧点击“锁”图标开启权限')
     } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
@@ -305,23 +376,29 @@ const callStartTime = ref<number | null>(null)
 const callableTargets = computed(() => {
   const list: any[] = []
 
-  // 1. 添加房间
+  // 1. 添加房间 (仅显示在线且通过 MQTT 接入的硬件终端)
   hotelStore.rooms.forEach(room => {
     // 隔离：只能看到本店房间
     if (appStore.userInfo?.role !== 'system' && room.hotel_id !== appStore.userInfo?.hotel_id) {
       return
     }
-    // 改用数据库ID判断在线状态，避免多门店同房间号冲突
-    const isOnline = onlineStatus.value.rooms.some((r: any) => String(r.id) === String(room.id))
-    list.push({
-      id: room.id,
-      clientId: String(room.id), // 使用唯一ID呼叫
-      name: `房间 ${room.room_number}`,
-      desc: room.room_name,
-      type: 'room',
-      status: room.room_status,
-      isOnline
-    })
+    // 检查在线状态 (根据数据库 ID 或 房号匹配)
+    const isOnline = onlineStatus.value.rooms.some((r: any) => 
+      String(r.id) === String(room.id) || String(r.room_number) === String(room.room_number)
+    )
+    
+    // 优化：仅在语音通话清单显示在线硬件
+    if (isOnline) {
+      list.push({
+        id: room.id,
+        clientId: String(room.id),
+        name: `房间 ${room.room_number}`,
+        desc: room.room_name,
+        type: 'room',
+        status: room.room_status,
+        isOnline: true
+      })
+    }
   })
 
   // 2. 添加员工 (过滤掉自己并过滤掉 user 角色)

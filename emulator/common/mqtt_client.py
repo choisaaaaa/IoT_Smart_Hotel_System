@@ -93,7 +93,21 @@ class MQTTClient:
     def _on_message(self, client, userdata, msg):
         self.msg_received += 1
         topic = msg.topic
-        payload = msg.payload.decode('utf-8')
+
+        # 处理二进制音频流
+        if "hotel/call/audio/" in topic:
+            if self.on_message:
+                try:
+                    self.on_message(topic, msg.payload)
+                except Exception as e:
+                    self.logger.error(f"音频流回调处理失败: {e}")
+            return
+
+        try:
+            payload = msg.payload.decode('utf-8')
+        except UnicodeDecodeError:
+            self.logger.warning(f"无法解码主题 [{topic}] 的消息 payload")
+            return
 
         self.logger.info(f"接收 [{topic}]: {payload}")
         self.log_buffer.log("RX", f"[{topic}] {payload}")
@@ -121,6 +135,12 @@ class MQTTClient:
                 self.on_message(topic, payload)
             except Exception as e:
                 self.logger.error(f"消息回调处理失败: {e}")
+
+    def publish_binary(self, topic, payload):
+        if not self.connected:
+            return False
+        result = self.client.publish(topic, payload, qos=0)
+        return result.rc == mqtt.MQTT_ERR_SUCCESS
 
     def _handle_command(self, payload):
         try:
@@ -226,7 +246,8 @@ class MQTTClient:
 
         try:
             if isinstance(payload, dict):
-                if self.audit_status == "approved" and self.device_key:
+                # 只要有密钥就进行签名，防止本地审核状态滞后导致的消息被后端拦截
+                if self.device_key:
                     payload['timestamp'] = datetime.now().isoformat()
                     payload['signature'] = self._generate_signature(payload.copy())
 

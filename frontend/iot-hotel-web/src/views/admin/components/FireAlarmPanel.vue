@@ -274,11 +274,11 @@ function getAlarmStatusText(status: string): string {
 }
 
 function getAlarmTypeText(type: string): string {
-  return { smoke: '烟雾探测', temperature: '温度异常', manual: '手动报警' }[type] || type
+  return { smoke: '烟雾探测', temperature: '温度异常', manual: '手动报警', fire_alarm: '消防报警', sos_alarm: 'SOS报警' }[type] || type
 }
 
 function getUnitByType(type: string): string {
-  return { smoke: '%', temperature: '°C', manual: '' }[type] || ''
+  return { smoke: '%', temperature: '°C', manual: '', fire_alarm: 'ppm', sos_alarm: '' }[type] || ''
 }
 
 function formatTime(time: string): string {

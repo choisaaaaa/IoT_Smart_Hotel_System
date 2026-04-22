@@ -387,8 +387,89 @@ async function handleHangup() {
       }
     }
     cleanupWebRTC()
+    stopAudioCapture()
     appStore.clearCurrentCall()
     message.success('通话已挂断')
+  }
+}
+
+// ============ Audio Streaming (Hardware Bridge) ============
+const audioContext = ref<AudioContext | null>(null)
+const audioChunkTimer = ref<any>(null)
+
+// 播放收到的二进制音频片段
+const playAudioChunk = async (chunk: ArrayBuffer) => {
+  if (!audioContext.value) {
+    audioContext.value = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 })
+  }
+  
+  const ctx = audioContext.value
+  if (ctx.state === 'suspended') {
+    await ctx.resume()
+  }
+
+  const int16Data = new Int16Array(chunk)
+  const float32Data = new Float32Array(int16Data.length)
+  
+  for (let i = 0; i < int16Data.length; i++) {
+    float32Data[i] = int16Data[i] / 32768.0
+  }
+  
+  const buffer = ctx.createBuffer(1, float32Data.length, 16000)
+  buffer.getChannelData(0).set(float32Data)
+  
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  source.connect(ctx.destination)
+  source.start()
+}
+
+// 开始采集并发送音频片段
+const startAudioCapture = async (callId: string, targetType: string, targetId: string) => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })
+    const ctx = new AudioContext({ sampleRate: 16000 })
+    const source = ctx.createMediaStreamSource(stream)
+    const processor = ctx.createScriptProcessor(2048, 1, 1)
+
+    source.connect(processor)
+    processor.connect(ctx.destination)
+
+    processor.onaudioprocess = (e) => {
+      if (!appStore.currentCall) {
+        stream.getTracks().forEach(t => t.stop())
+        ctx.close()
+        return
+      }
+
+      const inputData = e.inputBuffer.getChannelData(0)
+      const int16Data = new Int16Array(inputData.length)
+      for (let i = 0; i < inputData.length; i++) {
+        int16Data[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF
+      }
+      
+      const socket = getSocket()
+      if (socket) {
+        socket.emit('audio_chunk', {
+          call_id: callId,
+          target_type: targetType,
+          target_id: targetId,
+          chunk: int16Data.buffer
+        })
+      }
+    }
+    
+    audioChunkTimer.value = { stream, ctx }
+  } catch (err) {
+    console.error('Failed to capture audio:', err)
+  }
+}
+
+const stopAudioCapture = () => {
+  if (audioChunkTimer.value) {
+    audioChunkTimer.value.stream.getTracks().forEach((t: any) => t.stop())
+    audioChunkTimer.value.ctx.close()
+    audioChunkTimer.value = null
   }
 }
 
@@ -610,6 +691,7 @@ function cleanupWebRTC() {
     localStream.value.getTracks().forEach(track => track.stop())
     localStream.value = null
   }
+  stopAudioCapture()
   pendingIceCandidates.value = []
   pendingOffer.value = null
   processedCallAnswered.value.clear()
@@ -825,41 +907,53 @@ const handleCallAnswered = async (data: any) => {
     const targetId = isCaller ? data.callee_id : data.caller_id
     
     if (isCaller) {
-      await initWebRTC(data.call_id, targetType, targetId)
-      
-      if (peerConnection.value) {
-        const pc = peerConnection.value
-        try {
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
-          console.log('[WebRTC] 主叫方发起 Offer')
-          
-          if (pc !== peerConnection.value) {
-            console.log('[WebRTC] 创建 Offer 后连接被替换，中止发送')
-            return
-          }
+      if (targetType === 'room') {
+        console.log('[App] 目标是房间（硬件），开启原始音频流捕获')
+        appStore.setCallState({ connectionState: 'connected' })
+        await startAudioCapture(data.call_id, targetType, targetId)
+      } else {
+        await initWebRTC(data.call_id, targetType, targetId)
+        
+        if (peerConnection.value) {
+          const pc = peerConnection.value
+          try {
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            console.log('[WebRTC] 主叫方发起 Offer')
+            
+            if (pc !== peerConnection.value) {
+              console.log('[WebRTC] 创建 Offer 后连接被替换，中止发送')
+              return
+            }
 
-          const socket = getSocket()
-          if (socket) {
-            socket.emit('webrtc_offer', {
-              target_type: targetType,
-              target_id: targetId,
-              offer: offer,
-              call_id: data.call_id
-            })
+            const socket = getSocket()
+            if (socket) {
+              socket.emit('webrtc_offer', {
+                target_type: targetType,
+                target_id: targetId,
+                offer: offer,
+                call_id: data.call_id
+              })
+            }
+          } catch (e) {
+            console.error('[WebRTC] 创建 Offer 失败:', e)
           }
-        } catch (e) {
-          console.error('[WebRTC] 创建 Offer 失败:', e)
         }
       }
     } else {
-      if (peerConnection.value) {
-        console.log('[WebRTC] 被叫方连接已存在，等待 Offer...')
-      } else if (pendingOffer.value && pendingOffer.value.call_id === data.call_id) {
-        console.log('[WebRTC] 被叫方发现待处理 offer，初始化连接')
-        await initWebRTC(data.call_id, targetType, targetId)
+      if (data.caller_type === 'room') {
+        console.log('[App] 呼叫方是房间（硬件），开启原始音频流捕获')
+        appStore.setCallState({ connectionState: 'connected' })
+        await startAudioCapture(data.call_id, data.caller_type, data.caller_id)
       } else {
-        console.log('[WebRTC] 被叫方就绪，等待 Offer...')
+        if (peerConnection.value) {
+          console.log('[WebRTC] 被叫方连接已存在，等待 Offer...')
+        } else if (pendingOffer.value && pendingOffer.value.call_id === data.call_id) {
+          console.log('[WebRTC] 被叫方发现待处理 offer，初始化连接')
+          await initWebRTC(data.call_id, targetType, targetId)
+        } else {
+          console.log('[WebRTC] 被叫方就绪，等待 Offer...')
+        }
       }
     }
   }
@@ -880,6 +974,7 @@ function setupGlobalWebSocket() {
   socket.off('webrtc_ice_candidate', handleWebRTCIceCandidate)
   socket.off('call_hungup', handleCallHungup)
   socket.off('call_rejected', handleCallRejected)
+  socket.off('audio_chunk')
 
   // 添加新的监听器
   socket.on('connect', handleConnect)
@@ -892,6 +987,11 @@ function setupGlobalWebSocket() {
   socket.on('webrtc_ice_candidate', handleWebRTCIceCandidate)
   socket.on('call_hungup', handleCallHungup)
   socket.on('call_rejected', handleCallRejected)
+  socket.on('audio_chunk', (data: { call_id: string, chunk: ArrayBuffer }) => {
+    if (appStore.currentCall && appStore.currentCall.call_id === data.call_id) {
+      playAudioChunk(data.chunk)
+    }
+  })
 }
 
 const fetchSystemConfigs = async () => {

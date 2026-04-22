@@ -12,6 +12,12 @@ import threading
 import time
 import json
 import base64
+import io
+try:
+    import pyaudio
+    HAS_PYAUDIO = True
+except ImportError:
+    HAS_PYAUDIO = False
 from datetime import datetime
 from common.device_base import BaseDeviceEmulator
 from common.config import (
@@ -28,9 +34,8 @@ from common.config import (
 
 class RoomTerminalEmulator(BaseDeviceEmulator):
     def __init__(self, root):
-        self.room_id = "301"
-        self.device_id = f"room_{self.room_id}"
-
+        self.room_id = "" # 初始为空，由配网或资产同步填充
+        
         self.light_on = False
         self.air_on = False
         self.temp_val = 26
@@ -43,12 +48,18 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.audio_stream = None
         self._door_relock_timer = None
 
+        # 通话状态
+        self.current_call_id = None
+        self.is_in_call = False
+        self._call_audio_stream = None
+        self._call_output_stream = None
+
         self._stop_sensors = threading.Event()
 
         super().__init__(
             root=root,
             title=f"智慧酒店 - 客房终端仿真器",
-            device_id=self.device_id,
+            device_id=None, # 让基类自动生成或从配置加载唯一物理ID
             device_type="room",
             width=950,
             height=850
@@ -169,9 +180,25 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         tk.Button(settings_f, text="应用并同步", bg=self.colors['primary'], fg="white",
                   command=self._apply_room_change, relief=tk.FLAT, font=("Arial", 9, "bold"), padx=10).pack(side=tk.LEFT)
 
-        self._create_card(self.biz_frame, "AI 语音交互管家").pack(fill=tk.BOTH, expand=True)
+        self._create_card(self.biz_frame, "AI 语音交互与话务终端").pack(fill=tk.BOTH, expand=True)
         ai_body = self.last_card_body
 
+        # 呼叫控制区
+        call_ctrl = tk.Frame(ai_body, bg="white")
+        call_ctrl.pack(fill=tk.X, pady=(0, 10))
+
+        self.call_btn = tk.Button(call_ctrl, text="📞 呼叫前台", bg=self.colors['primary'], fg="white",
+                                 command=self._initiate_call, relief=tk.FLAT, font=("Arial", 10, "bold"),
+                                 padx=15, pady=6)
+        self.call_btn.pack(side=tk.LEFT)
+
+        self.hangup_btn = tk.Button(call_ctrl, text="挂断", bg=self.colors['danger'], fg="white",
+                                   command=self._hangup_call_manual, relief=tk.FLAT, font=("Arial", 10, "bold"),
+                                   padx=15, pady=6)
+        self.hangup_btn.pack(side=tk.LEFT, padx=10)
+        self.hangup_btn.config(state=tk.DISABLED)
+
+        # 语音输入区
         input_container = tk.Frame(ai_body, bg="white")
         input_container.pack(fill=tk.X, side=tk.BOTTOM, pady=(10, 0))
 
@@ -547,8 +574,10 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.register_command_handler(f"{CMD_SCENE}:{CMD_VAL_SLEEP}", self._handle_scene_sleep)
         self.mqtt_client.register_command_handler(f"{CMD_SCENE}:{CMD_VAL_LEAVE}", self._handle_scene_leave)
         self.mqtt_client.register_command_handler(f"{CMD_SCENE}:{CMD_VAL_READING}", self._handle_scene_reading)
-        self.mqtt_client.register_command_handler(CMD_INCOMING_CALL, self._handle_incoming_call)
-        self.mqtt_client.register_command_handler(CMD_HANGUP_CALL, self._handle_hangup_call)
+        self.mqtt_client.register_command_handler("incoming_call", self._handle_incoming_call)
+        self.mqtt_client.register_command_handler("answer_call", self._answer_call)
+        self.mqtt_client.register_command_handler("hangup_call", self._handle_hangup_call)
+        self.mqtt_client.register_command_handler("reject_call", self._handle_hangup_call)
 
     def _handle_light_on(self, data):
         self.root.after(0, lambda: self._set_light(True, from_cloud=True))
@@ -610,31 +639,215 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.root.after(0, lambda: self._apply_scene(CMD_VAL_READING))
         return True
 
+    def _initiate_call(self):
+        if not self.connected:
+            messagebox.showwarning("提示", "网络未连接，无法发起呼叫")
+            return
+            
+        self._log("正在发起呼叫前台...")
+        self.call_btn.config(state=tk.DISABLED, text="正在呼叫...")
+        self.hangup_btn.config(state=tk.NORMAL)
+        
+        # 模拟物理按键触发呼叫：向后端发送呼叫请求
+        # 硬件通常通过特定主题发布呼叫请求信令
+        call_id = f"CALL{int(time.time())}{random.randint(100, 999)}"
+        self.current_call_id = call_id
+        
+        if self.mqtt_client and self.connected:
+            # 协议：硬件主动发起呼叫信令
+            self.mqtt_client.publish(f"hotel/call/signaling/{call_id}", {
+                "caller_type": "room",
+                "caller_id": self.room_id,
+                "device_id": self.unique_device_id,
+                "callee_type": "front_desk",
+                "callee_id": "all",
+                "type": "voice",
+                "action": "initiate"
+            })
+            self._add_chat("assistant", "正在为您接通前台，请稍候...")
+        else:
+            self._log("MQTT未连接，呼叫失败", "ERROR")
+            self._reset_call_ui()
+
+    def _hangup_call_manual(self):
+        if not self.current_call_id:
+            return
+            
+        self._log("正在挂断通话...")
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish(f"hotel/call/signaling/{self.current_call_id}", {
+                "action": "hangup",
+                "call_id": self.current_call_id,
+                "device_id": self.unique_device_id
+            })
+        
+        self._handle_hangup_call({})
+        self._reset_call_ui()
+
+    def _reset_call_ui(self):
+        self.call_btn.config(state=tk.NORMAL, text="📞 呼叫前台")
+        self.hangup_btn.config(state=tk.DISABLED)
+
     def _handle_incoming_call(self, data):
         caller = data.get('created_by', '前台')
-        self._log(f"收到来电: {caller}")
+        self.current_call_id = data.get('call_id')
+        self._log(f"收到来电: {caller}, CallID: {self.current_call_id}")
         self._add_chat("assistant", f"📞 {caller}正在呼叫您...")
+        
+        self.root.after(0, lambda: self.call_btn.config(state=tk.DISABLED, text="来电中..."))
+        self.root.after(0, lambda: self.hangup_btn.config(state=tk.NORMAL))
+        
+        # 自动接听模拟（硬件设备通常需要物理按键，这里模拟自动接听或通过UI接听）
+        self.root.after(1000, lambda: self._answer_call(data))
+        
+        # 模拟来电提示
+        self._log("来电灯光提示中...")
         return True
+
+    def _answer_call(self, data):
+        if not self.current_call_id:
+            return
+        
+        self.is_in_call = True
+        self._log(f"已接听通话: {self.current_call_id}")
+        self._add_chat("assistant", "通话已接通...")
+        
+        self.root.after(0, lambda: self.call_btn.config(state=tk.DISABLED, text="通话中..."))
+        self.root.after(0, lambda: self.hangup_btn.config(state=tk.NORMAL))
+        
+        # 订阅音频主题 (下行：Cloud -> Hardware)
+        audio_topic_down = f"hotel/call/audio/{self.current_call_id}/down"
+        self.mqtt_client.subscribe(audio_topic_down)
+        
+        # 启动音频采集与播放
+        if HAS_PYAUDIO:
+            self._start_call_audio()
+
+    def _start_call_audio(self):
+        try:
+            if not self.pyaudio_instance:
+                self.pyaudio_instance = pyaudio.PyAudio()
+            
+            # 打开输入流
+            self._call_audio_stream = self.pyaudio_instance.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=2048
+            )
+            
+            # 打开输出流
+            self._call_output_stream = self.pyaudio_instance.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                output=True,
+                frames_per_buffer=2048
+            )
+            
+            # 启动发送线程
+            threading.Thread(target=self._call_audio_sender_loop, daemon=True).start()
+            self._log("通话音频链路已开启")
+        except Exception as e:
+            self._log(f"开启音频链路失败: {e}", "ERROR")
+
+    def _call_audio_sender_loop(self):
+        # 上行流：Hardware -> Cloud
+        audio_topic_up = f"hotel/call/audio/{self.current_call_id}/up"
+        while self.is_in_call and self._call_audio_stream:
+            try:
+                data = self._call_audio_stream.read(2048, exception_on_overflow=False)
+                if self.mqtt_client and self.connected:
+                    self.mqtt_client.publish_binary(audio_topic_up, data)
+            except Exception as e:
+                self._log(f"发送通话音频失败: {e}", "ERROR")
+                break
 
     def _handle_hangup_call(self, data):
         self._log("通话已结束")
+        self.is_in_call = False
+        self.current_call_id = None
+        self._stop_call_audio()
+        self._add_chat("assistant", "通话已挂断")
+        self.root.after(0, self._reset_call_ui)
         return True
 
+    def _stop_call_audio(self):
+        if self._call_audio_stream:
+            try:
+                self._call_audio_stream.stop_stream()
+                self._call_audio_stream.close()
+            except: pass
+            self._call_audio_stream = None
+            
+        if self._call_output_stream:
+            try:
+                self._call_output_stream.stop_stream()
+                self._call_output_stream.close()
+            except: pass
+            self._call_output_stream = None
+
     def _on_mqtt_message(self, topic, payload):
-        super()._on_mqtt_message(topic, payload)
+        # 1. 处理通话音频流 (下行：Cloud -> Hardware)
+        if topic.endswith('/down') and "hotel/call/audio/" in topic and self.is_in_call:
+            if self._call_output_stream:
+                try:
+                    self._call_output_stream.write(payload)
+                except Exception as e:
+                    self._log(f"播放通话音频失败: {e}", "ERROR")
+            return
+
+        # 2. 处理 JSON 业务指令与配置
         try:
-            data = json.loads(payload) if isinstance(payload, str) else payload
+            # 兼容 bytes 和 str
+            data = json.loads(payload) if isinstance(payload, (bytes, str)) else payload
+            
+            # 配置更新处理 (Cloud -> Hardware)
+            if "hotel/device/config/" in topic:
+                audit_status = data.get('audit_status')
+                if audit_status:
+                    self.mqtt_client.audit_status = audit_status
+                    self._log(f"收到云端配置更新: 状态={audit_status}", "SUCCESS")
+                    # 关键修复：确保 UI 刷新
+                    self.root.after(0, self._update_audit_status_display)
+                    # 如果审核通过，保存密钥
+                    if audit_status == 'approved' and data.get('device_key'):
+                        self.mqtt_client.device_key = data.get('device_key')
+                return
+
+            # 通用指令路由 (Cloud -> Hardware)
             cmd_type = data.get('command_type', '')
-            cmd_value = data.get('command_value', '')
-            self._log(f"消息回调: topic={topic} cmd={cmd_type} val={cmd_value}")
+            if not cmd_type and 'action' in data: # 兼容信令格式
+                cmd_type = data.get('action')
+
+            handler = self.mqtt_client.command_handlers.get(cmd_type)
+            if handler:
+                self._log(f"收到云端指令: {cmd_type}")
+                # 确保在主线程执行 UI 相关操作
+                self.root.after(0, lambda: handler(data))
+            else:
+                self._log(f"收到未注册指令: {cmd_type or topic}")
         except Exception as e:
-            self._log(f"处理消息异常: {e}", "ERROR")
+            self._log(f"消息解析异常: {e}", "ERROR")
+
+    def _update_audit_status_display(self):
+        super()._update_audit_status_display()
 
     def _on_ai_response(self, data):
+        super()._on_ai_response(data)
         text = data.get('response') or data.get('text')
         self.root.after(0, lambda: self._add_chat("assistant", text))
         self.root.after(0, lambda: self.ai_status_var.set("空闲"))
         self._log(f"AI 回复已收到 (长度:{len(text or '')})")
+        
+        # 处理 AI 下发的动作指令
+        actions = data.get('actions', [])
+        for action in actions:
+            if action.get('type') == 'call_front_desk':
+                self._initiate_call()
+            elif action.get('type') == 'hangup_call':
+                self._hangup_call_manual()
 
 
 if __name__ == "__main__":

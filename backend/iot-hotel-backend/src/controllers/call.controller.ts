@@ -4,6 +4,7 @@ import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { getWebSocketService } from '../services/websocket.service';
+import mqttService from '../services/mqtt.service';
 import { isSystemAdmin, isCustomer, isGuest, normalizeRole } from '../utils/role';
 
 export const initiateCall = async (req: AuthRequest, res: Response) => {
@@ -88,6 +89,26 @@ export const initiateCall = async (req: AuthRequest, res: Response) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [callId, caller_type, caller_id, callee_type, callee_id, currentUser.hotel_id, 'calling', new Date()]
     );
+
+    // 如果是呼叫客房硬件，通过 MQTT 发送 incoming_call 指令
+    if (callee_type === 'room') {
+      const [roomDevices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+        [callee_id]
+      );
+      if (roomDevices.length > 0) {
+        const deviceId = roomDevices[0].device_id;
+        mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+          command_id: Date.now(),
+          command_type: 'incoming_call',
+          call_id: callId,
+          caller_type,
+          caller_id,
+          created_by: currentUser.username || caller_id
+        });
+        logger.info(`[HTTP API] 发送 incoming_call 到硬件设备: ${deviceId} (房间 ${callee_id})`);
+      }
+    }
 
     res.json(successResponse({
       call_id: callId,
@@ -272,6 +293,26 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       started_at: new Date().toISOString()
     };
 
+    // 如果是呼叫客房硬件，通过 MQTT 发送 incoming_call 指令
+    if (callee_type === 'room') {
+      const [roomDevices] = await pool.query<RowDataPacket[]>(
+        'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+        [callee_id]
+      );
+      if (roomDevices.length > 0) {
+        const deviceId = roomDevices[0].device_id;
+        mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+          command_id: Date.now(),
+          command_type: 'incoming_call',
+          call_id: callId,
+          caller_type,
+          caller_id,
+          created_by: currentUser.username || caller_id
+        });
+        logger.info(`[HTTP API] 发送 incoming_call 到硬件设备: ${deviceId} (房间 ${callee_id})`);
+      }
+    }
+
       // 发起呼叫通知
     if (callee_type === 'front_desk') {
       // 门店隔离广播
@@ -383,6 +424,24 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
         logger.info(`[HTTP API] 发送 call_answered 到酒店前台房间: ${hotelRoom}`);
         io.to(hotelRoom).emit('call_answered', answeredData);
       }
+      
+      // 如果涉及房间硬件，通知接听
+      if (callData.callee_type === 'room' || callData.caller_type === 'room') {
+        const roomId = callData.callee_type === 'room' ? callData.callee_id : callData.caller_id;
+        const [roomDevices] = await pool.query<RowDataPacket[]>(
+          'SELECT device_id FROM devices WHERE (room_id = ? OR room_id = (SELECT id FROM rooms WHERE room_number = ?)) AND device_type = "room"',
+          [roomId, roomId]
+        );
+        if (roomDevices.length > 0) {
+          const deviceId = roomDevices[0].device_id;
+          mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+            command_id: Date.now(),
+            command_type: 'answer_call',
+            call_id: call_id
+          });
+          logger.info(`[HTTP API] 已向硬件下发接听指令: ${deviceId}`);
+        }
+      }
     } else {
       logger.error(`[HTTP API] WebSocket服务不可用，无法发送call_answered事件`);
     }
@@ -457,6 +516,23 @@ export const rejectCall = async (req: AuthRequest, res: Response) => {
         const hotelRoom = `front_desk_hotel_${callData.hotel_id}`;
         io.to(hotelRoom).emit('call_rejected', { call_id });
         logger.info(`[HTTP API] 发送 call_rejected 到酒店前台房间: ${hotelRoom}`);
+      }
+
+      // 如果涉及房间硬件，通知拒接
+      if (callData.callee_type === 'room' || callData.caller_type === 'room') {
+        const roomId = callData.callee_type === 'room' ? callData.callee_id : callData.caller_id;
+        const [roomDevices] = await pool.query<RowDataPacket[]>(
+          'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+          [roomId]
+        );
+        if (roomDevices.length > 0) {
+          const deviceId = roomDevices[0].device_id;
+          mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+            command_id: Date.now(),
+            command_type: 'reject_call',
+            call_id: call_id
+          });
+        }
       }
     }
 
@@ -539,6 +615,23 @@ export const hangupCall = async (req: AuthRequest, res: Response) => {
         const hotelRoom = `front_desk_hotel_${callData.hotel_id}`;
         io.to(hotelRoom).emit('call_hungup', { call_id });
         logger.info(`[HTTP API] 发送 call_hungup 到酒店前台房间: ${hotelRoom}`);
+      }
+
+      // 如果涉及房间硬件，通知挂断
+      if (callData.callee_type === 'room' || callData.caller_type === 'room') {
+        const roomId = callData.callee_type === 'room' ? callData.callee_id : callData.caller_id;
+        const [roomDevices] = await pool.query<RowDataPacket[]>(
+          'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+          [roomId]
+        );
+        if (roomDevices.length > 0) {
+          const deviceId = roomDevices[0].device_id;
+          mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+            command_id: Date.now(),
+            command_type: 'hangup_call',
+            call_id: call_id
+          });
+        }
       }
     }
 

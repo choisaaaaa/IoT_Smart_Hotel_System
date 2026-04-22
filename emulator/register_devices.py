@@ -11,9 +11,9 @@ print(f"Login: {login_resp.status_code}")
 headers = {"Authorization": f"Bearer {token}"}
 
 devices_to_register = [
-    {"device_id": "floor_03", "device_type": "floor", "device_name": "3F Floor Controller", "hotel_id": 9},
-    {"device_id": "room_301", "device_type": "room", "device_name": "Room 301 Terminal", "hotel_id": 9, "room_number": "301"},
-    {"device_id": "front_desk_01", "device_type": "front_desk", "device_name": "Front Desk Card Reader", "hotel_id": 9},
+    {"device_id": "FLO_DEMO_01", "device_type": "floor", "device_name": "Demo Floor Controller", "hotel_id": 9},
+    {"device_id": "ROO_DEMO_01", "device_type": "room", "device_name": "Demo Room Terminal", "hotel_id": 9, "room_number": "888"},
+    {"device_id": "FRO_DEMO_01", "device_type": "front_desk", "device_name": "Demo Front Desk", "hotel_id": 9},
 ]
 
 for dev in devices_to_register:

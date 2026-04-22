@@ -56,15 +56,15 @@ DEFAULT_CONFIG = {
         "keepalive": 60
     },
     "front_desk": {
-        "device_id": "front_desk_01",
-        "target_room": "301"
+        "device_id": "",
+        "target_room": ""
     },
     "floor": {
-        "device_id": "floor_03"
+        "device_id": ""
     },
     "room": {
-        "device_id": "room_301",
-        "room_id": "301"
+        "device_id": "",
+        "room_id": ""
     }
 }
 

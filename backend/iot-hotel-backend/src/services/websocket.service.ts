@@ -187,8 +187,13 @@ class WebSocketService {
               const room = rows[0];
               displayName = `客房 ${room.room_number}`;
               hotelId = room.hotel_id;
-              // 强制将 clientId 统一为数据库 ID，确保全局唯一
-              data.clientId = String(room.id);
+              // 关键修复：不再强制将 clientId 覆盖为数据库 ID，保留前端传入的标识
+              // 但在内部存储中，我们通过 info.roomNumber 关联
+              const clientInfo = this.clients.get(socket.id);
+              if (clientInfo) {
+                (clientInfo as any).roomNumber = room.room_number;
+                (clientInfo as any).dbRoomId = room.id;
+              }
             }
           }
           
@@ -218,7 +223,7 @@ class WebSocketService {
             // 3. 移除 legacy 的全局 'front_desk' 房间，防止跨店泄露
             // if (data.clientType === 'front_desk') { socket.join('front_desk'); }
             
-            this.broadcastOnlineStatus();
+            this.broadcastOnlineStatus().catch(err => logger.error('注册后广播失败:', err.message));
           }
           
           socket.emit('registered', {
@@ -244,13 +249,13 @@ class WebSocketService {
           if (data.dutyRole) {info.dutyRole = data.dutyRole;}
           
           logger.info(`员工 ${info.clientName} 更新在岗状态: ${data.isOnDuty ? '在岗' : '离岗'} (${info.dutyRole})`);
-          this.broadcastOnlineStatus();
+          this.broadcastOnlineStatus().catch(err => logger.error('更新状态后广播失败:', err.message));
           socket.emit('duty_status_updated', { isOnDuty: info.isOnDuty, dutyRole: info.dutyRole });
         }
       });
 
       socket.on('get_online_status', () => {
-        this.sendOnlineStatus(socket);
+        this.sendOnlineStatus(socket).catch(err => logger.error('发送状态失败:', err.message));
       });
 
       socket.on('send_message', (data: { roomId?: string; content: string; type?: string }) => {
@@ -427,21 +432,23 @@ class WebSocketService {
           
           // 1. 获取主叫方的酒店信息（如果是房间）
           let callerHotelName = '';
+          let callerRoomNumber = ''; // 新增：保存原始房号
           if (caller_type === 'room') {
             const [hotelRows] = await pool.query<RowDataPacket[]>(
-              'SELECT h.hotel_name FROM rooms r JOIN hotels h ON r.hotel_id = h.id WHERE r.id = ? OR r.room_number = ?',
+              'SELECT r.room_number, h.hotel_name FROM rooms r JOIN hotels h ON r.hotel_id = h.id WHERE r.id = ? OR r.room_number = ?',
               [caller_id, caller_id]
             );
             if (hotelRows.length > 0) {
               callerHotelName = hotelRows[0].hotel_name;
+              callerRoomNumber = hotelRows[0].room_number;
             }
           }
 
           const callData = {
             call_id: callId,
             caller_type,
-            caller_id,
-            caller_name: clientInfo?.clientName || caller_id,
+            caller_id: callerRoomNumber || caller_id, // 关键修复：向前端发送房号而非数据库ID
+            caller_name: clientInfo?.clientName || (callerRoomNumber ? `房间 ${callerRoomNumber}` : caller_id),
             hotel_name: callerHotelName, // 新增：所属酒店
             callee_type,
             callee_id,
@@ -451,6 +458,35 @@ class WebSocketService {
           };
           
           socket.emit('call_initiated', callData);
+          
+          // 如果是呼叫客房，通过 MQTT 发送 incoming_call 指令给硬件
+          if (callee_type === 'room') {
+            const [roomDevices] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id, audit_status FROM devices WHERE room_id = ? AND device_type = "room"',
+              [callee_id]
+            );
+            
+            if (roomDevices.length > 0) {
+              const device = roomDevices[0];
+              const deviceId = device.device_id;
+              
+              if (device.audit_status !== 'approved') {
+                logger.warn(`[WebSocket] 目标房间设备 ${deviceId} 未通过审核，通话质量可能受限`);
+              }
+
+              logger.info(`[WebSocket] 发送 incoming_call 到硬件设备: ${deviceId} (房间 ${callee_id})`);
+              mqttService.publish(`hotel/device/command/room/${deviceId}`, {
+                command_id: Date.now(),
+                command_type: 'incoming_call',
+                call_id: callId,
+                caller_type: caller_type,
+                caller_id: caller_id,
+                created_by: clientInfo?.clientName || caller_id
+              });
+            } else {
+              logger.warn(`[WebSocket] 房间 ${callee_id} 未绑定智能终端，无法通过 MQTT 呼叫`);
+            }
+          }
           
           // 如果是呼叫所有前台，广播到所属酒店的前台房间
           if (callee_type === 'front_desk' && (callee_id === 'all' || callee_id === 'staff')) {
@@ -716,28 +752,30 @@ class WebSocketService {
         }
       });
 
-      // --- 硬件音频流转发 (WebSocket Binary) ---
-      
-      socket.on('audio_chunk', (data: { 
-        target_type: 'room' | 'front_desk' | 'ai' | 'app'; 
+      // --- 硬件音频流转发 (WebSocket -> MQTT) ---
+      socket.on('audio_chunk', async (data: { 
+        call_id: string; 
+        target_type: string; 
         target_id: string; 
-        chunk: Buffer | ArrayBuffer;
-        call_id: string;
+        chunk: Buffer | ArrayBuffer 
       }) => {
-        if (data.target_type === 'room') {
-          // Web/App 发出的音频流，通过 MQTT 转发给硬件
-          const audioBuffer = Buffer.isBuffer(data.chunk) 
-            ? data.chunk 
-            : Buffer.from(data.chunk as ArrayBuffer);
-          mqttService.publishBinary(`hotel/call/audio/${data.call_id}`, audioBuffer);
-        } else {
-          // 转发给其他 Web/App 终端
-          this.io?.to(`${data.target_type}_${data.target_id}`).emit('audio_chunk', {
-            from_type: this.clients.get(socket.id)?.clientType,
-            from_id: this.clients.get(socket.id)?.clientId,
-            chunk: data.chunk,
-            call_id: data.call_id
-          });
+        try {
+          const { call_id, target_type, target_id, chunk } = data;
+          
+          if (target_type === 'room') {
+            // 下行流：Cloud -> Hardware
+            const topic = `hotel/call/audio/${call_id}/down`;
+            const audioBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer);
+            await mqttService.publishBinary(topic, audioBuffer);
+          } else {
+            // Web 间转发
+            this.io?.to(`${target_type}_${target_id}`).emit('audio_chunk', {
+              call_id,
+              chunk
+            });
+          }
+        } catch (error) {
+          // 音频流处理失败不打印高频日志
         }
       });
 
@@ -1081,7 +1119,7 @@ class WebSocketService {
       socket.on('disconnect', (reason) => {
         this.clients.delete(socket.id);
         logger.info(`WebSocket客户端断开: ${socket.id}, 原因: ${reason} (当前在线: ${this.clients.size})`);
-        this.broadcastOnlineStatus();
+        this.broadcastOnlineStatus().catch(err => logger.error('断开后广播失败:', err.message));
       });
 
       socket.on('error', (error) => {
@@ -1134,13 +1172,13 @@ class WebSocketService {
   /**
    * 发送在线状态给特定客户端
    */
-  private sendOnlineStatus(socket: Socket) {
+  private async sendOnlineStatus(socket: Socket) {
     const clientInfo = this.clients.get(socket.id);
     const hotelId = clientInfo?.hotelId;
 
     const data = {
       web: this.getClientsByType('front_desk', hotelId),
-      rooms: this.getClientsByType('room', hotelId),
+      rooms: await this.getOnlineRooms(hotelId),
       ai: this.getClientsByType('ai', hotelId),
       app: this.getClientsByType('app', hotelId)
     };
@@ -1150,28 +1188,87 @@ class WebSocketService {
   /**
    * 广播在线状态给所有相关客户端
    */
-  private broadcastOnlineStatus() {
-    // 方案 A: 简单广播所有（不安全，但简单）
-    // 方案 B: 分酒店广播（推荐）
-    
-    // 我们获取所有唯一的酒店ID
+  public async broadcastOnlineStatus() {
+    // 1. 我们获取所有唯一的酒店ID
     const hotelIds = new Set<number>();
     for (const info of this.clients.values()) {
       if (info.hotelId) {hotelIds.add(info.hotelId);}
     }
 
-    // 为每个酒店广播
+    // 2. 为每个酒店广播
     for (const hotelId of hotelIds) {
       const data = {
         web: this.getClientsByType('front_desk', hotelId),
-        rooms: this.getClientsByType('room', hotelId),
+        rooms: await this.getOnlineRooms(hotelId),
         ai: this.getClientsByType('ai', hotelId),
         app: this.getClientsByType('app', hotelId)
       };
       
-      // 发送给该酒店的前台房间
-      this.io?.to(`front_desk_hotel_${hotelId}`).emit('online_status', data);
+      const hotelRoom = `front_desk_hotel_${hotelId}`;
+      this.io?.to(hotelRoom).emit('online_status', data);
+      this.io?.to(hotelRoom).emit('online_status_update', data);
     }
+    
+    // 3. 为系统管理员广播全局状态
+    const globalData = {
+      web: this.getClientsByType('front_desk'),
+      rooms: await this.getOnlineRooms(),
+      ai: this.getClientsByType('ai'),
+      app: this.getClientsByType('app')
+    };
+    this.io?.to('system_admin').emit('online_status_update', globalData);
+  }
+
+  /**
+   * 获取所有在线房间（包括 WebSocket 客户端和 MQTT 硬件设备）
+   */
+  private async getOnlineRooms(hotelId?: number): Promise<any[]> {
+    const list: any[] = [];
+    
+    // 1. 获取 WebSocket 房间客户端
+    const wsRooms = this.getClientsByType('room', hotelId);
+    list.push(...wsRooms);
+
+    // 2. 获取 MQTT 在线硬件设备
+    try {
+      const mqttDevices = await mqttService.getOnlineDevices();
+      for (const device of mqttDevices) {
+        // 过滤酒店
+        if (hotelId !== undefined && device.hotel_id !== hotelId) {
+          continue;
+        }
+        
+        // 仅处理客房终端类型
+        if (device.device_type !== 'room') {
+          continue;
+        }
+
+        // 避免重复（如果某个房间既连了 WebSocket 又连了 MQTT，以 WebSocket 为准）
+        if (list.some(item => item.clientId === device.device_id)) {
+          continue;
+        }
+
+        // 获取房号 (优先使用数据库中的 room_number)
+        let roomNumber = device.room_number || '';
+        if (!roomNumber && device.device_id.startsWith('ROO_')) {
+          roomNumber = device.device_id.replace('ROO_', '');
+        }
+
+        list.push({
+          id: device.room_id || device.id, // 数据库 ID，用于前端匹配 store
+          clientId: device.device_id,     // 物理 ID
+          room_number: roomNumber,        // 房号
+          name: device.device_name || `客房 ${roomNumber}`,
+          type: 'room',
+          isMqtt: true,                   // 标记为 MQTT 设备
+          connectedAt: device.last_seen
+        });
+      }
+    } catch (error) {
+      logger.error('获取 MQTT 在线设备失败:', error.message);
+    }
+
+    return list;
   }
 
   /**
@@ -1186,8 +1283,24 @@ class WebSocketService {
           continue;
         }
         
+        let displayId = info.clientId;
+        let roomNumber = '';
+        let dbRoomId = (info as any).dbRoomId || '';
+
+        // 关键修复：如果类型是房间，尝试从 clientName 中提取房号
+        if (type === 'room') {
+          if (info.clientName?.startsWith('客房 ')) {
+            roomNumber = info.clientName.replace('客房 ', '');
+          }
+          if (!roomNumber && (info as any).roomNumber) {
+            roomNumber = (info as any).roomNumber;
+          }
+        }
+
         list.push({
-          id: info.clientId,
+          id: dbRoomId || info.clientId, // 关键修复：这里优先返回数据库 ID，方便前端匹配 store 中的 room.id
+          clientId: info.clientId,       // 原始物理标识
+          room_number: roomNumber || displayId, // 实际房号
           name: info.clientName,
           type: info.clientType,
           isOnDuty: info.isOnDuty,
