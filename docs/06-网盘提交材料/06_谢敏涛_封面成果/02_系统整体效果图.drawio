@@ -1,0 +1,91 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0">
+  <diagram name="云边端一体化架构" id="mxdHhfPfroRU6k46_bFv">
+    <mxGraphModel dx="1193" dy="767" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="k5KcsifPiMfBCUCdyQck-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#0A66C2;strokeWidth=2;fontSize=16;fontStyle=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#E3F2FD;labelBorderColor=#0A66C2;labelPadding=5;" value="☁️ 云平台层 (Cloud)" vertex="1">
+          <mxGeometry height="270" width="300" x="490" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2;fontSize=16;fontStyle=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#FFF3E0;labelBorderColor=#F57C00;labelPadding=5;" value="📶 边缘网关层 (Edge)" vertex="1">
+          <mxGeometry height="270" width="280" x="830" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;strokeWidth=2;fontSize=16;fontStyle=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#E8F5E9;labelBorderColor=#2E7D32;labelPadding=5;" value="🛏️ 终端设备层 (Device)" vertex="1">
+          <mxGeometry height="270" width="340" x="1150" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E88E5;strokeColor=#0D47A1;fontColor=#ffffff;fontSize=14;fontStyle=1;" value="Node.js 集群&#xa;(MQTT Broker / API)" vertex="1">
+          <mxGeometry height="60" width="200" x="540" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-5" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#43A047;strokeColor=#1B5E20;fontColor=#ffffff;fontSize=14;fontStyle=1;" value="MySQL" vertex="1">
+          <mxGeometry height="70" width="100" x="530" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-6" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#E53935;strokeColor=#B71C1C;fontColor=#ffffff;fontSize=14;fontStyle=1;" value="Redis" vertex="1">
+          <mxGeometry height="70" width="100" x="650" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;fontColor=#ffffff;fontSize=14;fontStyle=1;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;ESP32-S3 网关&lt;br&gt;(WiFi / MQTT Client)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="240" x="850" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-8" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#424242;fontStyle=1;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;MQTT 协议&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="100" x="920" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-9" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#43A047;startSize=30;fontSize=13;fontStyle=1;" value="传感器 (Sensors)" vertex="1">
+          <mxGeometry height="110" width="280" x="1180" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-10" parent="k5KcsifPiMfBCUCdyQck-9" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#2E7D32;" value="DHT11&#xa;温湿度" vertex="1">
+          <mxGeometry height="60" width="75" x="15" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-11" parent="k5KcsifPiMfBCUCdyQck-9" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#2E7D32;" value="MQ-2&#xa;烟雾" vertex="1">
+          <mxGeometry height="60" width="75" x="100" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-12" parent="k5KcsifPiMfBCUCdyQck-9" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#2E7D32;" value="RD-03&#xa;雷达存在" vertex="1">
+          <mxGeometry height="60" width="75" x="185" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-13" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#F57C00;startSize=30;fontSize=13;fontStyle=1;" value="执行器 (Actuators)" vertex="1">
+          <mxGeometry height="110" width="270" x="1185" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-14" parent="k5KcsifPiMfBCUCdyQck-13" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;" value="继电器组&#xa;(灯光/窗帘)" vertex="1">
+          <mxGeometry height="60" width="120" x="15" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-15" parent="k5KcsifPiMfBCUCdyQck-13" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;" value="智能门锁" vertex="1">
+          <mxGeometry height="60" width="120" x="145" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-16" edge="1" parent="1" source="k5KcsifPiMfBCUCdyQck-4" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#0A66C2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;dashPattern=8 4;" target="k5KcsifPiMfBCUCdyQck-7" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="710" y="670" as="sourcePoint" />
+            <mxPoint x="850" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-17" connectable="0" parent="k5KcsifPiMfBCUCdyQck-16" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontColor=#0A66C2;fontStyle=1;labelBackgroundColor=#FFFFFF;" value="发布/订阅 (MQTT)" vertex="1">
+          <mxGeometry relative="1" x="-0.2" y="1" as="geometry">
+            <mxPoint x="5" y="-15" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-18" edge="1" parent="1" source="k5KcsifPiMfBCUCdyQck-7" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#F57C00;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;dashPattern=8 4;" target="k5KcsifPiMfBCUCdyQck-9" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1090" y="670" as="sourcePoint" />
+            <mxPoint x="1210" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-19" connectable="0" parent="k5KcsifPiMfBCUCdyQck-18" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontColor=#F57C00;fontStyle=1;labelBackgroundColor=#FFFFFF;" value="传感器数据上报" vertex="1">
+          <mxGeometry relative="1" x="-0.2" y="1" as="geometry">
+            <mxPoint x="5" y="-15" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-20" edge="1" parent="1" source="k5KcsifPiMfBCUCdyQck-7" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#F57C00;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;dashPattern=8 4;" target="k5KcsifPiMfBCUCdyQck-13" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1090" y="820" as="sourcePoint" />
+            <mxPoint x="1210" y="820" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-21" connectable="0" parent="k5KcsifPiMfBCUCdyQck-20" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontColor=#F57C00;fontStyle=1;labelBackgroundColor=#FFFFFF;" value="指令下发" vertex="1">
+          <mxGeometry relative="1" x="-0.2" y="1" as="geometry">
+            <mxPoint x="5" y="-15" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="k5KcsifPiMfBCUCdyQck-22" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontColor=#2C3E50;fontStyle=1;" value="慧宿智联 · 云边端一体化系统架构图" vertex="1">
+          <mxGeometry height="40" width="560" x="700" y="850" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
