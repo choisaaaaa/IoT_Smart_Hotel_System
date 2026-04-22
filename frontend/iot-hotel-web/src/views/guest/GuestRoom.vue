@@ -99,18 +99,37 @@
             </div>
 
             <div class="chat-input-area">
-              <div v-if="chatMessages.length === 0" class="quick-actions">
-                <span 
-                  v-for="chip in quickChips" 
-                  :key="chip.text" 
-                  class="action-chip" 
+              <!-- 语音输入状态 -->
+              <div v-if="isListening" class="voice-input-status">
+                <div class="voice-waves-large">
+                  <span v-for="i in 7" :key="i" :style="{ animationDelay: `${i * 0.1}s` }"></span>
+                </div>
+                <p class="voice-hint">正在聆听...</p>
+                <p class="voice-sub-hint">松开结束语音输入</p>
+                <!-- 停止语音输入按钮 -->
+                <a-button
+                  type="primary"
+                  size="large"
+                  class="stop-voice-btn"
+                  @click="stopListening"
+                >
+                  <PauseCircleOutlined />
+                  <span>停止录音</span>
+                </a-button>
+              </div>
+
+              <div v-if="chatMessages.length === 0 && !isListening" class="quick-actions">
+                <span
+                  v-for="chip in quickChips"
+                  :key="chip.text"
+                  class="action-chip"
                   @click="askQuick(chip.text)"
                 >
                   <component :is="chip.icon" />
                   {{ chip.label }}
                 </span>
               </div>
-              <div class="input-wrapper">
+              <div class="input-wrapper" v-show="!isListening">
                 <a-input
                   v-model:value="inputText"
                   placeholder="输入您的问题，如：打开灯光、需要保洁..."
@@ -123,15 +142,34 @@
                     <EditOutlined class="input-icon" />
                   </template>
                 </a-input>
-                <a-button 
-                  type="primary" 
-                  size="large" 
-                  class="send-btn" 
-                  :loading="aiThinking" 
-                  :disabled="!inputText.trim() || aiThinking" 
+                <a-button
+                  type="primary"
+                  size="large"
+                  class="send-btn"
+                  :loading="aiThinking"
+                  :disabled="!inputText.trim() || aiThinking"
                   @click="sendMessage"
                 >
                   <SendOutlined />
+                </a-button>
+                <!-- 语音输入按钮 -->
+                <a-button
+                  shape="circle"
+                  size="large"
+                  class="voice-btn-large"
+                  :class="{
+                    listening: isListening,
+                    'voice-btn-disabled': !microphonePermission
+                  }"
+                  @mousedown="microphonePermission ? startListening() : requestMicrophonePermission()"
+                  @mouseup="microphonePermission ? stopListening() : null"
+                  @mouseleave="microphonePermission ? stopListening() : null"
+                  @touchstart="microphonePermission ? startListening() : requestMicrophonePermission()"
+                  @touchend="microphonePermission ? stopListening() : null"
+                  :title="microphonePermission ? '按住说话' : '点击启用麦克风'"
+                >
+                  <AudioOutlined v-if="microphonePermission" />
+                  <AudioMutedOutlined v-else />
                 </a-button>
               </div>
             </div>
@@ -457,7 +495,10 @@ import {
   SkinOutlined,
   InboxOutlined,
   ThunderboltOutlined,
-  CloudOutlined
+  CloudOutlined,
+  AudioOutlined,
+  AudioMutedOutlined,
+  PauseCircleOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -492,6 +533,13 @@ const chatMessages = ref<{ type: 'user' | 'ai'; text: string; time: string; typi
 const isTyping = ref(false)
 const displayedText = ref('')
 const suggestions = ref<string[]>([])
+
+// 语音识别状态
+const isListening = ref(false)
+const microphonePermission = ref(false)
+let recognition: any = null
+let recognitionTimeout: any = null
+let isRecognitionActive = false
 
 // 服务中心状态
 const showDeliveryModal = ref(false)
@@ -561,7 +609,7 @@ onMounted(async () => {
     router.push('/guest/booking')
     return
   }
-  
+
   if (!appStore.userStatus?.is_checked_in) {
     message.warning('您当前未入住，无法使用客房服务。请先在预入住页面选房或到前台办理。')
     router.push('/guest/checkin-online')
@@ -571,6 +619,11 @@ onMounted(async () => {
   const hotelId = appStore.userStatus?.checkin_info?.hotel_id
   await hotelStore.fetchHotelInfo(hotelId)
   initWebSocket()
+
+  // 初始化语音识别
+  initSpeechRecognition()
+  // 尝试自动获取麦克风权限
+  requestMicrophonePermission()
 })
 
 onUnmounted(() => {
@@ -726,6 +779,205 @@ function toggleAudio() {
   if (!audioPlayer.value) return
   if (isPlayingAudio.value) { audioPlayer.value.pause(); isPlayingAudio.value = false }
   else { audioPlayer.value.play(); isPlayingAudio.value = true }
+}
+
+// 语音识别相关函数
+function initSpeechRecognition() {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+
+  if (!SpeechRecognition) {
+    console.warn('[语音识别] 浏览器不支持语音识别')
+    return
+  }
+
+  recognition = new SpeechRecognition()
+  recognition.lang = 'zh-CN'
+  recognition.continuous = false
+  recognition.interimResults = true
+
+  recognition.onstart = () => {
+    isListening.value = true
+    isRecognitionActive = true
+    console.log('[语音识别] 开始聆听')
+
+    // 设置最大聆听时间（10秒）
+    recognitionTimeout = setTimeout(() => {
+      if (isRecognitionActive) {
+        console.log('[语音识别] 达到最大聆听时间，自动停止')
+        stopListening()
+      }
+    }, 10000)
+  }
+
+  recognition.onend = () => {
+    isListening.value = false
+    isRecognitionActive = false
+
+    if (recognitionTimeout) {
+      clearTimeout(recognitionTimeout)
+      recognitionTimeout = null
+    }
+
+    console.log('[语音识别] 聆听结束')
+  }
+
+  recognition.onresult = (event: any) => {
+    let finalTranscript = ''
+    let interimTranscript = ''
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript
+      } else {
+        interimTranscript += transcript
+      }
+    }
+
+    if (finalTranscript) {
+      console.log('[语音识别] 识别结果:', finalTranscript)
+      inputText.value = finalTranscript
+      sendMessage()
+      stopListening()
+    } else if (interimTranscript) {
+      inputText.value = interimTranscript
+    }
+  }
+
+  recognition.onerror = (event: any) => {
+    console.error('[语音识别] 错误:', event.error)
+    isListening.value = false
+    isRecognitionActive = false
+
+    if (recognitionTimeout) {
+      clearTimeout(recognitionTimeout)
+      recognitionTimeout = null
+    }
+
+    switch (event.error) {
+      case 'no-speech':
+        message.info('没有检测到语音，请再试一次')
+        break
+      case 'audio-capture':
+        message.error('无法访问麦克风，请检查设备')
+        break
+      case 'not-allowed':
+        message.error('麦克风权限被拒绝')
+        microphonePermission.value = false
+        break
+      case 'network':
+        message.error('网络错误，语音识别失败')
+        break
+      default:
+        message.error('语音识别失败，请重试')
+    }
+  }
+}
+
+function startListening() {
+  if (!recognition) {
+    message.warning('语音识别未初始化，请刷新页面重试')
+    return
+  }
+
+  if (isRecognitionActive) {
+    try {
+      recognition.stop()
+    } catch (e) {
+      // 忽略停止错误
+    }
+    setTimeout(() => doStartListening(), 100)
+  } else {
+    doStartListening()
+  }
+}
+
+function doStartListening() {
+  try {
+    recognition.start()
+  } catch (e: any) {
+    console.error('[语音识别] 启动失败:', e)
+    if (e.name === 'NotAllowedError') {
+      message.error('麦克风权限被拒绝，请在浏览器设置中允许访问')
+      microphonePermission.value = false
+    } else {
+      message.error('语音识别启动失败，请重试')
+    }
+    isListening.value = false
+    isRecognitionActive = false
+  }
+}
+
+function stopListening() {
+  if (recognition && isRecognitionActive) {
+    try {
+      recognition.stop()
+      console.log('[语音识别] 手动停止')
+    } catch (e) {
+      console.error('[语音识别] 停止失败:', e)
+    }
+  }
+
+  if (recognitionTimeout) {
+    clearTimeout(recognitionTimeout)
+    recognitionTimeout = null
+  }
+}
+
+async function requestMicrophonePermission() {
+  if (microphonePermission.value) {
+    return
+  }
+
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      message.warning('您的浏览器不支持语音输入')
+      return
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
+
+    stream.getTracks().forEach(track => track.stop())
+
+    microphonePermission.value = true
+    message.success('🎤 麦克风权限已获取')
+
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      message.info('iOS设备：请按住麦克风按钮开始语音对话')
+    }
+
+    console.log('[麦克风] 权限获取成功')
+  } catch (error: any) {
+    console.error('[麦克风] 权限获取失败:', error)
+    microphonePermission.value = false
+
+    if (error instanceof DOMException) {
+      switch (error.name) {
+        case 'NotAllowedError':
+        case 'PermissionDeniedError':
+          message.error('麦克风权限被拒绝，请点击麦克风图标重新授权')
+          break
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+          message.error('未找到麦克风设备，请检查硬件连接')
+          break
+        case 'NotReadableError':
+        case 'TrackStartError':
+          message.error('麦克风被其他应用占用，请关闭其他使用麦克风的程序')
+          break
+        default:
+          message.error('无法获取麦克风权限，请检查浏览器设置')
+      }
+    } else {
+      message.error('无法获取麦克风权限，请检查浏览器设置')
+    }
+  }
 }
 
 // Service center actions
@@ -1411,6 +1663,147 @@ function scrollToBottom() {
 .send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(201, 169, 98, 0.5);
+}
+
+/* ==================== 语音输入按钮 ==================== */
+.voice-btn-large {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: var(--hotel-radius-lg) !important;
+  background: linear-gradient(135deg, var(--hotel-gold-dark) 0%, var(--hotel-gold) 100%) !important;
+  color: white !important;
+  border: none !important;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(201, 169, 98, 0.4);
+}
+
+.voice-btn-large:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(201, 169, 98, 0.5);
+}
+
+.voice-btn-large:active {
+  transform: scale(0.95);
+}
+
+.voice-btn-large.listening {
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%) !important;
+  box-shadow: 0 4px 20px rgba(82, 196, 26, 0.5);
+  animation: pulse-green 1.5s infinite;
+}
+
+.voice-btn-disabled {
+  background: rgba(201, 169, 98, 0.3) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border: 2px dashed rgba(201, 169, 98, 0.4) !important;
+}
+
+.voice-btn-disabled:hover {
+  background: rgba(201, 169, 98, 0.4) !important;
+  transform: scale(1.02);
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(82, 196, 26, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0); }
+}
+
+/* ==================== 语音输入状态 ==================== */
+.voice-input-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(26, 43, 74, 0.05);
+  border-radius: var(--hotel-radius-xl);
+  margin-bottom: 16px;
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.voice-waves-large {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 60px;
+  margin-bottom: 16px;
+}
+
+.voice-waves-large span {
+  width: 6px;
+  height: 20px;
+  background: linear-gradient(to top, var(--hotel-gold-dark), var(--hotel-gold));
+  border-radius: 3px;
+  animation: wave-large 1s infinite ease-in-out;
+}
+
+.voice-waves-large span:nth-child(1),
+.voice-waves-large span:nth-child(7) {
+  height: 15px;
+}
+
+.voice-waves-large span:nth-child(2),
+.voice-waves-large span:nth-child(6) {
+  height: 30px;
+}
+
+.voice-waves-large span:nth-child(3),
+.voice-waves-large span:nth-child(5) {
+  height: 45px;
+}
+
+.voice-waves-large span:nth-child(4) {
+  height: 60px;
+}
+
+@keyframes wave-large {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.voice-hint {
+  color: var(--hotel-text);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.voice-sub-hint {
+  color: var(--hotel-text-muted);
+  font-size: 14px;
+  margin: 0 0 16px 0;
+}
+
+/* 停止录音按钮 */
+.stop-voice-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%) !important;
+  border: none !important;
+  border-radius: var(--hotel-radius-lg);
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.stop-voice-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+}
+
+.stop-voice-btn:active {
+  transform: scale(0.95);
 }
 
 /* ==================== 服务卡片 ==================== */

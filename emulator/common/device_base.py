@@ -35,11 +35,11 @@ class BaseDeviceEmulator:
         # 音频锁，防止多线程竞争播放器资源
         self._audio_lock = threading.Lock()
 
-        # 初始化音频
-        self._init_audio()
-
-        # 立即初始化 logger 以防后续报错
+        # 立即初始化 logger 以防后续报错 (必须在 _init_audio 之前)
         self.logger = Logger(str(self.device_id) if self.device_id else f"{self.device_type}_emu")
+
+        # 初始化音频 (在 logger 之后)
+        self._init_audio()
 
         # 生成唯一的设备ID，用于注册（如果配置中没有则生成）
         self.unique_device_id = self._generate_device_id()
@@ -55,6 +55,8 @@ class BaseDeviceEmulator:
         self.area_var = tk.StringVar(value="")        # 区域名称
         self.audit_status_var = tk.StringVar(value="未注册")
         self.ai_status_var = tk.StringVar(value="空闲")
+        # device_id_var 需要在 _check_if_configured 之前初始化
+        self.device_id_var = tk.StringVar(value=self.device_id)
 
         # 检查是否需要配网初始化
         self.configured = self._check_if_configured()
@@ -473,7 +475,7 @@ class BaseDeviceEmulator:
 
         tk.Label(title_container, text=f"{self.device_type.upper()}", font=("Arial", 11, "bold"),
                  bg=self.colors['primary'], fg="white", padx=10, pady=4).pack(side=tk.LEFT)
-        self.device_id_var = tk.StringVar(value=self.device_id)
+        # device_id_var 已在 __init__ 中初始化
         tk.Label(title_container, textvariable=self.device_id_var, font=("Consolas", 11),
                  bg=self.colors['card'], fg=self.colors['text']).pack(side=tk.LEFT, padx=8)
 

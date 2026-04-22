@@ -51,6 +51,7 @@ export class AIButlerService {
   private xfyunApiSecret = process.env.XFYUN_API_SECRET || '';
   private aliyunAccessKey = process.env.ALIYUN_ACCESS_KEY || '';
   private aliyunAccessSecret = process.env.ALIYUN_ACCESS_SECRET || '';
+  private aliyunAppKey = process.env.ALIYUN_APP_KEY || '';
 
   // 工具定义（Function Calling）
   private tools = [
@@ -321,43 +322,66 @@ export class AIButlerService {
   }
 
   /**
-   * 语音识别 - 阿里云ASR
+   * 语音识别 - 阿里云百炼ASR (使用FunASR模型)
+   * 文档: https://help.aliyun.com/document_detail/2712536.html
    */
   async speechToText(audioBase64: string): Promise<string> {
     try {
-      const url = 'https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr';
-
-      const date = new Date().toUTCString();
-      const signature = this.buildAliyunSignature(date);
-
-      const audioBuffer = Buffer.from(audioBase64, 'base64');
-
-      const response = await axios.post(url, audioBuffer, {
-        headers: {
-          'X-NLS-Token': this.aliyunAccessKey,
-          'X-NLS-Date': date,
-          'Authorization': signature,
-          'Content-Type': 'application/octet-stream',
-          'X-NLS-Format': 'pcm',
-          'X-NLS-Sample-Rate': '16000'
-        },
-        timeout: 10000
-      });
-
-      if (response.data && response.data.result) {
-        return response.data.result;
+      // 检查 API Key 是否配置
+      if (!this.aliyunAccessKey) {
+        logger.error('阿里云百炼ASR: ALIYUN_ACCESS_KEY 未配置');
+        return '';
       }
 
-      const errorMsg = response.data?.message || 'ASR响应异常';
-      throw new Error(errorMsg);
+      // 百炼语音识别API - 只需要API Key
+      const url = 'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription';
+
+      const response = await axios.post(url, {
+        model: 'paraformer-realtime-v2',  // 使用实时语音识别模型
+        input: {
+          audio: audioBase64  // base64编码的音频数据
+        },
+        parameters: {
+          format: 'pcm',
+          sample_rate: 16000,
+          language_hints: ['zh', 'en']  // 支持中英文
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.aliyunAccessKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      // 解析响应
+      if (response.data && response.data.output) {
+        const result = response.data.output;
+        if (result.text) {
+          logger.info(`百炼ASR识别成功: "${result.text}"`);
+          return result.text;
+        }
+      }
+
+      logger.warn('百炼ASR响应格式异常:', response.data);
+      return '';
     } catch (error: any) {
       const status = error.response?.status;
       const data = error.response?.data;
-      logger.error('阿里云ASR识别失败:', {
-        message: error.message,
-        status,
-        details: data
-      });
+      
+      // 详细错误日志
+      if (status === 401) {
+        logger.error('百炼ASR认证失败: API Key无效或已过期');
+      } else if (status === 429) {
+        logger.error('百炼ASR请求过于频繁，请稍后重试');
+      } else {
+        logger.error('百炼ASR识别失败:', {
+          message: error.message,
+          status,
+          details: data
+        });
+      }
+      
       return '';
     }
   }

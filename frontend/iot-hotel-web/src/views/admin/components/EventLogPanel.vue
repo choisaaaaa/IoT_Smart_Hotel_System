@@ -50,7 +50,6 @@
             <a-select-option value="environment_warning">⚠️ 环境警告</a-select-option>
             <a-select-option value="device_control">📱 设备控制</a-select-option>
             <a-select-option value="maintenance">🔧 维护提醒</a-select-option>
-            <a-select-option value="energy_alert">⚡ 能耗预警</a-select-option>
           </a-select>
           <a-select v-model:value="filterSeverity" placeholder="严重程度" allowClear style="width: 110px;" @change="fetchLogs">
             <a-select-option value="">全部</a-select-option>
@@ -180,8 +179,7 @@ function getEventTypeColor(type: string): string {
     device_error: 'orange',
     environment_warning: 'gold',
     device_control: 'blue',
-    maintenance: 'purple',
-    energy_alert: 'cyan'
+    maintenance: 'purple'
   }[type] || 'default'
 }
 
@@ -191,8 +189,7 @@ function getEventTypeText(type: string): string {
     device_error: '设备',
     environment_warning: '环境',
     device_control: '控制',
-    maintenance: '维护',
-    energy_alert: '能耗'
+    maintenance: '维护'
   }[type] || type
 }
 
