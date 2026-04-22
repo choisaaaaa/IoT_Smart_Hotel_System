@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'api_interceptor.dart';
 import '../constants/api_constants.dart';
 
@@ -16,6 +18,18 @@ class DioClient {
   }
 
   void init() {
+    // 配置HTTP客户端，支持HTTPS证书验证
+    final httpClient = HttpClient()
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+        // 生产环境应该严格验证证书，开发环境可以暂时允许
+        if (kDebugMode) {
+          // 开发环境：允许自签名证书（仅用于本地测试）
+          return host == 'localhost' || host == '127.0.0.1';
+        }
+        // 生产环境：严格验证证书
+        return false;
+      };
+
     dio = Dio(BaseOptions(
       baseUrl: ApiConstants.baseUrl,
       connectTimeout: const Duration(milliseconds: ApiConstants.connectTimeout),
@@ -25,7 +39,10 @@ class DioClient {
         'Accept': 'application/json; charset=utf-8',
       },
       responseDecoder: _utf8Decoder,
-    ));
+    ))
+      ..httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () => httpClient,
+      );
 
     dio.interceptors.addAll([
       AuthInterceptor(),

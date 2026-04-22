@@ -9,11 +9,25 @@ class ApiConstants {
     if (_baseUrlOverride.isNotEmpty) {
       return _baseUrlOverride;
     }
+    
+    // 灵活配置方案
+    // 方案1: 优先使用环境变量
+    const String envUrl = String.fromEnvironment('API_BASE_URL');
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+    
+    // 方案2: 开发环境默认值
+    if (const bool.fromEnvironment('dart.vm.product') == false) {
+      return 'http://localhost:9000/api/v1/';
+    }
+    
+    // 方案3: 生产环境默认值（打包到手机端使用）
     return 'http://8.134.166.69:9000/api/v1/';
   }
 
   static String get serverHost {
-    final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : 'http://8.134.166.69:9000';
+    final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : baseUrl;
     final uri = Uri.parse(url);
     return '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
   }
