@@ -38,6 +38,9 @@
         <template v-if="column.key === 'status'">
           <a-badge :status="deliveryBadge(record.status)" :text="deliveryStatusText(record.status)" />
         </template>
+        <template v-if="column.key === 'created_at'">
+          {{ formatTimeHHmm(record.created_at) }}
+        </template>
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" size="small" v-if="record.status === 'pending'" @click="startDelivery(record)">开始配送</a-button>
@@ -85,6 +88,7 @@ import { message } from 'ant-design-vue'
 import { SendOutlined, CarOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
+import { formatTimeHHmm } from '@/utils/date'
 
 const hotelStore = useHotelStore()
 const searchKey = ref('')

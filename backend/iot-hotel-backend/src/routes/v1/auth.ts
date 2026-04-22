@@ -331,6 +331,19 @@ router.post('/login', async (req, res) => {
       return sendError(res, errorResponse('手机号和密码不能为空', 400));
     }
 
+    // 检查账户是否被锁定
+    const { LoginSecurityService } = await import('../../services/login-security.service');
+    const lockStatus = await LoginSecurityService.isLocked(phone);
+    
+    if (lockStatus.isLocked) {
+      const remainingMinutes = Math.ceil(((lockStatus.lockedUntil!.getTime()) - Date.now()) / 60000);
+      logger.warn(`[Auth] 登录被拒绝 - 账户已锁定: ${phone}, 剩余时间: ${remainingMinutes}分钟`);
+      return sendError(res, errorResponse(
+        `账户已被锁定，请在 ${remainingMinutes} 分钟后再试`,
+        429
+      ));
+    }
+
     // 获取用户信息
     const [users]: any = await db.execute(
       `SELECT u.*, h.hotel_name
@@ -341,6 +354,8 @@ router.post('/login', async (req, res) => {
     );
 
     if (users.length === 0) {
+      // 即使用户不存在也记录失败，防止枚举攻击
+      await LoginSecurityService.recordFailedLogin(phone);
       return sendError(res, errorResponse('手机号或密码错误', 401));
     }
 
@@ -348,8 +363,42 @@ router.post('/login', async (req, res) => {
     const isPasswordValid = await comparePassword(password, user.password);
 
     if (!isPasswordValid) {
-      return sendError(res, errorResponse('手机号或密码错误', 401));
+      // 记录登录失败
+      const failResult = await LoginSecurityService.recordFailedLogin(phone);
+
+      if (failResult.isLocked) {
+        const lockMinutes = LoginSecurityService.calculateLockoutMinutes(failResult.attempts);
+        logger.warn(`[Auth] 账户 ${phone} 因连续登录失败被锁定至 ${failResult.lockedUntil?.toISOString()}`);
+        return sendError(res, errorResponse(
+          `密码错误，账户已被锁定 ${lockMinutes} 分钟`,
+          429
+        ));
+      }
+
+      // 计算剩余警告次数和锁定时间
+      const config = LoginSecurityService.getConfig();
+      let warningMessage = '';
+
+      if (failResult.warningAttempts > 0 && failResult.warningAttempts <= config.incrementFailedCount) {
+        // 在5次错误范围内，显示警告消息
+        warningMessage = `，错误 ${failResult.attempts} 次后将被禁止登录 ${config.initialLockoutMinutes} 分钟`;
+      }
+
+      logger.warn(`[Auth] 密码错误 - 账户: ${phone}, 剩余尝试次数: ${failResult.remainingAttempts}`);
+      return sendError(res, errorResponse(
+        `手机号或密码错误${warningMessage}`,
+        401
+      ));
     }
+
+    // 登录成功，重置失败计数
+    await LoginSecurityService.resetFailedLogin(phone);
+
+    // 更新最后登录时间
+    await db.execute(
+      'UPDATE users SET last_login_at = NOW() WHERE id = ?',
+      [user.id]
+    );
 
     // 获取用户角色和权限
     const [userRoles]: any = await db.execute(

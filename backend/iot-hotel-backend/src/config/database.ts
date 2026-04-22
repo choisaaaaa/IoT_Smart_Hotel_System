@@ -8,7 +8,7 @@ const poolOptions: PoolOptions = {
   password: config.database.password,
   database: config.database.database,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 30, // 生产环境建议20-50，根据并发量调整
   queueLimit: 0,
   charset: 'utf8mb4_unicode_ci',
   enableKeepAlive: true,

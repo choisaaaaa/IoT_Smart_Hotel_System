@@ -5,6 +5,7 @@ import { hasRole, normalizeRole } from '../utils/role';
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
 import crypto from 'crypto';
+import { verifyDeviceKey } from '../utils/device-key';
 
 /**
  * JWT认证中间件
@@ -133,8 +134,8 @@ export async function deviceAuthMiddleware(
 
     const device = devices[0];
 
-    // 验证设备密钥
-    if (device.device_key !== deviceKey) {
+    // 验证设备密钥（使用哈希比较）
+    if (!verifyDeviceKey(deviceKey, device.device_key)) {
       logger.warn(`设备密钥验证失败: ${deviceId}`);
       res.status(401).json({
         code: 401,
@@ -168,8 +169,10 @@ export async function deviceAuthMiddleware(
       }
     }
 
-    // 验证签名（如果提供）
+    // 验证签名（如果提供）- 使用哈希后的密钥进行签名验证
     if (signature && timestamp) {
+      // 注意：签名验证需要使用原始密钥，但由于我们存储的是哈希值
+      // 所以这里需要使用 deviceKey（设备传来的原始密钥）来计算签名
       const payload = `${deviceId}:${timestamp}:${deviceKey}`;
       const expectedSignature = crypto
         .createHmac('sha256', deviceKey)

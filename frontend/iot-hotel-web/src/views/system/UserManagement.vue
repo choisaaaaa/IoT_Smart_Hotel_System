@@ -61,9 +61,27 @@
             <span v-else-if="record.hotel_name">{{ record.hotel_name }}</span>
             <span v-else style="color: #999">未绑定</span>
           </template>
+          <template v-if="column.key === 'created_at'">
+            {{ formatDateTime(record.created_at) }}
+          </template>
+          <template v-if="column.key === 'last_login_at'">
+            {{ record.last_login_at ? formatDateTime(record.last_login_at) : '从未登录' }}
+          </template>
+          <template v-if="column.key === 'is_locked'">
+            <a-tag v-if="record.is_locked" color="red">已锁定</a-tag>
+            <a-tag v-else color="green">正常</a-tag>
+          </template>
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button type="link" @click="handleEdit(record)">编辑</a-button>
+              <a-button
+                v-if="record.username !== 'admin' && record.username !== appStore.userInfo?.username"
+                type="link"
+                :danger="!record.is_locked"
+                @click="handleToggleLock(record)"
+              >
+                {{ record.is_locked ? '解锁' : '锁定' }}
+              </a-button>
               <a-popconfirm
                 v-if="record.username !== 'admin' && record.username !== appStore.userInfo?.username"
                 title="确定要删除此用户吗？"
@@ -145,6 +163,8 @@ interface UserItem {
   hotel_id?: number
   hotel_name?: string
   created_at?: string
+  last_login_at?: string
+  is_locked?: boolean
 }
 
 interface HotelOption {
@@ -206,11 +226,12 @@ const rules = {
 const columns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
   { title: '手机号', dataIndex: 'phone', key: 'phone' },
-  { title: '邮箱', dataIndex: 'email', key: 'email' },
+  { title: '状态', key: 'is_locked', width: 80 },
   { title: '角色', dataIndex: 'role', key: 'role' },
   { title: '所属酒店', key: 'hotel' },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
-  { title: '操作', key: 'action', width: 150 }
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 150 },
+  { title: '最后登录', key: 'last_login_at', width: 150 },
+  { title: '操作', key: 'action', width: 200 }
 ]
 
 const getRoleColor = (role: string) => {
@@ -221,6 +242,32 @@ const getRoleColor = (role: string) => {
 const getRoleText = (role: string) => {
   const texts: any = { system: '系统管理员', admin: '门店管理员', staff: '门店员工', user: '普通用户' }
   return texts[role] || role
+}
+
+const formatDateTime = (dateStr: string | undefined) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+const handleToggleLock = async (record: any) => {
+  try {
+    if (record.is_locked) {
+      await axios.post(`/users/${record.id}/unlock`)
+      message.success(`用户 ${record.username} 已解锁`)
+    } else {
+      await axios.post(`/users/${record.id}/lock`)
+      message.success(`用户 ${record.username} 已锁定`)
+    }
+    fetchUsers()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '操作失败')
+  }
 }
 
 const filterHotelOption = (input: string, option: any) => {

@@ -4,6 +4,7 @@ import { successResponse, errorResponse, sendSuccess, sendError } from '../types
 import { hashPassword, comparePassword } from '../utils/password';
 import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, CANONICAL_ROLES } from '../utils/role';
 import db from '../config/database';
+import { LoginSecurityService } from '../services/login-security.service';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ export async function list(req: AuthRequest, res: Response) {
     const offset = (p - 1) * l;
 
     let sql = `SELECT u.id, u.username, u.phone, u.email, u.role, u.hotel_id, u.created_at,
-                h.hotel_name
+                u.last_login_at, h.hotel_name
                 FROM users u
                 LEFT JOIN hotels h ON u.hotel_id = h.id`;
 
@@ -66,8 +67,18 @@ export async function list(req: AuthRequest, res: Response) {
     const [users]: any = await db.query(sql, [...params, l, offset]);
     const [countResult]: any = await db.query(countSql, params);
 
+    const usersWithLockStatus = await Promise.all(
+      users.map(async (user: any) => {
+        const lockStatus = await LoginSecurityService.isLocked(user.phone);
+        return {
+          ...user,
+          is_locked: lockStatus.isLocked
+        };
+      })
+    );
+
     sendSuccess(res, {
-      users,
+      users: usersWithLockStatus,
       total: countResult[0].total,
       page: p,
       limit: l
@@ -255,6 +266,76 @@ export async function remove(req: AuthRequest, res: Response) {
     sendSuccess(res, { message: '用户删除成功' });
   } catch (error) {
     console.error('删除用户失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
+export async function lock(req: AuthRequest, res: Response) {
+  try {
+    const { id: userId } = req.params;
+    const currentUser = req.user;
+
+    if (!currentUser) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
+
+    if (!isSystemAdmin(currentUser.role)) {
+      return sendError(res, errorResponse('只有系统管理员可以锁定用户', 403));
+    }
+
+    const [users]: any = await db.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('用户不存在', 404));
+    }
+
+    const targetUser = users[0];
+
+    if (targetUser.username === 'admin') {
+      return sendError(res, errorResponse('不能锁定管理员账户', 403));
+    }
+
+    await LoginSecurityService.lockAccount(targetUser.phone);
+
+    sendSuccess(res, { message: '用户已锁定' });
+  } catch (error) {
+    console.error('锁定用户失败:', error);
+    sendError(res, errorResponse('服务器错误', 500));
+  }
+}
+
+export async function unlock(req: AuthRequest, res: Response) {
+  try {
+    const { id: userId } = req.params;
+    const currentUser = req.user;
+
+    if (!currentUser) {
+      return sendError(res, errorResponse('未授权', 401));
+    }
+
+    if (!isSystemAdmin(currentUser.role) && !isHotelAdmin(currentUser.role)) {
+      return sendError(res, errorResponse('只有管理员可以解锁用户', 403));
+    }
+
+    const [users]: any = await db.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return sendError(res, errorResponse('用户不存在', 404));
+    }
+
+    const targetUser = users[0];
+
+    await LoginSecurityService.unlockAccount(targetUser.phone);
+
+    sendSuccess(res, { message: '用户已解锁' });
+  } catch (error) {
+    console.error('解锁用户失败:', error);
     sendError(res, errorResponse('服务器错误', 500));
   }
 }

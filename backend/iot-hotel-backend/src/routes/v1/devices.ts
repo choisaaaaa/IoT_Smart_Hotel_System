@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import deviceController from '../../controllers/device.controller';
-import { authenticate, authorize } from '../../middleware/auth';
+import { authenticate, authorize, deviceAuthMiddleware, optionalDeviceAuthMiddleware } from '../../middleware/auth';
 import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
@@ -8,7 +8,10 @@ const router = Router();
 const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
 const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 
-router.post('/register', deviceController.register);
+// 设备注册接口 - 支持两种认证方式 (H-01安全加固)
+// 方式1: 设备预注册Token认证 (新设备)
+// 方式2: 管理员认证 (手动注册)
+router.post('/register', optionalDeviceAuthMiddleware as any, deviceController.register);
 router.post('/room-card', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), deviceController.handleRoomCard);
 router.get('/', authenticate as any, authorize(allRoles), deviceController.getAll);
 router.get('/:id', authenticate as any, authorize(allRoles), deviceController.getById);

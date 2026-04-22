@@ -48,6 +48,9 @@
             <template v-if="column.key === 'status'">
               <a-badge :status="orderBadge(record.status)" :text="orderStatusText(record.status)" />
             </template>
+            <template v-if="column.key === 'created_at'">
+              {{ formatTimeHHmm(record.created_at) }}
+            </template>
             <template v-if="column.key === 'action'">
               <a-space>
                 <a-button type="link" size="small" v-if="record.status === 'pending'" @click="startProcess(record)">开始处理</a-button>
@@ -128,6 +131,7 @@ import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
 import { maintenanceApi } from '@/api/maintenance'
 import { roomApi } from '@/api/room'
+import { formatTimeHHmm } from '@/utils/date'
 
 const hotelStore = useHotelStore()
 const appStore = useAppStore()

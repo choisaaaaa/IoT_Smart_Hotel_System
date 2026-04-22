@@ -63,6 +63,11 @@ export function formatMonthYear(val: any): string {
   return d ? d.tz(TZ).format('YYYY年MM月') : '-'
 }
 
+export function formatTimeHHmm(val: any): string {
+  const d = ensureDayjs(val)
+  return d ? d.tz(TZ).format('HH:mm') : '-'
+}
+
 export function now(): dayjs.Dayjs {
   return dayjs().tz(TZ)
 }

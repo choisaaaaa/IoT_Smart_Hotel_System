@@ -6,8 +6,10 @@ services:
     container_name: iot-hotel-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-IotHotel2026!Root}
       MYSQL_DATABASE: ${DB_NAME:-iot_hotel_system}
+      MYSQL_USER: ${DB_USER:-iot_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-IotHotel2026}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
       TZ: Asia/Shanghai
@@ -40,6 +42,8 @@ services:
       - "${MQTT_WS_PORT:-9001}:9001"
     volumes:
       - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./config/mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
+      - ./config/acl:/mosquitto/config/acl:ro
       - mqtt_data:/mosquitto/data
       - mqtt_log:/mosquitto/log
     networks:

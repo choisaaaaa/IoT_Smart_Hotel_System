@@ -578,8 +578,22 @@ const handleLogin = async () => {
         default: fetchUserStatus()
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('登录失败:', error)
+    const status = error?.response?.status
+    const serverMsg = error?.response?.data?.message
+
+    if (status === 429) {
+      message.error(serverMsg || '账户已被锁定，请稍后再试')
+    } else if (status === 401) {
+      if (serverMsg?.includes('锁定')) {
+        message.error(serverMsg)
+      } else {
+        message.warning(serverMsg || '手机号或密码错误')
+      }
+    } else {
+      message.error(serverMsg || '登录失败，请重试')
+    }
   } finally {
     loginLoading.value = false
   }
@@ -683,8 +697,10 @@ const handleRegister = async () => {
     registerForm.phone = ''
 
     activeTab.value = 'password'
-  } catch (error) {
+  } catch (error: any) {
     console.error('注册失败:', error)
+    const errorMessage = error?.response?.data?.message || '注册失败，请重试'
+    message.error(errorMessage)
   } finally {
     registerLoading.value = false
   }

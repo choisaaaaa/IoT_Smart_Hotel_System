@@ -7,6 +7,7 @@ import path from 'path';
 import expressWinston from 'express-winston';
 import logger from './utils/logger';
 import { redisClient } from './utils/redis';
+import { requestIdMiddleware } from './middleware/request-id';
 
 import appConfig from './config/app';
 import routes from './routes';
@@ -28,22 +29,30 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"]
+      mediaSrc: ["'self'", "blob:"],
+      frameSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
     }
   },
   crossOriginEmbedderPolicy: false, // 允许嵌入资源
+  crossOriginResourcePolicy: { policy: "cross-origin" },
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true
-  }
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  noSniff: true,
+  xssFilter: true
 }));
 
 // CORS配置
@@ -80,6 +89,7 @@ const corsOptions = {
   maxAge: 86400 // 24小时
 };
 
+app.use(requestIdMiddleware);
 app.use(cors(corsOptions));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));

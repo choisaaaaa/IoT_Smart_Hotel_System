@@ -130,7 +130,7 @@
                 <div class="task-name">{{ item.fault_description?.substring(0, 30) || '维修工单' }}</div>
                 <div class="task-meta">
                   <span><HomeOutlined /> {{ item.room_number || item.room_id }}</span>
-                  <span><ClockCircleOutlined /> {{ formatTime(item.created_at) }}</span>
+                  <span><ClockCircleOutlined /> {{ formatTimeHHmm(item.created_at) }}</span>
                 </div>
               </div>
               <RightOutlined class="task-arrow" />
@@ -168,7 +168,7 @@
                 <div class="task-name">{{ item.item_name }} x{{ item.quantity }}</div>
                 <div class="task-meta">
                   <span><HomeOutlined /> {{ item.room_number || item.room_id }}</span>
-                  <span><ClockCircleOutlined /> {{ formatTime(item.created_at) }}</span>
+                  <span><ClockCircleOutlined /> {{ formatTimeHHmm(item.created_at) }}</span>
                 </div>
               </div>
               <RightOutlined class="task-arrow" />
@@ -251,6 +251,7 @@ import { bookingApi } from '@/api/booking'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
 import { hotelApi } from '@/api/hotel'
+import { formatTimeHHmm } from '@/utils/date'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -315,15 +316,16 @@ async function loadStats() {
     const totalRooms = rooms.reduce((sum: number, r: any) => sum + (r.count || 0), 0)
     const occupiedRooms = rooms.find((r: any) => r.room_status === 'occupied')?.count || 0
     
-    // 获取今日预订统计
+    // 获取今日预订统计 - 使用正确的参数名 check_in_date
     const bookingRes: any = await bookingApi.getBookingList({ 
-      checkin_date: today,
-      pageSize: 100 
+      check_in_date: today,
+      pageSize: 1000 
     })
     const bookings = bookingRes.data?.list || []
     
-    const todayCheckin = bookings.filter((b: any) => b.status === 'checked_in').length
-    const todayCheckout = bookings.filter((b: any) => b.status === 'checked_out').length
+    // 更准确的统计逻辑
+    const todayCheckin = bookings.filter((b: any) => ['checked_in', 'confirmed', 'pre_checked_in'].includes(b.status)).length
+    const todayCheckout = bookings.filter((b: any) => b.status === 'checked_out' && b.check_out_date?.startsWith(today)).length
     
     const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0
     
@@ -366,9 +368,10 @@ async function loadTodayBookings() {
   try {
     const today = dayjs().format('YYYY-MM-DD')
     const res: any = await bookingApi.getBookingList({ 
-      checkin_date: today,
-      pageSize: 20 
+      check_in_date: today,
+      pageSize: 1000 
     })
+    // 不过滤状态，展示所有今日预订
     todayBookings.value = res.data?.list || []
   } catch (error) {
     console.error('加载预订失败:', error)
@@ -381,10 +384,10 @@ function formatTime(time: string) {
 
 function getPriorityText(priority: string) {
   const map: Record<string, string> = {
-    low: '普通',
-    medium: '一般',
-    high: '紧急',
-    urgent: '特急'
+    low: '低',
+    medium: '中',
+    high: '高',
+    urgent: '紧急'
   }
   return map[priority] || priority
 }

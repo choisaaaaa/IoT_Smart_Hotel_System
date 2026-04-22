@@ -1,0 +1,21 @@
+# MQTT ACL访问控制列表
+# 格式: user username [topic [read|write|readwrite] topic]
+
+# 允许所有认证用户订阅状态和广播主题
+pattern read hotel/device/status/#
+pattern read hotel/device/data/#
+pattern read hotel/device/command/result
+pattern read hotel/device/security/event
+
+# 允许iot_user发布设备状态和数据
+user iot_user
+topic readwrite hotel/device/#
+topic read hotel/device/command/#
+
+# 允许backend_service读写所有主题
+user backend_service
+topic readwrite #
+
+# 允许admin读写所有主题
+user admin
+topic readwrite #

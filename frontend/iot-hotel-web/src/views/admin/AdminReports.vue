@@ -49,9 +49,12 @@
           <template v-if="column.key === 'amount'">
             <span style="font-weight: 600; color: #1890ff;">¥{{ record.amount.toFixed(2) }}</span>
           </template>
+          <template v-if="column.key === 'pay_method'">
+            {{ paymentMethodText(record.pay_method) }}
+          </template>
           <template v-if="column.key === 'status'">
-            <a-tag :color="record.status === 'paid' ? 'success' : record.status === 'pending' ? 'warning' : 'default'">
-              {{ record.status === 'paid' ? '已支付' : record.status === 'pending' ? '待支付' : '已退款' }}
+            <a-tag :color="getBillStatusColor(record.status)">
+              {{ getBillStatusText(record.status) }}
             </a-tag>
           </template>
         </template>
@@ -65,6 +68,44 @@ import { ref, reactive, onMounted, nextTick, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { FileTextOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
+
+function paymentMethodText(method: string): string {
+  const map: Record<string, string> = {
+    alipay: '支付宝',
+    wechat: '微信支付',
+    wechat_pay: '微信支付',
+    credit_card: '银行卡',
+    cash: '现金',
+    pending: '待支付'
+  }
+  return map[method] || method || '未设置'
+}
+
+function getBillStatusText(status: string): string {
+  const map: Record<string, string> = {
+    confirmed: '已确认',
+    checked_in: '已入住',
+    checked_out: '已完成',
+    cancelled: '已退款',
+    pending: '待支付',
+    paid: '已支付',
+    refunded: '已退款'
+  }
+  return map[status] || status
+}
+
+function getBillStatusColor(status: string): string {
+  const map: Record<string, string> = {
+    confirmed: 'blue',
+    checked_in: 'processing',
+    checked_out: 'success',
+    cancelled: 'error',
+    pending: 'warning',
+    paid: 'success',
+    refunded: 'default'
+  }
+  return map[status] || 'default'
+}
 
 const revenueChartRef = ref<HTMLDivElement>()
 const pieChartRef = ref<HTMLDivElement>()
