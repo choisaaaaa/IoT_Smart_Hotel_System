@@ -42,7 +42,7 @@ export function validateEmail(email: string): ValidationResult {
 }
 
 /**
- * 验证密码强度 (M-04安全加固)
+ * 验证密码强度
  */
 export function validatePassword(password: string): ValidationResult {
   if (!password) {
@@ -60,14 +60,9 @@ export function validatePassword(password: string): ValidationResult {
   // 检查密码复杂度
   const hasLetter = /[a-zA-Z]/.test(password);
   const hasNumber = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
   
   if (!hasLetter || !hasNumber) {
     return { valid: false, error: '密码必须包含字母和数字' };
-  }
-  
-  if (!hasSpecialChar) {
-    return { valid: false, error: '密码必须包含至少一个特殊字符' };
   }
   
   return { valid: true };
