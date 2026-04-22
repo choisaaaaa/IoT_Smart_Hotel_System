@@ -57,7 +57,7 @@ class DeviceController {
         data: result
       });
     } catch (error) {
-      logger.error('Audit device error:', error.message);
+      logger.error('Audit device error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }

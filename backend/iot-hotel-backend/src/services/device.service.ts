@@ -257,7 +257,7 @@ class DeviceService {
         device_name
       };
     } catch (error) {
-      logger.error('Error auditing device:', error.message);
+      logger.error('Error auditing device:', error);
       throw error;
     }
   }
