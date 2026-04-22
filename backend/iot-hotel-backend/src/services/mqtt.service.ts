@@ -722,11 +722,12 @@ class MQTTService {
         ]
       );
 
-      logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}`);
+      logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}, hotelId: ${hotelId}`);
 
       // 关键修复：安防事件只发送给所属酒店的前台
       if (hotelId && this.wsInstance) {
         const hotelRoom = `front_desk_hotel_${hotelId}`;
+        logger.info(`发送安防事件到房间: ${hotelRoom}`);
         this.wsInstance.emit('security_event', {
           device_id: data.device_id,
           event_type: data.event_type,
@@ -734,6 +735,18 @@ class MQTTService {
           data: data.data,
           timestamp: new Date().toISOString()
         }, hotelRoom);
+      } else {
+        // 如果没有 hotelId，广播给所有连接的前台（用于测试）
+        if (this.wsInstance) {
+          logger.warn(`没有 hotelId，广播安防事件到所有前台`);
+          this.wsInstance.emit('security_event', {
+            device_id: data.device_id,
+            event_type: data.event_type,
+            level: data.level || 'info',
+            data: data.data,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     } catch (error) {
       logger.error('处理安防事件失败:', error.message);

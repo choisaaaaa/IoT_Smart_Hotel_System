@@ -10,6 +10,8 @@ from tkinter import ttk, messagebox
 import random
 import json
 import requests
+import threading
+import time
 from datetime import datetime
 from common.device_base import BaseDeviceEmulator
 from common.mqtt_client import MQTTClient
@@ -64,6 +66,8 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         self.led_color = (0, 0, 255)
         self.led_wall_colors = ["#ffffff"] * 8  # 8颗客房状态灯
         self.rooms_mapping = ["", "", "", "", "", "", "", ""]
+        self._alarm_beep_thread = None  # 报警蜂鸣器线程
+        self._stop_alarm_beep = threading.Event()  # 停止蜂鸣器事件
 
         super().__init__(
             root=root,
@@ -427,6 +431,11 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         self.mqtt_client.subscribe(cmd_topic)
         self._log(f"已订阅前台指令主题: {cmd_topic}")
 
+        # 订阅全局前台指令主题（用于接收全局消警等指令）
+        all_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/all"
+        self.mqtt_client.subscribe(all_cmd_topic)
+        self._log(f"已订阅全局前台指令主题: {all_cmd_topic}")
+
         # 订阅客房状态事件以更新灯墙
         self.mqtt_client.subscribe("hotel/device/event/room/+", self._on_room_event)
         self.mqtt_client.subscribe("hotel/security/event", self._on_security_event)
@@ -458,39 +467,147 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             pass
 
     def _on_security_event(self, topic, payload):
+        """处理安防事件，实现联动报警"""
         try:
             data = json.loads(payload)
             event_type = data.get('event_type')
-            if event_type == "fire_alarm" or event_type == "sos_alarm":
-                event_data = data.get('data', {})
-                room_id = event_data.get('room_id') or event_data.get('floor_id')
-                if room_id in self.rooms_mapping:
+            event_data = data.get('data', {})
+            device_id = data.get('device_id', '')
+            
+            # 忽略自己触发的报警
+            if device_id == self.unique_device_id:
+                return
+            
+            # 处理消防报警联动
+            if event_type == "fire_alarm":
+                room_id = event_data.get('room_id')
+                floor_id = event_data.get('floor_id')
+                location = room_id or floor_id
+                
+                self._log(f"🔥 收到联动报警: {device_id} 触发消防报警", "ERROR")
+                
+                # 更新灯墙显示报警房间
+                if location and location in self.rooms_mapping:
+                    idx = self.rooms_mapping.index(location)
+                    self.led_wall_colors[idx] = "#ff4d4f"
+                    self.root.after(0, self._update_led_wall)
+                
+                # 蜂鸣器响3声
+                self._beep(3)
+                
+                # 启动持续蜂鸣器（5秒后）
+                self._start_continuous_beep()
+                
+                # LED变红
+                self._update_led(255, 0, 0)
+                self.root.after(3000, lambda: self._update_led(0, 0, 255))
+                
+                # 更新SOS按钮状态
+                self.sos_btn.config(text="🔥 联动报警中", bg="#000000", fg="#ff4d4f")
+                self.root.after(5000, lambda: self.sos_btn.config(text="🚨 110一键报警", bg="red", fg="white"))
+            
+            # 处理SOS报警联动
+            elif event_type == "sos_alarm":
+                room_id = event_data.get('room_id')
+                self._log(f"🆘 收到联动报警: {device_id} 触发SOS报警", "ERROR")
+                
+                if room_id and room_id in self.rooms_mapping:
                     idx = self.rooms_mapping.index(room_id)
                     self.led_wall_colors[idx] = "#ff4d4f"
                     self.root.after(0, self._update_led_wall)
+                
                 self._beep(3)
-        except:
-            pass
+                self._update_led(255, 0, 0)
+                self.root.after(3000, lambda: self._update_led(0, 0, 255))
+                
+        except Exception as e:
+            self._log(f"处理安防事件失败: {e}", "ERROR")
+
+    def _start_continuous_beep(self):
+        """启动持续蜂鸣器（5秒后开始持续响）"""
+        def continuous_beep():
+            # 等待5秒
+            time.sleep(5)
+            
+            # 如果还在报警状态，开始持续蜂鸣
+            while not self._stop_alarm_beep.is_set():
+                try:
+                    import winsound
+                    winsound.Beep(2000, 500)  # 响500ms
+                    time.sleep(0.2)  # 间隔200ms
+                except Exception:
+                    time.sleep(1)
+        
+        # 停止之前的蜂鸣器线程
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
+        
+        # 重置停止事件并启动新线程
+        self._stop_alarm_beep.clear()
+        self._alarm_beep_thread = threading.Thread(target=continuous_beep, daemon=True)
+        self._alarm_beep_thread.start()
+
+    def _stop_continuous_beep(self):
+        """停止持续蜂鸣器"""
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
 
     def _on_disconnected(self):
         self._update_led(255, 0, 0)
 
     def _register_command_handlers(self):
+        # 注册房卡相关指令处理器
         self.mqtt_client.register_command_handler(CMD_ISSUE_CARD, self._handle_issue_card)
         self.mqtt_client.register_command_handler(CMD_VERIFY_CARD, self._handle_verify_card)
         self.mqtt_client.register_command_handler(CMD_SWIPE_CARD, self._handle_swipe_card)
+        # 注册房间控制指令处理器
+        self.mqtt_client.register_command_handler(CMD_DOOR, self._handle_door_command)
+        self.mqtt_client.register_command_handler(CMD_LIGHT, self._handle_light_command)
+        self.mqtt_client.register_command_handler(CMD_SCENE, self._handle_scene_command)
+        # 注册通话相关指令
+        self.mqtt_client.register_command_handler(CMD_INCOMING_CALL, self._handle_incoming_call)
+        self.mqtt_client.register_command_handler(CMD_HANGUP_CALL, self._handle_hangup_call)
+        # 注册通用room_card_op指令（Web端发卡使用）
+        self.mqtt_client.register_command_handler("room_card_op", self._handle_room_card_op)
+        # 注册报警复位指令
+        self.mqtt_client.register_command_handler("alarm_reset", self._handle_alarm_reset)
+        self._log("已注册所有指令处理器")
+
+    def _handle_alarm_reset(self, data):
+        """处理报警复位指令"""
+        self._log("[Web指令] 收到消警指令，复位报警状态")
+        # 复位灯墙颜色
+        for i in range(8):
+            self.led_wall_colors[i] = "#ffffff"
+        self.root.after(0, self._update_led_wall)
+        self._beep(1)
+        # 停止持续蜂鸣器
+        self._stop_continuous_beep()
+        return True
 
     def _handle_issue_card(self, data):
         room_id = data.get('command_value', {}).get('room_id', self.target_room_var.get()) if isinstance(data.get('command_value'), dict) else self.target_room_var.get()
+        if not room_id:
+            self._log("开卡失败: 未指定房间号", "ERROR")
+            return False
         success, msg = self.rfid.issue_card(room_id)
         self.root.after(0, self._draw_card)
         self._beep(1 if success else 2)
+        if success:
+            self._log(f"[Web指令] 开卡成功: 房间 {room_id}")
+            # 更新灯墙状态为已入住
+            self._update_room_status_on_wall(room_id, "check_in")
+        else:
+            self._log(f"[Web指令] 开卡失败: {msg}", "ERROR")
         return success
 
     def _handle_verify_card(self, data):
         success, msg = self.rfid.verify_card()
         self.root.after(0, self._draw_card)
         self._beep(1 if success else 2)
+        self._log(f"[Web指令] 验卡: {msg}")
         return success
 
     def _handle_swipe_card(self, data):
@@ -499,9 +616,122 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             self.last_card_room = result
             if self.mqtt_client and self.connected:
                 self.mqtt_client.publish_to_room(result, CMD_DOOR, CMD_VAL_UNLOCK)
+            self._log(f"[Web指令] 刷卡通过，已发送开锁指令到房间 {result}")
+        else:
+            self._log(f"[Web指令] 刷卡失败: {result}", "ERROR")
         self.root.after(0, self._draw_card)
         self._beep(1 if success else 2)
         return success
+
+    def _handle_room_card_op(self, data):
+        """处理Web端发来的房卡操作指令"""
+        try:
+            cmd_value = data.get('command_value', '{}')
+            if isinstance(cmd_value, str):
+                import json
+                cmd_value = json.loads(cmd_value)
+            action = cmd_value.get('action', 'issue')
+            room_number = cmd_value.get('room_number', '')
+            booking_id = cmd_value.get('booking_id', '')
+            
+            self._log(f"[Web指令] 收到房卡操作: action={action}, room={room_number}, booking={booking_id}")
+            
+            if action == 'issue':
+                # 设置目标房间
+                if room_number:
+                    self.target_room_var.set(room_number)
+                # 执行开卡
+                success, msg = self.rfid.issue_card(room_number or self.target_room_var.get())
+                self.root.after(0, self._draw_card)
+                self._beep(1 if success else 2)
+                if success:
+                    self._update_led(0, 255, 0)
+                    self._update_room_status_on_wall(room_number, "check_in")
+                    self._log(f"[Web指令] 发卡成功: 房间 {room_number}")
+                    # 上报发卡成功事件
+                    if self.mqtt_client and self.connected:
+                        self.mqtt_client.publish_security_event("card_issued", level="info", event_data={
+                            "room_id": room_number,
+                            "booking_id": booking_id,
+                            "action": "issue",
+                            "operator": self.device_id
+                        })
+                else:
+                    self._update_led(255, 0, 0)
+                    self._log(f"[Web指令] 发卡失败: {msg}", "ERROR")
+                self.root.after(3000, lambda: self._update_led(0, 0, 255))
+                return success
+            
+            elif action == 'revoke':
+                # 执行退卡
+                self.rfid.remove_card()
+                self.root.after(0, self._draw_card)
+                self._beep(1)
+                self._update_led(255, 165, 0)  # 橙色表示退卡
+                self._update_room_status_on_wall(room_number, "check_out")
+                self._log(f"[Web指令] 退卡成功: 房间 {room_number}")
+                self.root.after(3000, lambda: self._update_led(0, 0, 255))
+                return True
+            
+            return False
+        except Exception as e:
+            self._log(f"[Web指令] 处理房卡操作失败: {e}", "ERROR")
+            return False
+
+    def _handle_door_command(self, data):
+        """处理门锁控制指令"""
+        cmd_value = data.get('command_value', '')
+        room_id = data.get('room_id', self.target_room_var.get())
+        self._log(f"[Web指令] 门锁控制: {cmd_value}, 房间: {room_id}")
+        if cmd_value == CMD_VAL_UNLOCK:
+            self._beep(1)
+            self._update_led(0, 255, 0)
+            self.root.after(1000, lambda: self._update_led(0, 0, 255))
+        return True
+
+    def _handle_light_command(self, data):
+        """处理灯光控制指令"""
+        cmd_value = data.get('command_value', '')
+        self._log(f"[Web指令] 灯光控制: {cmd_value}")
+        return True
+
+    def _handle_scene_command(self, data):
+        """处理场景控制指令"""
+        cmd_value = data.get('command_value', '')
+        self._log(f"[Web指令] 场景控制: {cmd_value}")
+        return True
+
+    def _handle_incoming_call(self, data):
+        """处理来电指令"""
+        extra = data.get('extra_data', {})
+        call_id = extra.get('call_id', 'unknown')
+        broadcast_text = extra.get('broadcast_text', '收到来电')
+        self._log(f"[Web指令] 来电: {broadcast_text} (Call ID: {call_id})")
+        self._beep(2)
+        self._update_led(255, 255, 0)  # 黄色闪烁
+        self.root.after(2000, lambda: self._update_led(0, 0, 255))
+        return True
+
+    def _handle_hangup_call(self, data):
+        """处理挂断指令"""
+        extra = data.get('extra_data', {})
+        call_id = extra.get('call_id', 'unknown')
+        self._log(f"[Web指令] 挂断通话 (Call ID: {call_id})")
+        return True
+
+    def _update_room_status_on_wall(self, room_id, status):
+        """更新灯墙上的房间状态"""
+        if room_id in self.rooms_mapping:
+            idx = self.rooms_mapping.index(room_id)
+            if status == "check_in":
+                self.led_wall_colors[idx] = "#52c41a"  # 绿色-已入住
+            elif status == "check_out":
+                self.led_wall_colors[idx] = "#ffffff"  # 白色-空置
+            elif status == "cleaning":
+                self.led_wall_colors[idx] = "#faad14"  # 黄色-清洁中
+            elif status == "maintenance":
+                self.led_wall_colors[idx] = "#1890ff"  # 蓝色-维修中
+            self.root.after(0, self._update_led_wall)
 
     def _on_mqtt_message(self, topic, payload):
         super()._on_mqtt_message(topic, payload)
@@ -509,7 +739,8 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             data = json.loads(payload) if isinstance(payload, str) else payload
             cmd_type = data.get('command_type', '')
             cmd_value = data.get('command_value', '')
-            self._log(f"消息回调: topic={topic} cmd={cmd_type} val={cmd_value}")
+            device_id = data.get('device_id', '')
+            self._log(f"[MQTT消息] Topic: {topic}, Cmd: {cmd_type}, Value: {cmd_value}, Target: {device_id}")
         except Exception as e:
             self._log(f"处理消息异常: {e}", "ERROR")
 
