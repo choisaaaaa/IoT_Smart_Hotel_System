@@ -838,6 +838,22 @@ class WebSocketService {
           const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
           logger.info(`发送 call_answered 到主叫房间: ${callerRoom} (原始caller_id: ${callData.caller_id})`);
           this.io?.to(callerRoom).emit('call_answered', answerData);
+
+          // 如果主叫方是房间（硬件发起），通过 MQTT 通知硬件接通
+          if (callData.caller_type === 'room') {
+            // 获取物理设备 ID
+            const [callerDevs] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+              [normalizedCallerId]
+            );
+            const callerPhysicalId = callerDevs.length > 0 ? callerDevs[0].device_id : normalizedCallerId;
+
+            mqttService.publish(`hotel/device/command/room/${callerPhysicalId}`, {
+              command_id: Date.now(),
+              command_type: 'call_answered',
+              call_id: callId
+            });
+          }
           
           if (callData.callee_type === 'front_desk' && normalizedCalleeId === 'all') {
             const ansHotelId = callData.hotel_id || currentClient?.hotelId;
@@ -860,7 +876,14 @@ class WebSocketService {
           
           // 如果是拨给房间，通知硬件接通
           if (callData.callee_type === 'room') {
-            mqttService.publish(`hotel/device/command/room/${normalizedCalleeId}`, {
+            // 获取物理设备 ID
+            const [calleeDevs] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+              [normalizedCalleeId]
+            );
+            const calleePhysicalId = calleeDevs.length > 0 ? calleeDevs[0].device_id : normalizedCalleeId;
+
+            mqttService.publish(`hotel/device/command/room/${calleePhysicalId}`, {
               command_id: Date.now(),
               command_type: 'answer_call',
               call_id: callId
@@ -918,7 +941,14 @@ class WebSocketService {
 
           // 如果是拨给房间，通知硬件拒接
           if (callData.callee_type === 'room') {
-            mqttService.publish(`hotel/device/command/room/${normalizedCalleeId}`, {
+            // 获取物理设备 ID
+            const [calleeDevs] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+              [normalizedCalleeId]
+            );
+            const calleePhysicalId = calleeDevs.length > 0 ? calleeDevs[0].device_id : normalizedCalleeId;
+
+            mqttService.publish(`hotel/device/command/room/${calleePhysicalId}`, {
               command_id: Date.now(),
               command_type: 'reject_call',
               call_id: callId
@@ -1036,7 +1066,14 @@ class WebSocketService {
           }
 
           if (callData.caller_type === 'room') {
-            mqttService.publish(`hotel/device/command/room/${normalizedCallerId}`, {
+            // 获取物理设备 ID
+            const [callerDevs] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+              [normalizedCallerId]
+            );
+            const callerPhysicalId = callerDevs.length > 0 ? callerDevs[0].device_id : normalizedCallerId;
+
+            mqttService.publish(`hotel/device/command/room/${callerPhysicalId}`, {
               command_id: Date.now(),
               command_type: 'hangup_call',
               call_id: callId
@@ -1047,7 +1084,14 @@ class WebSocketService {
           }
 
           if (callData.callee_type === 'room') {
-            mqttService.publish(`hotel/device/command/room/${normalizedCalleeId}`, {
+            // 获取物理设备 ID
+            const [calleeDevs] = await pool.query<RowDataPacket[]>(
+              'SELECT device_id FROM devices WHERE room_id = ? AND device_type = "room"',
+              [normalizedCalleeId]
+            );
+            const calleePhysicalId = calleeDevs.length > 0 ? calleeDevs[0].device_id : normalizedCalleeId;
+
+            mqttService.publish(`hotel/device/command/room/${calleePhysicalId}`, {
               command_id: Date.now(),
               command_type: 'hangup_call',
               call_id: callId

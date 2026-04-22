@@ -11,6 +11,7 @@ import random
 import threading
 import time
 import json
+import queue
 import base64
 import io
 try:
@@ -53,6 +54,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.is_in_call = False
         self._call_audio_stream = None
         self._call_output_stream = None
+        self._audio_lock = threading.Lock()
+        self._audio_in_queue = queue.Queue(maxsize=50) # 约 6 秒缓存
 
         self._stop_sensors = threading.Event()
 
@@ -576,6 +579,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.register_command_handler(f"{CMD_SCENE}:{CMD_VAL_READING}", self._handle_scene_reading)
         self.mqtt_client.register_command_handler("incoming_call", self._handle_incoming_call)
         self.mqtt_client.register_command_handler("answer_call", self._answer_call)
+        self.mqtt_client.register_command_handler("call_answered", self._answer_call)
         self.mqtt_client.register_command_handler("hangup_call", self._handle_hangup_call)
         self.mqtt_client.register_command_handler("reject_call", self._handle_hangup_call)
 
@@ -705,11 +709,15 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         return True
 
     def _answer_call(self, data):
+        if not self.current_call_id and data.get('call_id'):
+            self.current_call_id = data.get('call_id')
+            
         if not self.current_call_id:
+            self._log("未找到通话ID，无法接听", "WARNING")
             return
         
         self.is_in_call = True
-        self._log(f"已接听通话: {self.current_call_id}")
+        self._log(f"通话已建立: {self.current_call_id}")
         self._add_chat("assistant", "通话已接通...")
         
         self.root.after(0, lambda: self.call_btn.config(state=tk.DISABLED, text="通话中..."))
@@ -722,6 +730,9 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         # 启动音频采集与播放
         if HAS_PYAUDIO:
             self._start_call_audio()
+        else:
+            self._log("未检测到 pyaudio，无法进行语音通话", "WARNING")
+            self._add_chat("assistant", "[系统] 未检测到麦克风，通话仅信令在线")
 
     def _start_call_audio(self):
         try:
@@ -746,90 +757,131 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
                 frames_per_buffer=2048
             )
             
-            # 启动发送线程
+            # 清空队列
+            while not self._audio_in_queue.empty():
+                try: self._audio_in_queue.get_nowait()
+                except: break
+
+            # 启动发送和播放线程
             threading.Thread(target=self._call_audio_sender_loop, daemon=True).start()
-            self._log("通话音频链路已开启")
+            threading.Thread(target=self._call_audio_playback_loop, daemon=True).start()
+            self._log("通话音频链路已开启 (已启用抖动缓冲)")
         except Exception as e:
             self._log(f"开启音频链路失败: {e}", "ERROR")
 
     def _call_audio_sender_loop(self):
         # 上行流：Hardware -> Cloud
         audio_topic_up = f"hotel/call/audio/{self.current_call_id}/up"
-        while self.is_in_call and self._call_audio_stream:
+        while self.is_in_call:
             try:
-                data = self._call_audio_stream.read(2048, exception_on_overflow=False)
+                with self._audio_lock:
+                    if not self._call_audio_stream:
+                        break
+                    data = self._call_audio_stream.read(2048, exception_on_overflow=False)
+                
                 if self.mqtt_client and self.connected:
                     self.mqtt_client.publish_binary(audio_topic_up, data)
             except Exception as e:
-                self._log(f"发送通话音频失败: {e}", "ERROR")
+                if self.is_in_call:
+                    self._log(f"发送通话音频异常: {e}", "ERROR")
+                break
+
+    def _call_audio_playback_loop(self):
+        """独立的音频播放线程，从队列中读取并写入声卡，防止阻塞 MQTT 回调"""
+        # 初始缓冲：等待队列中有至少 2 个包再开始播放，减少抖动
+        prebuffer_size = 2
+        while self.is_in_call:
+            try:
+                # 获取数据（带超时以检查 is_in_call 状态）
+                data = self._audio_in_queue.get(timeout=1.0)
+                
+                # 如果是刚开始，等待缓冲
+                if prebuffer_size > 0 and self._audio_in_queue.qsize() < prebuffer_size:
+                    # 继续等待更多数据
+                    continue
+                else:
+                    prebuffer_size = 0 # 缓冲完成
+
+                with self._audio_lock:
+                    if self._call_output_stream:
+                        self._call_output_stream.write(data)
+                
+                self._audio_in_queue.task_done()
+            except queue.Empty:
+                prebuffer_size = 2 # 队列空了，重新开始缓冲
+                continue
+            except Exception as e:
+                if self.is_in_call:
+                    self._log(f"音频播放异常: {e}", "ERROR")
                 break
 
     def _handle_hangup_call(self, data):
-        self._log("通话已结束")
+        self._log("收到挂断信号")
         self.is_in_call = False
-        self.current_call_id = None
         self._stop_call_audio()
+        self.current_call_id = None
         self._add_chat("assistant", "通话已挂断")
         self.root.after(0, self._reset_call_ui)
         return True
 
     def _stop_call_audio(self):
-        if self._call_audio_stream:
-            try:
-                self._call_audio_stream.stop_stream()
-                self._call_audio_stream.close()
-            except: pass
-            self._call_audio_stream = None
-            
-        if self._call_output_stream:
-            try:
-                self._call_output_stream.stop_stream()
-                self._call_output_stream.close()
-            except: pass
-            self._call_output_stream = None
+        with self._audio_lock:
+            if self._call_audio_stream:
+                try:
+                    self._call_audio_stream.stop_stream()
+                    self._call_audio_stream.close()
+                except: pass
+                self._call_audio_stream = None
+                
+            if self._call_output_stream:
+                try:
+                    self._call_output_stream.stop_stream()
+                    self._call_output_stream.close()
+                except: pass
+                self._call_output_stream = None
 
     def _on_mqtt_message(self, topic, payload):
         # 1. 处理通话音频流 (下行：Cloud -> Hardware)
         if topic.endswith('/down') and "hotel/call/audio/" in topic and self.is_in_call:
-            if self._call_output_stream:
+            try:
+                # 将音频数据放入队列，由独立线程播放，避免阻塞 MQTT 主循环
+                self._audio_in_queue.put_nowait(payload)
+            except queue.Full:
+                # 如果队列满了，丢弃最旧的包以保持实时性
                 try:
-                    self._call_output_stream.write(payload)
-                except Exception as e:
-                    self._log(f"播放通话音频失败: {e}", "ERROR")
+                    self._audio_in_queue.get_nowait()
+                    self._audio_in_queue.put_nowait(payload)
+                except: pass
             return
 
         # 2. 处理 JSON 业务指令与配置
         try:
             # 兼容 bytes 和 str
-            data = json.loads(payload) if isinstance(payload, (bytes, str)) else payload
+            if isinstance(payload, bytes):
+                try:
+                    payload = payload.decode('utf-8')
+                except: pass
             
-            # 配置更新处理 (Cloud -> Hardware)
-            if "hotel/device/config/" in topic:
-                audit_status = data.get('audit_status')
-                if audit_status:
-                    self.mqtt_client.audit_status = audit_status
-                    self._log(f"收到云端配置更新: 状态={audit_status}", "SUCCESS")
-                    # 关键修复：确保 UI 刷新
-                    self.root.after(0, self._update_audit_status_display)
-                    # 如果审核通过，保存密钥
-                    if audit_status == 'approved' and data.get('device_key'):
-                        self.mqtt_client.device_key = data.get('device_key')
-                return
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            if not data: return
 
             # 通用指令路由 (Cloud -> Hardware)
             cmd_type = data.get('command_type', '')
             if not cmd_type and 'action' in data: # 兼容信令格式
                 cmd_type = data.get('action')
 
-            handler = self.mqtt_client.command_handlers.get(cmd_type)
-            if handler:
-                self._log(f"收到云端指令: {cmd_type}")
-                # 确保在主线程执行 UI 相关操作
-                self.root.after(0, lambda: handler(data))
-            else:
-                self._log(f"收到未注册指令: {cmd_type or topic}")
+            if cmd_type:
+                handler = self.mqtt_client.command_handlers.get(cmd_type)
+                if handler:
+                    self._log(f"收到云端指令: {cmd_type}")
+                    # 确保在主线程执行 UI 相关操作
+                    self.root.after(0, lambda: handler(data))
+                else:
+                    self._log(f"收到未注册指令: {cmd_type or topic}")
         except Exception as e:
-            self._log(f"消息解析异常: {e}", "ERROR")
+            # 如果是二进制音频流但不符合主题过滤，忽略解析错误
+            if not isinstance(payload, bytes):
+                self._log(f"消息解析异常: {e}", "ERROR")
 
     def _update_audit_status_display(self):
         super()._update_audit_status_display()

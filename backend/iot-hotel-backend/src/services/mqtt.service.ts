@@ -210,31 +210,40 @@ class MQTTService {
         }
       });
 
-      this.client.on('message', async (topic: string, message: Buffer, packet: any) => {
+      this.client.on('message', (topic: string, message: Buffer, packet: any) => {
         // 通话音频流是二进制，不需要 toString 和 JSON.parse
         if (topic.startsWith('hotel/call/audio/') && topic.endsWith('/up')) {
-          await this.handleCallAudio(topic, message);
+          // 不使用 await，让音频转发尽可能并行，减少阻塞
+          this.handleCallAudio(topic, message).catch(err => 
+            logger.error(`[Audio] 转发失败: ${err.message}`)
+          );
           return;
         }
 
-        const msgStr = message.toString();
-        logger.debug(`收到MQTT消息 [${topic}]: ${msgStr}`);
+        const processMessage = async () => {
+          const msgStr = message.toString();
+          logger.debug(`收到MQTT消息 [${topic}]: ${msgStr}`);
 
-        // 记录入站消息
-        await this.logCommunication(topic, msgStr, 'in', packet.qos, packet.retain);
+          // 记录入站消息
+          await this.logCommunication(topic, msgStr, 'in', packet.qos, packet.retain);
 
-        try {
-          const data = JSON.parse(msgStr);
-          await this.handleMessage(topic, data, message);
-        } catch (parseError) {
-          // 通话信令通常是 JSON，如果解析失败再作为 raw 处理
-          if (topic.startsWith('hotel/call/signaling/')) {
-            await this.handleCallSignaling(topic, { raw: msgStr });
-          } else {
-            logger.warn(`MQTT消息解析失败 [${topic}]: ${msgStr.substring(0, 100)}${msgStr.length > 100 ? '...' : ''}`);
-            await this.handleMessage(topic, { raw: msgStr }, message);
+          try {
+            const data = JSON.parse(msgStr);
+            await this.handleMessage(topic, data, message);
+          } catch (parseError) {
+            // 通话信令通常是 JSON，如果解析失败再作为 raw 处理
+            if (topic.startsWith('hotel/call/signaling/')) {
+              await this.handleCallSignaling(topic, { raw: msgStr });
+            } else {
+              logger.warn(`MQTT消息解析失败 [${topic}]: ${msgStr.substring(0, 100)}${msgStr.length > 100 ? '...' : ''}`);
+              await this.handleMessage(topic, { raw: msgStr }, message);
+            }
           }
-        }
+        };
+
+        processMessage().catch(err => {
+          logger.error(`处理MQTT消息异常 [${topic}]:`, err);
+        });
       });
     });
   }
@@ -451,7 +460,7 @@ class MQTTService {
       // 硬件发起挂断，更新数据库并通知 Web 端
       try {
         await pool.query(
-          "UPDATE calls SET status = 'completed', ended_at = NOW() WHERE call_id = ?",
+          "UPDATE calls SET status = 'ended', ended_at = NOW() WHERE call_id = ?",
           [callId]
         );
         

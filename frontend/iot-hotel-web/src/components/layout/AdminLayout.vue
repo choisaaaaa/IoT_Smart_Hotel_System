@@ -102,9 +102,6 @@
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
           <a-breadcrumb class="breadcrumb">
-            <a-breadcrumb-item>
-              <SettingOutlined /> 管理后台
-            </a-breadcrumb-item>
             <a-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx">
               {{ item }}
             </a-breadcrumb-item>
@@ -137,8 +134,18 @@
                 <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                   <UserOutlined /> 个人资料
                 </a-menu-item>
-                <a-menu-item key="settings" @click="$router.push('/hotel-admin/hotel/info')">
-                  <SettingOutlined /> 系统设置
+                <a-menu-item key="settings" @click="$router.push('/reception/dashboard')">
+                  <CustomerServiceOutlined /> 切换前台端
+                </a-menu-item>
+                <a-menu-item 
+                  v-if="appStore.userInfo?.role === 'system_admin'" 
+                  key="system" 
+                  @click="$router.push('/system/dashboard')"
+                >
+                  <SwapOutlined /> 切换系统端
+                </a-menu-item>
+                <a-menu-item key="guest" @click="$router.push('/guest/booking')">
+                  <HomeOutlined /> 切换顾客端
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout" class="logout-item">

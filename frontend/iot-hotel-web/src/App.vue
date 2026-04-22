@@ -27,6 +27,12 @@
             <div class="call-status-tag" :class="connectionState">
               {{ connectionStateText }}
             </div>
+            <div style="margin-top: 12px;">
+              <a-button size="small" type="link" @click="refreshCallStatus">
+                <template #icon><ReloadOutlined /></template>
+                同步状态
+              </a-button>
+            </div>
           </div>
 
           <div class="call-body-modal">
@@ -83,6 +89,9 @@
         <div class="call-header">
           <PhoneOutlined class="call-icon-mini" />
           <span class="caller-name-mini">{{ remoteDisplayName }}</span>
+          <a-button type="link" size="small" @click.stop="refreshCallStatus" style="padding: 0; height: auto;">
+            <template #icon><ReloadOutlined /></template>
+          </a-button>
           <div class="connection-status" :class="connectionState">
             {{ connectionStateText }}
           </div>
@@ -115,7 +124,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref, reactive, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PhoneOutlined, CloseOutlined, FullscreenExitOutlined, CustomerServiceOutlined, HomeOutlined } from '@ant-design/icons-vue'
+import { 
+  PhoneOutlined, CloseOutlined, FullscreenExitOutlined, 
+  CustomerServiceOutlined, HomeOutlined, ReloadOutlined 
+} from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
@@ -143,6 +155,15 @@ function minimizeCall() {
 
 function expandCall() {
   isMinimized.value = false
+}
+
+// 刷新通话状态（强制同步）
+function refreshCallStatus() {
+  const socket = getSocket()
+  if (socket) {
+    socket.emit('get_online_status')
+    message.success('已发起状态同步')
+  }
 }
 
 // ============ 通话中悬浮窗 ============
@@ -396,6 +417,7 @@ async function handleHangup() {
 // ============ Audio Streaming (Hardware Bridge) ============
 const audioContext = ref<AudioContext | null>(null)
 const audioChunkTimer = ref<any>(null)
+const nextStartTime = ref(0) // 记录下一段音频开始播放的时间戳
 
 // 播放收到的二进制音频片段
 const playAudioChunk = async (chunk: ArrayBuffer) => {
@@ -409,8 +431,29 @@ const playAudioChunk = async (chunk: ArrayBuffer) => {
   }
 
   const int16Data = new Int16Array(chunk)
-  const float32Data = new Float32Array(int16Data.length)
   
+  // 为硬件通话计算远端音量
+  let sum = 0
+  for (let i = 0; i < int16Data.length; i++) {
+    sum += Math.abs(int16Data[i])
+  }
+  const average = sum / int16Data.length
+  outputVolume.value = Math.min(100, Math.round((average / 1000) * 100)) 
+  
+  if (outputVolume.value > 5) {
+    remoteSpeaking.value = true
+    lastRemoteSpeakTime.value = Date.now()
+  } else if (Date.now() - lastRemoteSpeakTime.value > 500) {
+    remoteSpeaking.value = false
+  }
+  
+  appStore.setCallState({
+    outputVolume: outputVolume.value,
+    remoteSpeaking: remoteSpeaking.value
+  })
+
+  // 转换数据为 Float32
+  const float32Data = new Float32Array(int16Data.length)
   for (let i = 0; i < int16Data.length; i++) {
     float32Data[i] = int16Data[i] / 32768.0
   }
@@ -421,13 +464,30 @@ const playAudioChunk = async (chunk: ArrayBuffer) => {
   const source = ctx.createBufferSource()
   source.buffer = buffer
   source.connect(ctx.destination)
-  source.start()
+
+  // 关键优化：精确调度播放时间，防止卡顿和爆音
+  const currentTime = ctx.currentTime
+  
+  // 如果当前时间已经超过了预定的开始时间，或者预定时间还没初始化
+  if (nextStartTime.value < currentTime) {
+    // 增加一小段延迟（50ms）作为初始缓冲，防止网络抖动
+    nextStartTime.value = currentTime + 0.05
+  }
+  
+  source.start(nextStartTime.value)
+  
+  // 更新下一次播放的开始时间 (buffer 时长 = samples / sampleRate)
+  nextStartTime.value += buffer.duration
 }
 
 // 开始采集并发送音频片段
 const startAudioCapture = async (callId: string, targetType: string, targetId: string) => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })
+    
+    // 初始化本地音量检测
+    initInputVolumeDetection(stream)
+
     const ctx = new AudioContext({ sampleRate: 16000 })
     const source = ctx.createMediaStreamSource(stream)
     const processor = ctx.createScriptProcessor(2048, 1, 1)
@@ -909,6 +969,7 @@ const handleCallAnswered = async (data: any) => {
     if (isCaller) {
       if (targetType === 'room') {
         console.log('[App] 目标是房间（硬件），开启原始音频流捕获')
+        connectionState.value = 'connected'
         appStore.setCallState({ connectionState: 'connected' })
         await startAudioCapture(data.call_id, targetType, targetId)
       } else {
@@ -943,6 +1004,7 @@ const handleCallAnswered = async (data: any) => {
     } else {
       if (data.caller_type === 'room') {
         console.log('[App] 呼叫方是房间（硬件），开启原始音频流捕获')
+        connectionState.value = 'connected'
         appStore.setCallState({ connectionState: 'connected' })
         await startAudioCapture(data.call_id, data.caller_type, data.caller_id)
       } else {

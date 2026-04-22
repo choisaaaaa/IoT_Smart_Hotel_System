@@ -39,7 +39,6 @@
           <menu-unfold-outlined v-if="collapsed" class="trigger" @click="() => (collapsed = !collapsed)" />
           <menu-fold-outlined v-else class="trigger" @click="() => (collapsed = !collapsed)" />
           <a-breadcrumb class="breadcrumb">
-            <a-breadcrumb-item>首页</a-breadcrumb-item>
             <a-breadcrumb-item>{{ currentTitle }}</a-breadcrumb-item>
           </a-breadcrumb>
         </div>
@@ -53,6 +52,16 @@
             </span>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="reception" @click="$router.push('/reception/dashboard')">
+                  <CustomerServiceOutlined /> 切换前台端
+                </a-menu-item>
+                <a-menu-item key="admin" @click="$router.push('/hotel-admin/dashboard')">
+                  <SettingOutlined /> 切换管理后台
+                </a-menu-item>
+                <a-menu-item key="guest" @click="$router.push('/guest/booking')">
+                  <HomeOutlined /> 切换顾客端
+                </a-menu-item>
+                <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
                   <logout-outlined /> 退出登录
                 </a-menu-item>
@@ -81,7 +90,8 @@ import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
   UserOutlined, MenuFoldOutlined, GiftOutlined,
-  MenuUnfoldOutlined, LogoutOutlined, SettingOutlined
+  MenuUnfoldOutlined, LogoutOutlined, SettingOutlined,
+  CustomerServiceOutlined, HomeOutlined
 } from '@ant-design/icons-vue'
 
 const route = useRoute()

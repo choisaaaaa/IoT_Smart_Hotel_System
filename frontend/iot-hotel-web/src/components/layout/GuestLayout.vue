@@ -91,10 +91,10 @@
               v-if="userInfo.role && userInfo.role !== CANONICAL_ROLES.CUSTOMER"
               type="link"
               class="switch-side-btn"
-              @click="$router.push('/reception/dashboard')"
+              @click="$router.push('/hotel-admin/dashboard')"
             >
               <SwapOutlined />
-              管理后台
+              切换管理端
             </a-button>
 
             <a-dropdown placement="bottomRight">
@@ -110,7 +110,21 @@
                   <a-menu-item key="profile" @click="$router.push('/guest/profile')">
                     <UserOutlined /> 个人中心
                   </a-menu-item>
-                  <a-menu-divider />
+                  <a-menu-item 
+                    v-if="userInfo.role === CANONICAL_ROLES.SYSTEM_ADMIN" 
+                    key="system" 
+                    @click="$router.push('/system/dashboard')"
+                  >
+                    <SwapOutlined /> 切换系统端
+                  </a-menu-item>
+                  <a-menu-item 
+                    v-if="userInfo.role === CANONICAL_ROLES.SYSTEM_ADMIN || userInfo.role === CANONICAL_ROLES.HOTEL_ADMIN" 
+                    key="reception" 
+                    @click="$router.push('/reception/dashboard')"
+                  >
+                    <CustomerServiceOutlined /> 切换前台端
+                  </a-menu-item>
+                  <a-menu-divider v-if="userInfo.role !== CANONICAL_ROLES.CUSTOMER" />
                   <a-menu-item key="logout" @click="handleLogout" class="logout-item">
                     <LogoutOutlined /> 退出登录
                   </a-menu-item>
@@ -375,7 +389,8 @@ import {
   IdcardOutlined,
   FileTextOutlined,
   CrownOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  CustomerServiceOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { authService, normalizeRole, CANONICAL_ROLES } from '@/api/auth'

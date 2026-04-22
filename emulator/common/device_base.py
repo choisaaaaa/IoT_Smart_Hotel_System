@@ -432,7 +432,7 @@ class BaseDeviceEmulator:
 
                         # 执行成功回调
                         if callback:
-                            self.root.after(0, callback)
+                            self.root.after(0, lambda: callback(data))
                     else:
                         self._log(f"同步失败: {result.get('message')}", "ERROR")
                 else:
@@ -490,7 +490,7 @@ class BaseDeviceEmulator:
         tk.Label(self.status_frame, text="|  审核:", font=("Arial", 10), bg=self.colors['card'],
                  fg=self.colors['text_secondary']).pack(side=tk.LEFT, padx=(20, 0))
         self.audit_status_label = tk.Label(self.status_frame, textvariable=self.audit_status_var,
-                                          font=("Arial", 10, "bold"), bg=self.colors['card'], fg=self.colors['warning'])
+                                          font=("Arial", 10, "bold"), bg=self.colors['card'], fg=self.colors['text_secondary'])
         self.audit_status_label.pack(side=tk.LEFT, padx=5)
 
         # 控制面板布局
@@ -629,7 +629,12 @@ class BaseDeviceEmulator:
 
             self._log(f"正在建立系统连接...")
 
-            def on_registered():
+            def on_registered(server_data=None):
+                # 提取审核状态
+                effective_status = None
+                if server_data:
+                    effective_status = server_data.get('audit_status') or server_data.get('status')
+
                 # 2. 初始化MQTT客户端
                 self.mqtt_client = MQTTClient(
                     self.unique_device_id,
@@ -637,7 +642,8 @@ class BaseDeviceEmulator:
                     broker,
                     port,
                     self.device_key_var.get(), # 使用最新的 key
-                    hotel_id=int(self.hotel_id_var.get()) if self.hotel_id_var.get() else 1
+                    hotel_id=int(self.hotel_id_var.get()) if self.hotel_id_var.get() else 1,
+                    audit_status=effective_status
                 )
 
                 if self.mqtt_client.connect():
@@ -694,7 +700,6 @@ class BaseDeviceEmulator:
             # 更新审核状态
             status = data.get('audit_status')
             if status:
-                self.audit_status_var.set(status)
                 if self.mqtt_client:
                     self.mqtt_client.audit_status = status
 
@@ -812,6 +817,8 @@ class BaseDeviceEmulator:
             status_map = {
                 "pending": ("待审核", self.colors['warning']),
                 "approved": ("已激活", self.colors['success']),
+                "active": ("已激活", self.colors['success']),
+                "registered": ("已激活", self.colors['success']),
                 "rejected": ("被拒绝", self.colors['danger'])
             }
             text, color = status_map.get(audit_status, ("未注册", self.colors['text_secondary']))

@@ -25,7 +25,7 @@ from .config import (
 
 
 class MQTTClient:
-    def __init__(self, device_id, device_type, broker="8.134.166.69", port=1883, device_key="", username="root", password="IotHotel2026", hotel_id=None):
+    def __init__(self, device_id, device_type, broker="8.134.166.69", port=1883, device_key="", username="root", password="IotHotel2026", hotel_id=None, audit_status=None):
         self.device_id = device_id
         self.device_type = device_type
         self.broker = broker
@@ -59,7 +59,12 @@ class MQTTClient:
         self._stop_health = threading.Event()
         self._health_thread = None
 
-        self.audit_status = "approved" if device_key else "pending"
+        # 优先使用传入的审核状态，否则根据是否有密钥判断
+        if audit_status:
+            self.audit_status = audit_status
+        else:
+            self.audit_status = "approved" if device_key else "pending"
+            
         self.on_message = None
         self.on_ai_response = None
 
@@ -94,47 +99,59 @@ class MQTTClient:
         self.msg_received += 1
         topic = msg.topic
 
+        # 1. 优先执行特定主题的订阅回调
+        if topic in self.subscriptions and self.subscriptions[topic]:
+            try:
+                payload = msg.payload
+                # 如果是 JSON，尝试解析
+                if not topic.endswith('/up') and not topic.endswith('/down'):
+                    try:
+                        payload = payload.decode('utf-8')
+                    except: pass
+                
+                self.subscriptions[topic](topic, payload)
+            except Exception as e:
+                self.logger.error(f"执行主题回调失败 [{topic}]: {e}")
+
+        # 2. 处理通用的 on_message 回调 (兼容旧逻辑)
         # 处理二进制音频流
         if "hotel/call/audio/" in topic:
             if self.on_message:
                 try:
                     self.on_message(topic, msg.payload)
                 except Exception as e:
-                    self.logger.error(f"音频流回调处理失败: {e}")
+                    self.logger.error(f"处理音频消息失败: {e}")
             return
 
+        # 处理 JSON 消息
         try:
             payload = msg.payload.decode('utf-8')
-        except UnicodeDecodeError:
-            self.logger.warning(f"无法解码主题 [{topic}] 的消息 payload")
-            return
-
-        self.logger.info(f"接收 [{topic}]: {payload}")
-        self.log_buffer.log("RX", f"[{topic}] {payload}")
-
-        callback = self.subscriptions.get(topic)
-        if callback and callable(callback):
-            try:
-                callback(topic, payload)
-            except Exception as e:
-                self.logger.error(f"处理消息失败: {e}")
-
-        if TOPIC_DEVICE_COMMAND_PREFIX in topic:
-            self._handle_command(payload)
-
-        if "hotel/ai/response/room/" in topic:
-            try:
-                data = json.loads(payload)
-                if self.on_ai_response:
-                    self.on_ai_response(data)
-            except Exception as e:
-                self.logger.error(f"处理 AI 响应失败: {e}")
-
-        if self.on_message:
-            try:
+            
+            # 如果是 AI 响应主题，单独触发 AI 回调
+            if topic == TOPIC_AI_RESPONSE or "hotel/ai/response/room/" in topic:
+                try:
+                    data = json.loads(payload)
+                    if self.on_ai_response:
+                        self.on_ai_response(data)
+                except Exception as e:
+                    self.logger.error(f"AI响应解析失败: {e}")
+            
+            # 触发通用回调
+            if self.on_message:
                 self.on_message(topic, payload)
-            except Exception as e:
-                self.logger.error(f"消息回调处理失败: {e}")
+            
+            # 如果是指令主题，进入指令路由
+            if TOPIC_DEVICE_COMMAND_PREFIX in topic:
+                try:
+                    self._handle_command(payload)
+                except: pass
+
+        except UnicodeDecodeError:
+            # 可能是非 UTF-8 的二进制数据，直接传给 on_message
+            if self.on_message:
+                self.on_message(topic, msg.payload)
+        except Exception as e:
+            self.logger.error(f"消息解析异常: {e}")
 
     def publish_binary(self, topic, payload):
         if not self.connected:

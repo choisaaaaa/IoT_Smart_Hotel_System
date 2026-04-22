@@ -101,9 +101,6 @@
           <MenuUnfoldOutlined v-if="collapsed" class="trigger" @click="collapsed = false" />
           <MenuFoldOutlined v-else class="trigger" @click="collapsed = true" />
           <a-breadcrumb class="breadcrumb">
-            <a-breadcrumb-item>
-              <CustomerServiceOutlined /> 前台端
-            </a-breadcrumb-item>
             <a-breadcrumb-item>{{ currentTitle }}</a-breadcrumb-item>
           </a-breadcrumb>
         </div>
@@ -177,7 +174,7 @@
               </a-avatar>
               <div v-if="!collapsed" class="user-info">
                 <span class="user-name">{{ appStore.userInfo?.username || '前台员工' }}</span>
-                <span class="user-role">前台接待</span>
+                <span class="user-role">{{ appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN ? '系统管理员' : '前台接待' }}</span>
               </div>
               <DownOutlined class="dropdown-icon" />
             </div>
@@ -196,9 +193,16 @@
                 <a-menu-item 
                   v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN" 
                   key="system" 
-                  @click="returnToSystem"
+                  @click="$router.push('/system/dashboard')"
                 >
-                  <SwapOutlined /> 返回系统端
+                  <SwapOutlined /> 切换系统端
+                </a-menu-item>
+                <a-menu-item 
+                  v-if="appStore.userInfo?.role === CANONICAL_ROLES.SYSTEM_ADMIN || appStore.userInfo?.role === CANONICAL_ROLES.HOTEL_ADMIN" 
+                  key="guest" 
+                  @click="$router.push('/guest/booking')"
+                >
+                  <HomeOutlined /> 切换顾客端
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout" class="logout-item">
