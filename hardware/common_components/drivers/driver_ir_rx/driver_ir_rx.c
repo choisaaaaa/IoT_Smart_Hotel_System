@@ -52,6 +52,14 @@ esp_err_t driver_ir_rx_init(int gpio_num)
     return ESP_OK;
 }
 
+int driver_ir_rx_demod_level(void)
+{
+    if (!s_inited) {
+        return -1;
+    }
+    return gpio_get_level(s_pin);
+}
+
 esp_err_t driver_ir_rx_poll_nec(uint8_t *out_addr, uint8_t *out_cmd, bool *out_updated)
 {
     if (!s_inited || out_addr == NULL || out_cmd == NULL || out_updated == NULL) {

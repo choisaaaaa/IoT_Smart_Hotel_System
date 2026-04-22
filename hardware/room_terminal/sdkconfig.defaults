@@ -1,5 +1,10 @@
 # 统一硬件基线参数（当前工程目标为 ESP32-S3，勿使用已废弃的 CONFIG_ESP32_DEFAULT_CPU_*，否则会报 unknown kconfig symbol）
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# 使用工程内 partitions.csv，扩大 factory（app）分区，缓解「app 分区几乎已满」警告
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
 CONFIG_FREERTOS_HZ=1000
 
 # 优化 FreeRTOS 任务调度与看门狗

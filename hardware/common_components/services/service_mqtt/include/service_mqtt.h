@@ -18,6 +18,9 @@ esp_err_t service_mqtt_subscribe(const char *topic, mqtt_event_callback_t callba
 // 发布 JSON 数据到后端的 Topic
 esp_err_t service_mqtt_publish(const char *topic, const char *json_payload);
 
+/** 同上但不打印「发布成功」日志，供高频音频块等场景。 */
+esp_err_t service_mqtt_publish_silent(const char *topic, const char *payload);
+
 #ifdef __cplusplus
 }
 #endif

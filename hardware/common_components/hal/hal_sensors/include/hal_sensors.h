@@ -17,6 +17,9 @@ typedef struct {
     uint16_t air_quality_adc;  // 空气质量/烟雾浓度 (MQ-135/MQ-2 ADC采集值)
     uint16_t light_adc;        // 环境光照强度 (光敏电阻 ADC采集值)
     bool is_human_present;     // 是否有人 (毫米波雷达检测, true=有人)
+    /** NTC 分压温度（GLOBAL_ADC_NTC_PIN>=0 且初始化成功时有效，与 DHT 可并存） */
+    bool ntc_valid;
+    float ntc_temp_c;
 } sensor_data_t;
 
 /**

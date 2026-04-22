@@ -64,6 +64,20 @@ esp_err_t driver_ir_tx_init(int gpio_num)
     return ESP_OK;
 }
 
+esp_err_t driver_ir_tx_send_38khz_burst_us(uint32_t duration_us)
+{
+    if (!s_inited) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (duration_us == 0) {
+        gpio_set_level(s_pin, 0);
+        return ESP_OK;
+    }
+    send_mark_us((int)duration_us);
+    gpio_set_level(s_pin, 0);
+    return ESP_OK;
+}
+
 esp_err_t driver_ir_tx_send_nec(uint8_t addr, uint8_t cmd)
 {
     if (!s_inited) {

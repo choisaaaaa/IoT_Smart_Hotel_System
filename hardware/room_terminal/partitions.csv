@@ -1,0 +1,6 @@
+# 4MB Flash：在标准 nvs + phy_init 之后，将剩余空间全部划给 factory（应用）分区。
+# 若模组为 8MB/16MB，可把最后一列改大（例如 0x7F0000），并同步 menuconfig 里的 Flash size。
+# Name,   Type, SubType, Offset,  Size,     Flags
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x3F0000,
