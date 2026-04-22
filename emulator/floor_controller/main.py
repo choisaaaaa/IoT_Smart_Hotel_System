@@ -32,6 +32,8 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self.led_status_colors = ["#52c41a"] * 5  # 5颗状态灯
 
         self._stop_sensors = threading.Event()
+        self._alarm_beep_thread = None  # 报警蜂鸣器线程
+        self._stop_alarm_beep = threading.Event()  # 停止蜂鸣器事件
 
         super().__init__(
             root=root,
@@ -221,6 +223,9 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self._beep(3)
         self.led_status_colors = ["#ff4d4f"] * 5
         self._update_led_status()
+        
+        # 启动持续蜂鸣器（5秒后）
+        self._start_continuous_beep()
 
         if self.mqtt_client and self.connected:
             self.mqtt_client.publish_security_event("fire_alarm", level="critical", event_data={
@@ -229,17 +234,116 @@ class FloorControllerEmulator(BaseDeviceEmulator):
                 "message": f"第{self.floor_id_var.get()}层消防报警触发"
             })
 
+    def _start_continuous_beep(self):
+        """启动持续蜂鸣器（5秒后开始持续响）"""
+        def continuous_beep():
+            # 等待5秒
+            time.sleep(5)
+            
+            # 如果还在报警状态，开始持续蜂鸣
+            while self.is_alarm and not self._stop_alarm_beep.is_set():
+                try:
+                    import winsound
+                    winsound.Beep(2000, 500)  # 响500ms
+                    time.sleep(0.2)  # 间隔200ms
+                except Exception:
+                    time.sleep(1)
+        
+        # 停止之前的蜂鸣器线程
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
+        
+        # 重置停止事件并启动新线程
+        self._stop_alarm_beep.clear()
+        self._alarm_beep_thread = threading.Thread(target=continuous_beep, daemon=True)
+        self._alarm_beep_thread.start()
+
+    def _stop_continuous_beep(self):
+        """停止持续蜂鸣器"""
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
+
     def _reset_alarm(self):
         self.is_alarm = False
         self.alarm_btn.config(text="🛑 模拟触发全楼层消防报警", bg=self.colors['danger'])
         self._log("警报已人工复位")
         self._reset_led_status()
+        self._stop_continuous_beep()  # 停止持续蜂鸣器
+
+    def _on_security_event_from_others(self, topic, payload):
+        """处理来自其他设备的安防事件，实现联动报警"""
+        try:
+            import json
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            event_type = data.get('event_type', '')
+            event_data = data.get('data', {})
+            device_id = data.get('device_id', '')
+            
+            # 忽略自己触发的报警
+            if device_id == self.unique_device_id:
+                return
+            
+            # 处理消防报警联动
+            if event_type == 'fire_alarm':
+                floor_id = event_data.get('floor_id', '')
+                room_id = event_data.get('room_id', '')
+                
+                # 如果报警来自同一楼层，或者没有指定楼层（全楼报警），则联动
+                my_floor = self.floor_id_var.get()
+                if not floor_id or floor_id == my_floor:
+                    self._log(f"🔥 收到联动报警: 设备 {device_id} 触发消防报警", "ERROR")
+                    self._trigger_alarm_from_other(device_id, room_id or floor_id)
+            
+            # 处理SOS报警联动
+            elif event_type == 'sos_alarm':
+                self._log(f"🆘 收到联动报警: 设备 {device_id} 触发SOS报警", "ERROR")
+                self._trigger_alarm_from_other(device_id, event_data.get('room_id', 'unknown'))
+                
+        except Exception as e:
+            self._log(f"处理联动报警事件失败: {e}", "ERROR")
+
+    def _trigger_alarm_from_other(self, source_device, location):
+        """由其他设备触发的联动报警"""
+        if self.is_alarm:
+            return  # 已经在报警状态，不再重复触发
+            
+        self.is_alarm = True
+        self.alarm_btn.config(text=f"🔥 联动报警: {location}", bg="#000000")
+        self._log(f"联动报警生效！来源: {source_device}, 位置: {location}", "ERROR")
+        
+        # 蜂鸣器响3声
+        self._beep(3)
+        
+        # LED全部变红
+        self.led_status_colors = ["#ff4d4f"] * 5
+        self._update_led_status()
+        
+        # 上报联动报警事件
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish_security_event("fire_alarm_linked", level="critical", event_data={
+                "floor_id": self.floor_id_var.get(),
+                "source_device": source_device,
+                "location": location,
+                "type": "linked_fire_alarm",
+                "message": f"第{self.floor_id_var.get()}层收到联动消防报警"
+            })
 
     def _on_connected(self):
         # 使用物理 ID (unique_device_id) 进行订阅，确保与云端标识一致
         cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/floor/{self.unique_device_id}"
         self.mqtt_client.subscribe(cmd_topic)
         self._log(f"已订阅楼控指令主题: {cmd_topic}")
+
+        # 订阅全局楼控指令主题（用于接收全局消警等指令）
+        all_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/floor/all"
+        self.mqtt_client.subscribe(all_cmd_topic)
+        self._log(f"已订阅全局楼控指令主题: {all_cmd_topic}")
+
+        # 订阅全局安防事件主题，实现联动报警
+        self.mqtt_client.subscribe("hotel/security/event", self._on_security_event_from_others)
+        self._log("已订阅全局安防事件主题: hotel/security/event")
 
         self._register_command_handlers()
 
@@ -248,30 +352,58 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self._log("传感器数据上报已启动(30秒间隔)")
 
     def _register_command_handlers(self):
+        # 注册照明控制指令
         self.mqtt_client.register_command_handler(f"{CMD_LIGHT}:{CMD_VAL_ON}", self._handle_light_on)
         self.mqtt_client.register_command_handler(f"{CMD_LIGHT}:{CMD_VAL_OFF}", self._handle_light_off)
+        self.mqtt_client.register_command_handler(CMD_LIGHT, self._handle_light_command)
+        # 注册广播控制指令
         self.mqtt_client.register_command_handler(CMD_BROADCAST_START, self._handle_broadcast_start)
         self.mqtt_client.register_command_handler(CMD_BROADCAST_STOP, self._handle_broadcast_stop)
+        # 注册楼层复位指令
         self.mqtt_client.register_command_handler(CMD_FLOOR_RESET, self._handle_floor_reset)
+        # 注册安防相关指令
+        self.mqtt_client.register_command_handler("alarm_ack", self._handle_alarm_ack)
+        self.mqtt_client.register_command_handler("alarm_reset", self._handle_alarm_reset)
+        # 注册空调/窗帘控制指令
+        self.mqtt_client.register_command_handler(CMD_AIR, self._handle_air_command)
+        self.mqtt_client.register_command_handler(CMD_CURTAIN, self._handle_curtain_command)
+        self._log("已注册所有楼控指令处理器")
 
     def _handle_light_on(self, data):
         self.root.after(0, lambda: self._toggle_light(from_cloud=True, turn_on=True))
+        self._log("[Web指令] 照明开启")
         return True
 
     def _handle_light_off(self, data):
         self.root.after(0, lambda: self._toggle_light(from_cloud=True, turn_on=False))
+        self._log("[Web指令] 照明关闭")
+        return True
+
+    def _handle_light_command(self, data):
+        """处理通用灯光指令"""
+        cmd_value = data.get('command_value', '')
+        if cmd_value == CMD_VAL_ON or cmd_value == 'on':
+            self.root.after(0, lambda: self._toggle_light(from_cloud=True, turn_on=True))
+            self._log("[Web指令] 照明开启")
+        elif cmd_value == CMD_VAL_OFF or cmd_value == 'off':
+            self.root.after(0, lambda: self._toggle_light(from_cloud=True, turn_on=False))
+            self._log("[Web指令] 照明关闭")
         return True
 
     def _handle_broadcast_start(self, data):
         self.is_broadcasting = True
         self.root.after(0, lambda: self.bc_status.config(text="● 正在播放...", fg=self.colors['danger']))
-        self._log("接收到云端广播指令：正在全楼层播放...")
+        self.led_status_colors = ["#1890ff"] * 5  # 蓝色表示广播中
+        self.root.after(0, self._update_led_status)
+        self._beep(1)
+        self._log("[Web指令] 应急广播开始")
         return True
 
     def _handle_broadcast_stop(self, data):
         self.is_broadcasting = False
         self.root.after(0, lambda: self.bc_status.config(text="● 就绪", fg=self.colors['text_secondary']))
-        self._log("广播已停止")
+        self._reset_led_status()
+        self._log("[Web指令] 应急广播停止")
         return True
 
     def _handle_floor_reset(self, data):
@@ -279,7 +411,37 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         self._toggle_light(from_cloud=True, turn_on=False)
         self.is_broadcasting = False
         self.root.after(0, lambda: self.bc_status.config(text="● 就绪", fg=self.colors['text_secondary']))
-        self._log("楼层已复位")
+        self._reset_led_status()
+        self._beep(1)
+        self._log("[Web指令] 楼层系统复位")
+        return True
+
+    def _handle_alarm_ack(self, data):
+        """处理报警确认指令"""
+        self._log("[Web指令] 报警已确认")
+        self._beep(1)
+        # LED变为黄色闪烁表示已确认但未复位
+        self.led_status_colors = ["#faad14"] * 5
+        self.root.after(0, self._update_led_status)
+        return True
+
+    def _handle_alarm_reset(self, data):
+        """处理报警复位指令"""
+        self._reset_alarm()
+        self._log("[Web指令] 报警已复位")
+        self._beep(1)
+        return True
+
+    def _handle_air_command(self, data):
+        """处理空调控制指令"""
+        cmd_value = data.get('command_value', '')
+        self._log(f"[Web指令] 空调控制: {cmd_value}")
+        return True
+
+    def _handle_curtain_command(self, data):
+        """处理窗帘控制指令"""
+        cmd_value = data.get('command_value', '')
+        self._log(f"[Web指令] 窗帘控制: {cmd_value}")
         return True
 
     def _on_mqtt_message(self, topic, payload):
@@ -288,7 +450,21 @@ class FloorControllerEmulator(BaseDeviceEmulator):
             data = json.loads(payload) if isinstance(payload, str) else payload
             cmd_type = data.get('command_type', '')
             cmd_value = data.get('command_value', '')
-            self._log(f"消息回调: topic={topic} cmd={cmd_type} val={cmd_value}")
+            device_id = data.get('device_id', '')
+            self._log(f"[MQTT消息] Topic: {topic}, Cmd: {cmd_type}, Value: {cmd_value}, Target: {device_id}")
+            
+            # 处理复合指令键值 (如 "light:on")
+            if ':' in cmd_type and cmd_value == '':
+                parts = cmd_type.split(':')
+                if len(parts) == 2:
+                    data['command_type'] = parts[0]
+                    data['command_value'] = parts[1]
+                    # 重新触发指令处理
+                    composite_key = cmd_type
+                    if composite_key in self.mqtt_client.command_handlers:
+                        handler = self.mqtt_client.command_handlers[composite_key]
+                        if handler:
+                            handler(data)
         except Exception as e:
             self._log(f"处理消息异常: {e}", "ERROR")
 

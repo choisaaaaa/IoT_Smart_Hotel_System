@@ -58,6 +58,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self._audio_in_queue = queue.Queue(maxsize=50) # 约 6 秒缓存
 
         self._stop_sensors = threading.Event()
+        self._alarm_beep_thread = None  # 报警蜂鸣器线程
+        self._stop_alarm_beep = threading.Event()  # 停止蜂鸣器事件
 
         super().__init__(
             root=root,
@@ -224,6 +226,18 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.ai_chat.config(state=tk.DISABLED)
         self._add_chat("assistant", "您好，我是您的智能管家。您可以对我说\"开灯\"、\"帮我叫前台\"或者\"我想睡觉了\"。")
 
+    def _beep(self, count=1):
+        """蜂鸣器提示音"""
+        try:
+            import winsound
+            for i in range(count):
+                winsound.Beep(1000 if count == 1 else 2000, 200)
+                if i < count - 1:
+                    time.sleep(0.1)
+        except Exception:
+            # 如果winsound不可用，使用视觉反馈代替
+            self._log(f"[蜂鸣器] 嘀{'嘀' * (count - 1)}")
+
     def _update_oled(self):
         self.oled_canvas.delete("all")
         w = 600
@@ -231,11 +245,18 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.oled_canvas.create_rectangle(0, 0, w, h, fill="#000000")
         self.oled_canvas.create_rectangle(5, 5, w-5, h-5, outline="#333333", width=1)
 
-        display_room = self.room_number_var.get() or self.room_id
-        self.oled_canvas.create_text(30, 40, text=f"ROOM: {display_room}", fill="#00FF00", font=("Consolas", 22, "bold"), anchor=tk.W)
-        self.oled_canvas.create_text(30, 80, text=f"TEMP: {self.temp_val}C | HUMI: 55%", fill="white", font=("Consolas", 14), anchor=tk.W)
-        status_str = f"LIGHT: {'ON' if self.light_on else 'OFF'} | AC: {'ON' if self.air_on else 'OFF'} | DOOR: {'OPEN' if self.door_unlocked else 'LOCKED'}"
-        self.oled_canvas.create_text(30, 115, text=status_str, fill="#1890ff", font=("Consolas", 12), anchor=tk.W)
+        # 如果有报警信息，优先显示
+        if hasattr(self, 'oled_alarm_text') and self.oled_alarm_text:
+            self.oled_canvas.create_text(w//2, h//2, text=self.oled_alarm_text, fill="#ff0000", 
+                                        font=("Consolas", 28, "bold"), anchor=tk.CENTER)
+            self.oled_canvas.create_text(w//2, h-20, text="PLEASE EVACUATE!", fill="#ff6600", 
+                                        font=("Consolas", 12), anchor=tk.CENTER)
+        else:
+            display_room = self.room_number_var.get() or self.room_id
+            self.oled_canvas.create_text(30, 40, text=f"ROOM: {display_room}", fill="#00FF00", font=("Consolas", 22, "bold"), anchor=tk.W)
+            self.oled_canvas.create_text(30, 80, text=f"TEMP: {self.temp_val}C | HUMI: 55%", fill="white", font=("Consolas", 14), anchor=tk.W)
+            status_str = f"LIGHT: {'ON' if self.light_on else 'OFF'} | AC: {'ON' if self.air_on else 'OFF'} | DOOR: {'OPEN' if self.door_unlocked else 'LOCKED'}"
+            self.oled_canvas.create_text(30, 115, text=status_str, fill="#1890ff", font=("Consolas", 12), anchor=tk.W)
 
         if self.connected:
             self.oled_canvas.create_text(w-30, 30, text="● Online", fill="#52c41a", font=("Arial", 9, "bold"), anchor=tk.E)
@@ -557,6 +578,15 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.subscribe(cmd_topic)
         self._log(f"已订阅客房指令主题: {cmd_topic}")
 
+        # 订阅全局客房指令主题（用于接收全局消警等指令）
+        all_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/all"
+        self.mqtt_client.subscribe(all_cmd_topic)
+        self._log(f"已订阅全局客房指令主题: {all_cmd_topic}")
+
+        # 订阅全局安防事件主题，实现联动报警
+        self.mqtt_client.subscribe("hotel/security/event", self._on_security_event_from_others)
+        self._log("已订阅全局安防事件主题: hotel/security/event")
+
         self._register_command_handlers()
 
         self._stop_sensors.clear()
@@ -582,6 +612,19 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.register_command_handler("call_answered", self._answer_call)
         self.mqtt_client.register_command_handler("hangup_call", self._handle_hangup_call)
         self.mqtt_client.register_command_handler("reject_call", self._handle_hangup_call)
+        # 注册报警复位指令
+        self.mqtt_client.register_command_handler("alarm_reset", self._handle_alarm_reset)
+
+    def _handle_alarm_reset(self, data):
+        """处理报警复位指令"""
+        self._log("[Web指令] 收到消警指令，复位报警状态")
+        # 清除OLED报警显示
+        self.oled_alarm_text = None
+        self._update_oled()
+        self._beep(1)
+        # 停止持续蜂鸣器
+        self._stop_continuous_beep()
+        return True
 
     def _handle_light_on(self, data):
         self.root.after(0, lambda: self._set_light(True, from_cloud=True))
@@ -642,6 +685,122 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
     def _handle_scene_reading(self, data):
         self.root.after(0, lambda: self._apply_scene(CMD_VAL_READING))
         return True
+
+    def _on_security_event_from_others(self, topic, payload):
+        """处理来自其他设备的安防事件，实现联动报警"""
+        try:
+            import json
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            event_type = data.get('event_type', '')
+            event_data = data.get('data', {})
+            device_id = data.get('device_id', '')
+            
+            # 忽略自己触发的报警
+            if device_id == self.unique_device_id:
+                return
+            
+            # 处理消防报警联动
+            if event_type == 'fire_alarm':
+                floor_id = event_data.get('floor_id', '')
+                room_id = event_data.get('room_id', '')
+                
+                # 提取当前房间所在楼层
+                # 房间ID格式可能是 "301" 或 "room_301"
+                my_floor = ''
+                if '_' in self.room_id:
+                    room_num = self.room_id.split('_')[1]
+                    my_floor = room_num[0] if room_num else ''
+                else:
+                    my_floor = self.room_id[0] if self.room_id else ''
+                
+                # 如果报警来自同一楼层，或者没有指定楼层（全楼报警），则联动
+                should_trigger = False
+                if not floor_id:
+                    should_trigger = True  # 没有指定楼层，全楼报警
+                elif floor_id == my_floor:
+                    should_trigger = True  # 同楼层
+                elif floor_id == self.room_id:
+                    should_trigger = True  # 指定了本房间
+                
+                if should_trigger:
+                    self._log(f"🔥 收到联动报警: 设备 {device_id} 触发消防报警", "ERROR")
+                    self._trigger_alarm_from_other(device_id, room_id or floor_id, "fire")
+            
+            # 处理SOS报警联动
+            elif event_type == 'sos_alarm':
+                self._log(f"🆘 收到联动报警: 设备 {device_id} 触发SOS报警", "ERROR")
+                self._trigger_alarm_from_other(device_id, event_data.get('room_id', 'unknown'), "sos")
+                
+        except Exception as e:
+            self._log(f"处理联动报警事件失败: {e}", "ERROR")
+
+    def _trigger_alarm_from_other(self, source_device, location, alarm_type):
+        """由其他设备触发的联动报警"""
+        # 在OLED上显示报警信息
+        self.oled_alarm_text = f"ALERT! {alarm_type.upper()}"
+        self._update_oled()
+        
+        # 蜂鸣器响3声
+        self._beep(3)
+        
+        # 启动持续蜂鸣器（5秒后）
+        self._start_continuous_beep()
+        
+        # 灯光闪烁效果（开灯-关灯-开灯）
+        original_light = self.light_on
+        self._set_light(True, from_cloud=True)
+        self.root.after(500, lambda: self._set_light(False, from_cloud=True))
+        self.root.after(1000, lambda: self._set_light(True, from_cloud=True))
+        self.root.after(1500, lambda: self._set_light(False, from_cloud=True))
+        self.root.after(2000, lambda: self._set_light(original_light, from_cloud=True))
+        
+        # 在AI聊天窗口显示报警信息
+        alarm_msg = f"⚠️ 联动报警: {location} 发生{alarm_type}报警！请保持冷静，等待救援。"
+        self._add_chat("assistant", alarm_msg)
+        
+        # 5秒后清除OLED报警显示
+        self.root.after(5000, lambda: setattr(self, 'oled_alarm_text', None) or self._update_oled())
+        
+        # 上报联动报警事件
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish_security_event("fire_alarm_linked", level="critical", event_data={
+                "room_id": self.room_id,
+                "source_device": source_device,
+                "location": location,
+                "type": f"linked_{alarm_type}_alarm",
+                "message": f"房间{self.room_id}收到联动报警"
+            })
+
+    def _start_continuous_beep(self):
+        """启动持续蜂鸣器（5秒后开始持续响）"""
+        def continuous_beep():
+            # 等待5秒
+            time.sleep(5)
+            
+            # 如果还在报警状态，开始持续蜂鸣
+            while not self._stop_alarm_beep.is_set():
+                try:
+                    import winsound
+                    winsound.Beep(2000, 500)  # 响500ms
+                    time.sleep(0.2)  # 间隔200ms
+                except Exception:
+                    time.sleep(1)
+        
+        # 停止之前的蜂鸣器线程
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
+        
+        # 重置停止事件并启动新线程
+        self._stop_alarm_beep.clear()
+        self._alarm_beep_thread = threading.Thread(target=continuous_beep, daemon=True)
+        self._alarm_beep_thread.start()
+
+    def _stop_continuous_beep(self):
+        """停止持续蜂鸣器"""
+        self._stop_alarm_beep.set()
+        if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
+            self._alarm_beep_thread.join(timeout=1)
 
     def _initiate_call(self):
         if not self.connected:
