@@ -50,9 +50,15 @@
           <span style="font-weight: 600;">¥{{ record.total_price }}</span>
         </template>
         <template v-if="column.key === 'status'">
-          <a-tag :color="record.status === 'paid' ? 'success' : record.status === 'pending' ? 'warning' : 'default'">
-            {{ record.status === 'paid' ? '已支付' : record.status === 'pending' ? '待支付' : '已退款' }}
+          <a-tag :color="getBillStatusColor(record.status)">
+            {{ getBillStatusText(record.status) }}
           </a-tag>
+        </template>
+        <template v-if="column.key === 'payment_method'">
+          {{ paymentMethodText(record.payment_method) }}
+        </template>
+        <template v-if="column.key === 'created_at'">
+          {{ formatTimeHHmm(record.created_at) }}
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
@@ -95,7 +101,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
 import { bookingApi } from '@/api/booking'
-import { formatDate } from '@/utils/date'
+import { formatDate, formatTimeHHmm } from '@/utils/date'
 
 const payMethodFilter = ref<string | undefined>()
 const drawerVisible = ref(false)
@@ -108,6 +114,40 @@ const stats = reactive({
   monthTotal: 0,
   pendingCount: 0
 })
+
+function paymentMethodText(method: string): string {
+  const map: Record<string, string> = {
+    alipay: '支付宝',
+    wechat: '微信支付',
+    wechat_pay: '微信支付',
+    credit_card: '银行卡',
+    cash: '现金',
+    pending: '待支付'
+  }
+  return map[method] || method || '未设置'
+}
+
+function getBillStatusText(status: string): string {
+  const map: Record<string, string> = {
+    confirmed: '已确认',
+    checked_in: '已入住',
+    checked_out: '已完成',
+    cancelled: '已退款',
+    pending: '待支付'
+  }
+  return map[status] || status
+}
+
+function getBillStatusColor(status: string): string {
+  const map: Record<string, string> = {
+    confirmed: 'blue',
+    checked_in: 'processing',
+    checked_out: 'success',
+    cancelled: 'error',
+    pending: 'warning'
+  }
+  return map[status] || 'default'
+}
 
 const detailColumns = [
   { title: '项目', dataIndex: 'item' },

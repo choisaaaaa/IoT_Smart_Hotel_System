@@ -1,6 +1,7 @@
 -- 智慧酒店物联网控制系统 - 数据库初始化脚本
--- 数据库架构版本: v3.4.0
--- 适配多酒店隔离、AI管家、动态价格日历、会员系统、评价头像、酒店图片管理、AI知识库
+-- 数据库架构版本: v3.5.0 (统一完整版)
+-- 创建日期: 2026-04-22
+-- 说明: 合并所有表结构为单一文件，包含全部44张表定义
 
 CREATE DATABASE IF NOT EXISTS iot_hotel_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE iot_hotel_system;
@@ -13,6 +14,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS ai_conversations;
 DROP TABLE IF EXISTS ai_knowledge_entries;
+DROP TABLE IF EXISTS ai_knowledge_base;
 DROP TABLE IF EXISTS hotel_images;
 DROP TABLE IF EXISTS login_sessions;
 DROP TABLE IF EXISTS api_tokens;
@@ -21,6 +23,15 @@ DROP TABLE IF EXISTS control_commands;
 DROP TABLE IF EXISTS rfid_cards;
 DROP TABLE IF EXISTS scene_configs;
 DROP TABLE IF EXISTS devices;
+DROP TABLE IF EXISTS device_groups;
+DROP TABLE IF EXISTS device_group_members;
+DROP TABLE IF EXISTS device_alarms;
+DROP TABLE IF EXISTS ir_remote_codes;
+DROP TABLE IF EXISTS firmware_updates;
+DROP TABLE IF EXISTS device_status_history;
+DROP TABLE IF EXISTS energy_consumption;
+DROP TABLE IF EXISTS scene_execution_logs;
+DROP TABLE IF EXISTS call_quality_logs;
 DROP TABLE IF EXISTS maintenance_tickets;
 DROP TABLE IF EXISTS delivery_orders;
 DROP TABLE IF EXISTS calls;
@@ -43,6 +54,11 @@ DROP TABLE IF EXISTS members;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS hotels;
 DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS sms_verifications;
+DROP TABLE IF EXISTS security_events;
+DROP TABLE IF EXISTS device_auth;
+DROP TABLE IF EXISTS system_logs;
+DROP TABLE IF EXISTS network_config;
 
 -- -----------------------------------------------------------------------------
 -- 1. 酒店信息表 (Hotels)
@@ -88,6 +104,7 @@ CREATE TABLE users (
     permissions JSON DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_login_at DATETIME DEFAULT NULL COMMENT '最后登录时间',
     UNIQUE KEY uk_username (username),
     UNIQUE KEY uk_phone (phone),
     UNIQUE KEY uk_uid (uid),
@@ -95,7 +112,60 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 3. 房型信息表 (Room Types)
+-- 3. 角色表 (Roles)
+-- -----------------------------------------------------------------------------
+CREATE TABLE roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL UNIQUE,
+    role_description VARCHAR(255) DEFAULT NULL,
+    permissions JSON DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 4. 用户角色关联表 (User Roles)
+-- -----------------------------------------------------------------------------
+CREATE TABLE user_roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    role_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_role (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 5. 用户酒店关联表 (User Hotels)
+-- -----------------------------------------------------------------------------
+CREATE TABLE user_hotels (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    hotel_id INT NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_hotel (user_id, hotel_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 6. 楼层表 (Floors)
+-- -----------------------------------------------------------------------------
+CREATE TABLE floors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    floor_number INT NOT NULL,
+    floor_name VARCHAR(50) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_hotel_floor (hotel_id, floor_number),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 7. 房型信息表 (Room Types)
 -- -----------------------------------------------------------------------------
 CREATE TABLE room_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,7 +185,7 @@ CREATE TABLE room_types (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 4. 房间信息表 (Rooms)
+-- 8. 房间信息表 (Rooms)
 -- -----------------------------------------------------------------------------
 CREATE TABLE rooms (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -140,11 +210,13 @@ CREATE TABLE rooms (
     UNIQUE KEY uk_hotel_room (hotel_id, room_number),
     INDEX idx_room_status (room_status),
     INDEX idx_room_type (room_type),
+    INDEX idx_hotel_id (hotel_id),
+    CONSTRAINT fk_room_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
     CONSTRAINT fk_room_type_ref FOREIGN KEY (room_type_id) REFERENCES room_types(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 5. 价格日历表 (Room Prices)
+-- 9. 价格日历表 (Room Prices)
 -- -----------------------------------------------------------------------------
 CREATE TABLE room_prices (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -161,7 +233,7 @@ CREATE TABLE room_prices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 6. 预订表 (Bookings)
+-- 10. 预订表 (Bookings)
 -- -----------------------------------------------------------------------------
 CREATE TABLE bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -190,11 +262,13 @@ CREATE TABLE bookings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_booking_number (booking_number),
     INDEX idx_hotel_status (hotel_id, status),
-    INDEX idx_room_id (room_id)
+    INDEX idx_room_id (room_id),
+    INDEX idx_checkin_checkout (check_in_date, check_out_date),
+    CONSTRAINT fk_booking_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 7. 实际住客表 (Guests - 与预订表解耦，支持同房间多住客及硬件同步)
+-- 11. 实际住客表 (Guests)
 -- -----------------------------------------------------------------------------
 CREATE TABLE guests (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -209,11 +283,13 @@ CREATE TABLE guests (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_booking_id (booking_id),
-    INDEX idx_room_id (room_id)
+    INDEX idx_room_id (room_id),
+    CONSTRAINT fk_guest_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_guest_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 8. 支付表 (Payments)
+-- 12. 支付表 (Payments)
 -- -----------------------------------------------------------------------------
 CREATE TABLE payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -234,7 +310,7 @@ CREATE TABLE payments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 8.1 服务评价表 (Reviews)
+-- 13. 服务评价表 (Reviews)
 -- -----------------------------------------------------------------------------
 CREATE TABLE reviews (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -262,7 +338,7 @@ CREATE TABLE reviews (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 8.2 评价申诉表 (Review Appeals)
+-- 14. 评价申诉表 (Review Appeals)
 -- -----------------------------------------------------------------------------
 CREATE TABLE review_appeals (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -283,7 +359,7 @@ CREATE TABLE review_appeals (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 9. 会员资产表 (Members)
+-- 15. 会员资产表 (Members)
 -- -----------------------------------------------------------------------------
 CREATE TABLE members (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -303,16 +379,8 @@ CREATE TABLE members (
     UNIQUE KEY uk_member_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 会员等级配色方案配置 (可选)
-INSERT INTO system_settings (config_key, config_value, description) 
-VALUES ('color_standard', '#4b6cb7', '普通会员主色'),
-       ('color_silver', '#bdc3c7', '银会员主色'),
-       ('color_gold', '#d4af37', '金会员主色'),
-       ('color_platinum', '#e5e4e2', '铂金会员主色'),
-       ('color_diamond', '#30cfd0', '钻石会员主色');
-
 -- -----------------------------------------------------------------------------
--- 10. 优惠券定义表 (Coupons)
+-- 16. 优惠券定义表 (Coupons)
 -- -----------------------------------------------------------------------------
 CREATE TABLE coupons (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -333,7 +401,7 @@ CREATE TABLE coupons (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 11. 会员领券表 (Member Coupons)
+-- 17. 会员领券表 (Member Coupons)
 -- -----------------------------------------------------------------------------
 CREATE TABLE member_coupons (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -344,28 +412,165 @@ CREATE TABLE member_coupons (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_member_id (member_id),
-    INDEX idx_coupon_id (coupon_id)
+    INDEX idx_coupon_id (coupon_id),
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 12. 物联网设备表 (Devices)
+-- 18. 物联网设备表 (Devices)
 -- -----------------------------------------------------------------------------
 CREATE TABLE devices (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id VARCHAR(50) NOT NULL,
     device_type VARCHAR(20) NOT NULL,
     device_name VARCHAR(50) NOT NULL,
-    device_key VARCHAR(50) NOT NULL,
+    device_key VARCHAR(255) NOT NULL COMMENT '设备密钥哈希存储',
     device_status VARCHAR(20) NOT NULL DEFAULT 'offline',
     firmware_version VARCHAR(20) DEFAULT NULL,
     last_seen DATETIME DEFAULT NULL,
+    audit_status VARCHAR(20) DEFAULT 'pending' COMMENT '设备审核状态: pending/approved/rejected',
+    hotel_id INT DEFAULT 0 COMMENT '设备所属酒店ID',
+    room_id INT DEFAULT NULL COMMENT '关联房间ID',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_device_id (device_id)
+    UNIQUE KEY uk_device_id (device_id),
+    INDEX idx_device_status (device_status),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_audit_status (audit_status),
+    INDEX idx_device_hotel_status (device_status, hotel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 13. 传感器数据表 (Sensor Data)
+-- 19. 设备组表 (Device Groups)
+-- -----------------------------------------------------------------------------
+CREATE TABLE device_groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    group_name VARCHAR(50) NOT NULL,
+    group_type VARCHAR(20) NOT NULL COMMENT '按房间/按楼层/自定义',
+    description TEXT DEFAULT NULL,
+    created_by INT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hotel_id (hotel_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 20. 设备组成员表 (Device Group Members)
+-- -----------------------------------------------------------------------------
+CREATE TABLE device_group_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    device_id VARCHAR(50) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_group_device (group_id, device_id),
+    FOREIGN KEY (group_id) REFERENCES device_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 21. 设备告警表 (Device Alarms)
+-- -----------------------------------------------------------------------------
+CREATE TABLE device_alarms (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    alarm_type VARCHAR(50) NOT NULL,
+    alarm_level ENUM('info', 'warning', 'critical') DEFAULT 'warning',
+    message TEXT NOT NULL,
+    is_acknowledged TINYINT(1) DEFAULT 0,
+    acknowledged_by INT DEFAULT NULL,
+    acknowledged_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_id (device_id),
+    INDEX idx_alarm_level (alarm_level),
+    INDEX idx_created_at (created_at),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 22. 红外遥控码表 (IR Remote Codes)
+-- -----------------------------------------------------------------------------
+CREATE TABLE ir_remote_codes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    brand VARCHAR(50) NOT NULL,
+    device_type VARCHAR(20) NOT NULL COMMENT 'ac/tv/projector等',
+    code_name VARCHAR(50) NOT NULL,
+    code_data JSON NOT NULL COMMENT '红外编码数据',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_brand (device_id, brand),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 23. 固件更新表 (Firmware Updates)
+-- -----------------------------------------------------------------------------
+CREATE TABLE firmware_updates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_type VARCHAR(20) NOT NULL,
+    version VARCHAR(20) NOT NULL,
+    file_url VARCHAR(255) NOT NULL,
+    file_size INT DEFAULT 0,
+    checksum VARCHAR(64) DEFAULT NULL COMMENT 'SHA256校验值',
+    release_notes TEXT DEFAULT NULL,
+    is_force_update TINYINT(1) DEFAULT 0,
+    status ENUM('draft', 'released', 'archived') DEFAULT 'draft',
+    created_by INT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_type (device_type),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 24. 设备状态历史表 (Device Status History)
+-- -----------------------------------------------------------------------------
+CREATE TABLE device_status_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    old_status VARCHAR(20) NOT NULL,
+    new_status VARCHAR(20) NOT NULL,
+    reason VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_id (device_id),
+    INDEX idx_created_at (created_at),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 25. 能耗记录表 (Energy Consumption)
+-- -----------------------------------------------------------------------------
+CREATE TABLE energy_consumption (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    energy_type VARCHAR(20) NOT NULL COMMENT 'electricity/water/gas',
+    consumption_value DECIMAL(10,2) NOT NULL,
+    unit VARCHAR(10) NOT NULL DEFAULT 'kWh',
+    recorded_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_time (device_id, recorded_at),
+    INDEX idx_energy_type (energy_type),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 26. 场景执行日志表 (Scene Execution Logs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE scene_execution_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    scene_id INT NOT NULL,
+    device_id VARCHAR(50) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    status ENUM('success', 'failed', 'timeout') NOT NULL,
+    error_message TEXT DEFAULT NULL,
+    executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_scene_id (scene_id),
+    INDEX idx_executed_at (executed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 27. 传感器数据表 (Sensor Data)
 -- -----------------------------------------------------------------------------
 CREATE TABLE sensor_data (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -373,11 +578,31 @@ CREATE TABLE sensor_data (
     sensor_type VARCHAR(20) NOT NULL,
     sensor_value VARCHAR(50) NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_device_time (device_id, created_at)
+    INDEX idx_device_time (device_id, created_at),
+    INDEX idx_created_at_device (created_at, device_id),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 13.1 房卡管理表 (RFID Cards)
+-- 28. 控制指令表 (Control Commands)
+-- -----------------------------------------------------------------------------
+CREATE TABLE control_commands (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    command_type VARCHAR(20) NOT NULL,
+    command_value VARCHAR(50) NOT NULL,
+    command_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_by VARCHAR(50) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    executed_at DATETIME DEFAULT NULL,
+    INDEX idx_device_id (device_id),
+    INDEX idx_created_at (created_at),
+    INDEX idx_command_status (command_status),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29. 房卡管理表 (RFID Cards)
 -- -----------------------------------------------------------------------------
 CREATE TABLE rfid_cards (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -398,7 +623,7 @@ CREATE TABLE rfid_cards (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 13.2 场景配置表 (Scene Configs)
+-- 30. 场景配置表 (Scene Configs)
 -- -----------------------------------------------------------------------------
 CREATE TABLE scene_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -413,7 +638,7 @@ CREATE TABLE scene_configs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 13.3 通话记录表 (Calls)
+-- 31. 通话记录表 (Calls)
 -- -----------------------------------------------------------------------------
 CREATE TABLE calls (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -436,7 +661,22 @@ CREATE TABLE calls (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 13.4 MQTT 通信日志表 (MQTT Logs)
+-- 32. 通话质量日志表 (Call Quality Logs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE call_quality_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    call_id VARCHAR(50) NOT NULL,
+    mos_score DECIMAL(3,2) DEFAULT NULL COMMENT '语音质量评分1-5',
+    jitter_ms INT DEFAULT NULL COMMENT '抖动毫秒',
+    packet_loss_pct DECIMAL(5,2) DEFAULT NULL COMMENT '丢包率',
+    latency_ms INT DEFAULT NULL COMMENT '延迟毫秒',
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_call_id (call_id),
+    INDEX idx_recorded_at (recorded_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 33. MQTT 通信日志表 (MQTT Logs)
 -- -----------------------------------------------------------------------------
 CREATE TABLE mqtt_communication_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -453,7 +693,30 @@ CREATE TABLE mqtt_communication_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 14. 报修工单表 (Maintenance Tickets)
+-- 34. 送物订单表 (Delivery Orders)
+-- -----------------------------------------------------------------------------
+CREATE TABLE delivery_orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(50) NOT NULL,
+    booking_id INT DEFAULT NULL,
+    guest_id INT DEFAULT NULL,
+    room_id INT NOT NULL,
+    item_category VARCHAR(50) NOT NULL DEFAULT 'food',
+    item_name VARCHAR(100) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    note VARCHAR(255) DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    completed_at DATETIME DEFAULT NULL,
+    UNIQUE KEY uk_order_no (order_no),
+    INDEX idx_room_id (room_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 35. 报修工单表 (Maintenance Tickets)
 -- -----------------------------------------------------------------------------
 CREATE TABLE maintenance_tickets (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -466,67 +729,19 @@ CREATE TABLE maintenance_tickets (
     photos JSON DEFAULT NULL,
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    repairer VARCHAR(50) DEFAULT NULL,
-    assigned_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     completed_at DATETIME DEFAULT NULL,
     repair_description TEXT DEFAULT NULL,
     repair_cost DECIMAL(10,2) DEFAULT 0.00,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_ticket_no (ticket_no),
     INDEX idx_room_id (room_id),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 15. 系统配置表 (System Settings)
--- -----------------------------------------------------------------------------
-CREATE TABLE system_settings (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    config_key VARCHAR(50) NOT NULL,
-    config_value TEXT DEFAULT NULL,
-    description VARCHAR(255) DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_config_key (config_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- -----------------------------------------------------------------------------
--- 16. API 访问令牌表 (API Tokens)
--- -----------------------------------------------------------------------------
-CREATE TABLE api_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    token_type VARCHAR(50) DEFAULT 'login',
-    expires_at DATETIME NOT NULL,
-    is_used TINYINT(1) DEFAULT 0,
-    used_at DATETIME DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_token (token),
-    INDEX idx_user_id (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- -----------------------------------------------------------------------------
--- 初始化基础数据
--- -----------------------------------------------------------------------------
-
--- 默认集团总部 (Hotel ID: 0 系统管理员所在逻辑层，Hotel ID: 1 默认首家门店)
-INSERT INTO hotels (id, hotel_name, hotel_star, description) VALUES (1, '智联酒店旗舰店', 5, '智慧物联网样板店');
-
--- 默认系统管理员 (密码: admin123)
-INSERT INTO users (username, password, role, hotel_id) 
-VALUES ('sys_admin', '$2a$10$p0M96fI3D0eI8V1v.H6o7u/8h6Q6q5n0V8i1W5a4C0g7Y6e5f4a3b', 'system_admin', 0);
-
--- 系统全局配置
-INSERT INTO system_settings (config_key, config_value, description) 
-VALUES ('member_program_name', '智联尊享会', '会员计划名称'),
-       ('points_rate', '1', '消费1元获得积分数'),
-       ('points_redeem_rate', '10', '多少积分抵扣1元'),
-       ('checkin_points', '50', '每日签到获得积分数');
-
--- -----------------------------------------------------------------------------
--- 17. 酒店图片表 (Hotel Images)
+-- 36. 酒店图片表 (Hotel Images)
 -- -----------------------------------------------------------------------------
 CREATE TABLE hotel_images (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -543,17 +758,18 @@ CREATE TABLE hotel_images (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='酒店图片表';
 
 -- -----------------------------------------------------------------------------
--- 18. AI知识库词条表 (AI Knowledge Entries)
+-- 37. AI知识库表 (AI Knowledge Base) - H-05统一表
 -- -----------------------------------------------------------------------------
-CREATE TABLE ai_knowledge_entries (
+CREATE TABLE ai_knowledge_base (
     id INT AUTO_INCREMENT PRIMARY KEY,
     hotel_id INT NOT NULL DEFAULT 0 COMMENT '酒店ID，0表示全局词条',
-    category VARCHAR(50) NOT NULL COMMENT '分类: hotel_info-酒店信息, service-服务设施, policy-政策规定, faq-常见问题, other-其他',
-    question TEXT NOT NULL COMMENT '问题/关键词',
-    answer TEXT NOT NULL COMMENT '答案内容',
-    keywords JSON COMMENT '关键词标签，用于匹配',
+    category VARCHAR(50) NOT NULL COMMENT '分类: restaurant-餐厅, facility-设施, policy-政策, activity-活动, other-其他',
+    title VARCHAR(200) NOT NULL COMMENT '标题',
+    content TEXT NOT NULL COMMENT '知识详细内容（支持Markdown格式）',
+    keywords VARCHAR(500) DEFAULT NULL COMMENT '关键词（逗号分隔，用于AI检索匹配）',
     priority INT DEFAULT 0 COMMENT '优先级，数值越大越优先',
     is_active TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+    sort_order INT DEFAULT 0 COMMENT '排序权重',
     usage_count INT DEFAULT 0 COMMENT '使用次数统计',
     created_by INT COMMENT '创建者用户ID',
     updated_by INT COMMENT '最后更新者用户ID',
@@ -562,13 +778,11 @@ CREATE TABLE ai_knowledge_entries (
     INDEX idx_hotel_id (hotel_id),
     INDEX idx_category (category),
     INDEX idx_is_active (is_active),
-    INDEX idx_priority (priority),
-    FULLTEXT INDEX idx_question (question),
-    FULLTEXT INDEX idx_answer (answer)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI知识库词条表';
+    INDEX idx_priority (priority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI知识库表';
 
 -- -----------------------------------------------------------------------------
--- 19. AI对话历史表 (AI Conversations)
+-- 38. AI对话历史表 (AI Conversations)
 -- -----------------------------------------------------------------------------
 CREATE TABLE ai_conversations (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -591,7 +805,120 @@ CREATE TABLE ai_conversations (
     INDEX idx_hotel_id (hotel_id),
     INDEX idx_created_at (created_at),
     INDEX idx_intent (intent),
-    FOREIGN KEY (matched_entry_id) REFERENCES ai_knowledge_entries(id) ON DELETE SET NULL
+    FOREIGN KEY (matched_entry_id) REFERENCES ai_knowledge_base(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI对话历史表';
+
+-- -----------------------------------------------------------------------------
+-- 39. API 访问令牌表 (API Tokens)
+-- -----------------------------------------------------------------------------
+CREATE TABLE api_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    token_type VARCHAR(50) DEFAULT 'login',
+    expires_at DATETIME NOT NULL,
+    is_used TINYINT(1) DEFAULT 0,
+    used_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_token (token),
+    INDEX idx_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 40. 登录会话表 (Login Sessions)
+-- -----------------------------------------------------------------------------
+CREATE TABLE login_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    session_token VARCHAR(255) NOT NULL UNIQUE,
+    device_info VARCHAR(255) DEFAULT NULL,
+    ip_address VARCHAR(50) DEFAULT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 41. 短信验证码表 (SMS Verifications)
+-- -----------------------------------------------------------------------------
+CREATE TABLE sms_verifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL,
+    verification_code VARCHAR(10) NOT NULL,
+    purpose VARCHAR(20) NOT NULL DEFAULT 'reset_password' COMMENT '用途: reset_password, login, register',
+    is_used TINYINT(1) DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    used_at DATETIME DEFAULT NULL,
+    INDEX idx_phone (phone),
+    INDEX idx_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信验证码表';
+
+-- -----------------------------------------------------------------------------
+-- 42. 安防事件表 (Security Events)
+-- -----------------------------------------------------------------------------
+CREATE TABLE security_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(50) NOT NULL,
+    event_type VARCHAR(20) NOT NULL,
+    event_data TEXT,
+    event_level VARCHAR(20) DEFAULT 'info',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_device_id (device_id),
+    INDEX idx_created_at (created_at),
+    INDEX idx_event_type (event_type),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 43. 系统设置表 (System Settings)
+-- -----------------------------------------------------------------------------
+CREATE TABLE system_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    config_key VARCHAR(50) NOT NULL,
+    config_value TEXT DEFAULT NULL,
+    description VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_config_key (config_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
+-- 初始化基础数据
+-- =============================================================================
+
+-- 默认酒店数据
+INSERT INTO hotels (id, hotel_name, hotel_star, description) VALUES
+(1, '智联酒店旗舰店', 5, '智慧物联网样板店'),
+(2, '无畏电竞酒店', 4, '专业电竞主题酒店');
+
+-- 默认系统管理员 (密码: 123123)
+INSERT INTO users (username, password, phone, role, hotel_id) VALUES
+('sys_admin1', '$2a$10$p0M96fI3D0eI8V1v.H6o7u/8h6Q6q5n0V8i1W5a4C0g7Y6e5f4a3b', '13900000001', 'system_admin', 0);
+
+-- 角色初始化
+INSERT INTO roles (role_name, role_description, permissions) VALUES
+('system_admin', '系统管理员，拥有所有权限', '["read","write","delete","manage_users","manage_roles","manage_devices","view_reports","system_config"]'),
+('hotel_admin', '酒店管理员，拥有酒店管理权限', '["read","write","manage_bookings","manage_rooms","manage_orders","view_reports","manage_guests","hotel_manage"]'),
+('receptionist', '前台员工，拥有业务操作权限', '["read","write","manage_bookings","manage_rooms","manage_orders","view_reports","manage_guests"]'),
+('customer', '顾客，拥有基本服务权限', '["read","manage_own_bookings","manage_own_profile","use_services"]'),
+('guest', '住客，拥有房间服务权限', '["read","use_room_services","ai_butler","order_delivery","order_maintenance"]');
+
+-- 系统全局配置
+INSERT INTO system_settings (config_key, config_value, description)
+VALUES ('member_program_name', '智联尊享会', '会员计划名称'),
+       ('points_rate', '1', '消费1元获得积分数'),
+       ('points_redeem_rate', '10', '多少积分抵扣1元'),
+       ('checkin_points', '50', '每日签到获得积分数');
+
+-- 会员等级配色方案配置 (可选)
+INSERT INTO system_settings (config_key, config_value, description)
+VALUES ('color_standard', '#4b6cb7', '普通会员主色'),
+       ('color_silver', '#bdc3c7', '银会员主色'),
+       ('color_gold', '#d4af37', '金会员主色'),
+       ('color_platinum', '#e5e4e2', '铂金会员主色'),
+       ('color_diamond', '#30cfd0', '钻石会员主色');
 
 SET FOREIGN_KEY_CHECKS = 1;

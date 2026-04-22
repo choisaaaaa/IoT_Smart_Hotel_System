@@ -49,15 +49,15 @@ export function validatePassword(password: string): ValidationResult {
     return { valid: false, error: '密码不能为空' };
   }
   
-  if (password.length < 6) {
-    return { valid: false, error: '密码长度至少6位' };
+  if (password.length < 8) {
+    return { valid: false, error: '密码长度至少8位' };
   }
   
   if (password.length > 128) {
     return { valid: false, error: '密码长度不能超过128位' };
   }
   
-  // 检查密码复杂度（可选）
+  // 检查密码复杂度
   const hasLetter = /[a-zA-Z]/.test(password);
   const hasNumber = /\d/.test(password);
   

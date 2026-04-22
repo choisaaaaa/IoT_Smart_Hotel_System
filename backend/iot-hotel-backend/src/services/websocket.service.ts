@@ -27,9 +27,20 @@ class WebSocketService {
 
   init(httpServer: http.Server) {
     this.server = httpServer;
+    
+    // WebSocket CORS配置 - 限制为已知的前端域名列表
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8080',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173'
+    ];
+
     this.io = new Server(httpServer, {
       cors: {
-        origin: '*',
+        origin: isProduction ? allowedOrigins : true, // 生产环境严格限制，开发环境允许所有
         methods: ['GET', 'POST'],
         credentials: true
       },

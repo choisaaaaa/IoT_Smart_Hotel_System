@@ -1,0 +1,11 @@
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = iot-mqtt-server
+DNS.3 = 8.134.166.69
+IP.1 = 127.0.0.1
+IP.2 = 8.134.166.69

@@ -89,8 +89,8 @@ export const getReports = async (req: AuthRequest, res: Response) => {
     );
 
     const statusMap: Record<string, string> = {
-      pending: 'pending', confirmed: 'paid', checked_in: 'paid',
-      checked_out: 'paid', cancelled: 'refunded'
+      pending: '待支付', confirmed: '已支付', checked_in: '已支付',
+      checked_out: '已支付', cancelled: '已退款', paid: '已支付', refunded: '已退款'
     };
     const bills = (billList as any[]).map((item: any) => ({
       ...item,

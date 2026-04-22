@@ -1,6 +1,7 @@
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import crypto from 'crypto';
+import { hashDeviceKey, encryptDeviceKey, generateSecureDeviceKey, verifyDeviceKey, getKeyStorageFormat } from '../utils/device-key';
 import CacheService from './cache.service';
 
 export interface DeviceData {
@@ -179,23 +180,33 @@ class DeviceService {
         throw new Error('Device not found');
       }
 
-      let device_key = currentDevice?.device_key || '';
+      // 注意：currentDevice.device_key 现在存储的是哈希值
+      // device_key_encrypted 存储的是AES加密的原始密钥（用于签名验证）
+      let rawDeviceKey = '';
+      const hasExistingKey = currentDevice?.device_key && currentDevice.device_key !== '';
 
       // 只有在第一次从非 approved 变为 approved 时，或者没有 key 时，才生成新 key
-      if (status === 'approved' && (!device_key || currentDevice?.audit_status !== 'approved')) {
-        device_key = crypto.randomBytes(16).toString('hex');
+      if (status === 'approved' && (!hasExistingKey || currentDevice?.audit_status !== 'approved')) {
+        // 生成新的原始设备密钥（用于下发给硬件）
+        rawDeviceKey = generateSecureDeviceKey();
       }
+
+      // 将密钥哈希后存储到 device_key 列
+      const deviceKeyHash = rawDeviceKey ? hashDeviceKey(rawDeviceKey) : (currentDevice?.device_key || '');
+      // 将原始密钥加密后存储到 device_key_encrypted 列（用于签名验证）
+      const deviceKeyEncrypted = rawDeviceKey ? encryptDeviceKey(rawDeviceKey) : (currentDevice?.device_key_encrypted || null);
 
       await pool.query<ResultSetHeader>(
         `UPDATE devices SET
           audit_status = ?,
           device_key = ?,
+          device_key_encrypted = ?,
           room_id = ?,
           area = ?,
           device_name = COALESCE(?, device_name),
           updated_at = NOW()
         WHERE id = ?`,
-        [status, device_key, room_id || null, area || null, device_name || null, id]
+        [status, deviceKeyHash, deviceKeyEncrypted, room_id || null, area || null, device_name || null, id]
       );
 
       // 清除相关缓存
@@ -219,11 +230,13 @@ class DeviceService {
       const mqttService = require('./mqtt.service').default;
       mqttService.clearDeviceCache(currentDevice.device_id);
 
-      // 主动推送配置更新到硬件 (包含新的审核状态和密钥)
+      // 主动推送配置更新到硬件
+      // 注意：只有在生成新密钥时才下发原始密钥，否则硬件已经有密钥
       mqttService.publish(`hotel/device/config/${currentDevice.device_type}/${currentDevice.device_id}`, {
         device_id: currentDevice.device_id,
         audit_status: status,
-        device_key: status === 'approved' ? device_key : null,
+        // 只在首次审批时下发原始密钥，后续不再下发
+        device_key: (status === 'approved' && rawDeviceKey) ? rawDeviceKey : null,
         room_id: room_id,
         room_number: room_number,
         hotel_id: currentDevice.hotel_id,
@@ -239,7 +252,8 @@ class DeviceService {
       return {
         id,
         status,
-        device_key: status === 'approved' ? device_key : null,
+        // 只在首次审批时返回原始密钥给管理员（用于配置硬件）
+        device_key: (status === 'approved' && rawDeviceKey) ? rawDeviceKey : null,
         room_id,
         room_number,
         area,

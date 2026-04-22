@@ -1,0 +1,15 @@
+# MQTT Broker密码文件
+# 格式: username:password
+# 使用 mosquitto_passwd 生成加密密码
+# 
+# 用户列表:
+# iot_user - IoT设备通用账号
+# backend_service - 后端服务账号
+# admin - 管理员账号
+#
+# 生成命令示例:
+# mosquitto_passwd -c /etc/mosquitto/passwd iot_user
+# mosquitto_passwd /etc/mosquitto/passwd backend_service
+#
+# 注意: 此文件仅用于开发环境,生产环境应使用 mosquitto_passwd 工具生成
+iot_user:$7$101$abc123def456$IotHotel2026

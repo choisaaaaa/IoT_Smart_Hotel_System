@@ -10,10 +10,20 @@ extern "C" {
 // ==========================================
 
 // 后台 MQTT 服务器地址配置
-// 开发环境: mqtt://192.168.1.100:1883
-// 云服务器: mqtt://your-domain.com:1883 或 mqtt://your-server-ip:1883
-// 生产环境(推荐): mqtts://your-domain.com:8883 (启用TLS加密)
-#define GLOBAL_MQTT_BROKER_URI "mqtt://172.20.10.3:1883"
+// 本地开发: mqtt://192.168.1.100:1883
+// Docker环境: mqtt://host.docker.internal:1883 (Windows/Mac)
+// 云服务器: mqtt://8.134.166.69:1883
+// 生产环境(推荐): mqtts://8.134.166.69:8883 (启用TLS加密)
+
+// MQTT认证凭据 (S-01安全加固)
+#define GLOBAL_MQTT_USERNAME "iot_user"
+#define GLOBAL_MQTT_PASSWORD "IotHotel2026"
+
+// 选择使用的环境 (取消注释一个)
+// #define GLOBAL_MQTT_BROKER_URI "mqtt://192.168.1.100:1883"  // 本地开发
+// #define GLOBAL_MQTT_BROKER_URI "mqtt://host.docker.internal:1883"  // Docker环境
+#define GLOBAL_MQTT_BROKER_URI "mqtt://8.134.166.69:1883"  // 云服务器
+// #define GLOBAL_MQTT_BROKER_URI "mqtts://8.134.166.69:8883"  // 生产TLS
 
 // 默认配网 AP 热点名称前缀
 #define GLOBAL_WIFI_DEFAULT_SSID "SmartHotel_AP"

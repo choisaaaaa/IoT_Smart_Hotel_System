@@ -108,6 +108,12 @@ async function startServer() {
           logger.info('数据库列 frequent_guests.id_type 类型修改成功');
         } catch (e: any) { throw e; }
 
+        // 添加 users.last_login_at 列
+        try {
+          await pool.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME DEFAULT NULL AFTER updated_at');
+          logger.info('数据库列 users.last_login_at 添加成功');
+        } catch (e: any) { if (e.code !== 'ER_DUP_COLUMN_NAME' && e.errno !== 1060) {throw e;} }
+
         logger.info('子房价系统及证件类型数据库修复/升级成功');
       } catch (schemaError: any) {
         logger.error('子房价系统数据库修复失败:', schemaError.code, schemaError.message);
