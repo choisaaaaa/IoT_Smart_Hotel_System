@@ -2,7 +2,7 @@ import request from './request'
 import type { BookingInfo, PaginatedResponse, ApiResponse } from '@/types'
 
 export const bookingApi = {
-  getBookingList: (params?: { page?: number; pageSize?: number; status?: string; guest_name?: string; hotel_id?: number }) =>
+  getBookingList: (params?: { page?: number; pageSize?: number; status?: string; guest_name?: string; hotel_id?: number; checkin_date?: string; checkout_date?: string }) =>
     request.get<PaginatedResponse<BookingInfo>>('/bookings', { params }),
 
   createBooking: (data: Partial<BookingInfo> & { hotel_id: number }) =>

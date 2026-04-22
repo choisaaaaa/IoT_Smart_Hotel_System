@@ -226,7 +226,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+
 import dayjs from 'dayjs'
 import {
   DashboardOutlined,
