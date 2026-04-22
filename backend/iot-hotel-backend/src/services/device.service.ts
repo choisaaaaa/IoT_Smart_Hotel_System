@@ -202,11 +202,10 @@ class DeviceService {
           device_key = ?,
           device_key_encrypted = ?,
           room_id = ?,
-          area = ?,
           device_name = COALESCE(?, device_name),
           updated_at = NOW()
         WHERE id = ?`,
-        [status, deviceKeyHash, deviceKeyEncrypted, room_id || null, area || null, device_name || null, id]
+        [status, deviceKeyHash, deviceKeyEncrypted, room_id || null, device_name || null, id]
       );
 
       // 清除相关缓存
@@ -252,11 +251,9 @@ class DeviceService {
       return {
         id,
         status,
-        // 只在首次审批时返回原始密钥给管理员（用于配置硬件）
         device_key: (status === 'approved' && rawDeviceKey) ? rawDeviceKey : null,
         room_id,
         room_number,
-        area,
         device_name
       };
     } catch (error) {
