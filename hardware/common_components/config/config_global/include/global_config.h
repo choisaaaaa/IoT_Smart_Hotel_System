@@ -26,6 +26,10 @@ extern "C" {
 #define GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX       "hotel/device/command"
 #define GLOBAL_TOPIC_DEVICE_COMMAND_RESULT       "hotel/device/command/result"
 #define GLOBAL_TOPIC_SECURITY_EVENT              "hotel/security/event"
+/** 客房上行 PCM（JSON+base64）：hotel/device/audio/uplink/<device_id> */
+#define GLOBAL_TOPIC_DEVICE_AUDIO_UPLINK_PREFIX  "hotel/device/audio/uplink"
+/** 下行播放同一 device_id：hotel/device/audio/downlink/<device_id> */
+#define GLOBAL_TOPIC_DEVICE_AUDIO_DOWNLINK_PREFIX "hotel/device/audio/downlink"
 
 // 房卡扇区 1 应用层密文默认 AES-128 密钥（32 个十六进制字符）。生产环境请在前台与客房 NVS
 // 写入 HotelCard_AES128Hex（内容与本宏等长），勿长期使用公开默认值。
@@ -50,11 +54,19 @@ extern "C" {
 //   客房固件须在 CMake 中将 FRONT 两键置 -1，避免 hal_interactive 与 hal_actuators 抢同一脚。
 // ==========================================
 
-// 音频主线 (I2S) — 与一体模块杜邦线布线一致：BCLK→41、LRCLK/WS→42、DATA→39、SDA→40
+// 音频 — 客房实物为安信可 LMD2718+NS4168 一体模组（板载 LMD2718T PDM MEMS + NS4168 D 类功放）。
+//   【SPK 路径】I2S0 标准模式（Philips），接 NS4168：
+//     LRCLK→WS(GPIO42)、BCLK(GPIO41)、SDATA←MCU DOUT(GPIO40)；
+//   【MIC 路径】I2S1 PDM RX 模式（LMD2718T 是单比特 PDM 麦，不是 I2S 麦，规格书明确）：
+//     PDM_CLK 由 MCU 输出→MIC CLK(GPIO14，独立脚，不可与 BCLK 共用)；
+//     PDM_DATA←MCU DIN(GPIO39)。
+//   重要：MIC CLK 必须独立于 NS4168 BCLK，因为 PDM CLK 典型 2.048MHz 而 I2S BCLK 在 16-bit mono
+//   slot 下是 fs×32=512kHz~1MHz，两者频率不同，共线会互相顶导致两边都出乱码。
 #define GLOBAL_I2S_BCLK_PIN        41
 #define GLOBAL_I2S_WS_PIN          42
-#define GLOBAL_I2S_DIN_PIN         39
+#define GLOBAL_I2S_DIN_PIN         39  /* 兼容旧配置名：实际作为 MIC PDM DATA */
 #define GLOBAL_I2S_DOUT_PIN        40
+#define GLOBAL_I2S_MIC_PDM_CLK_PIN 7   /* MIC PDM CLK 独立脚（与 BCLK 频率不同，必须独占） */
 #define GLOBAL_PTT_BTN_PIN         1  // 客房：接听/唤醒 Agent（杜邦线开发板，见 docs/22）
 
 // SPI 总线 (RC522, W25Q64)
@@ -90,6 +102,23 @@ extern "C" {
 #endif
 #ifndef GLOBAL_ADC_NTC_PIN
 #define GLOBAL_ADC_NTC_PIN         6
+#endif
+
+// 楼控雨棚（SG90 舵机 + 雨量数字 DO）。未使用写 -1；DO 极性：多数 FC-37 类为「有雨拉低」→ ACTIVE_LOW=1
+#ifndef GLOBAL_CANOPY_SERVO_PIN
+#define GLOBAL_CANOPY_SERVO_PIN    (-1)
+#endif
+#ifndef GLOBAL_RAIN_SENSOR_DO_PIN
+#define GLOBAL_RAIN_SENSOR_DO_PIN  (-1)
+#endif
+#ifndef GLOBAL_RAIN_SENSOR_ACTIVE_LOW
+#define GLOBAL_RAIN_SENSOR_ACTIVE_LOW 1
+#endif
+#ifndef GLOBAL_CANOPY_ANGLE_RETRACT_DEG
+#define GLOBAL_CANOPY_ANGLE_RETRACT_DEG 0
+#endif
+#ifndef GLOBAL_CANOPY_ANGLE_EXTEND_DEG
+#define GLOBAL_CANOPY_ANGLE_EXTEND_DEG 180
 #endif
 
 // DHT11 单总线数据脚（可由终端工程通过编译宏覆盖）
@@ -128,7 +157,7 @@ extern "C" {
 #endif
 
 // 独立按键 (低有效)；各终端可在 CMake 中用 add_compile_definitions(...=-1) 关闭未接线槽位
-#define GLOBAL_BTN_ROOM_1_PIN      7  // 客房: 报警/SOS（杜邦线开发板）
+#define GLOBAL_BTN_ROOM_1_PIN      14 // 客房: 报警/SOS（GPIO7 让位给 MIC PDM CLK）
 #ifndef GLOBAL_BTN_ROOM_2_PIN
 #define GLOBAL_BTN_ROOM_2_PIN      20 // 客房: 场景（可选；《03》PCB 为 GPIO28）
 #endif

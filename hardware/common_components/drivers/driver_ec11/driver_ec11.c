@@ -156,3 +156,11 @@ bool driver_ec11_sw_stable_pressed(void)
     }
     return s_sw_stable_pressed;
 }
+
+void driver_ec11_clear_rotation_accumulator(void)
+{
+    if (!s_inited) {
+        return;
+    }
+    s_step_acc = 0;
+}

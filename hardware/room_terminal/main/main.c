@@ -20,6 +20,7 @@
 #include "hal_sensors.h"
 #include "hal_interactive.h"
 #include "hal_audio.h"
+#include "voice_session.h"
 #include "hal_infrared.h"
 #include "driver_oled.h"
 #include "service_network.h"
@@ -116,7 +117,6 @@ static bool s_ptt_long_fired = false;
 
 // 统一任务周期配置，避免散落魔法数字
 static const TickType_t SENSOR_TASK_PERIOD = pdMS_TO_TICKS(15000);
-static const TickType_t VOICE_TASK_PERIOD = pdMS_TO_TICKS(100);
 static const TickType_t BUTTON_TASK_PERIOD = pdMS_TO_TICKS(60);
 static const TickType_t AUTO_LOCK_TASK_PERIOD = pdMS_TO_TICKS(200);
 static const TickType_t AUTO_LOCK_DELAY = pdMS_TO_TICKS(8000);
@@ -148,7 +148,7 @@ static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
 }
 
 static void load_nvs_string_with_fallback(const char *key, char *out, size_t out_size, const char *fallback) {
-    if (service_network_read_nvs_string(key, out, out_size) != ESP_OK) {
+    if (service_network_read_nvs_string(key, out, out_size) != ESP_OK || out[0] == '\0') {
         copy_str_safe(out, out_size, fallback);
     } else {
         out[out_size - 1] = '\0';
@@ -323,7 +323,9 @@ static esp_err_t room_relay_set(actuator_type_t channel, bool on, const char *la
     (void)channel;
     return ESP_OK;
 #else
-    return hal_actuators_set_state(channel, on);
+    esp_err_t err = hal_actuators_set_state(channel, on);
+    ESP_LOGI(TAG, "【%s】%s → hal_actuators %s", label_zh, on ? "开" : "关", esp_err_to_name(err));
+    return err;
 #endif
 }
 
@@ -352,10 +354,6 @@ static void publish_command_result_ex(int cmd_id, const char *cmd_type, bool exe
 
     free(reply_str);
     cJSON_Delete(reply);
-}
-
-static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_success, const char *result_msg) {
-    publish_command_result_ex(cmd_id, cmd_type, exec_success, result_msg, NULL);
 }
 
 static void publish_room_runtime_status(void) {
@@ -656,6 +654,23 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
         current_call_id[0] = '\0';
         remote_id[0] = '\0';
         *out_result_msg = "通话已结束";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "agent_session_start") == 0) {
+        uint32_t win_ms = 120000;
+        cJSON *w = cJSON_GetObjectItem(root, "window_ms");
+        if (cJSON_IsNumber(w) && w->valuedouble > 0) {
+            win_ms = (uint32_t)w->valuedouble;
+        }
+        voice_session_arm_agent_window(win_ms);
+        *out_result_msg = "Agent 语音窗口已开启（按住 PTT 上行）";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "agent_session_end") == 0) {
+        voice_session_close_agent_window();
+        *out_result_msg = "Agent 语音窗口已关闭";
         return true;
     }
 
@@ -1006,6 +1021,11 @@ void on_network_status_changed(bool connected, const char* ip_address) {
             ESP_LOGE(TAG, "订阅客房指令失败: %s", esp_err_to_name(err));
         }
 
+        err = voice_session_subscribe_downlink();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "订阅音频下行失败: %s", esp_err_to_name(err));
+        }
+
         if (s_floor_sensor_device_id[0] != '\0') {
             char t_mq2[160];
             char t_ntc[160];
@@ -1074,24 +1094,7 @@ void task_sensor_monitor(void *pvParameters) {
     }
 }
 
-// --- 语音通话相关任务 (新) ---
-
-void task_voice_call(void *pvParameters) {
-    (void)pvParameters;
-    uint8_t audio_buffer[1024];
-    size_t read_len = 0;
-    
-    while(1) {
-        if (is_on_call) {
-            // 1. 录制一段音频
-            if (hal_audio_record_chunk(audio_buffer, sizeof(audio_buffer), &read_len) == ESP_OK) {
-                // 2. 通过 MQTT 发送音频数据块 (演示用)
-                ESP_LOGD(TAG, "正在通话中，录制并发送音频块: %zu Bytes", read_len);
-            }
-        }
-        vTaskDelay(VOICE_TASK_PERIOD);
-    }
-}
+// --- 语音通话 / Agent：上行与下行在 voice_session.c ---
 
 void task_room_auto_lock(void *pvParameters) {
     (void)pvParameters;
@@ -1134,6 +1137,7 @@ void task_room_button_events(void *pvParameters) {
                 s_ptt_long_fired = true;
                 ESP_LOGI(TAG, "GPIO%d PTT 长按: 唤醒 Agent（语音助手）", GLOBAL_PTT_BTN_PIN);
                 publish_room_business_event("agent_wake_requested", "长按 PTT 唤醒语音助手", "info");
+                voice_session_arm_agent_window(120000);
                 hal_interactive_beep(1, 120);
             }
         }
@@ -1248,9 +1252,6 @@ static void room_apply_brightness_to_light(void) {
         ESP_LOGW(TAG, "主灯继电器驱动失败: %s", esp_err_to_name(err));
     }
     uint8_t b = (uint8_t)((s_brightness_pct <= 0) ? 0 : (s_brightness_pct * 255 / 100));
-    if (b > 255) {
-        b = 255;
-    }
     (void)hal_interactive_set_led_color(0, b, (uint8_t)((uint16_t)b * 200 / 255), (uint8_t)(b / 2));
 #endif
 }
@@ -1302,6 +1303,7 @@ void task_room_ec11_peripheral(void *pvParameters) {
         if (dir != DRIVER_EC11_DIR_NONE && !sw_pressed) {
             switch (s_ec11_function_mode) {
                 case ROOM_EC11_MODE_VOLUME: {
+                    const int prev_vol = s_volume_pct;
                     int step = (dir == DRIVER_EC11_DIR_CW) ? ROOM_EC11_VOLUME_STEP : -ROOM_EC11_VOLUME_STEP;
                     s_volume_pct += step;
                     if (s_volume_pct < 0) {
@@ -1310,8 +1312,19 @@ void task_room_ec11_peripheral(void *pvParameters) {
                     if (s_volume_pct > 100) {
                         s_volume_pct = 100;
                     }
+                    if (s_volume_pct != prev_vol) {
+                        hal_audio_set_playback_volume_pct(s_volume_pct);
+                        if (hal_audio_beep_volume_pct(s_volume_pct) != ESP_OK) {
+                            ESP_LOGD(TAG, "音量档位提示音未播放（音频未就绪或 I2S 忙）");
+                        }
+                    }
+                    driver_ec11_clear_rotation_accumulator();
                     publish_sensor_data("volume", (double)s_volume_pct, "%");
+#if ROOM_HARDWARE_LOG_ONLY
                     ESP_LOGI(TAG, "音量：%d%%（未接外设/仅日志）", s_volume_pct);
+#else
+                    ESP_LOGI(TAG, "音量：%d%%", s_volume_pct);
+#endif
                     room_ec11_refresh_oled_mode_line();
                     break;
                 }
@@ -1558,6 +1571,7 @@ void app_main(void)
     hal_sensors_init();
     hal_interactive_init();
     hal_audio_init();
+    hal_audio_set_playback_volume_pct(s_volume_pct);
     hal_infrared_init();
 
     if (GLOBAL_EC11_A_PIN >= 0 && GLOBAL_EC11_B_PIN >= 0) {
@@ -1582,6 +1596,9 @@ void app_main(void)
     load_nvs_string_with_fallback("Floor_Sensor_Device_Id", s_floor_sensor_device_id,
                                   sizeof(s_floor_sensor_device_id), "floor_03");
 
+    voice_session_init(device_id, &s_network_ready, &is_on_call, &s_call_incoming_pending, current_call_id,
+                       sizeof(current_call_id));
+
     char boot_msg[32];
     snprintf(boot_msg, sizeof(boot_msg), "房号: %s", current_room_id);
     driver_oled_show_text_line(0, boot_msg);
@@ -1597,8 +1614,8 @@ void app_main(void)
     ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 ---");
     // sensor_task: 只负责采集+上报
     xTaskCreatePinnedToCore(task_sensor_monitor, "sensor_task", 4096, NULL, 5, NULL, 1);
-    // voice_task: 只负责通话态音频处理
-    xTaskCreate(task_voice_call, "voice_task", 4096, NULL, 5, NULL);
+    // voice_task: 电话连续上行 + Agent 窗口内按住 PTT 上行；下行见 voice_downlink_mqtt_cb
+    xTaskCreate(voice_uplink_task, "voice_task", 8192, NULL, 5, NULL);
     // auto_lock_task: 门锁自动回锁守护
     xTaskCreate(task_room_auto_lock, "room_auto_lock_task", 3072, NULL, 4, NULL);
     // button_task: 客房场景/SOS 按键业务

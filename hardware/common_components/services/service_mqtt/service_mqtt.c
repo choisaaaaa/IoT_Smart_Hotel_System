@@ -115,7 +115,9 @@ esp_err_t service_mqtt_start(const char *broker_uri, const char *client_id) {
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = broker_uri,
         .credentials.client_id = client_id,
-        .network.disable_auto_reconnect = true
+        .network.disable_auto_reconnect = true,
+        .buffer.size = 20480,       // 下行缓冲：容纳较大音频 JSON（~15KB）一次性送达
+        .buffer.out_size = 8192,    // 上行缓冲：满足分段 PCM 上行（默认也够，这里显式设定）
     };
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
@@ -187,5 +189,21 @@ esp_err_t service_mqtt_publish(const char *topic, const char *json_payload) {
     }
 
     ESP_LOGI(TAG, "MQTT 发布成功: topic=%s msg_id=%d", topic, msg_id);
+    return ESP_OK;
+}
+
+esp_err_t service_mqtt_publish_silent(const char *topic, const char *payload)
+{
+    if (topic == NULL || payload == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_connected || s_client == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    int msg_id = esp_mqtt_client_publish(s_client, topic, payload, 0, 1, 0);
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "MQTT 发布失败: topic=%s", topic);
+        return ESP_FAIL;
+    }
     return ESP_OK;
 }

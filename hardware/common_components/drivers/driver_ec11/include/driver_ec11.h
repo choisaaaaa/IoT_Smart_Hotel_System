@@ -38,6 +38,9 @@ esp_err_t driver_ec11_poll(driver_ec11_direction_t *out_dir, bool *out_btn_press
 /** @brief 无按键脚或未初始化时返回 false；否则返回消抖后的稳定按下状态（低有效=按下） */
 bool driver_ec11_sw_stable_pressed(void);
 
+/** @brief 清零 A/B 四相累计步进，避免毛刺在停止旋转后继续凑满一步误触发 */
+void driver_ec11_clear_rotation_accumulator(void);
+
 #ifdef __cplusplus
 }
 #endif

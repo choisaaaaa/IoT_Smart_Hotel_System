@@ -20,6 +20,7 @@
 #include "hal_actuators.h"
 #include "hal_sensors.h"
 #include "hal_interactive.h"
+#include "hal_canopy.h"
 #include "service_network.h"
 #include "global_config.h"
 
@@ -30,6 +31,7 @@ static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
 static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
 static const TickType_t FLOOR_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
+static const TickType_t FLOOR_CANOPY_POLL_PERIOD = pdMS_TO_TICKS(100);
 static volatile bool s_network_ready = false;
 static bool s_corridor_light_on = false;
 static uint32_t s_reconnect_count = 0;
@@ -127,6 +129,9 @@ static void publish_floor_runtime_status(void) {
     cJSON_AddStringToObject(root, "device_type", "floor");
     cJSON_AddStringToObject(root, "status", "online");
     cJSON_AddBoolToObject(root, "corridor_light_on", s_corridor_light_on);
+    cJSON_AddBoolToObject(root, "rain_detected", hal_canopy_is_raining());
+    cJSON_AddNumberToObject(root, "canopy_angle_deg", (double)hal_canopy_get_angle());
+    cJSON_AddBoolToObject(root, "canopy_auto", hal_canopy_get_auto());
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
     char *json_str = cJSON_PrintUnformatted(root);
@@ -221,6 +226,30 @@ static bool execute_floor_command(const char *cmd_type, const char **out_result_
 
     if (strcmp(cmd_type, "floor_reset") == 0) {
         *out_result_msg = "楼控复位占位执行成功";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "canopy_extend") == 0) {
+        esp_err_t err = hal_canopy_manual_extend();
+        *out_result_msg = (err == ESP_OK) ? "雨棚已手动伸出" : "舵机伸出失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "canopy_retract") == 0) {
+        esp_err_t err = hal_canopy_manual_retract();
+        *out_result_msg = (err == ESP_OK) ? "雨棚已手动收回" : "舵机收回失败";
+        return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "canopy_auto_on") == 0) {
+        hal_canopy_set_auto(true);
+        *out_result_msg = "雨棚已恢复雨量自动控制";
+        return true;
+    }
+
+    if (strcmp(cmd_type, "canopy_auto_off") == 0) {
+        hal_canopy_set_auto(false);
+        *out_result_msg = "已关闭雨量自动控制(需手动伸收)";
         return true;
     }
 
@@ -407,6 +436,17 @@ void task_floor_sensor_report(void *pvParameters) {
         if (env_data.ntc_valid) {
             publish_sensor_data("ntc_temp_c", (double)env_data.ntc_temp_c, "C");
         }
+        publish_sensor_data("rain_detected", hal_canopy_is_raining() ? 1.0 : 0.0, "bool");
+        publish_sensor_data("canopy_angle_deg", (double)hal_canopy_get_angle(), "deg");
+    }
+}
+
+static void task_floor_canopy_poll(void *pvParameters)
+{
+    (void)pvParameters;
+    while (1) {
+        vTaskDelay(FLOOR_CANOPY_POLL_PERIOD);
+        hal_canopy_poll();
     }
 }
 
@@ -529,6 +569,9 @@ void app_main(void) {
     hal_actuators_init();
     hal_sensors_init();
     hal_interactive_init();
+    if (hal_canopy_init() != ESP_OK) {
+        ESP_LOGW(TAG, "雨棚模块初始化未完全成功，请检查舵机/雨量接线");
+    }
 
     // 3. 读取并拼接规范的 Client ID
     load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
@@ -542,6 +585,7 @@ void app_main(void) {
     xTaskCreate(task_floor_sensor_report, "floor_sensor_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_health_report, "floor_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_button_events, "floor_button_task", 3072, NULL, 4, NULL);
+    xTaskCreate(task_floor_canopy_poll, "floor_canopy_task", 3072, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

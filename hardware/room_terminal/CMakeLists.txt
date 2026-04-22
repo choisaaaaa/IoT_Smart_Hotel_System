@@ -24,7 +24,9 @@ set(EXTRA_COMPONENT_DIRS
 # - 房内 NTC：GPIO14 在部分开发板未引出；默认改 GPIO19（客房已禁用楼道键 GLOBAL_BTN_FLOOR_1_PIN=-1），
 #   与继电器5/6、DHT20 不冲突；火灾判据仍用楼控 MQTT 的 MQ2+走廊 NTC + 房内 NTC（三重与）。
 # - 客房板不接本地 MQ2/光敏：二者均 -1；无蜂鸣器：GLOBAL_BUZZER_PIN=-1。
+# - 继电器/红外/RGB：ROOM_HARDWARE_LOG_ONLY=0 时真驱动 GPIO；杜邦线未接负载、只做逻辑演示时改为 1。
 add_compile_definitions(
+    ROOM_HARDWARE_LOG_ONLY=0
     GLOBAL_ADC_MQ2_PIN=-1
     GLOBAL_ADC_LDR_PIN=-1
     GLOBAL_ADC_NTC_PIN=19
