@@ -45,7 +45,7 @@ class MQTTService {
   private baseReconnectDelay: number = 1000;
   private wsInstance: any = null;
   private callCache: Map<string, { caller_type: string, caller_id: any, callee_type: string, callee_id: any }> = new Map();
-  private deviceCache: Map<string, { audit_status: string, device_key: string, hotel_id?: number }> = new Map();
+  private deviceCache: Map<string, { audit_status: string, device_key: string, device_key_encrypted?: string, hotel_id?: number }> = new Map();
 
   constructor() {
     this.startOfflineCheck();
