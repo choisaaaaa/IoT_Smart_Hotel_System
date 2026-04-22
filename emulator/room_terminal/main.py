@@ -60,7 +60,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         old_room_id = self.room_id
         if self.room_id_var.get():
             self.room_id = self.room_id_var.get()
-            self.device_id = f"room_{self.room_id}"
+            # 不重建 device_id，保持配置中的原始 device_id
             self._log(f"已同步房间信息: ID={self.room_id}, 编号={self.room_number_var.get()}")
 
             if old_room_id != self.room_id and self.mqtt_client and self.connected:

@@ -187,18 +187,59 @@ export class AIButlerService {
    */
   async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
     try {
-      let actualRoomId = roomId;
+      let actualRoomDbId: number | null = null;
+      let actualRoomNumber: string | null = null;
+      let deviceFoundId: string | null = null;
 
+      logger.debug(`验证入住状态 - 原始roomId: ${roomId}`);
+
+      // 策略1: 直接作为 device_id 查找
       const [deviceRows] = await pool.query<RowDataPacket[]>(
-        `SELECT d.room_id, r.room_number FROM devices d
+        `SELECT d.device_id, d.room_id, r.room_number FROM devices d
          LEFT JOIN rooms r ON d.room_id = r.id
          WHERE d.device_id = ? AND d.room_id IS NOT NULL`,
         [roomId]
       );
+      if (deviceRows.length > 0) {
+        actualRoomDbId = deviceRows[0].room_id;
+        actualRoomNumber = deviceRows[0].room_number;
+        deviceFoundId = deviceRows[0].device_id;
+        logger.info(`通过设备ID ${roomId} 解析到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+      }
 
-      if (deviceRows.length > 0 && deviceRows[0].room_id) {
-        actualRoomId = String(deviceRows[0].room_id);
-        logger.info(`通过设备ID ${roomId} 解析到房间ID ${actualRoomId}`);
+      // 策略2: 如果策略1失败，尝试从 roomId 中提取数字作为 room_id
+      if (!actualRoomDbId) {
+        const numericId = roomId.replace(/^room_?/, '');
+        if (numericId && /^\d+$/.test(numericId)) {
+          const numId = parseInt(numericId);
+          const [roomRows] = await pool.query<RowDataPacket[]>(
+            `SELECT r.id, r.room_number FROM rooms r WHERE r.id = ?`,
+            [numId]
+          );
+          if (roomRows.length > 0) {
+            actualRoomDbId = roomRows[0].id;
+            actualRoomNumber = roomRows[0].room_number;
+            logger.info(`通过解析数字 ${numId} 找到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+          }
+        }
+      }
+
+      // 策略3: 尝试作为 room_number 查找
+      if (!actualRoomDbId) {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ?`,
+          [roomId]
+        );
+        if (roomRows.length > 0) {
+          actualRoomDbId = roomRows[0].id;
+          actualRoomNumber = roomRows[0].room_number;
+          logger.info(`通过房号 ${roomId} 找到房间DB ID ${actualRoomDbId}`);
+        }
+      }
+
+      if (!actualRoomDbId) {
+        logger.warn(`房间 ${roomId} 无有效入住记录，无法解析到任何房间`);
+        return null;
       }
 
       const [guests] = await pool.query<RowDataPacket[]>(
@@ -207,15 +248,15 @@ export class AIButlerService {
          JOIN rooms r ON g.room_id = r.id
          JOIN hotels h ON r.hotel_id = h.id
          LEFT JOIN bookings b ON g.booking_id = b.id
-         WHERE (r.id = ? OR r.room_number = ?)
+         WHERE r.id = ?
          AND g.check_out_time IS NULL
          ORDER BY g.check_in_time DESC
          LIMIT 1`,
-        [actualRoomId, actualRoomId]
+        [actualRoomDbId]
       );
 
       if (guests.length === 0) {
-        logger.warn(`房间 ${roomId} 无有效入住记录`);
+        logger.warn(`房间 ${actualRoomNumber}(DB ID:${actualRoomDbId}) 无有效入住记录`);
         return null;
       }
 

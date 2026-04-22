@@ -110,8 +110,8 @@ export const environmentApi = {
     if (params?.status) queryParams.status = params.status
 
     const res: any = await request.get('/environment', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { list: [], total: 0, summary: {} as EnvironmentSummary, update_time: '' } }
   },
@@ -123,8 +123,8 @@ export const environmentApi = {
     if (params?.hours) queryParams.hours = params.hours
 
     const res: any = await request.get('/environment/history', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { room_id: params?.room_id || '', history: [], period: '' } }
   },
@@ -136,8 +136,8 @@ export const environmentApi = {
     if (params?.limit) queryParams.limit = params.limit
 
     const res: any = await request.get('/environment/fire-alarms', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { alarms: [], total: 0, summary: { active_count: 0, acknowledged_count: 0, resolved_today: 0, false_alarm_count: 0 } } }
   },
@@ -161,8 +161,8 @@ export const environmentApi = {
     if (params?.room_id) queryParams.room_id = params.room_id
 
     const res: any = await request.get('/environment/devices', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { devices: [], total: 0, summary: { online_count: 0, offline_count: 0, error_count: 0, running_count: 0, total_devices: 0, online_rate: 0 } } }
   },
@@ -180,8 +180,8 @@ export const environmentApi = {
     if (params?.period) queryParams.period = params.period
 
     const res: any = await request.get('/environment/energy', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { consumption: [], total: 0, summary: { total_today_kwh: 0, total_yesterday_kwh: 0, total_month_kwh: 0, savings_rate: 0, estimated_monthly_cost: 0, most_efficient_room: '-', least_efficient_room: '-' } } }
   },
@@ -193,16 +193,16 @@ export const environmentApi = {
     if (params?.limit) queryParams.limit = params.limit
 
     const res: any = await request.get('/environment/event-logs', { params: queryParams })
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: { logs: [], total: 0, summary: { critical_count: 0, unresolved_count: 0, today_total: 0 } } }
   },
 
   getDashboardStats: async () => {
     const res: any = await request.get('/environment/dashboard')
-    if (res.data?.success && res.data?.data) {
-      return { data: res.data.data }
+    if (res?.success && res?.data) {
+      return { data: res.data }
     }
     return { data: {} }
   }
