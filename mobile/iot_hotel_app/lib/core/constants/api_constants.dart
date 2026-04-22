@@ -19,7 +19,7 @@ class ApiConstants {
     
     // 方案2: 开发环境默认值
     if (const bool.fromEnvironment('dart.vm.product') == false) {
-      return 'http://localhost:9000/api/v1/';
+      return 'http://8.134.166.69:9000/api/v1/';
     }
     
     // 方案3: 生产环境默认值（打包到手机端使用）

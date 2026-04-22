@@ -171,7 +171,7 @@ class DeviceService {
 
       // 获取当前设备信息，检查是否已有 key
       const [currentRows] = await pool.query<RowDataPacket[]>(
-        'SELECT device_id, device_type, device_key, audit_status FROM devices WHERE id = ?',
+        'SELECT device_id, device_type, device_key, device_key_encrypted, audit_status, hotel_id FROM devices WHERE id = ?',
         [id]
       );
       
