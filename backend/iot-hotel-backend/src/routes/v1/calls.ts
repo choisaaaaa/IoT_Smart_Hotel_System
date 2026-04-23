@@ -8,16 +8,59 @@ import logger from '../../utils/logger';
 import pool, { RowDataPacket } from '../../config/database';
 import mqttService from '../../services/mqtt.service';
 
+/**
+ * @swagger
+ * tags:
+ *   name: Calls
+ *   description: 语音通话与前台呼叫接口
+ */
+
 const router = Router();
 
-// 原有通话路由
+/**
+ * @swagger
+ * /calls/initiate:
+ *   post:
+ *     summary: 发起通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [callee_type, callee_id]
+ *             properties:
+ *               callee_type: { type: string, enum: [front_desk, room] }
+ *               callee_id: { type: string }
+ *     responses:
+ *       200:
+ *         description: 通话已发起
+ */
 router.post('/initiate', authenticate as any, callController.initiateCall);
 router.post('/outbound', authenticate as any, callController.outboundCall);
+
+/**
+ * @swagger
+ * /calls/active:
+ *   get:
+ *     summary: 获取当前活跃通话列表
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
+router.get('/:call_id/answer', authenticate as any, callController.answerCall);
 router.post('/:call_id/answer', authenticate as any, callController.answerCall);
 router.post('/:call_id/reject', authenticate as any, callController.rejectCall);
 router.post('/:call_id/hangup', authenticate as any, callController.hangupCall);
 router.get('/:call_id/status', authenticate as any, callController.getCallStatus);
 router.get('/active', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getActiveCalls);
+
 router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallHistory);
 router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallStats);
 

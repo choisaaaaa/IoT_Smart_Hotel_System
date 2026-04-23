@@ -62,10 +62,45 @@ router.get('/', authenticate as any, authorize(allRoles), deviceController.getAl
 router.get('/:id', authenticate as any, authorize(allRoles), deviceController.getById);
 router.put('/:id/audit', authenticate as any, authorize(adminRoles), deviceController.audit);
 router.delete('/:id', authenticate as any, authorize(adminRoles), deviceController.delete);
+/**
+ * @swagger
+ * /devices/{id}/sensor-data:
+ *   get:
+ *     summary: 获取设备历史传感器数据
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.post('/:id/command', authenticate as any, authorize(allRoles), deviceController.sendCommand);
 
+/**
+ * @swagger
+ * /devices/{id}/sensor-data/latest:
+ *   get:
+ *     summary: 获取设备最新传感器数据
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/:id/sensor-data', authenticate as any, authorize(allRoles), deviceController.getSensorData);
 router.get('/:id/sensor-data/latest', authenticate as any, authorize(allRoles), deviceController.getLatestSensorData);
 router.get('/:id/commands', authenticate as any, authorize(allRoles), deviceController.getCommandHistory);
+
 
 export default router;

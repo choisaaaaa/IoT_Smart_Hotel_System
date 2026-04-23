@@ -62,7 +62,27 @@ router.post('/qr-generate', async (req, res) => {
   }
 });
 
-// APP确认扫码（需要APP的JWT认证）
+/**
+ * @swagger
+ * /auth/qr-confirm:
+ *   post:
+ *     summary: APP确认扫码（需要认证）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token: { type: string }
+ *     responses:
+ *       200:
+ *         description: 扫码确认成功
+ */
 router.post('/qr-confirm', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const user = req.user;
@@ -266,7 +286,25 @@ router.post('/generate-token', async (req, res) => {
   }
 });
 
-// 扫码登录 - 使用 API Token 登录
+/**
+ * @swagger
+ * /auth/scan-login:
+ *   post:
+ *     summary: 扫码登录 - 使用 API Token 登录
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token: { type: string }
+ *     responses:
+ *       200:
+ *         description: 登录成功
+ */
 router.post('/scan-login', async (req, res) => {
   try {
     const { token } = req.body;

@@ -76,10 +76,41 @@ router.get('/:id', detail);
  */
 router.get('/:hotelId/detail', getHotelDetailWithImages);
 
+/**
+ * @swagger
+ * /hotels/{hotelId}/images:
+ *   get:
+ *     summary: 获取酒店图片列表
+ *     tags: [Hotels]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/:hotelId/images', getHotelImages);
 
+/**
+ * @swagger
+ * /hotels/{hotelId}/rooms/availability:
+ *   get:
+ *     summary: 获取房型实时可用性
+ *     tags: [Hotels]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 // 房型可用性查询 - 游客也可访问
 router.get('/:hotelId/rooms/availability', getRoomAvailability);
+
 
 router.put('/:hotelId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotel);
 router.post('/:hotelId/images', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), addHotelImage);

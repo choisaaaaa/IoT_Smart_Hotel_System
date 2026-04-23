@@ -4,10 +4,48 @@ import pool, { RowDataPacket, ResultSetHeader } from '../../config/database';
 import { authenticate } from '../../middleware/auth';
 import logger from '../../utils/logger';
 
+/**
+ * @swagger
+ * tags:
+ *   name: Favorites
+ *   description: 用户酒店收藏管理接口
+ */
+
 const router = Router();
+
+/**
+ * @swagger
+ * /favorites:
+ *   get:
+ *     summary: 获取我的收藏列表
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ *   post:
+ *     summary: 添加酒店到收藏
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [hotel_id]
+ *             properties:
+ *               hotel_id: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 收藏成功
+ */
 
 // 需要认证的路由
 const authenticatedRouter = Router();
+
 authenticatedRouter.use(authenticate);
 
 authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
