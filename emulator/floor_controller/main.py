@@ -574,10 +574,28 @@ class FloorControllerEmulator(BaseDeviceEmulator):
         # 注册安防相关指令
         self.mqtt_client.register_command_handler("alarm_ack", self._handle_alarm_ack)
         self.mqtt_client.register_command_handler("alarm_reset", self._handle_alarm_reset)
+        # 注册蜂鸣器测试指令
+        self.mqtt_client.register_command_handler("buzzer", self._handle_buzzer_command)
         # 注册空调/窗帘控制指令
         self.mqtt_client.register_command_handler(CMD_AIR, self._handle_air_command)
         self.mqtt_client.register_command_handler(CMD_CURTAIN, self._handle_curtain_command)
         self._log("已注册所有楼控指令处理器")
+
+    def _handle_buzzer_command(self, data):
+        """处理蜂鸣器控制指令"""
+        try:
+            cmd_value = data.get('command_value', '{}')
+            if isinstance(cmd_value, str):
+                import json
+                cmd_value = json.loads(cmd_value)
+            
+            count = cmd_value.get('count', 1)
+            self._log(f"[Web指令] 触发蜂鸣器: {count} 次")
+            self._beep(count)
+            return True
+        except Exception as e:
+            self._log(f"处理蜂鸣器指令失败: {e}", "ERROR")
+            return False
 
     def _handle_light_on(self, data):
         self.root.after(0, lambda: self._toggle_light(from_cloud=True, turn_on=True))
