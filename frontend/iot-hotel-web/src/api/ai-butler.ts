@@ -30,6 +30,6 @@ export const aiButlerApi = {
   wake: (roomId: string, text: string) =>
     request.post<ApiResponse<{ isWake: boolean; accessible: boolean; guestName?: string }>>('/ai-butler/wake', { room_id: roomId, text }),
 
-  broadcast: (roomId: string, text: string) =>
-    request.post<ApiResponse<{ room_id: string; device_id: string }>>('/ai-butler/broadcast', { room_id: roomId, text })
+  broadcast: (roomIds: string | string[], text: string) =>
+    request.post<ApiResponse<{ room_id: string; device_id: string }>>('/ai-butler/broadcast', { room_id: roomIds, text })
 }

@@ -188,21 +188,75 @@
       </div>
     </a-modal>
     <!-- 房间广播弹窗 -->
-    <a-modal v-model:open="broadcastVisible" title="📢 发起房间语音广播" @ok="handleBroadcast" :confirmLoading="broadcasting">
-      <a-form layout="vertical">
-        <a-form-item label="目标房间" required>
-          <a-select v-model:value="broadcastForm.room_id" placeholder="选择或输入房间号" show-search>
-            <a-select-option v-for="room in roomList" :key="room.room_id" :value="room.room_id">
-              {{ room.room_id }} ({{ room.display_name }})
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="广播内容 (由AI自动朗读)" required>
-          <a-textarea v-model:value="broadcastForm.text" placeholder="请输入要广播的内容，如：尊敬的客人，您的外卖已送达前台，请注意查收。" :rows="4" />
-        </a-form-item>
-        <a-alert message="AI 自动朗读" description="下发后，客房内的 AI 管家将自动把文字转为语音播放。此功能用于非实时通话的紧急提醒或温馨提示。" type="info" show-icon />
-      </a-form>
-    </a-modal>
+    <a-modal v-model:open="broadcastVisible" title="📢 发起房间语音广播" @ok="handleBroadcast" :confirmLoading="broadcasting" width="800px">
+      <div class="broadcast-modal-content">
+        <a-form layout="vertical">
+          <a-form-item label="1. 输入广播内容 (由AI自动朗读)" required>
+            <a-textarea v-model:value="broadcastForm.text" placeholder="请输入要广播的内容，如：尊敬的客人，您的外卖已送达前台，请注意查收。" :rows="3" />
+          </a-form-item>
+          
+          <a-form-item required>
+            <template #label>
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span>2. 选择目标房间 (当前已选: {{ broadcastForm.room_ids.length }} 个)</span>
+                <a-space>
+                  <a-button type="link" size="small" @click="selectAllOnline" style="padding: 0">全选在线</a-button>
+                  <a-button type="link" size="small" @click="broadcastForm.room_ids = []" style="padding: 0">清除选择</a-button>
+                </a-space>
+              </div>
+            </template>
+            
+            <a-table
+              :columns="broadcastRoomColumns"
+              :data-source="roomList"
+              :pagination="{ pageSize: 5 }"
+              :row-selection="{
+                selectedRowKeys: broadcastForm.room_ids,
+                onChange: (keys: any[]) => broadcastForm.room_ids = keys
+              }"
+              row-key="room_id"
+              size="small"
+              bordered
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'isOnline'">
+                  <a-badge :status="record.isOnline ? 'success' : 'default'" :text="record.isOnline ? '在线' : '离线'" />
+                </template>
+                <template v-if="column.key === 'room_status'">
+                  <a-tag :color="record.room_status === 'occupied' ? 'blue' : 'orange'">
+                    {{ record.room_status === 'occupied' ? '已入住' : '未入住' }}
+                  </a-tag>
+                </template>
+              </template>
+            </a-table>
+          </a-form-item>
+      
+         </a-form>
+         
+         <a-divider orientation="left">最近广播记录</a-divider>
+         <a-list :data-source="broadcastHistory" size="small" :pagination="{ pageSize: 3 }">
+           <template #renderItem="{ item }">
+             <a-list-item>
+               <div style="width: 100%">
+                 <div style="display: flex; justify-content: space-between;">
+                   <span style="font-weight: bold;">{{ item.time }}</span>
+                   <a-tag :color="item.successCount === item.totalCount ? 'success' : 'warning'">
+                     推送: {{ item.successCount }}/{{ item.totalCount }}
+                   </a-tag>
+                 </div>
+                 <div style="color: #666; margin-top: 4px; font-size: 13px;">{{ item.text }}</div>
+                 <div style="font-size: 12px; color: #999; margin-top: 2px;">
+                   目标: {{ item.targets.join(', ') }}
+                 </div>
+               </div>
+             </a-list-item>
+           </template>
+           <template #header v-if="broadcastHistory.length === 0">
+             <div style="text-align: center; color: #999;">暂无发送记录</div>
+           </template>
+         </a-list>
+       </div>
+     </a-modal>
   </div>
 </template>
 
@@ -241,32 +295,59 @@ const fetchCallsTimer = ref<NodeJS.Timeout | null>(null)
 const roomList = computed(() => {
   return (hotelStore.rooms as RoomInfo[])
     .filter((r: RoomInfo) => appStore.userInfo?.role === 'system' || r.hotel_id === appStore.userInfo?.hotel_id)
-    .map((r: RoomInfo) => ({
-      room_id: r.room_number,
-      display_name: `${r.room_name} - ${r.room_status === 'occupied' ? '已入住' : '未入住'}`
-    }))
+    .map((r: RoomInfo) => {
+      const isOnline = onlineStatus.value.rooms.some((onlineRoom: any) => 
+        String(onlineRoom.room_number) === String(r.room_number) || String(onlineRoom.id) === String(r.id)
+      )
+      return {
+        room_id: r.room_number,
+        display_name: r.room_name,
+        room_status: r.room_status,
+        isOnline: isOnline
+      }
+    })
+    .sort((a, b) => {
+      // 在线优先，然后按房间号排序
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1
+      return a.room_id.localeCompare(b.room_id, undefined, { numeric: true })
+    })
 })
 
 // 麦克风检测状态
 const micChecking = ref(false)
 const micStatus = ref<'idle' | 'success' | 'error'>('idle')
 
+// 广播房间表格列定义
+const broadcastRoomColumns = [
+  { title: '房间号', dataIndex: 'room_id', key: 'room_id', width: 100 },
+  { title: '房间名称', dataIndex: 'display_name', key: 'display_name' },
+  { title: '推送状态', dataIndex: 'isOnline', key: 'isOnline', width: 120 },
+  { title: '房态', dataIndex: 'room_status', key: 'room_status', width: 100 }
+]
+
   // 房间广播
   const broadcastVisible = ref(false)
   const broadcastForm = reactive({
-    room_id: '',
+    room_ids: [] as string[],
     text: ''
   })
   const broadcasting = ref(false)
+  const broadcastHistory = ref<any[]>([])
 
   const openBroadcastModal = () => {
-    broadcastForm.room_id = ''
+    broadcastForm.room_ids = []
     broadcastForm.text = ''
     broadcastVisible.value = true
   }
 
+  const selectAllOnline = () => {
+    broadcastForm.room_ids = roomList.value
+      .filter(r => r.isOnline)
+      .map(r => r.room_id)
+  }
+
   const handleBroadcast = async () => {
-    if (!broadcastForm.room_id) {
+    if (!broadcastForm.room_ids || broadcastForm.room_ids.length === 0) {
       message.warning('请选择房间')
       return
     }
@@ -276,10 +357,25 @@ const micStatus = ref<'idle' | 'success' | 'error'>('idle')
     }
 
     broadcasting.value = true
+    const targetRoomIds = [...broadcastForm.room_ids]
     try {
-      await aiButlerApi.broadcast(broadcastForm.room_id, broadcastForm.text)
-      message.success(`广播已成功下发至 ${broadcastForm.room_id} 房间`)
-      broadcastVisible.value = false
+      const res = await aiButlerApi.broadcast(targetRoomIds, broadcastForm.text)
+      const results = (res as any).data || []
+      
+      // 记录历史
+      broadcastHistory.value.unshift({
+        id: Date.now(),
+        time: new Date().toLocaleTimeString(),
+        text: broadcastForm.text,
+        targets: targetRoomIds,
+        successCount: results.length,
+        totalCount: targetRoomIds.length
+      })
+      
+      message.success(`广播已成功下发至 ${results.length} 个房间`)
+      // broadcastVisible.value = false // 保持打开，方便查看历史或继续操作
+      broadcastForm.room_ids = []
+      broadcastForm.text = ''
     } catch (err: any) {
       message.error(err.response?.data?.message || '广播下发失败')
     } finally {
