@@ -276,6 +276,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Bills',
         component: () => import('@/views/reception/Bills.vue'),
         meta: { title: '账单报表', icon: 'DollarOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF] }
+      },
+      {
+        path: 'privilege-card',
+        name: 'PrivilegeCard',
+        component: () => import('@/views/reception/PrivilegeCard.vue'),
+        meta: { title: '特权卡发放', icon: 'SafetyOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF] }
       }
     ]
   },

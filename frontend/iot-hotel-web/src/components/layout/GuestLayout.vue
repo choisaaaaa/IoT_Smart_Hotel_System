@@ -728,6 +728,7 @@ const handleLogout = async () => {
 .guest-layout {
   min-height: 100vh;
   background: linear-gradient(135deg, var(--hotel-bg) 0%, #f0f4f8 100%);
+  overflow-x: hidden;
 }
 
 /* ==================== 顶部导航 - 炫酷玻璃态 ==================== */

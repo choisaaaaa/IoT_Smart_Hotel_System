@@ -82,18 +82,6 @@
           </a-menu-item>
         </a-menu>
       </div>
-
-      <div class="sider-footer-wrapper">
-        <div class="sider-footer" :class="{ collapsed: collapsed }">
-          <div v-if="!collapsed" class="system-info">
-            <span class="version">系统版本 v2.2.0</span>
-            <span class="status online">运行正常</span>
-          </div>
-          <div v-else class="system-info-collapsed">
-            <span class="status-dot online"></span>
-          </div>
-        </div>
-      </div>
     </a-layout-sider>
 
     <a-layout>
@@ -256,6 +244,7 @@ onMounted(() => {
 .admin-layout {
   min-height: 100vh;
   background: var(--hotel-bg);
+  overflow-x: hidden;
 }
 
 .admin-sider {
@@ -265,6 +254,16 @@ onMounted(() => {
   bottom: 0;
   z-index: 100;
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+  overflow-y: auto; /* 允许侧边栏在内容过多时滚动 */
+}
+
+.admin-sider::-webkit-scrollbar {
+  width: 4px;
+}
+
+.admin-sider::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
 }
 
 .admin-sider :deep(.ant-layout-sider-children) {
@@ -282,6 +281,7 @@ onMounted(() => {
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0 20px;
+  flex-shrink: 0;
   transition: all 0.3s;
 }
 
@@ -369,72 +369,6 @@ onMounted(() => {
 
 .sider-menu-wrapper::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
-}
-
-.sider-footer-wrapper {
-  flex-shrink: 0;
-  background: #001529;
-  position: relative;
-  z-index: 10;
-}
-
-.sider-footer {
-  padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sider-footer.collapsed {
-  padding: 16px 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.system-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.system-info-collapsed {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.version {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.status {
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status.online {
-  color: var(--hotel-success);
-}
-
-.status::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: block;
-}
-
-.status-dot.online {
-  background: var(--hotel-success);
 }
 
 .admin-header {
@@ -554,7 +488,7 @@ onMounted(() => {
 .admin-content {
   margin: 24px;
   margin-left: 284px;
-  min-height: calc(100vh - 72px - 80px);
+  min-height: calc(100vh - 72px - 80px); /* 减去 header 和 footer 高度 */
   transition: margin-left 0.2s;
 }
 

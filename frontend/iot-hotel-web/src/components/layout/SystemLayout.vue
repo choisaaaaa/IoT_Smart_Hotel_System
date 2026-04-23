@@ -5,36 +5,38 @@
         <img src="/logo-small.png" alt="Logo" class="logo-img" />
         <span v-show="!collapsed">{{ hotelStore.hotelInfo?.hotel_name || '系统管理端' }}</span>
       </div>
-      <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline" @click="handleMenuClick">
-        <a-menu-item key="/system/dashboard">
-          <template #icon><DashboardOutlined /></template>
-          <span>系统概览</span>
-        </a-menu-item>
-        <a-menu-item key="/system/hotels">
-          <template #icon><BankOutlined /></template>
-          <span>酒店维护</span>
-        </a-menu-item>
-        <a-menu-item key="/system/devices">
-          <template #icon><MobileOutlined /></template>
-          <span>全局设备</span>
-        </a-menu-item>
-        <a-menu-item key="/system/users">
-          <template #icon><UserOutlined /></template>
-          <span>账户管理</span>
-        </a-menu-item>
-        <a-menu-item key="/system/coupons">
-          <template #icon><GiftOutlined /></template>
-          <span>优惠券管理</span>
-        </a-menu-item>
-        <a-menu-item key="/system/settings">
-          <template #icon><SettingOutlined /></template>
-          <span>系统配置</span>
-        </a-menu-item>
-      </a-menu>
+      <div class="sider-menu-wrapper">
+        <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline" @click="handleMenuClick">
+          <a-menu-item key="/system/dashboard">
+            <template #icon><DashboardOutlined /></template>
+            <span>系统概览</span>
+          </a-menu-item>
+          <a-menu-item key="/system/hotels">
+            <template #icon><BankOutlined /></template>
+            <span>酒店维护</span>
+          </a-menu-item>
+          <a-menu-item key="/system/devices">
+            <template #icon><MobileOutlined /></template>
+            <span>全局设备</span>
+          </a-menu-item>
+          <a-menu-item key="/system/users">
+            <template #icon><UserOutlined /></template>
+            <span>账户管理</span>
+          </a-menu-item>
+          <a-menu-item key="/system/coupons">
+            <template #icon><GiftOutlined /></template>
+            <span>优惠券管理</span>
+          </a-menu-item>
+          <a-menu-item key="/system/settings">
+            <template #icon><SettingOutlined /></template>
+            <span>系统配置</span>
+          </a-menu-item>
+        </a-menu>
+      </div>
     </a-layout-sider>
 
     <a-layout>
-      <a-layout-header class="header">
+      <a-layout-header class="header" :style="{ marginLeft: collapsed ? '80px' : '200px' }">
         <div class="header-left">
           <menu-unfold-outlined v-if="collapsed" class="trigger" @click="() => (collapsed = !collapsed)" />
           <menu-fold-outlined v-else class="trigger" @click="() => (collapsed = !collapsed)" />
@@ -71,7 +73,7 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="content">
+      <a-layout-content class="content" :style="{ marginLeft: collapsed ? '104px' : '224px' }">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <component :is="Component" />
@@ -127,7 +129,41 @@ async function handleLogout() {
 </script>
 
 <style scoped>
-.system-layout { height: 100vh; }
+.system-layout { 
+  min-height: 100vh; 
+  background: #f0f2f5;
+}
+
+.sider {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.sider :deep(.ant-layout-sider-children) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sider-menu-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
 .logo {
   height: 64px;
   display: flex;
@@ -135,6 +171,7 @@ async function handleLogout() {
   padding: 0 24px;
   gap: 12px;
   cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .logo-img {
@@ -142,15 +179,60 @@ async function handleLogout() {
   height: 32px;
   object-fit: contain;
 }
-.logo span { font-size: 18px; font-weight: bold; white-space: nowrap; color: #fff; }
-.header { background: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); z-index: 1; }
-.header-left { display: flex; align-items: center; }
-.trigger { font-size: 18px; cursor: pointer; transition: color 0.3s; margin-right: 24px; }
+
+.logo span { 
+  font-size: 16px; 
+  font-weight: bold; 
+  white-space: nowrap; 
+  color: #fff; 
+}
+
+.header { 
+  background: #fff; 
+  padding: 0 24px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  box-shadow: 0 1px 4px rgba(0,21,41,.08); 
+  z-index: 99; 
+  position: sticky;
+  top: 0;
+  transition: margin-left 0.2s;
+}
+
+.header-left { 
+  display: flex; 
+  align-items: center; 
+}
+
+.trigger { 
+  font-size: 18px; 
+  cursor: pointer; 
+  transition: color 0.3s; 
+  margin-right: 24px; 
+}
+
 .trigger:hover { color: #1890ff; }
-.user-action { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 0 12px; transition: background 0.3s; }
+
+.user-action { 
+  cursor: pointer; 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  padding: 0 12px; 
+  transition: background 0.3s; 
+}
+
 .user-action:hover { background: rgba(0,0,0,0.025); }
+
 .username { font-size: 14px; }
-.content { margin: 24px; min-height: 280px; }
+
+.content { 
+  margin: 24px; 
+  min-height: calc(100vh - 64px - 48px); 
+  transition: margin-left 0.2s;
+}
+
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

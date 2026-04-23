@@ -17,6 +17,22 @@ class RFIDController {
     }
   }
 
+  async issuePrivilege(req: Request, res: Response) {
+    try {
+      const hotelId = (req as any).user?.hotel_id;
+      const operatorId = (req as any).user?.id;
+      if (!hotelId || !operatorId) {
+        return res.status(401).json(errorResponse('Unauthorized'));
+      }
+
+      const result = await rfidService.issuePrivilegeCard(req.body, hotelId, operatorId);
+      res.json(successResponse(result, '特权卡签发指令已下发'));
+    } catch (error) {
+      logger.error('Issue privilege card controller error:', error.message);
+      res.status(500).json(errorResponse(error.message || '特权卡签发失败'));
+    }
+  }
+
   async getAll(req: Request, res: Response) {
     try {
       const hotelId = (req as any).user?.hotel_id;

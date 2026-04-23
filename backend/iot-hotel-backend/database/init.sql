@@ -1,7 +1,7 @@
 -- 智慧酒店物联网控制系统 - 数据库初始化脚本
--- 数据库架构版本: v3.5.0 (统一完整版)
--- 创建日期: 2026-04-22
--- 说明: 合并所有表结构为单一文件，包含全部44张表定义
+-- 数据库架构版本: v3.6.0 (统一完整版)
+-- 创建日期: 2026-04-23
+-- 说明: 合并所有表结构为单一文件，包含全部53张表定义
 
 CREATE DATABASE IF NOT EXISTS iot_hotel_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE iot_hotel_system;
@@ -20,6 +20,11 @@ DROP TABLE IF EXISTS login_sessions;
 DROP TABLE IF EXISTS api_tokens;
 DROP TABLE IF EXISTS sensor_data;
 DROP TABLE IF EXISTS control_commands;
+DROP TABLE IF EXISTS card_lifecycle_logs;
+DROP TABLE IF EXISTS staff_access_policies;
+DROP TABLE IF EXISTS door_security_states;
+DROP TABLE IF EXISTS occupancy_verification;
+DROP TABLE IF EXISTS rfid_access_logs;
 DROP TABLE IF EXISTS rfid_cards;
 DROP TABLE IF EXISTS scene_configs;
 DROP TABLE IF EXISTS devices;
@@ -40,13 +45,17 @@ DROP TABLE IF EXISTS review_appeals;
 DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS guests;
+DROP TABLE IF EXISTS frequent_guests;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS room_prices;
+DROP TABLE IF EXISTS rate_plans;
 DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS user_favorites;
 DROP TABLE IF EXISTS member_coupons;
 DROP TABLE IF EXISTS coupons;
 DROP TABLE IF EXISTS room_types;
 DROP TABLE IF EXISTS floors;
+DROP TABLE IF EXISTS role_applications;
 DROP TABLE IF EXISTS user_hotels;
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS roles;
@@ -151,6 +160,29 @@ CREATE TABLE user_hotels (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
+-- 5a. 角色/入驻申请表 (Role Applications)
+-- -----------------------------------------------------------------------------
+CREATE TABLE role_applications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    application_type VARCHAR(20) NOT NULL,
+    hotel_id INT DEFAULT NULL,
+    hotel_name VARCHAR(100) DEFAULT NULL,
+    hotel_address VARCHAR(255) DEFAULT NULL,
+    reason VARCHAR(500) DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    reviewed_by INT DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    review_note VARCHAR(500) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
 -- 6. 楼层表 (Floors)
 -- -----------------------------------------------------------------------------
 CREATE TABLE floors (
@@ -182,6 +214,31 @@ CREATE TABLE room_types (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_hotel_type_code (hotel_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 7a. 价格方案表 (Rate Plans)
+-- -----------------------------------------------------------------------------
+CREATE TABLE rate_plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    room_type_id INT NOT NULL,
+    plan_name VARCHAR(100) NOT NULL,
+    base_price DECIMAL(10,2) DEFAULT 0.00,
+    meal_plan ENUM('none', 'breakfast', 'half_board', 'full_board') DEFAULT 'none',
+    breakfast_count INT DEFAULT 0,
+    cancellation_policy ENUM('free', 'no_cancel', 'restricted') DEFAULT 'free',
+    cancel_time_limit INT DEFAULT 0,
+    payment_type ENUM('all', 'online_only', 'front_desk_only') DEFAULT 'all',
+    is_guaranteed TINYINT(1) DEFAULT 0,
+    prepayment_ratio DECIMAL(5,2) DEFAULT 0.00,
+    is_active TINYINT(1) DEFAULT 1,
+    default_inventory INT DEFAULT 10,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hotel_id (hotel_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+    FOREIGN KEY (room_type_id) REFERENCES room_types(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
@@ -286,6 +343,22 @@ CREATE TABLE guests (
     INDEX idx_room_id (room_id),
     CONSTRAINT fk_guest_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
     CONSTRAINT fk_guest_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 11a. 常住人表 (Frequent Guests)
+-- -----------------------------------------------------------------------------
+CREATE TABLE frequent_guests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    id_type VARCHAR(50) DEFAULT 'idcard',
+    id_number VARCHAR(50) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
@@ -415,6 +488,20 @@ CREATE TABLE member_coupons (
     INDEX idx_coupon_id (coupon_id),
     FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
     FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 17a. 用户收藏表 (User Favorites)
+-- -----------------------------------------------------------------------------
+CREATE TABLE user_favorites (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    hotel_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_hotel_id (hotel_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
@@ -611,6 +698,7 @@ CREATE TABLE rfid_cards (
     booking_id INT DEFAULT NULL,
     room_id INT DEFAULT NULL,
     member_id INT DEFAULT NULL,
+    card_type ENUM('guest', 'master', 'floor', 'staff') DEFAULT 'guest',
     status ENUM('active', 'inactive', 'lost') DEFAULT 'active',
     issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     expires_at DATETIME DEFAULT NULL,
@@ -620,6 +708,95 @@ CREATE TABLE rfid_cards (
     INDEX idx_hotel_card (hotel_id),
     INDEX idx_booking_card (booking_id),
     CONSTRAINT fk_rfid_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29a. 房卡门禁记录表 (RFID Access Logs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE rfid_access_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    card_uid VARCHAR(50) NOT NULL,
+    room_id INT DEFAULT NULL,
+    hotel_id INT NOT NULL,
+    access_type ENUM('entry', 'exit', 'denied') NOT NULL,
+    access_result ENUM('success', 'failed', 'expired', 'invalid') NOT NULL,
+    identity_type ENUM('guest', 'staff', 'visitor', 'illegal') DEFAULT 'guest',
+    fail_reason VARCHAR(100) DEFAULT NULL,
+    device_id VARCHAR(50) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_card_uid (card_uid),
+    INDEX idx_room_id (room_id),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29b. 房卡全生命周期审计表 (Card Lifecycle Logs)
+-- -----------------------------------------------------------------------------
+CREATE TABLE card_lifecycle_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    card_uid VARCHAR(50) NOT NULL,
+    hotel_id INT NOT NULL,
+    action_type ENUM('issue', 'recycle', 'lost', 'reset', 'activate', 'deactivate') NOT NULL,
+    operator_id INT DEFAULT NULL,
+    target_booking_id INT DEFAULT NULL,
+    target_user_id INT DEFAULT NULL,
+    notes VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_card_uid (card_uid),
+    INDEX idx_hotel_action (hotel_id, action_type),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29c. 员工访问策略表 (Staff Access Policies)
+-- -----------------------------------------------------------------------------
+CREATE TABLE staff_access_policies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT NOT NULL,
+    user_id INT NOT NULL,
+    access_scope ENUM('all', 'floor', 'room_list', 'public_area') NOT NULL DEFAULT 'room_list',
+    scope_value TEXT DEFAULT NULL,
+    time_slots JSON DEFAULT NULL,
+    is_emergency TINYINT(1) DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_hotel (user_id, hotel_id),
+    INDEX idx_active_status (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29d. 门锁状态表 (Door Security States)
+-- -----------------------------------------------------------------------------
+CREATE TABLE door_security_states (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    room_id INT NOT NULL UNIQUE,
+    device_id VARCHAR(50) NOT NULL,
+    lock_state ENUM('closed', 'open', 'unlocked_timeout', 'forced_open') NOT NULL DEFAULT 'closed',
+    internal_deadbolt TINYINT(1) DEFAULT 0,
+    battery_level TINYINT DEFAULT 100,
+    last_event_type ENUM('rfid', 'app', 'physical_key', 'remote', 'button') DEFAULT 'rfid',
+    last_event_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_lock_battery (lock_state, battery_level),
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 29e. 房间占用校验表 (Occupancy Verification)
+-- -----------------------------------------------------------------------------
+CREATE TABLE occupancy_verification (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    room_id INT NOT NULL UNIQUE,
+    booking_id INT DEFAULT NULL,
+    last_pir_activity DATETIME DEFAULT NULL,
+    last_card_power_state TINYINT(1) DEFAULT 0,
+    last_energy_pulse DATETIME DEFAULT NULL,
+    discrepancy_flag TINYINT(1) DEFAULT 0,
+    verified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_discrepancy (discrepancy_flag),
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------

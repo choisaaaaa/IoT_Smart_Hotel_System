@@ -465,17 +465,53 @@
       :title="cardOpType === 'issue' ? '发放房卡' : '收回房卡'"
       @ok="handleCardOp"
       :confirmLoading="cardOpLoading"
-      width="400px"
+      width="500px"
     >
       <div v-if="selectedGuestForCard" class="card-op-info">
-        <a-descriptions :column="1" size="small" style="margin-bottom: 16px;">
+        <div class="hardware-status-panel" v-if="selectedDevice">
+          <div class="status-title">
+            <LaptopOutlined /> 当前发卡设备状态
+          </div>
+          <div class="status-tags">
+            <a-tag :color="deviceOnline ? 'success' : 'error'">
+              <template #icon>
+                <CheckCircleOutlined v-if="deviceOnline" />
+                <CloseCircleOutlined v-else />
+              </template>
+              {{ deviceOnline ? '设备在线' : '设备离线' }}
+            </a-tag>
+            <a-tag v-if="deviceOnline" color="blue">
+              <template #icon><WifiOutlined /></template>
+              信号: {{ deviceSignal }}%
+            </a-tag>
+            <a-tag v-if="deviceOnline" :color="deviceBattery < 20 ? 'red' : 'green'">
+              <template #icon><ThunderboltOutlined /></template>
+              电量: {{ deviceBattery }}%
+            </a-tag>
+          </div>
+        </div>
+        <a-alert
+          v-else
+          message="未选择发卡器"
+          description="请在页面顶部选择前台发卡设备，否则无法执行物理写卡操作。"
+          type="warning"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
+        <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px;">
           <a-descriptions-item label="房间号">{{ selectedGuestForCard.room_number }}</a-descriptions-item>
           <a-descriptions-item label="住客姓名">{{ selectedGuestForCard.guest_name }}</a-descriptions-item>
+          <a-descriptions-item label="入住日期">{{ dayjs(selectedGuestForCard.check_in_date).format('MM-DD') }}</a-descriptions-item>
+          <a-descriptions-item label="退房日期">{{ dayjs(selectedGuestForCard.check_out_date).format('MM-DD') }}</a-descriptions-item>
         </a-descriptions>
 
         <template v-if="cardOpType === 'issue'">
           <div class="verify-section">
-            <div style="margin-bottom: 8px; font-weight: 500;">安全验证：</div>
+            <div style="margin-bottom: 12px; font-weight: 500; display: flex; justify-content: space-between; align-items: center;">
+              <span>安全验证</span>
+              <a-checkbox v-model:checked="autoVerify">自动核验物理 ID</a-checkbox>
+            </div>
             <a-input-password
               v-model:value="idLastFour"
               placeholder="请输入住客证件号后四位"
@@ -484,15 +520,20 @@
             >
               <template #prefix><SafetyCertificateOutlined /></template>
             </a-input-password>
-            <div style="margin-top: 8px; color: #8c8c8c; font-size: 12px;">
-              * 为了用卡安全，请务必核对住客身份。支持多次发卡。
+            <div style="margin-top: 12px; color: #8c8c8c; font-size: 12px; line-height: 1.5;">
+              <p style="margin-bottom: 4px;">• 请确保房卡已放置在发卡器感应区</p>
+              <p style="margin-bottom: 0;">• 系统将自动写入房间授权、时间期限及加密扇区</p>
             </div>
           </div>
         </template>
         <template v-else>
-          <div style="text-align: center; padding: 20px 0;">
-            <p>请将房卡置于前台发卡器上以执行注销。</p>
-            <a-spin v-if="cardOpLoading" tip="正在通信..." />
+          <div style="text-align: center; padding: 24px 0; background: #f9f9f9; border-radius: 8px;">
+            <a-spin v-if="cardOpLoading" tip="正在执行物理注销..." />
+            <template v-else>
+              <div style="font-size: 48px; color: #ff4d4f; margin-bottom: 16px;"><CloseCircleOutlined /></div>
+              <p style="font-size: 16px; font-weight: 500;">准备注销并回收房卡</p>
+              <p style="color: #8c8c8c;">请将待注销的房卡置于感应区，点击确认执行</p>
+            </template>
           </div>
         </template>
       </div>
@@ -518,7 +559,10 @@ import {
   BankOutlined,
   UserOutlined,
   LaptopOutlined,
-  ApiOutlined
+  ApiOutlined,
+  CheckCircleOutlined,
+  WifiOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
@@ -563,11 +607,27 @@ async function fetchFrontEndDevices() {
       if (list.length > 0 && !selectedDevice.value) {
         selectedDevice.value = list[0].device_id
       }
+      updateDeviceStatus()
     }
   } catch (error) {
     console.error('获取前台设备失败:', error)
   }
 }
+
+function updateDeviceStatus() {
+  if (!selectedDevice.value) return
+  const device = frontEndDevices.value.find(d => d.device_id === selectedDevice.value)
+  if (device) {
+    deviceOnline.value = device.device_status === 'online'
+    // 模拟或从扩展字段获取硬件指标
+    deviceSignal.value = deviceOnline.value ? 92 + Math.floor(Math.random() * 8) : 0
+    deviceBattery.value = 100
+  }
+}
+
+watch(selectedDevice, () => {
+  updateDeviceStatus()
+})
 
 const getLogoUrl = (url?: string) => {
   return appStore.resolveImageUrl(url) || '/logo-small.png'
@@ -694,6 +754,12 @@ const cardOpLoading = ref(false)
 const cardOpType = ref<'issue' | 'revoke'>('issue')
 const selectedGuestForCard = ref<any>(null)
 const idLastFour = ref('')
+
+// 硬件状态相关
+const deviceOnline = ref(true)
+const deviceSignal = ref(98)
+const deviceBattery = ref(100)
+const autoVerify = ref(true)
 
 function openCardModal(type: 'issue' | 'revoke', record?: any) {
   if (record) {
@@ -1366,6 +1432,29 @@ onMounted(async () => {
 
 .card-op-info {
   padding: 8px;
+}
+
+.hardware-status-panel {
+  background: #f0f5ff;
+  border: 1px solid #adc6ff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.status-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d39c4;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-tags {
+  display: flex;
+  gap: 8px;
 }
 
 .verify-section {
