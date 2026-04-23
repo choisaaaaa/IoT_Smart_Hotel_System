@@ -1,0 +1,5 @@
+name: SmartHotel
+values:
+  - key: baseUrl
+    enabled: true
+    value: ''

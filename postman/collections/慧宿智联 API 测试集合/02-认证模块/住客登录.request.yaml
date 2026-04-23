@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/guest-login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "phone": "13800138000",
+        "code": "123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('住客登录成功', function () {
+          var jsonData = pm.response.json();
+          if (jsonData.code === 200) {
+              pm.expect(jsonData.data.token).to.exist;
+              pm.environment.set('guestToken', jsonData.data.token);
+          }
+      });
+    language: text/javascript
+order: 3000

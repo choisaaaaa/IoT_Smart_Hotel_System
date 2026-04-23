@@ -1,0 +1,15 @@
+$kind: collection
+description: 慧宿智联智能酒店系统 API 接口测试 - 包含认证、预订、房间、设备等核心模块
+variables:
+  baseUrl: http://localhost:3000
+  adminToken: ""
+  receptionToken: ""
+  guestToken: ""
+  bookingId: ""
+scripts:
+  - type: http:beforeRequest
+    code: // 全局前置脚本
+    language: text/javascript
+  - type: http:afterResponse
+    code: // 全局测试脚本
+    language: text/javascript
