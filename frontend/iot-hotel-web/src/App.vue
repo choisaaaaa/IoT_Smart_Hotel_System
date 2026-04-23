@@ -962,7 +962,8 @@ const handleSecurityEvent = (data: any) => {
       message: eventData.message || data.description || '紧急报警',
       timestamp: data.timestamp || new Date().toISOString(),
       floorId: eventData.floor_id,
-      roomId: eventData.room_id || eventData.room_number
+      roomId: eventData.room_id || eventData.room_number,
+      acknowledged: false
     })
   }
 }

@@ -84,7 +84,15 @@ class EnvironmentService {
         queryParameters: queryParams,
       );
       if (response.statusCode == 200 && isApiSuccess(response.data)) {
-        final data = response.data['data'] as Map<String, dynamic>;
+        final rawData = response.data['data'];
+        Map<String, dynamic> data;
+        if (rawData is Map<String, dynamic>) {
+          data = rawData;
+        } else if (rawData is List) {
+          data = {'list': rawData, 'pagination': {'total': rawData.length}};
+        } else {
+          data = {};
+        }
         final List<dynamic> alarmList = List<dynamic>.from(data['list'] ?? []);
 
         final mappedAlarms = alarmList.map((alarm) {
@@ -334,11 +342,13 @@ class EnvironmentService {
       Map<String, dynamic> statsData = {};
 
       if (results[0].statusCode == 200 && results[0].data['code'] == 200) {
-        consumptionData = results[0].data['data'] as Map<String, dynamic>;
+        final rawData = results[0].data['data'];
+        if (rawData is Map<String, dynamic>) consumptionData = rawData;
       }
 
       if (results[1].statusCode == 200 && results[1].data['code'] == 200) {
-        statsData = results[1].data['data'] as Map<String, dynamic>;
+        final rawData = results[1].data['data'];
+        if (rawData is Map<String, dynamic>) statsData = rawData;
       }
 
       final totalToday = (statsData['total'] as num?)?.toDouble() ?? 0;
@@ -378,96 +388,35 @@ class EnvironmentService {
     int? limit,
   }) async {
     try {
-      final alarmParams = <String, dynamic>{
-        'pageSize': limit ?? 100,
+      final queryParams = <String, dynamic>{
+        'limit': limit ?? 100,
       };
-      if (severity != null) alarmParams['alarm_level'] = severity;
+      if (eventType != null) queryParams['event_type'] = eventType;
+      if (severity != null) queryParams['severity'] = severity;
 
-      final alarmResponse = await _dioClient.get(
-        ApiConstants.deviceAlarms,
-        queryParameters: alarmParams,
+      final response = await _dioClient.get(
+        '${ApiConstants.environment}/event-logs',
+        queryParameters: queryParams,
       );
 
-      List<dynamic> allLogs = [];
-
-      if (alarmResponse.statusCode == 200 && alarmResponse.data['code'] == 200) {
-        final alarmData = alarmResponse.data['data'] as Map<String, dynamic>;
-        final List<dynamic> alarmList = List<dynamic>.from(alarmData['list'] ?? []);
-
-        for (final alarm in alarmList) {
-          String mappedEventType;
-          switch (alarm['alarm_type']?.toString()) {
-            case 'smoke':
-            case 'fire':
-              mappedEventType = 'fire_alarm';
-              break;
-            case 'temperature':
-            case 'overheat':
-              mappedEventType = 'environment_warning';
-              break;
-            case 'offline':
-            case 'device_error':
-              mappedEventType = 'device_error';
-              break;
-            default:
-              mappedEventType = 'device_error';
-          }
-
-          String mappedSeverity;
-          switch (alarm['alarm_level']?.toString()) {
-            case 'emergency':
-            case 'critical':
-              mappedSeverity = 'critical';
-              break;
-            case 'error':
-            case 'high':
-              mappedSeverity = 'error';
-              break;
-            case 'warning':
-            case 'medium':
-              mappedSeverity = 'warning';
-              break;
-            default:
-              mappedSeverity = 'info';
-          }
-
-          allLogs.add({
-            'id': alarm['id'],
-            'event_type': mappedEventType,
-            'room_id': alarm['room_id'],
-            'room_number': alarm['room_number'] ?? alarm['room_id']?.toString() ?? '-',
-            'title': _getAlarmTitle(alarm['alarm_type'], alarm['alarm_level']),
-            'description': alarm['alarm_content'] ?? '设备告警',
-            'severity': mappedSeverity,
-            'created_at': alarm['created_at'] ?? '',
-            'resolved': alarm['status'] == 'resolved' || alarm['status'] == 'ignored',
-            'resolved_at': alarm['handled_at'],
-            'handled_by': alarm['handled_by']?.toString(),
-          });
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
+        final data = response.data['data'];
+        if (data is Map<String, dynamic>) {
+          return ApiResult.success(data);
         }
+        return ApiResult.success({
+          'logs': [],
+          'total': 0,
+          'summary': {
+            'critical_count': 0,
+            'unresolved_count': 0,
+            'today_total': 0,
+          },
+        });
       }
-
-      if (eventType != null) {
-        allLogs = allLogs.where((log) => log['event_type'] == eventType).toList();
-      }
-      if (severity != null) {
-        allLogs = allLogs.where((log) => log['severity'] == severity).toList();
-      }
-
-      final criticalCount = allLogs.where((l) => l['severity'] == 'critical' && l['resolved'] == false).length;
-      final unresolvedCount = allLogs.where((l) => l['resolved'] == false).length;
-
-      return ApiResult.success({
-        'logs': allLogs,
-        'total': allLogs.length,
-        'summary': {
-          'critical_count': criticalCount,
-          'unresolved_count': unresolvedCount,
-          'today_total': allLogs.length,
-        },
-      });
+      return ApiResult.failure(response.data['message'] ?? '获取事件日志失败');
     } catch (e) {
-      return ApiResult.failure('网络错误�?e');
+      return ApiResult.failure('网络错误：$e');
     }
   }
 
@@ -526,7 +475,12 @@ class EnvironmentService {
       try {
         final deviceResponse = await _dioClient.get(ApiConstants.devices);
         if (deviceResponse.statusCode == 200 && deviceResponse.data['code'] == 200) {
-          deviceData = deviceResponse.data['data'] as Map<String, dynamic>? ?? {};
+          final rawData = deviceResponse.data['data'];
+          if (rawData is Map<String, dynamic>) {
+            deviceData = rawData;
+          } else if (rawData is List) {
+            deviceData = {'list': rawData};
+          }
         }
       } catch (e) {
         debugPrint('获取设备数据失败: $e');
@@ -536,7 +490,12 @@ class EnvironmentService {
       try {
         final alarmResponse = await _dioClient.get('${ApiConstants.deviceAlarms}/stats');
         if (alarmResponse.statusCode == 200 && alarmResponse.data['code'] == 200) {
-          alarmStats = alarmResponse.data['data'] as Map<String, dynamic>? ?? {};
+          final rawData = alarmResponse.data['data'];
+          if (rawData is Map<String, dynamic>) {
+            alarmStats = rawData;
+          } else if (rawData is List) {
+            alarmStats = {'list': rawData};
+          }
         }
       } catch (e) {
         debugPrint('获取告警统计失败: $e');

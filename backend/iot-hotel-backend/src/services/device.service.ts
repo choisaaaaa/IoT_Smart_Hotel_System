@@ -295,7 +295,7 @@ class DeviceService {
           );
           return rows as DeviceData[];
         },
-        { ttl: 60 }
+        { ttl: 10 } // 待审核设备缓存10秒（高频变更数据）
       );
     } catch (error) {
       logger.error('Error getting pending devices:', error.message);
@@ -370,7 +370,7 @@ class DeviceService {
           const [rows] = await pool.query<RowDataPacket[]>(query, params);
           return rows;
         },
-        { ttl: 300 }
+        { ttl: 10 } // 设备列表缓存10秒（高频变更数据）
       );
     } catch (error) {
       logger.error('Error getting devices:', error.message);
@@ -408,7 +408,7 @@ class DeviceService {
           const [rows] = await pool.query<RowDataPacket[]>(query, params);
           return rows.length > 0 ? (rows[0] as DeviceData) : null;
         },
-        { ttl: 300 }
+        { ttl: 10 } // 设备详情缓存10秒（高频变更数据）
       );
     } catch (error) {
       logger.error('Error getting device by id:', error.message);

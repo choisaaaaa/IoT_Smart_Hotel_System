@@ -5,6 +5,7 @@ import mqttService from './services/mqtt.service';
 import websocketService from './services/websocket.service';
 import { orderTimeoutService } from './services/order-timeout.service';
 import { autoCheckoutService } from './services/auto-checkout.service';
+import { cacheInvalidationService } from './services/cache-invalidation.service';
 import pool from './config/database';
 
 const PORT = config.app.port;

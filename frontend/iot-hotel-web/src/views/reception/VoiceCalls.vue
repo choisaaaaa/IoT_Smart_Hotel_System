@@ -35,77 +35,64 @@
     <!-- 当前通话 (统一由 App.vue 处理，这里仅保留挂断快捷键或隐藏) -->
     <!-- 移除了本地 redundant current-call-section -->
 
-    <!-- 呼叫网格与调度面板 -->
+    <!-- 广播与呼叫面板 -->
     <div class="calls-main-layout">
-      <!-- 调度面板 -->
-      <a-card class="duty-management-card" title="话务调度面板" :bodyStyle="{ padding: '16px' }">
+      <!-- 房间广播面板 -->
+      <a-card class="broadcast-card" title="📢 房间广播" :bodyStyle="{ padding: '16px' }">
         <template #extra>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <a-button type="primary" size="small" @click="openBroadcastModal">
-              <template #icon><SoundOutlined /></template>
-              房间广播
-            </a-button>
-            <a-badge :status="appStore.userStatus?.isOnDuty ? 'success' : 'default'" :text="appStore.userStatus?.isOnDuty ? '值班中' : '休息中'" />
-          </div>
+          <a-button type="primary" size="small" @click="openBroadcastModal">
+            <template #icon><SoundOutlined /></template>
+            发起广播
+          </a-button>
         </template>
 
-        <div class="duty-controls">
-          <div class="control-item">
-            <span class="label">接听状态:</span>
-            <a-switch
-              :checked="appStore.userStatus?.isOnDuty"
-              @change="handleDutySwitch"
-              checked-children="在岗"
-              un-checked-children="离岗"
-            />
-          </div>
+        <div class="broadcast-info">
+          <a-alert
+            message="房间广播功能"
+            description="向指定房间发送语音广播消息，由AI自动朗读。支持多房间同时推送。"
+            type="info"
+            show-icon
+            :banner="false"
+            style="margin-bottom: 16px"
+          />
 
-          <div class="control-item" v-if="appStore.userStatus?.isOnDuty">
-            <span class="label">当值岗位:</span>
-            <a-select v-model:value="currentDutyRole" @change="handleRoleChange" style="width: 130px">
-              <a-select-option value="reception">客服前台</a-select-option>
-              <a-select-option value="manager">值班经理</a-select-option>
-              <a-select-option value="security">安保中心</a-select-option>
-              <a-select-option value="cleaning">保洁调度</a-select-option>
-            </a-select>
-          </div>
-
-          <a-divider style="margin: 8px 0" />
-
-          <div class="mic-check-section">
-            <a-button
-              block
-              :type="micStatus === 'success' ? 'default' : 'primary'"
-              @click="checkMicPermission"
-              :loading="micChecking"
-            >
-              <template #icon>
-                <AudioOutlined v-if="micStatus !== 'success'" />
-                <CheckCircleOutlined v-else style="color: #52c41a" />
-              </template>
-              {{ micStatus === 'success' ? '麦克风已就绪' : '检测麦克风权限' }}
-            </a-button>
-            <div v-if="micStatus === 'error'" class="mic-error-tip">
-              <WarningOutlined /> 麦克风未授权或设备不可用
-            </div>
+          <div class="broadcast-stats">
+            <a-statistic title="在线房间" :value="roomList.filter(r => r.isOnline).length" :value-style="{ color: '#52c41a' }">
+              <template #prefix><HomeOutlined /></template>
+            </a-statistic>
+            <a-statistic title="可广播房间" :value="roomList.length" :value-style="{ color: '#1890ff' }">
+              <template #prefix><SoundOutlined /></template>
+            </a-statistic>
           </div>
         </div>
 
         <a-divider style="margin: 16px 0" />
 
-        <div class="online-staff-section">
+        <div class="recent-broadcast-section">
           <div class="section-header">
-            <span class="title">当前值班 ({{ onDutyStaff.length }})</span>
-            <span class="subtitle">仅在岗人员可接收公共呼叫</span>
+            <span class="title">最近广播记录</span>
           </div>
-          <div class="staff-list-mini">
-            <div v-for="staff in onDutyStaff" :key="staff.id" class="staff-item-mini">
-              <a-avatar size="small" :src="staff.avatar">{{ staff.name[0] }}</a-avatar>
-              <span class="staff-name">{{ staff.name }}</span>
-              <a-tag size="small" color="blue">{{ getRoleLabel(staff.dutyRole) }}</a-tag>
-            </div>
-            <a-empty v-if="onDutyStaff.length === 0" description="暂无值班人员" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
-          </div>
+          <a-list :data-source="broadcastHistory" size="small" :pagination="{ pageSize: 5 }">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <div style="width: 100%">
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="font-weight: bold;">{{ item.time }}</span>
+                    <a-tag :color="item.successCount === item.totalCount ? 'success' : 'warning'">
+                      推送: {{ item.successCount }}/{{ item.totalCount }}
+                    </a-tag>
+                  </div>
+                  <div style="color: #666; margin-top: 4px; font-size: 13px;">{{ item.text }}</div>
+                  <div style="font-size: 12px; color: #999; margin-top: 2px;">
+                    目标: {{ item.targets.join(', ') }}
+                  </div>
+                </div>
+              </a-list-item>
+            </template>
+            <template #header v-if="broadcastHistory.length === 0">
+              <div style="text-align: center; color: #999;">暂无广播记录</div>
+            </template>
+          </a-list>
         </div>
       </a-card>
 
@@ -236,29 +223,6 @@
           </a-form-item>
       
          </a-form>
-         
-         <a-divider orientation="left">最近广播记录</a-divider>
-         <a-list :data-source="broadcastHistory" size="small" :pagination="{ pageSize: 3 }">
-           <template #renderItem="{ item }">
-             <a-list-item>
-               <div style="width: 100%">
-                 <div style="display: flex; justify-content: space-between;">
-                   <span style="font-weight: bold;">{{ item.time }}</span>
-                   <a-tag :color="item.successCount === item.totalCount ? 'success' : 'warning'">
-                     推送: {{ item.successCount }}/{{ item.totalCount }}
-                   </a-tag>
-                 </div>
-                 <div style="color: #666; margin-top: 4px; font-size: 13px;">{{ item.text }}</div>
-                 <div style="font-size: 12px; color: #999; margin-top: 2px;">
-                   目标: {{ item.targets.join(', ') }}
-                 </div>
-               </div>
-             </a-list-item>
-           </template>
-           <template #header v-if="broadcastHistory.length === 0">
-             <div style="text-align: center; color: #999;">暂无发送记录</div>
-           </template>
-         </a-list>
        </div>
      </a-modal>
   </div>
@@ -800,6 +764,8 @@ onUnmounted(() => {
   if (fetchCallsTimer.value) {
     clearInterval(fetchCallsTimer.value)
   }
+  // 清理通话时长计时器，防止组件卸载后计时器继续运行
+  stopCallDurationTimer()
 })
 
 const historyColumns = [
@@ -819,43 +785,23 @@ const historyColumns = [
   align-items: flex-start;
 }
 
-.duty-management-card {
-  width: 320px;
+.broadcast-card {
+  width: 380px;
   flex-shrink: 0;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-.duty-controls {
+.broadcast-info {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.control-item {
+.broadcast-stats {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.control-item .label {
-  color: #595959;
-  font-weight: 500;
-}
-
-.mic-check-section {
-  margin-top: 8px;
-}
-
-.mic-error-tip {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #ff4d4f;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 16px;
+  justify-content: space-around;
 }
 
 .section-header {
@@ -865,31 +811,6 @@ const historyColumns = [
 .section-header .title {
   display: block;
   font-weight: 600;
-  font-size: 14px;
-}
-
-.section-header .subtitle {
-  font-size: 12px;
-  color: #bfbfbf;
-}
-
-.staff-list-mini {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.staff-item-mini {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  background: #fafafa;
-  border-radius: 8px;
-}
-
-.staff-name {
-  flex: 1;
   font-size: 14px;
 }
 

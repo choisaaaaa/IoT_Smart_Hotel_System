@@ -142,6 +142,7 @@ import {
 import dayjs from 'dayjs'
 import { useAppStore } from '@/stores/app'
 import request from '@/api/request'
+import { environmentApi } from '@/api/environment'
 
 interface AlarmInfo {
   id: string
@@ -154,6 +155,7 @@ interface AlarmInfo {
   timestamp: string
   floorId?: string
   roomId?: string
+  acknowledged?: boolean
 }
 
 const appStore = useAppStore()
@@ -254,21 +256,13 @@ async function handleAcknowledge() {
   acknowledging.value = true
   
   try {
-    // 调用后端API确认报警（如果后端有实现）
-    try {
-      await request.post('/security/acknowledge', {
-        alarm_id: currentAlarm.value.id,
-        device_id: currentAlarm.value.deviceId,
+    // 调用后端API确认报警
+    const alarmId = parseInt(currentAlarm.value.id)
+    if (!isNaN(alarmId)) {
+      await environmentApi.acknowledgeAlarm(alarmId, {
         handler: appStore.userInfo?.username || '前台工作人员',
-        timestamp: new Date().toISOString()
+        notes: '通过报警弹窗确认处理'
       })
-    } catch (apiError: any) {
-      // 如果API不存在(404)，则忽略错误，继续执行消警指令
-      if (apiError?.response?.status === 404) {
-        console.log('[AlarmAlertModal] 消警API未实现，跳过')
-      } else {
-        throw apiError
-      }
     }
     
     // 发送消警指令到设备

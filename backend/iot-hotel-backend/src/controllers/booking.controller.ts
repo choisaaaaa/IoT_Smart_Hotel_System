@@ -12,6 +12,41 @@ import { isSystemAdmin, isCustomer, isGuest, isStaff, isHotelAdmin, CANONICAL_RO
 import { LEVEL_DISCOUNTS, LEVEL_POINTS_MULTIPLIER } from '../config/constants';
 import { orderTimeoutService } from '../services/order-timeout.service';
 import { systemConfigService } from '../services/system-config.service';
+import CacheService from '../services/cache.service';
+import { eventBus, EVENT_TYPES } from '../utils/event-bus';
+
+// 辅助函数：清除订单相关的所有缓存
+async function clearBookingRelatedCaches(bookingId: number, hotelId: number, bookingNumber?: string, status?: string) {
+  try {
+    // 清除订单详情缓存
+    await CacheService.delete(CacheService.bookingKeys.info(bookingId));
+    
+    // 清除按订单号缓存
+    if (bookingNumber) {
+      await CacheService.delete(CacheService.bookingKeys.byNumber(bookingNumber));
+    }
+    
+    // 清除所有相关的订单列表缓存
+    await CacheService.deletePattern(`booking:list:${hotelId}*`);
+    
+    // 清除TTS相关缓存（如果有）
+    await CacheService.deletePattern(`tts:booking:${bookingId}:*`);
+    
+    // 发布事件通知其他模块清除相关缓存
+    if (status) {
+      await eventBus.emit(EVENT_TYPES.BOOKING_STATUS_CHANGED, {
+        bookingId,
+        hotelId,
+        bookingNumber,
+        status
+      });
+    }
+    
+    logger.info(`已清除订单 ${bookingId} 相关缓存`);
+  } catch (error) {
+    logger.error(`清除订单 ${bookingId} 缓存失败:`, error.message);
+  }
+}
 
 // 辅助函数：退房后更新会员成长值、积分与等级
 async function updateMemberExperienceAfterCheckout(connection: PoolConnection, guestPhone: string, totalPrice: number, guestName?: string) {
@@ -1086,6 +1121,10 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     }
 
     await connection.commit();
+    
+    // 立即清除所有相关缓存，确保数据一致性
+    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, 'checked_in');
+    
     res.json(successResponse(null, '办理入住成功'));
   } catch (error: any) {
     await connection.rollback();
@@ -1199,6 +1238,10 @@ export const checkout = async (req: AuthRequest, res: Response) => {
     }
 
     await connection.commit();
+    
+    // 立即清除所有相关缓存，确保数据一致性
+    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, 'checked_out');
+    
     res.json(successResponse(null, '办理退房成功'));
   } catch (error) {
     await connection.rollback();
@@ -1526,6 +1569,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }
 
     await connection.commit();
+    
+    // 立即清除所有相关缓存，确保数据一致性
+    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, status);
+    
     res.json(successResponse(null, '更新预订状态成功'));
   } catch (error) {
     await connection.rollback();

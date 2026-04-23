@@ -45,7 +45,7 @@ class MQTTService {
   private baseReconnectDelay: number = 1000;
   private wsInstance: any = null;
   private callCache: Map<string, { caller_type: string, caller_id: any, callee_type: string, callee_id: any }> = new Map();
-  private deviceCache: Map<string, { audit_status: string, device_key: string, device_key_encrypted?: string, hotel_id?: number }> = new Map();
+  private deviceCache: Map<string, { audit_status: string, device_key: string, device_key_encrypted?: string, hotel_id?: number, room_id?: number }> = new Map();
 
   constructor() {
     this.startOfflineCheck();
@@ -83,7 +83,7 @@ class MQTTService {
 
     if (!device) {
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT audit_status, device_key, device_key_encrypted, hotel_id FROM devices WHERE device_id = ?',
+        'SELECT audit_status, device_key, device_key_encrypted, hotel_id, room_id FROM devices WHERE device_id = ?',
         [deviceId]
       );
       device = rows[0] as any;
@@ -805,6 +805,43 @@ class MQTTService {
       );
 
       logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}, hotelId: ${hotelId}`);
+
+      // 如果是火警或SOS报警，同时插入到 device_alarms 表，以便在消防报警记录页面显示
+      if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm') {
+        try {
+          // 获取设备信息以确定酒店ID和房间ID
+          let resolvedHotelId = hotelId;
+          let roomId = null;
+          const eventData = data.data || {};
+
+          if (!resolvedHotelId || resolvedHotelId === 0) {
+            const device = await this.getDeviceMetadata(data.device_id);
+            resolvedHotelId = device?.hotel_id || 0;
+            roomId = device?.room_id || null;
+          }
+
+          // 如果 event_data 中有 room_id，优先使用
+          if (eventData.room_id) {
+            roomId = parseInt(eventData.room_id) || null;
+          }
+
+          await pool.query<ResultSetHeader>(
+            `INSERT INTO device_alarms (device_id, hotel_id, room_id, alarm_type, alarm_level, alarm_content, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())`,
+            [
+              data.device_id || '',
+              resolvedHotelId || 0,
+              roomId,
+              'fire',
+              data.level === 'critical' ? 'emergency' : (data.level || 'warning'),
+              eventData.message || data.description || `${data.event_type === 'fire_alarm' ? '消防报警' : 'SOS报警'}触发`
+            ]
+          );
+          logger.info(`[MQTT] ${data.event_type} 已同步到 device_alarms 表`);
+        } catch (alarmError) {
+          logger.error(`[MQTT] 同步 ${data.event_type} 到 device_alarms 失败:`, alarmError.message);
+        }
+      }
 
       // 如果是发卡器感应到卡片，更新设备的 last_card_uid，并尝试下发同步指令
       if (data.event_type === 'card_uid_detected' && data.card_uid) {
