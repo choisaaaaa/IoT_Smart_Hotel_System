@@ -4,7 +4,7 @@ import logger from './utils/logger';
 export async function migrate() {
   try {
     logger.info('Starting database migration...');
-    
+
     // Check if user_id column exists in bookings
     const [columns] = await pool.query<any[]>(`
       SELECT COLUMN_NAME 
@@ -23,6 +23,86 @@ export async function migrate() {
         ADD CONSTRAINT fk_booking_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       `);
       logger.info('Successfully added user_id to bookings table.');
+    }
+
+    // --- 检查并创建 review_appeals 表 ---
+    const [reviewAppealsExists] = await pool.query<any[]>(`
+      SELECT TABLE_NAME
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'review_appeals'
+    `);
+
+    if (reviewAppealsExists.length === 0) {
+      logger.info('Creating review_appeals table...');
+      await pool.query(`
+        CREATE TABLE review_appeals (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          review_id INT NOT NULL,
+          hotel_id INT NOT NULL,
+          appellant_id INT NOT NULL,
+          appeal_reason TEXT NOT NULL,
+          status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+          handler_id INT DEFAULT NULL,
+          handle_reason TEXT DEFAULT NULL,
+          handled_at DATETIME DEFAULT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_review_id (review_id),
+          INDEX idx_hotel_id (hotel_id),
+          INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('Successfully created review_appeals table.');
+    } else {
+      // 检查表结构是否完整
+      const [appealColumns] = await pool.query<any[]>(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'review_appeals'
+      `);
+      const appealColNames = appealColumns.map((c: any) => c.COLUMN_NAME.toLowerCase());
+
+      const appealAdditions = [
+        { name: 'handled_at', type: 'DATETIME DEFAULT NULL' }
+      ];
+
+      for (const col of appealAdditions) {
+        if (!appealColNames.includes(col.name.toLowerCase())) {
+          logger.info(`Adding column ${col.name} to review_appeals table...`);
+          await pool.query(`ALTER TABLE review_appeals ADD COLUMN ${col.name} ${col.type}`);
+        }
+      }
+    }
+
+    // --- 检查并创建 mqtt_communication_logs 表 ---
+    const [mqttLogsExists] = await pool.query<any[]>(`
+      SELECT TABLE_NAME
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'mqtt_communication_logs'
+    `);
+
+    if (mqttLogsExists.length === 0) {
+      logger.info('Creating mqtt_communication_logs table...');
+      await pool.query(`
+        CREATE TABLE mqtt_communication_logs (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          hotel_id INT DEFAULT 0,
+          device_id VARCHAR(100) DEFAULT NULL,
+          topic VARCHAR(500) NOT NULL,
+          payload TEXT,
+          direction ENUM('in', 'out') DEFAULT 'in',
+          qos INT DEFAULT 0,
+          retain TINYINT DEFAULT 0,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_hotel_id (hotel_id),
+          INDEX idx_device_id (device_id),
+          INDEX idx_timestamp (timestamp)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('Successfully created mqtt_communication_logs table.');
     }
 
     // --- 对齐 hotels 表结构 ---
