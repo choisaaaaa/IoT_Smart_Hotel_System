@@ -48,11 +48,56 @@ router.get('/me', authenticate as any, memberController.getMe);
  *       200:
  *         description: 充值成功
  */
+/**
+ * @swagger
+ * /members/status:
+ *   get:
+ *     summary: 获取会员状态统计
+ *     tags: [Members]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/status', authenticate as any, memberController.getStatus);
+
+/**
+ * @swagger
+ * /members/discounts:
+ *   get:
+ *     summary: 获取会员等级折扣配置
+ *     tags: [Members]
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ *   put:
+ *     summary: 更新会员等级折扣配置
+ *     tags: [Members]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
 router.get('/discounts', memberController.getLevelDiscounts);
 router.put('/discounts', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), memberController.updateLevelDiscounts);
+
+/**
+ * @swagger
+ * /members/checkin:
+ *   post:
+ *     summary: 会员每日签到获取积分
+ *     tags: [Members]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 签到成功
+ */
 router.post('/recharge', authenticate as any, memberController.rechargeBalance);
 router.post('/checkin', authenticate as any, memberController.checkin);
+
 
 router.post('/fix-schema', authenticate as any, memberController.fixDatabaseSchema);
 router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), memberController.getById);

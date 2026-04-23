@@ -38,6 +38,16 @@ const options: swaggerJsdoc.Options = {
             code: { type: 'integer', example: 200 },
             message: { type: 'string', example: 'success' },
             data: { type: 'object' },
+            timestamp: { type: 'number', example: 1714022400000 },
+          },
+        },
+        ApiError: {
+          type: 'object',
+          properties: {
+            code: { type: 'integer', example: 400 },
+            message: { type: 'string', example: '请求参数错误' },
+            details: { type: 'object' },
+            timestamp: { type: 'number', example: 1714022400000 },
           },
         },
         Hotel: {

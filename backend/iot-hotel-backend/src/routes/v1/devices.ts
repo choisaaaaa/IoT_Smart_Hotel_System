@@ -55,13 +55,70 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
  *       200:
  *         description: 指令已发送
  */
+/**
+ * @swagger
+ * /devices/register:
+ *   post:
+ *     summary: 设备注册/上线
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 注册成功
+ */
 router.post('/register', optionalDeviceAuthMiddleware as any, deviceController.register);
+
+/**
+ * @swagger
+ * /devices/test-beep:
+ *   post:
+ *     summary: 远程触发设备蜂鸣器测试
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 指令已发送
+ */
 router.post('/test-beep', authenticate as any, authorize(allRoles), deviceController.testBeep);
+
+/**
+ * @swagger
+ * /devices/room-card:
+ *   post:
+ *     summary: 处理房间插卡/取卡事件
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 处理成功
+ */
 router.post('/room-card', authenticate as any, authorize(allRoles), deviceController.handleRoomCard);
 router.get('/', authenticate as any, authorize(allRoles), deviceController.getAll);
 router.get('/:id', authenticate as any, authorize(allRoles), deviceController.getById);
+
+/**
+ * @swagger
+ * /devices/{id}/audit:
+ *   put:
+ *     summary: 设备审核/上线状态更新
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 审核成功
+ */
 router.put('/:id/audit', authenticate as any, authorize(adminRoles), deviceController.audit);
 router.delete('/:id', authenticate as any, authorize(adminRoles), deviceController.delete);
+
 /**
  * @swagger
  * /devices/{id}/sensor-data:
