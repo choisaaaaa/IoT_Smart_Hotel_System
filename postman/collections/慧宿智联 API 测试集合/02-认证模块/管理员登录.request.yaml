@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "username": "admin",
+        "password": "admin123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('登录成功', function () {
+          pm.response.to.have.status(200);
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.code).to.eql(200);
+          pm.expect(jsonData.data.token).to.exist;
+          pm.environment.set('adminToken', jsonData.data.token);
+      });
+
+      pm.test('响应时间小于 200ms', function () {
+          pm.expect(pm.response.responseTime).to.be.below(200);
+      });
+    language: text/javascript
+order: 1000

@@ -88,7 +88,6 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         )
 
         self._sync_room_info()
-        self._draw_card()
 
     def _sync_room_info(self):
         old_room_id = self.room_id

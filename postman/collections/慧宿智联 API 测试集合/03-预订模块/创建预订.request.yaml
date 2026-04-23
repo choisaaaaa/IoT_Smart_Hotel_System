@@ -1,0 +1,38 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/bookings"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: |-
+    {
+        "room_id": 1,
+        "room_type_id": 1,
+        "check_in_date": "2026-05-01",
+        "check_out_date": "2026-05-03",
+        "guest_name": "测试住客",
+        "guest_phone": "13800138000",
+        "guest_count": 2,
+        "remark": "测试预订"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('创建预订成功', function () {
+          var jsonData = pm.response.json();
+          if (jsonData.code === 200 || jsonData.code === 201) {
+              pm.expect(jsonData.data.id).to.exist;
+              pm.environment.set('bookingId', jsonData.data.id);
+          }
+      });
+
+      pm.test('预订状态为 pending', function () {
+          var jsonData = pm.response.json();
+          if (jsonData.data) {
+              pm.expect(jsonData.data.status).to.eql('pending');
+          }
+      });
+    language: text/javascript
+order: 1000

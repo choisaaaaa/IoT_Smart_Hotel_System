@@ -1,0 +1,11 @@
+# Use this workspace to collaborate
+workspace:
+  id: fac03992-ad14-40a4-86d0-b9d23630969c
+
+localResources:
+  collections:
+    - ..\tests\api\postman_collection.json
+
+cloudResources:
+  collections:
+    ..\postman\collections\慧宿智联 API 测试集合: 4553f929-8e6b-4464-bacc-a2d826b48f4f

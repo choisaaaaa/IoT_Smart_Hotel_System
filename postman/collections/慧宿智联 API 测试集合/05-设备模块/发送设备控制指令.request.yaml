@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/devices/control"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{guestToken}}
+body:
+  type: text
+  content: |-
+    {
+        "device_id": "room_001_light",
+        "command": "turn_off",
+        "mode": "sleep"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('设备控制指令发送成功', function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.code).to.be.oneOf([200, 202]);
+      });
+    language: text/javascript
+order: 2000
