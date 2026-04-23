@@ -1,71 +1,63 @@
 # 智慧酒店物联网控制系统 - 数据库 E-R 图设计
 
-> 版本: v2.0.0
-> 更新日期: 2026-04-16
+> 版本: v3.0.0
+> 更新日期: 2026-04-19
 > 适用范围: 后端服务、Web前端、App端、硬件接口
 
 ---
 
 ## 一、核心实体分类总览
 
-系统采用 **6大模块** 设计，共 **40张核心表**（新增12张）：
+系统采用 **6大模块** 设计，共 **28张核心表**：
 
 | 模块 | 表数量 | 核心功能 |
 |------|--------|----------|
-| 用户与权限 | 7 | 四角色模型、扫码登录、会话管理 |
-| 酒店与房间 | 8 | 酒店管理、房型、场景配置、房卡 |
+| 用户与权限 | 7 | 五角色模型、扫码登录、会话管理 |
+| 酒店与房间 | 6 | 酒店管理、房型、楼层 |
 | 预订与入住 | 4 | 预订、入住、支付、常住客 |
-| 会员与营销 | 6 | 会员体系、优惠券、评价、申诉 |
-| IoT物联网 | 9 | 设备控制、传感器、通话、MQTT、安防 |
-| 客房服务 | 3 | 送物、维修工单、角色申请 |
+| 会员与营销 | 4 | 会员体系、优惠券、评价 |
+| IoT物联网 | 3 | 设备控制、传感器、通话 |
+| 客房服务 | 4 | 送物、维修工单、消息、角色申请 |
 
 ---
 
 ## 二、E-R 关系总图
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e8f5e9', 'fontSize': '14px' }, 'flowchart': { 'htmlLabels': true, 'curve': 'basis' }, 'er': { 'diagramPadding': 20, 'layoutDirection': 'TB' }}}%%
 erDiagram
     USERS ||--o{ USER_ROLES : "拥有"
     USERS ||--o{ USER_HOTELS : "属于"
     USERS ||--o{ API_TOKENS : "生成"
     USERS ||--o{ LOGIN_SESSIONS : "创建"
+    USERS ||--o{ ROLE_APPLICATIONS : "申请"
     USER_ROLES }o--|| ROLES : "分配给"
     USER_HOTELS }o--|| HOTELS : "管理"
     HOTELS ||--o{ FLOORS : "包含"
-    HOTELS ||--o{ ROOMS : "拥有"
     HOTELS ||--o{ ROOM_TYPES : "定义"
-    HOTELS ||--o{ SCENE_CONFIGS : "配置"
-    HOTELS ||--o{ RFID_CARDS : "管理"
+    HOTELS ||--o{ ROOMS : "拥有"
+    HOTELS ||--o{ COUPONS : "发放"
     HOTELS ||--o{ REVIEWS : "接收"
-    HOTELS ||--o{ CALLS : "通话"
-    HOTELS ||--o{ MQTT_LOGS : "通信"
-    ROOMS ||--o{ RFID_CARDS : "绑定"
-    ROOMS ||--o{ BOOKINGS : "被预订"
-    ROOMS ||--o{ ROOM_PRICES : "定价"
-    ROOMS ||--o{ DELIVERY_ORDERS : "接收"
-    ROOMS ||--o{ MAINTENANCE_TICKETS : "报修"
+    HOTELS ||--o{ BOOKINGS : "预订"
+    HOTELS ||--o{ DELIVERY_ORDERS : "服务"
+    HOTELS ||--o{ MAINTENANCE_TICKETS : "报修"
+    HOTELS ||--o{ PAYMENTS : "支付"
     ROOM_TYPES ||--o{ ROOMS : "分类"
+    ROOMS ||--o{ ROOM_PRICES : "定价"
+    ROOMS ||--o{ BOOKINGS : "被预订"
+    ROOMS ||--o{ DELIVERY_ORDERS : "送物"
+    ROOMS ||--o{ MAINTENANCE_TICKETS : "维修"
+    ROOMS ||--o{ MESSAGES : "消息"
     BOOKINGS }o--|| USERS : "创建"
-    BOOKINGS }o--|| GUESTS : "入住"
-    BOOKINGS ||--o{ RFID_CARDS : "发卡"
-    BOOKINGS ||--o{ PAYMENTS : "支付"
     BOOKINGS }o--|| RATE_PLANS : "使用"
-    GUESTS ||--o{ BOOKINGS : "入住"
+    BOOKINGS ||--o{ PAYMENTS : "支付"
+    BOOKINGS ||--o{ DELIVERY_ORDERS : "关联"
+    BOOKINGS ||--o{ MAINTENANCE_TICKETS : "关联"
     MEMBERS ||--o{ MEMBER_COUPONS : "领取"
-    MEMBERS ||--o{ RFID_CARDS : "绑定"
-    MEMBERS ||--o{ FREQUENT_GUESTS : "关联"
     MEMBER_COUPONS }o--|| COUPONS : "包含"
     MEMBERS ||--o{ REVIEWS : "撰写"
-    REVIEWS ||--o{ REVIEW_APPEALS : "申诉"
     DEVICES ||--o{ SENSOR_DATA : "生成"
     DEVICES ||--o{ CONTROL_COMMANDS : "接收"
     DEVICES ||--o{ CALLS : "参与"
-    DEVICES ||--o{ SECURITY_EVENTS : "触发"
-    DEVICES ||--o{ DEVICE_AUTH : "认证"
-    DEVICES ||--o{ SYSTEM_LOGS : "记录"
-    DEVICES ||--o{ NETWORK_CONFIG : "配网"
-    DEVICES ||--o{ MQTT_LOGS : "通信"
 ```
 
 ---
@@ -1219,5 +1211,6 @@ flowchart LR
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
-| v2.0.0 | 2026-04-16 | 新增12张表：rfid_cards, scene_configs, mqtt_logs, review_appeals, security_events, device_auth, system_logs, network_config, api_tokens, login_sessions, role_applications, frequent_guests |
+| v3.0.0 | 2026-04-19 | 重新校准数据库，修正为28张表；新增messages、system_settings表；移除不存在的表(rfid_cards, scene_configs等)；角色模型更新为五角色；优化E-R关系连线 |
+| v2.0.0 | 2026-04-16 | 新增12张表（部分表实际不存在） |
 | v1.0.0 | 2026-04-16 | 初始文档，完整 E-R 图设计 |

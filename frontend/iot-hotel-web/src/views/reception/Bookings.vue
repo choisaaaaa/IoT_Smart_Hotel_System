@@ -16,7 +16,13 @@
     </div>
 
     <a-tabs v-model:activeKey="activeTab" @change="fetchBookings">
-      <a-tab-pane key="today" tab="今日预订" />
+      <a-tab-pane key="today">
+        <template #tab>
+          <a-badge :count="pendingBookingCount" :offset="[12, -4]" :show-zero="false">
+            今日预订
+          </a-badge>
+        </template>
+      </a-tab-pane>
       <a-tab-pane key="history" tab="历史预订" />
     </a-tabs>
 
@@ -158,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
@@ -177,6 +183,8 @@ const modalVisible = ref(false)
 const detailVisible = ref(false)
 const bookings = ref<any[]>([])
 const currentBooking = ref<any>(null)
+
+const pendingBookingCount = computed(() => bookings.value.filter(b => b.status === 'pending').length)
 
 const newBooking = reactive({
   guest_name: '', 

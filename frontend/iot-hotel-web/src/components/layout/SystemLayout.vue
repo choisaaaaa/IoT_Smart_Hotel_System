@@ -2,8 +2,8 @@
   <a-layout class="system-layout">
     <a-layout-sider v-model:collapsed="collapsed" :trigger="null" collapsible class="sider">
       <div class="logo">
-        <BankOutlined style="font-size: 24px; color: #1890ff;" />
-        <span v-show="!collapsed">系统管理端</span>
+        <img src="/logo-small.png" alt="Logo" class="logo-img" />
+        <span v-show="!collapsed">{{ hotelStore.hotelInfo?.hotel_name || '系统管理端' }}</span>
       </div>
       <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline" @click="handleMenuClick">
         <a-menu-item key="/system/dashboard">
@@ -86,6 +86,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
@@ -97,6 +98,9 @@ import {
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
+
+hotelStore.fetchHotelInfo()
 
 // 初始化用户信息
 appStore.initUserInfo()
@@ -124,7 +128,20 @@ async function handleLogout() {
 
 <style scoped>
 .system-layout { height: 100vh; }
-.logo { height: 64px; display: flex; align-items: center; justify-content: center; padding: 0 16px; color: #fff; gap: 12px; overflow: hidden; background: #001529; }
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
 .logo span { font-size: 18px; font-weight: bold; white-space: nowrap; color: #fff; }
 .header { background: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); z-index: 1; }
 .header-left { display: flex; align-items: center; }

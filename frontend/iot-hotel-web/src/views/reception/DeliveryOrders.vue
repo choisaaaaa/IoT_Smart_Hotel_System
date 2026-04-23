@@ -2,9 +2,11 @@
   <div class="delivery-orders">
     <a-row :gutter="[16, 16]">
       <a-col :xs="12" :sm="8">
-        <a-card size="small" class="stat-card">
-          <a-statistic title="待配送" :value="pendingCount" :value-style="{ color: '#faad14' }"><template #icon><SendOutlined /></template></a-statistic>
-        </a-card>
+        <a-badge :count="pendingCount" :offset="[-10, 10]" :show-zero="false" style="width: 100%">
+          <a-card size="small" class="stat-card" :body-style="{ background: pendingCount > 0 ? '#fffbe6' : '#fff' }">
+            <a-statistic title="待配送" :value="pendingCount" :value-style="{ color: '#faad14' }"><template #icon><SendOutlined /></template></a-statistic>
+          </a-card>
+        </a-badge>
       </a-col>
       <a-col :xs="12" :sm="8">
         <a-card size="small" class="stat-card">

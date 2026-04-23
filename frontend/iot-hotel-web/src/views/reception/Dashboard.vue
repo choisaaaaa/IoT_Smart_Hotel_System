@@ -68,34 +68,41 @@
       </div>
       <div class="actions-grid">
         <div class="action-card" @click="$router.push('/reception/bookings')">
-          <div class="action-icon booking">
-            <CalendarOutlined />
-          </div>
+          <a-badge :count="notificationStore.moduleUnreadCounts['/reception/bookings']" :offset="[-10, 10]">
+            <div class="action-icon booking">
+              <CalendarOutlined />
+            </div>
+          </a-badge>
           <div class="action-name">预订管理</div>
           <div class="action-desc">查看和处理预订</div>
         </div>
-        <div class="action-card" @click="$router.push('/reception/checkin')">
-          <div class="action-icon checkin">
-            <IdcardOutlined />
-          </div>
-          <div class="action-name">办理入住</div>
-          <div class="action-desc">快速办理入住</div>
+        <div class="action-card" @click="$router.push('/reception/reception-center')">
+          <a-badge :count="notificationStore.moduleUnreadCounts['/reception/reception-center']" :offset="[-10, 10]">
+            <div class="action-icon checkin">
+              <IdcardOutlined />
+            </div>
+          </a-badge>
+          <div class="action-name">接待中心</div>
+          <div class="action-desc">办理入住与退房</div>
         </div>
-        <div class="action-card" @click="$router.push('/reception/checkout')">
-          <div class="action-icon checkout">
-            <CreditCardOutlined />
-          </div>
-          <div class="action-name">办理退房</div>
-          <div class="action-desc">快速办理退房</div>
+        <div class="action-card" @click="$router.push('/reception/workorders')">
+          <a-badge :count="notificationStore.moduleUnreadCounts['/reception/workorders']" :offset="[-10, 10]">
+            <div class="action-icon checkout">
+              <ToolOutlined />
+            </div>
+          </a-badge>
+          <div class="action-name">工单处理</div>
+          <div class="action-desc">维修与打扫任务</div>
         </div>
-        <div class="action-card" @click="$router.push('/reception/room-availability')">
-          <div class="action-icon rooms">
-            <ApartmentOutlined />
-          </div>
-          <div class="action-name">客房余量</div>
-          <div class="action-desc">查看房间状态</div>
+        <div class="action-card" @click="$router.push('/reception/delivery')">
+          <a-badge :count="notificationStore.moduleUnreadCounts['/reception/delivery']" :offset="[-10, 10]">
+            <div class="action-icon rooms">
+              <SendOutlined />
+            </div>
+          </a-badge>
+          <div class="action-name">送物服务</div>
+          <div class="action-desc">处理客房送物请求</div>
         </div>
-
       </div>
     </div>
 
@@ -107,6 +114,7 @@
             <div class="task-title">
               <ToolOutlined class="task-icon" />
               <span>待处理工单</span>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/workorders']" :offset="[5, -2]" />
             </div>
             <a-button type="link" @click="$router.push('/reception/workorders')">
               查看全部 <RightOutlined />
@@ -145,6 +153,7 @@
             <div class="task-title">
               <SendOutlined class="task-icon" />
               <span>待配送订单</span>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/delivery']" :offset="[5, -2]" />
             </div>
             <a-button type="link" @click="$router.push('/reception/delivery')">
               查看全部 <RightOutlined />
@@ -226,6 +235,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useNotificationStore } from '@/stores/notification'
 
 import dayjs from 'dayjs'
 import {
@@ -237,16 +247,12 @@ import {
   PieChartOutlined,
   ThunderboltOutlined,
   IdcardOutlined,
-  CreditCardOutlined,
-  ApartmentOutlined,
   ToolOutlined,
   SendOutlined,
   RightOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons-vue'
-import { useAppStore } from '@/stores/app'
-import { useHotelStore } from '@/stores/hotel'
 import { bookingApi } from '@/api/booking'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
@@ -254,8 +260,7 @@ import { hotelApi } from '@/api/hotel'
 import { formatTimeHHmm } from '@/utils/date'
 
 const router = useRouter()
-const appStore = useAppStore()
-const hotelStore = useHotelStore()
+const notificationStore = useNotificationStore()
 
 const loading = ref(false)
 const currentDate = computed(() => dayjs().format('YYYY年MM月DD日 dddd'))
@@ -316,9 +321,9 @@ async function loadStats() {
     const totalRooms = rooms.reduce((sum: number, r: any) => sum + (r.count || 0), 0)
     const occupiedRooms = rooms.find((r: any) => r.room_status === 'occupied')?.count || 0
     
-    // 获取今日预订统计 - 使用正确的参数名 check_in_date
+    // 获取今日预订统计 - 使用正确的参数名 checkin_date
     const bookingRes: any = await bookingApi.getBookingList({ 
-      check_in_date: today,
+      checkin_date: today,
       pageSize: 1000 
     })
     const bookings = bookingRes.data?.list || []
@@ -368,7 +373,7 @@ async function loadTodayBookings() {
   try {
     const today = dayjs().format('YYYY-MM-DD')
     const res: any = await bookingApi.getBookingList({ 
-      check_in_date: today,
+      checkin_date: today,
       pageSize: 1000 
     })
     // 不过滤状态，展示所有今日预订
@@ -376,10 +381,6 @@ async function loadTodayBookings() {
   } catch (error) {
     console.error('加载预订失败:', error)
   }
-}
-
-function formatTime(time: string) {
-  return dayjs(time).format('HH:mm')
 }
 
 function getPriorityText(priority: string) {

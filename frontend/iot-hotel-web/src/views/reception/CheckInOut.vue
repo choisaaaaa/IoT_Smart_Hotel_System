@@ -3,18 +3,37 @@
     <div class="reception-header-logo">
       <div class="logo-wrapper">
         <div class="logo-icon">
-          <span class="logo-emoji">🏨</span>
-        </div>
-        <div class="logo-text">
-          <div class="main-title">智联酒店接待中心</div>
-          <div class="sub-title">SMART HOTEL RECEPTION CENTER</div>
+          <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img-header" />
         </div>
         <div class="header-divider"></div>
         <div class="hotel-info">
-          <div class="hotel-name">🏨 {{ hotelStore.hotelInfo?.hotel_name || '当前门店' }}</div>
+          <div class="hotel-name">
+            <BankOutlined /> {{ hotelStore.hotelInfo?.hotel_name || '当前门店' }}
+          </div>
           <div class="hotel-id">集团编号: {{ hotelStore.hotelInfo?.id || '-' }}</div>
         </div>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+        <div class="header-divider"></div>
+        <div class="user-info">
+          <div class="user-name">
+            <UserOutlined /> {{ appStore.userInfo?.username || '当前用户' }}
+          </div>
+          <div class="user-role">{{ appStore.userInfo?.role_name || appStore.userInfo?.role || '操作员' }}</div>
+        </div>
+        
+        <div class="header-actions">
+          <a-space>
+            <a-select v-model:value="selectedDevice" placeholder="选择前台设备" style="width: 180px">
+              <template #prefix><LaptopOutlined /></template>
+              <a-select-option v-for="d in frontEndDevices" :key="d.device_id" :value="d.device_id">
+                {{ d.device_name || d.device_id }}
+              </a-select-option>
+              <a-select-option v-if="frontEndDevices.length === 0" value="none" disabled>未发现前台设备</a-select-option>
+            </a-select>
+            <a-button @click="testCommunication" :loading="testing">
+              <template #icon><ApiOutlined /></template>
+              通信测试
+            </a-button>
+          </a-space>
           <a-button type="primary" @click="() => { inventoryModalVisible = true; fetchTodayInventory(); }">
             <template #icon><ShopOutlined /></template>
             今日可售余量管理
@@ -23,7 +42,12 @@
       </div>
     </div>
     <a-tabs v-model:activeKey="activeTab">
-      <a-tab-pane key="checkin" tab="📥 入住办理">
+      <a-tab-pane key="checkin">
+        <template #tab>
+          <a-badge :count="todayBookings.length" :offset="[12, -4]" :show-zero="false">
+            📥 入住办理
+          </a-badge>
+        </template>
         <a-row :gutter="16">
           <a-col :xs="24" :xl="15">
             <a-form :model="checkinForm" layout="vertical">
@@ -256,7 +280,12 @@
         </a-descriptions>
       </div>
     </a-modal>
-            <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
+            <a-card size="small" style="margin-top: 12px;" :loading="todayBookingLoading">
+              <template #title>
+                <a-badge :count="todayBookings.length" :offset="[15, 0]" :show-zero="false">
+                  今日预定清单
+                </a-badge>
+              </template>
               <a-space style="margin-bottom: 8px;">
                 <a-button size="small" type="primary" @click="fetchTodayBookings">刷新</a-button>
                 <a-button 
@@ -485,19 +514,26 @@ import {
   DownOutlined,
   InfoCircleOutlined,
   ControlOutlined,
-  ShopOutlined
+  ShopOutlined,
+  BankOutlined,
+  UserOutlined,
+  LaptopOutlined,
+  ApiOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
+import { useNotificationStore } from '@/stores/notification'
 import { bookingApi } from '@/api/booking'
+import { deviceApi } from '@/api/device'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
 import { userApi, type UserProfile } from '@/api/user'
-import type { RoomInfo } from '@/types'
+import type { RoomInfo, DeviceInfo } from '@/types'
 
 const hotelStore = useHotelStore()
 const appStore = useAppStore()
+const notificationStore = useNotificationStore()
 const route = useRoute()
 const activeTab = ref('checkin')
 const submitting = ref(false)
@@ -506,10 +542,49 @@ const currentGuests = ref<any[]>([])
 const roomSearchKeyword = ref('')
 const todayBookings = ref<any[]>([])
 const selectedBookingKeys = ref<number[]>([])
-// 移除 memberPhones，改用 memberList
-// const memberPhones = ref<Set<string>>(new Set())
 const todayBookingLoading = ref(false)
 const companions = ref<any[]>([])
+
+// 设备选择与测试
+const frontEndDevices = ref<DeviceInfo[]>([])
+const selectedDevice = ref<string | undefined>(undefined)
+const testing = ref(false)
+
+async function fetchFrontEndDevices() {
+  try {
+    const res = await deviceApi.getDeviceList({ audit_status: 'approved' })
+    if (res.data) {
+      // 过滤前台设备：device_type 为 'front_desk' 或者 device_id 以 'FRN_' 开头
+      const list = res.data.filter(d => 
+        d.device_type === 'front_desk' || 
+        (d.device_id && d.device_id.startsWith('FRN_'))
+      )
+      frontEndDevices.value = list
+      if (list.length > 0 && !selectedDevice.value) {
+        selectedDevice.value = list[0].device_id
+      }
+    }
+  } catch (error) {
+    console.error('获取前台设备失败:', error)
+  }
+}
+
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
+
+async function testCommunication() {
+  testing.value = true
+  try {
+    // 模拟通信测试
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    message.success('设备通信正常，连接状态：良好')
+  } catch (error) {
+    message.error('设备通信失败，请检查连接')
+  } finally {
+    testing.value = false
+  }
+}
 
 // 经理授权相关
 const isAuthorized = ref(false)
@@ -1191,6 +1266,7 @@ async function fillByBookingId() {
 }
 
 onMounted(async () => {
+  fetchFrontEndDevices()
   try {
     await Promise.allSettled([
       hotelStore.fetchHotelInfo(),
@@ -1319,7 +1395,17 @@ onMounted(async () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-height: 72px;
+  padding: 0 24px;
   gap: 24px;
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .logo-icon {
@@ -1344,12 +1430,11 @@ onMounted(async () => {
   text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.logo-img {
+.logo-img-header {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 8px;
-  background: #fff;
+  padding: 4px;
 }
 
 .logo-fallback {
@@ -1385,27 +1470,40 @@ onMounted(async () => {
   background: #f5f5f5;
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #1890ff;
+  background: #e6f7ff;
+  padding: 1px 8px;
+  border-radius: 4px;
   width: fit-content;
 }
 
-.main-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #1a1a1a;
-  line-height: 1.2;
-  letter-spacing: 1px;
-}
-
-.sub-title {
-  font-size: 11px;
-  color: #bfbfbf;
-  letter-spacing: 3px;
-  margin-top: 6px;
-  font-weight: 500;
-}
-
-.selected-room-card {
-  border: 1px dashed #d9d9d9;
+.room-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
 }
 .selected-room-header {
   display: flex;

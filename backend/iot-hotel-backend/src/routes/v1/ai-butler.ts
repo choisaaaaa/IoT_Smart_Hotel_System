@@ -284,17 +284,20 @@ router.post('/broadcast',
   ],
   async (req, res) => {
     try {
-      const { room_id, text } = req.body;
+      let { room_id, text } = req.body;
+      
+      // 归一化为数组处理
+      const roomIds = Array.isArray(room_id) ? room_id : [room_id];
 
-      logger.info(`收到房间广播请求: 房间=${room_id}, 文本="${text}"`);
+      logger.info(`收到房间广播请求: 房间=${JSON.stringify(roomIds)}, 文本="${text}"`);
 
-      // 1. 验证房间是否存在并获取设备ID
+      // 1. 批量查询房间对应的设备 ID
+      // 使用 IN 查询，支持多个房间号或 ID
       const [devices] = await pool.query<RowDataPacket[]>(
         `SELECT d.device_id, r.room_number FROM devices d
          JOIN rooms r ON d.room_id = r.id
-         WHERE (r.room_number = ? OR r.id = ?) AND d.device_type = 'room'
-         LIMIT 1`,
-        [room_id, room_id]
+         WHERE (r.room_number IN (?) OR r.id IN (?)) AND d.device_type = 'room'`,
+        [roomIds, roomIds]
       );
 
       if (devices.length === 0) {
@@ -305,10 +308,7 @@ router.post('/broadcast',
         });
       }
 
-      const deviceId = devices[0].device_id;
-      const actualRoomNumber = devices[0].room_number;
-
-      // 2. 调用TTS合成语音
+      // 2. 调用 TTS 合成语音 (只合成一次)
       const audioBase64 = await aiButlerService.textToSpeech(text);
 
       if (!audioBase64) {
@@ -319,28 +319,31 @@ router.post('/broadcast',
         });
       }
 
-      // 3. 通过MQTT发布AI响应消息
-      const topic = `hotel/ai/response/room/${deviceId}`;
-      const payload = {
-        device_id: deviceId,
-        room_id: actualRoomNumber,
-        text: text,
-        audio_base64: audioBase64,
-        timestamp: Date.now(),
-        type: 'broadcast'
-      };
+      // 3. 循环下发消息
+      const results = [];
+      for (const device of devices) {
+        const deviceId = device.device_id;
+        const actualRoomNumber = device.room_number;
+        
+        const topic = `hotel/ai/response/room/${deviceId}`;
+        const payload = {
+          device_id: deviceId,
+          room_id: actualRoomNumber,
+          text: text,
+          audio_base64: audioBase64,
+          timestamp: Date.now(),
+          type: 'broadcast'
+        };
 
-      await mqttService.publish(topic, payload);
-
-      logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+        await mqttService.publish(topic, payload);
+        results.push({ room_id: actualRoomNumber, device_id: deviceId });
+        logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+      }
 
       res.json({
         code: 200,
-        message: '广播下发成功',
-        data: {
-          room_id: actualRoomNumber,
-          device_id: deviceId
-        }
+        message: `广播已成功下发至 ${results.length} 个房间`,
+        data: results
       });
     } catch (error) {
       logger.error('下发广播失败:', error.message);

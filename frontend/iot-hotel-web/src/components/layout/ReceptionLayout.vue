@@ -10,7 +10,7 @@
     >
       <div class="sider-header" @click="$router.push('/reception/dashboard')">
         <div class="sider-logo">
-          <CustomerServiceOutlined />
+          <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img" />
         </div>
         <div v-show="!collapsed" class="sider-brand">
           <span class="brand-title">前台工作台</span>
@@ -31,7 +31,11 @@
         </a-menu-item>
         
         <a-menu-item key="/reception/reception-center">
-          <template #icon><BellOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/reception-center']" :offset="[10, 0]">
+              <BellOutlined />
+            </a-badge>
+          </template>
           <span>接待中心</span>
         </a-menu-item>
         
@@ -41,7 +45,11 @@
         </a-menu-item>
         
         <a-menu-item key="/reception/bookings">
-          <template #icon><CalendarOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/bookings']" :offset="[10, 0]">
+              <CalendarOutlined />
+            </a-badge>
+          </template>
           <span>预订管理</span>
         </a-menu-item>
         
@@ -51,22 +59,38 @@
         </a-menu-item>
         
         <a-menu-item key="/reception/workorders">
-          <template #icon><ToolOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/workorders']" :offset="[10, 0]">
+              <ToolOutlined />
+            </a-badge>
+          </template>
           <span>工单处理</span>
         </a-menu-item>
         
         <a-menu-item key="/reception/delivery">
-          <template #icon><SendOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/delivery']" :offset="[10, 0]">
+              <SendOutlined />
+            </a-badge>
+          </template>
           <span>客房送物</span>
         </a-menu-item>
         
         <a-menu-item key="/reception/voice-calls">
-          <template #icon><PhoneOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/voice-calls']" :offset="[10, 0]">
+              <PhoneOutlined />
+            </a-badge>
+          </template>
           <span>语音通话</span>
         </a-menu-item>
         
         <a-menu-item key="/reception/environment">
-          <template #icon><EnvironmentOutlined /></template>
+          <template #icon>
+            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/environment']" :offset="[10, 0]">
+              <EnvironmentOutlined />
+            </a-badge>
+          </template>
           <span>环境监测</span>
         </a-menu-item>
         
@@ -106,115 +130,57 @@
         </div>
         
         <div class="header-right">
-          <!-- 报警通知按钮 - 醒目显示 -->
-          <a-popover 
-            v-model:open="alarmNotificationVisible" 
-            trigger="click" 
-            placement="bottomRight" 
-            :overlayStyle="{ width: '420px' }"
-            class="alarm-notification-popover"
-          >
-            <template #content>
-              <div class="alarm-notification-panel">
-                <div class="alarm-notification-header">
-                  <span class="alarm-notification-title">
-                    <WarningFilled class="alarm-title-icon" /> 报警通知
-                  </span>
-                  <a-button type="link" size="small" @click="clearAllAlarms">
-                    全部标记已读
-                  </a-button>
-                </div>
-                <a-divider style="margin: 12px 0;" />
-                <div v-if="alarmNotifications.length === 0" class="alarm-notification-empty">
-                  <CheckCircleOutlined class="empty-icon" />
-                  <p>暂无报警</p>
-                </div>
-                <div v-else class="alarm-notification-list">
-                  <div
-                    v-for="item in alarmNotifications"
-                    :key="item.id"
-                    class="alarm-notification-item"
-                    :class="{ 
-                      unread: !item.read, 
-                      critical: item.level === 'critical',
-                      'animate-pulse': item.level === 'critical' && !item.read 
-                    }"
-                    @click="handleAlarmClick(item)"
-                  >
-                    <div class="alarm-notification-icon" :class="item.level">
-                      <FireFilled v-if="item.type === 'fire_alarm'" />
-                      <AlertFilled v-else-if="item.type === 'sos_alarm'" />
-                      <WarningFilled v-else />
-                    </div>
-                    <div class="alarm-notification-content">
-                      <div class="alarm-notification-title-text">
-                        {{ item.title }}
-                        <a-tag v-if="item.level === 'critical'" color="red" size="small">紧急</a-tag>
-                      </div>
-                      <div class="alarm-notification-desc">{{ item.desc }}</div>
-                      <div class="alarm-notification-time">{{ item.time }}</div>
-                    </div>
-                    <div v-if="!item.read" class="alarm-notification-dot"></div>
-                  </div>
-                </div>
-                <div v-if="alarmNotifications.length > 0" class="alarm-notification-footer">
-                  <a-button type="primary" danger block @click="goToAlarmPanel">
-                    <SafetyOutlined /> 前往报警处理中心
-                  </a-button>
-                </div>
-              </div>
-            </template>
-            <a-badge :count="unreadAlarmCount" :offset="[-2, 4]">
-              <div class="header-icon-btn alarm-btn" :class="{ 
-                active: unreadAlarmCount > 0,
-                'alarm-critical': hasCriticalAlarm 
-              }">
-                <WarningFilled v-if="hasCriticalAlarm" />
-                <BellOutlined v-else />
-              </div>
-            </a-badge>
-          </a-popover>
-
-          <!-- 普通消息通知 -->
+          <!-- 消息中心 - 整合所有通知 -->
           <a-popover 
             v-model:open="notificationVisible" 
             trigger="click" 
             placement="bottomRight" 
-            :overlayStyle="{ width: '380px' }"
+            :overlayStyle="{ width: '400px' }"
             class="notification-popover"
           >
             <template #content>
               <div class="notification-panel">
                 <div class="notification-header">
                   <span class="notification-title">
-                    <BellOutlined /> 消息通知
-                  </span>
+                  <BellOutlined /> 消息通知
+                </span>
+                <div class="header-actions">
                   <a-button type="link" size="small" @click="clearAllNotifications">
-                    全部已读
+                    全部标记已读
                   </a-button>
                 </div>
+                </div>
                 <a-divider style="margin: 12px 0;" />
-                <div v-if="notificationItems.length === 0" class="notification-empty">
+                <div v-if="notifications.length === 0" class="notification-empty">
                   <CheckCircleOutlined class="empty-icon" />
                   <p>暂无新消息</p>
                 </div>
                 <div v-else class="notification-list">
                   <div
-                    v-for="item in notificationItems"
+                    v-for="item in notifications"
                     :key="item.id"
                     class="notification-item"
-                    :class="{ unread: !item.read }"
+                    :class="{ 
+                      unread: !item.read,
+                      critical: item.type === 'alarm' && item.level === 'critical'
+                    }"
                     @click="handleNotificationClick(item)"
                   >
                     <div class="notification-icon" :class="item.type">
                       <ToolOutlined v-if="item.type === 'maintenance'" />
                       <SendOutlined v-else-if="item.type === 'delivery'" />
-                      <AlertOutlined v-else-if="item.type === 'environment'" />
+                      <AlertOutlined v-else-if="item.type === 'environment' || item.type === 'alarm'" />
+                      <CalendarOutlined v-else-if="item.type === 'booking'" />
+                      <PhoneOutlined v-else-if="item.type === 'call'" />
                       <InfoCircleOutlined v-else />
                     </div>
                     <div class="notification-content">
-                      <div class="notification-title-text">{{ item.title }}</div>
+                      <div class="notification-title-text">
+                        {{ item.title }}
+                        <a-tag v-if="item.type === 'alarm'" color="red" size="small">紧急告警</a-tag>
+                      </div>
                       <div class="notification-desc">{{ item.desc }}</div>
+                      <div class="notification-time">{{ item.time }}</div>
                     </div>
                     <div v-if="!item.read" class="notification-dot"></div>
                   </div>
@@ -222,8 +188,12 @@
               </div>
             </template>
             <a-badge :count="unreadCount" :offset="[-2, 4]">
-              <div class="header-icon-btn" :class="{ active: unreadCount > 0 }">
-                <BellOutlined />
+              <div class="header-icon-btn" :class="{ 
+                active: unreadCount > 0,
+                'alarm-critical': hasCriticalAlarm 
+              }">
+                <WarningFilled v-if="hasCriticalAlarm" />
+                <BellOutlined v-else />
               </div>
             </a-badge>
           </a-popover>
@@ -333,13 +303,10 @@ import {
   AlertFilled,
   SafetyOutlined
 } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
+import { useNotificationStore } from '@/stores/notification'
 import { authService, CANONICAL_ROLES } from '@/api/auth'
-import { maintenanceApi } from '@/api/maintenance'
-import { deliveryApi } from '@/api/delivery'
-import { environmentApi } from '@/api/environment'
 import { initWebSocket } from '@/utils/websocket'
 import request from '@/api/request'
 import dayjs from 'dayjs'
@@ -348,20 +315,34 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
+const notificationStore = useNotificationStore()
+
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
 
 appStore.initUserInfo()
 
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
-const alarmNotificationVisible = ref(false)
 const currentTime = ref(dayjs().format('HH:mm'))
 
 let timeInterval: ReturnType<typeof setInterval>
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await hotelStore.fetchHotelInfo()
+    setupGlobalWebSocket()
+    // 初始加载
+    notificationStore.fetchAllUnreadCounts()
+    notificationStore.fetchAlarmNotifications()
+  } catch (error) {}
+  
   timeInterval = setInterval(() => {
     currentTime.value = dayjs().format('HH:mm')
+    // 定期刷新未读数
+    notificationStore.fetchAllUnreadCounts()
   }, 60000)
 })
 
@@ -374,249 +355,47 @@ async function handleLogout() {
   router.push('/guest/booking')
 }
 
-async function returnToSystem() {
-  try {
-    const res = await request.post('/auth/switch-hotel', { hotel_id: 0 })
-    if (res.data.token) {
-      localStorage.setItem('auth_token', res.data.token)
-      if (appStore.userInfo) {
-        appStore.setUserInfo({
-          ...appStore.userInfo,
-          hotel_id: 0,
-          hotel_name: '慧宿智联集团总部'
-        })
-      }
-      hotelStore.setCurrentHotelId(0)
-      router.push('/system/dashboard')
-    }
-  } catch (error) {
-    router.push('/system/dashboard')
-  }
-}
-
 function setupGlobalWebSocket() {
   initWebSocket()
 }
 
-onUnmounted(() => {})
-
-interface NotificationItem {
-  id: string
-  type: 'maintenance' | 'delivery' | 'environment' | 'info'
-  title: string
-  desc: string
-  route: string
-  read: boolean
-}
-
-interface AlarmNotificationItem {
-  id: string
-  type: 'fire_alarm' | 'sos_alarm' | 'smoke' | 'temperature' | 'manual'
-  level: 'critical' | 'high' | 'medium' | 'low'
-  title: string
-  desc: string
-  time: string
-  read: boolean
-  deviceId?: string
-  location?: string
-}
-
-const notificationItems = ref<NotificationItem[]>([])
-const alarmNotifications = ref<AlarmNotificationItem[]>([])
-
-const unreadCount = computed(() => notificationItems.value.filter(n => !n.read).length)
-const unreadAlarmCount = computed(() => alarmNotifications.value.filter(n => !n.read).length)
-const hasCriticalAlarm = computed(() => alarmNotifications.value.some(n => n.level === 'critical' && !n.read))
+const unreadCount = computed(() => notificationStore.unreadCount)
+const notifications = computed(() => notificationStore.notifications)
+const hasCriticalAlarm = computed(() => notificationStore.hasCriticalAlarm)
 const currentTitle = computed(() => (route.meta.title as string) || '')
 
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]
+  // 切换路由时刷新未读数
+  notificationStore.fetchAllUnreadCounts()
 })
 
 function handleMenuClick({ key }: { key: string }) {
   router.push(key)
 }
 
-onMounted(async () => {
-  try {
-    await hotelStore.fetchHotelInfo()
-    setupGlobalWebSocket()
-  } catch (error) {}
-})
-
-async function loadNotifications() {
-  const userInfo = appStore.userInfo
-  const userRole = userInfo?.role
-  if (!userRole || userRole === 'customer') {
-    notificationItems.value = []
-    return
-  }
-
-  try {
-    const [maintenanceRes, deliveryRes, envRes] = await Promise.allSettled([
-      maintenanceApi.getList({ status: 'pending', pageSize: 5 }),
-      deliveryApi.getList({ status: 'pending', pageSize: 5 }),
-      environmentApi.getEventLogs({ severity: 'warning', limit: 5 })
-    ])
-
-    const items: NotificationItem[] = []
-
-    if (maintenanceRes.status === 'fulfilled') {
-      const res = maintenanceRes.value as any
-      const list = res.data?.list || res.data?.data?.list || []
-      const total = Number(res.data?.total || res.data?.data?.total || 0)
-      if (total > 0) {
-        items.push({
-          id: 'maintenance-pending',
-          type: 'maintenance',
-          title: `维修工单 (${total})`,
-          desc: list[0]?.fault_description?.substring(0, 30) || `共${total}条待处理`,
-          route: '/reception/workorders',
-          read: false
-        })
-      }
-    }
-
-    if (deliveryRes.status === 'fulfilled') {
-      const res = deliveryRes.value as any
-      const list = res.data?.list || res.data?.data?.list || []
-      const total = Number(res.data?.total || res.data?.data?.total || 0)
-      if (total > 0) {
-        items.push({
-          id: 'delivery-pending',
-          type: 'delivery',
-          title: `送物订单 (${total})`,
-          desc: list[0]?.item_name || `共${total}条待处理`,
-          route: '/reception/delivery',
-          read: false
-        })
-      }
-    }
-
-    if (envRes.status === 'fulfilled') {
-      try {
-        const res = envRes.value as any
-        const logs = res.data?.logs || res.data?.data?.logs || []
-        const unresolved = logs.filter((l: any) => !l.resolved)
-        if (unresolved.length > 0) {
-          items.push({
-            id: 'environment-warning',
-            type: 'environment',
-            title: `环境告警 (${unresolved.length})`,
-            desc: unresolved[0]?.title || `${unresolved.length}条异常`,
-            route: '/reception/environment',
-            read: false
-          })
-        }
-      } catch (_) {}
-    }
-
-    notificationItems.value = items
-  } catch (error) {
-    notificationItems.value = []
-  }
-}
-
-function handleNotificationClick(item: NotificationItem) {
-  item.read = true
+function handleNotificationClick(item: any) {
+  notificationStore.markNotificationRead(item.id)
   notificationVisible.value = false
-  router.push(item.route)
+  
+  if (item.type === 'alarm') {
+    // 显示报警弹窗
+    appStore.showAlarmModal({
+      id: item.id,
+      type: item.type,
+      level: item.level,
+      deviceId: item.deviceId,
+      location: item.location,
+      message: item.desc,
+      timestamp: new Date().toISOString()
+    })
+  } else if (item.route) {
+    router.push(item.route)
+  }
 }
 
 function clearAllNotifications() {
-  notificationItems.value.forEach(n => n.read = true)
-}
-
-function clearAllAlarms() {
-  alarmNotifications.value.forEach(n => n.read = true)
-}
-
-function handleAlarmClick(item: AlarmNotificationItem) {
-  item.read = true
-  alarmNotificationVisible.value = false
-  // 显示报警弹窗
-  appStore.showAlarmModal({
-    id: item.id,
-    type: item.type,
-    level: item.level,
-    deviceId: item.deviceId,
-    location: item.location,
-    message: item.desc,
-    timestamp: new Date().toISOString()
-  })
-}
-
-function goToAlarmPanel() {
-  alarmNotificationVisible.value = false
-  router.push('/reception/environment')
-}
-
-// 加载报警通知
-async function loadAlarmNotifications() {
-  try {
-    const res: any = await environmentApi.getFireAlarms({ status: 'active' })
-    const alarms = res.data?.alarms || []
-    
-    alarmNotifications.value = alarms.map((alarm: any) => ({
-      id: String(alarm.id),
-      type: alarm.alarm_type || 'fire_alarm',
-      level: alarm.severity || 'high',
-      title: `${alarm.room_number || '未知房间'} - ${getAlarmTypeText(alarm.alarm_type)}`,
-      desc: alarm.description || '检测到异常情况',
-      time: dayjs(alarm.triggered_at).fromNow(),
-      read: false,
-      deviceId: alarm.device_id,
-      location: alarm.room_number
-    }))
-  } catch (error) {
-    console.error('加载报警通知失败:', error)
-  }
-}
-
-function getAlarmTypeText(type: string): string {
-  const texts: Record<string, string> = {
-    fire_alarm: '消防报警',
-    sos_alarm: 'SOS报警',
-    smoke: '烟雾探测',
-    temperature: '温度异常',
-    manual: '手动报警'
-  }
-  return texts[type] || type
-}
-
-// WebSocket消息处理
-function handleWebSocketMessage(data: any) {
-  if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm') {
-    // 添加新的报警通知
-    const newAlarm: AlarmNotificationItem = {
-      id: data.alarm_id || Date.now().toString(),
-      type: data.event_type,
-      level: data.level || 'critical',
-      title: `${data.data?.room_number || data.data?.floor_id || '未知位置'} - ${getAlarmTypeText(data.event_type)}`,
-      desc: data.data?.message || '紧急报警',
-      time: '刚刚',
-      read: false,
-      deviceId: data.device_id,
-      location: data.data?.room_number || data.data?.floor_id
-    }
-    
-    // 插入到最前面
-    alarmNotifications.value.unshift(newAlarm)
-    
-    // 显示报警弹窗
-    appStore.showAlarmModal({
-      id: newAlarm.id,
-      type: newAlarm.type,
-      level: newAlarm.level,
-      deviceId: newAlarm.deviceId,
-      location: newAlarm.location,
-      message: newAlarm.desc,
-      timestamp: new Date().toISOString()
-    })
-    
-    // 播放提示音
-    playNotificationSound()
-  }
+  notificationStore.clearAllNotifications()
 }
 
 function playNotificationSound() {
@@ -625,16 +404,6 @@ function playNotificationSound() {
     audio.play().catch(() => {})
   } catch (error) {}
 }
-
-onMounted(() => {
-  loadNotifications()
-  loadAlarmNotifications()
-  const userRole = appStore.userInfo?.role
-  if (userRole && userRole !== 'customer') {
-    setInterval(loadNotifications, 30000)
-    setInterval(loadAlarmNotifications, 10000) // 报警检查更频繁
-  }
-})
 </script>
 
 <style scoped>
@@ -670,16 +439,18 @@ onMounted(() => {
 }
 
 .sider-logo {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
-  border-radius: var(--hotel-radius);
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 22px;
   flex-shrink: 0;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sider-brand {

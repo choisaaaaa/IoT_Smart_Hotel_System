@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 import { useDeviceStore } from '@/stores/device'
 import { useAppStore } from '@/stores/app'
+import { useNotificationStore } from '@/stores/notification'
 
 let socket: Socket | null = null
 let lastRoomId: string | null = null
@@ -61,6 +62,7 @@ export function initWebSocket(roomId?: string): Socket {
 
   const deviceStore = useDeviceStore()
   const appStore = useAppStore()
+  const notificationStore = useNotificationStore()
 
   socket.on('connect', () => {
     console.log('[WS] 已连接到服务器, transport:', socket?.io?.engine?.transport?.name)
@@ -71,6 +73,8 @@ export function initWebSocket(roomId?: string): Socket {
     }
 
     doAutoRegister(socket!)
+    // 连接成功后刷新一次未读数
+    notificationStore.fetchAllUnreadCounts()
   })
 
   socket.on('disconnect', (reason: string) => {
@@ -158,6 +162,19 @@ export function initWebSocket(roomId?: string): Socket {
         roomId: eventData.room_id || eventData.room_number
       })
       
+      // 添加到通知中心
+      notificationStore.addAlarm({
+        id: data.alarm_id || data.device_id || Date.now().toString(),
+        type: data.event_type as any,
+        level: data.level || 'critical',
+        title: `${location} - 报警`,
+        desc: eventData.message || data.description || '紧急报警',
+        time: '刚刚',
+        read: false,
+        deviceId: data.device_id,
+        location: location
+      })
+      
       // 播放报警提示音
       try {
         const audio = new Audio('/alarm-notification.mp3')
@@ -167,6 +184,9 @@ export function initWebSocket(roomId?: string): Socket {
       // 其他安防事件只显示通知
       appStore.addNotification('error', `安防事件: ${data.event_type || '未知'} - ${data.description}`)
     }
+    
+    // 收到任何相关事件都刷新一次未读数
+    notificationStore.fetchAllUnreadCounts()
   })
 
   socket.on('room_status_update', (data: any) => {
