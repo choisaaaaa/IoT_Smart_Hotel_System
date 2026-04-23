@@ -77,6 +77,16 @@ router.use('/frequent-guests', frequentGuests);
 router.use('/health', health);
 router.use('/system-config', systemConfig);
 
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: 获取 API 根路径信息
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: 成功返回 API 模块索引
+ */
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({
     devices: '/api/v1/devices',

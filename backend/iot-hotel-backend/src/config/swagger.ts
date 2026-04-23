@@ -7,7 +7,12 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: '慧宿智联·云边端一体化智能酒店物联网系统 API',
       version: '2.2.0',
-      description: '智能酒店物联网设备管理与服务全栈解决方案后端接口文档',
+      description: '智能酒店物联网设备管理与服务全栈解决方案后端接口文档。\n\n' +
+                   '### 系统特性\n' +
+                   '- **云边端一体化**：支持云端调度与边缘侧实时响应。\n' +
+                   '- **多租户架构**：支持多酒店、多门店隔离管理。\n' +
+                   '- **实时交互**：部分实时状态通过 WebSocket 推送（端口同 API 端口）。\n' +
+                   '- **安全保障**：全量接口支持 JWT 认证与角色权限校验。',
       contact: {
         name: '慧宿智联团队',
       },
@@ -84,6 +89,39 @@ const options: swaggerJsdoc.Options = {
             check_in: { type: 'string', format: 'date' },
             check_out: { type: 'string', format: 'date' },
             status: { type: 'string' },
+          },
+        },
+        Payment: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            booking_id: { type: 'integer' },
+            amount: { type: 'number' },
+            payment_method: { type: 'string' },
+            status: { type: 'string' },
+            transaction_id: { type: 'string' },
+          },
+        },
+        Maintenance: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            room_id: { type: 'integer' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            status: { type: 'string' },
+            priority: { type: 'string' },
+          },
+        },
+        Review: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            booking_id: { type: 'integer' },
+            user_id: { type: 'integer' },
+            rating: { type: 'integer' },
+            content: { type: 'string' },
+            reply: { type: 'string' },
           },
         },
       },

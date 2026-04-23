@@ -47,11 +47,60 @@ const router = Router();
 const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 
+/**
+ * @swagger
+ * /payments/stats/revenue:
+ *   get:
+ *     summary: 获取收入统计数据 (管理员)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取统计
+ */
 router.get('/stats/revenue', authenticate as any, authorize(staffRoles), paymentController.getRevenueStats);
+
+/**
+ * @swagger
+ * /payments/{id}:
+ *   get:
+ *     summary: 获取支付详情
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/', authenticate as any, authorize(staffRoles), paymentController.get);
 router.get('/:id', authenticate as any, authorize(staffRoles), paymentController.getById);
+
+/**
+ * @swagger
+ * /payments/{id}/pay:
+ *   put:
+ *     summary: 确认支付
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 支付确认成功
+ */
 router.post('/', authenticate as any, authorize(allRoles), paymentController.create);
 router.put('/:id/pay', authenticate as any, paymentController.pay);
+
 
 
 export default router;
