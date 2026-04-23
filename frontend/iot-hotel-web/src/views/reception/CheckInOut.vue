@@ -23,7 +23,12 @@
       </div>
     </div>
     <a-tabs v-model:activeKey="activeTab">
-      <a-tab-pane key="checkin" tab="📥 入住办理">
+      <a-tab-pane key="checkin">
+        <template #tab>
+          <a-badge :count="todayBookings.length" :offset="[12, -4]" :show-zero="false">
+            📥 入住办理
+          </a-badge>
+        </template>
         <a-row :gutter="16">
           <a-col :xs="24" :xl="15">
             <a-form :model="checkinForm" layout="vertical">
@@ -256,7 +261,12 @@
         </a-descriptions>
       </div>
     </a-modal>
-            <a-card size="small" title="今日预定清单" style="margin-top: 12px;" :loading="todayBookingLoading">
+            <a-card size="small" style="margin-top: 12px;" :loading="todayBookingLoading">
+              <template #title>
+                <a-badge :count="todayBookings.length" :offset="[15, 0]" :show-zero="false">
+                  今日预定清单
+                </a-badge>
+              </template>
               <a-space style="margin-bottom: 8px;">
                 <a-button size="small" type="primary" @click="fetchTodayBookings">刷新</a-button>
                 <a-button 
@@ -490,6 +500,7 @@ import {
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
+import { useNotificationStore } from '@/stores/notification'
 import { bookingApi } from '@/api/booking'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
@@ -498,6 +509,7 @@ import type { RoomInfo } from '@/types'
 
 const hotelStore = useHotelStore()
 const appStore = useAppStore()
+const notificationStore = useNotificationStore()
 const route = useRoute()
 const activeTab = ref('checkin')
 const submitting = ref(false)

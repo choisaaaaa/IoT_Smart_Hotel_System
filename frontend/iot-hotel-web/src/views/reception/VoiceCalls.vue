@@ -162,8 +162,12 @@
           </div>
         </div>
       </a-tab-pane>
-      <a-tab-pane key="history" title="通话记录">
-        <template #tab><span><HistoryOutlined /> 通话记录</span></template>
+      <a-tab-pane key="history">
+        <template #tab>
+          <a-badge :count="notificationStore.moduleUnreadCounts['/reception/voice-calls']" :offset="[12, -4]" :show-zero="false">
+            <span><HistoryOutlined /> 通话记录</span>
+          </a-badge>
+        </template>
         <a-table :columns="historyColumns" :data-source="history" :pagination="{ pageSize: 10 }" row-key="call_id" size="small" />
       </a-tab-pane>
     </a-tabs>
@@ -275,10 +279,12 @@ import request from '@/api/request'
 import { getSocket, initWebSocket } from '@/utils/websocket'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
+import { useNotificationStore } from '@/stores/notification'
 import { CANONICAL_ROLES } from '@/api/auth'
 
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
+const notificationStore = useNotificationStore()
 const calling = ref(false)
 const activeCalls = ref<any[]>([])
 const history = ref<any[]>([])

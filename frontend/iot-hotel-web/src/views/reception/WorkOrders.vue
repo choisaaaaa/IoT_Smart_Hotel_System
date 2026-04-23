@@ -32,7 +32,12 @@
     </div>
 
     <a-tabs v-model:activeKey="activeTab">
-      <a-tab-pane key="maintenance" tab="维修处理">
+      <a-tab-pane key="maintenance">
+        <template #tab>
+          <a-badge :count="pendingCount" :offset="[12, -4]" :show-zero="false">
+            维修处理
+          </a-badge>
+        </template>
         <a-table
           :columns="maintenanceColumns"
           :data-source="filteredOrders"
@@ -46,7 +51,8 @@
               <a-tag :color="priorityColor(record.priority)">{{ priorityText(record.priority) }}</a-tag>
             </template>
             <template v-if="column.key === 'status'">
-              <a-badge :status="orderBadge(record.status)" :text="orderStatusText(record.status)" />
+              <a-badge v-if="record.status === 'pending'" status="warning" text="待处理" />
+              <a-badge v-else :status="orderBadge(record.status)" :text="orderStatusText(record.status)" />
             </template>
             <template v-if="column.key === 'created_at'">
               {{ formatTimeHHmm(record.created_at) }}

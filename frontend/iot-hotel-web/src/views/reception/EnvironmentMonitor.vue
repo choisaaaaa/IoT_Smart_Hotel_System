@@ -57,8 +57,12 @@
           </a-statistic>
           <div class="status-tags">
             <a-tag color="success">正常 {{ summary.normal_count }}</a-tag>
-            <a-tag color="warning">警告 {{ summary.warning_count }}</a-tag>
-            <a-tag color="error">危险 {{ summary.danger_count }}</a-tag>
+            <a-badge :count="summary.warning_count" :show-zero="false" size="small" :offset="[0, -5]">
+              <a-tag color="warning">警告 {{ summary.warning_count }}</a-tag>
+            </a-badge>
+            <a-badge :count="summary.danger_count" :show-zero="false" size="small" :offset="[0, -5]">
+              <a-tag color="error">危险 {{ summary.danger_count }}</a-tag>
+            </a-badge>
           </div>
         </a-card>
       </a-col>
