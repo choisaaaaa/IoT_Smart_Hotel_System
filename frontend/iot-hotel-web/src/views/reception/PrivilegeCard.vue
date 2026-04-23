@@ -7,6 +7,20 @@
       </div>
       <div class="header-extra">
         <a-space>
+          <a-alert
+            v-if="!selectedEncoder && encoders.length > 0"
+            message="请选择发卡器"
+            type="warning"
+            size="small"
+            show-icon
+          />
+          <a-alert
+            v-if="encoders.length === 0"
+            message="未检测到在线发卡器"
+            type="error"
+            size="small"
+            show-icon
+          />
           <a-button 
             :type="isAuthorized ? 'default' : 'primary'" 
             :danger="isAuthorized"
@@ -94,89 +108,112 @@
       :title="`签发 - ${selectedType?.name}`"
       @ok="handleIssue"
       :confirmLoading="issuing"
+      :okText="issueStep === 'success' ? '完成' : '立即签发'"
+      :cancelButtonProps="{ style: { display: issueStep === 'success' ? 'none' : '' } }"
       width="560px"
       destroyOnClose
     >
-      <div class="issue-form-container">
-        <a-alert
-          message="高权限操作警告"
-          :description="`您正在签发一张【${selectedType?.name}】，该卡片将具备${selectedType?.authDesc}。所有签发记录将被永久记录在系统审计日志中。`"
-          type="warning"
-          show-icon
-          style="margin-bottom: 24px"
-        />
+      <div class="issue-modal-content">
+        <template v-if="issueStep === 'form'">
+          <a-alert
+            message="高权限操作警告"
+            :description="`您正在签发一张【${selectedType?.name}】，该卡片将具备${selectedType?.authDesc}。所有签发记录将被永久记录在系统审计日志中。`"
+            type="warning"
+            show-icon
+            style="margin-bottom: 24px"
+          />
 
-        <a-form :model="issueForm" layout="vertical">
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="持卡人姓名" required>
-                <a-input v-model:value="issueForm.holder_name" placeholder="请输入姓名" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="员工编号/手机号" required>
-                <a-input v-model:value="issueForm.holder_id" placeholder="请输入标识符" />
-              </a-form-item>
-            </a-col>
-          </a-row>
+          <a-form :model="issueForm" layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="持卡人姓名" required>
+                  <a-input v-model:value="issueForm.holder_name" placeholder="请输入姓名" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="员工编号/手机号" required>
+                  <a-input v-model:value="issueForm.holder_id" placeholder="请输入标识符" />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-          <template v-if="selectedType?.key === 'floor'">
-            <a-form-item label="授权楼层" required>
-              <a-select
-                v-model:value="issueForm.floors"
-                mode="multiple"
-                placeholder="请选择授权楼层"
-                style="width: 100%"
-              >
-                <a-select-option v-for="f in floorList" :key="f.id" :value="f.floor_number">
-                  {{ f.floor_number }} 层
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </template>
-
-          <template v-if="selectedType?.key === 'staff'">
-            <a-form-item label="授权房间范围" required>
-              <a-select
-                v-model:value="issueForm.rooms"
-                mode="multiple"
-                placeholder="选择具体房间（可多选）"
-                style="width: 100%"
-              >
-                <a-select-option v-for="r in allRooms" :key="r.id" :value="r.room_number">
-                  {{ r.room_number }} - {{ r.room_name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </template>
-
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="有效期至" required>
-                <a-date-picker
-                  v-model:value="issueForm.expiry_date"
-                  show-time
-                  format="YYYY-MM-DD HH:mm"
+            <template v-if="selectedType?.key === 'floor'">
+              <a-form-item label="授权楼层" required>
+                <a-select
+                  v-model:value="issueForm.floors"
+                  mode="multiple"
+                  placeholder="请选择授权楼层"
                   style="width: 100%"
-                />
+                >
+                  <a-select-option v-for="f in floorList" :key="f.id" :value="f.floor_number">
+                    {{ f.floor_number }} 层
+                  </a-select-option>
+                </a-select>
               </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="备注说明">
-                <a-input v-model:value="issueForm.remark" placeholder="如：保洁部临时领用" />
+            </template>
+
+            <template v-if="selectedType?.key === 'staff'">
+              <a-form-item label="授权房间范围" required>
+                <a-select
+                  v-model:value="issueForm.rooms"
+                  mode="multiple"
+                  placeholder="选择具体房间（可多选）"
+                  style="width: 100%"
+                >
+                  <a-select-option v-for="r in allRooms" :key="r.id" :value="r.room_number">
+                    {{ r.room_number }} - {{ r.room_name }}
+                  </a-select-option>
+                </a-select>
               </a-form-item>
-            </a-col>
-          </a-row>
+            </template>
 
-          <a-divider>安全验证</a-divider>
-          <a-form-item label="操作员登录密码二次确认" required>
-            <a-input-password v-model:value="issueForm.confirm_password" placeholder="请输入您的登录密码" />
-          </a-form-item>
-        </a-form>
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="有效期至" required>
+                  <a-date-picker
+                    v-model:value="issueForm.expiry_date"
+                    show-time
+                    format="YYYY-MM-DD HH:mm"
+                    style="width: 100%"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="备注说明">
+                  <a-input v-model:value="issueForm.remark" placeholder="如：保洁部临时领用" />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-        <div class="hardware-hint">
-          <InfoCircleOutlined style="color: #1890ff" /> 请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。
-        </div>
+            <a-divider>安全验证</a-divider>
+            <a-form-item label="操作员登录密码二次确认" required>
+              <a-input-password v-model:value="issueForm.confirm_password" placeholder="请输入您的登录密码" />
+            </a-form-item>
+          </a-form>
+
+          <div class="hardware-hint">
+            <InfoCircleOutlined style="color: #1890ff" /> 请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="step-status-container">
+            <div class="status-animation">
+              <a-progress
+                type="circle"
+                :percent="issueStep === 'writing' ? 70 : 100"
+                :status="issueStep === 'error' ? 'exception' : (issueStep === 'success' ? 'success' : 'active')"
+                :width="120"
+              />
+            </div>
+            <h2 class="status-title">{{ issueStep === 'writing' ? '正在处理...' : (issueStep === 'success' ? '签发成功' : '签发失败') }}</h2>
+            <p class="status-msg">{{ issueStatusMsg }}</p>
+            
+            <div v-if="issueStep === 'error'" style="margin-top: 24px">
+              <a-button @click="issueStep = 'form'">返回修改</a-button>
+            </div>
+          </div>
+        </template>
       </div>
     </a-modal>
   </div>
@@ -344,6 +381,8 @@ async function fetchMetadata() {
 const issueModalVisible = ref(false)
 const selectedType = ref<any>(null)
 const issuing = ref(false)
+const issueStep = ref<'form' | 'writing' | 'success' | 'error'>('form')
+const issueStatusMsg = ref('')
 
 const issueForm = reactive({
   holder_name: '',
@@ -363,6 +402,8 @@ function openIssueModal(type: any) {
     return message.warning('请先在右上角选择发卡器设备')
   }
   selectedType.value = type
+  issueStep.value = 'form'
+  issueStatusMsg.value = ''
   resetForm()
   issueModalVisible.value = true
 }
@@ -378,6 +419,11 @@ function resetForm() {
 }
 
 async function handleIssue() {
+  if (issueStep.value === 'success') {
+    issueModalVisible.value = false
+    return
+  }
+
   if (!isAuthorized.value) {
     return message.error('授权已过期或未授权，请重新进行经理授权')
   }
@@ -387,6 +433,9 @@ async function handleIssue() {
 
   try {
     issuing.value = true
+    issueStep.value = 'writing'
+    issueStatusMsg.value = '正在向硬件下发写卡指令...'
+
     const payload = {
       card_type: selectedType.value.key,
       holder_name: issueForm.holder_name,
@@ -397,20 +446,28 @@ async function handleIssue() {
       remark: issueForm.remark,
       confirm_password: issueForm.confirm_password,
       encoder_id: selectedEncoder.value,
-      auth_manager_id: authForm.manager_id // 携带授权经理ID
+      auth_manager_id: authForm.manager_id
     }
 
     const res: any = await request.post('/rfid/issue-privilege', payload)
+    
     if (res.data.success) {
-      message.success(`${selectedType.value.name} 签发指令已下发，请等待设备蜂鸣反馈`)
-      issueModalVisible.value = false
-      // 签发成功后重置授权状态，增强安全性
-      isAuthorized.value = false
+      issueStatusMsg.value = '写卡指令已成功接收，请等待设备蜂鸣...'
+      
+      // 模拟等待硬件反馈的过程
+      setTimeout(() => {
+        issueStep.value = 'success'
+        issueStatusMsg.value = '特权卡签发成功！'
+        message.success(`${selectedType.value.name} 签发成功`)
+        isAuthorized.value = false // 成功后重置授权
+      }, 2000)
     } else {
-      message.error(res.data.message || '签发失败')
+      issueStep.value = 'error'
+      issueStatusMsg.value = res.data.message || '下发指令失败'
     }
   } catch (error: any) {
-    message.error(error.response?.data?.message || '服务器通信失败')
+    issueStep.value = 'error'
+    issueStatusMsg.value = error.response?.data?.message || '服务器通信失败'
   } finally {
     issuing.value = false
   }
@@ -542,6 +599,35 @@ onMounted(() => {
 
 .issue-form-container {
   padding: 8px 0;
+}
+
+.issue-modal-content {
+  min-height: 300px;
+}
+
+.step-status-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.status-animation {
+  margin-bottom: 24px;
+}
+
+.status-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.status-msg {
+  color: #64748b;
+  font-size: 14px;
 }
 
 .hardware-hint {
