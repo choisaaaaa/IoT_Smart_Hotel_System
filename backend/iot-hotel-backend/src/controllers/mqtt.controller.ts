@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest, sendSuccess, sendError, serverError, badRequest } from '../types';
 import mqttService from '../services/mqtt.service';
+import config from '../config';
 import logger from '../utils/logger';
 import { isSystemAdmin } from '../utils/role';
 
@@ -52,7 +53,7 @@ export class MQTTController {
   static async getStatus(req: AuthRequest, res: Response) {
     return sendSuccess(res, {
       connected: mqttService.isConnected(),
-      broker: process.env.MQTT_HOST || 'localhost'
+      broker: config.mqtt.host
     });
   }
 }
