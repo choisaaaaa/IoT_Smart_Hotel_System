@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "username": "receptionist",
+        "password": "reception123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('前台登录成功', function () {
+          pm.response.to.have.status(200);
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.data.token).to.exist;
+          pm.expect(jsonData.data.user.role).to.eql('receptionist');
+          pm.environment.set('receptionToken', jsonData.data.token);
+      });
+    language: text/javascript
+order: 2000

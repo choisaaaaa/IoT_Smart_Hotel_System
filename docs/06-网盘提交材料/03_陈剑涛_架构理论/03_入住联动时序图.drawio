@@ -1,0 +1,314 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.7.8 Chrome/128.0.6613.36 Electron/32.0.1 Safari/537.36" version="24.7.8">
+  <diagram name="第 1 页" id="tE4wwOxz1X8SXHQVORrP">
+    <mxGraphModel dx="1509" dy="888" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-5" value="客户端/前台端" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#1890ff;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="20" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-6" value="后端API" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#1890ff;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="226" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-7" value="MQTT Broker" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#722ed1;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="432" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-8" value="客房终端(ESP32)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#52c41a;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="638" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-9" value="数据库" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#fa8c16;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="844" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-10" value="设备控制器" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};fillColor=#fa8c16;fontColor=#FFFFFF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="1050" y="10" width="100" height="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-13" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" parent="1" source="S6-SW6D6r2baJJB2Vsp8-5" target="S6-SW6D6r2baJJB2Vsp8-6" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="520" as="sourcePoint" />
+            <mxPoint x="550" y="470" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="230" y="120" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-16" value="1. POST /api/v1/bookings" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" parent="S6-SW6D6r2baJJB2Vsp8-13" vertex="1" connectable="0">
+          <mxGeometry x="-0.0656" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-17" value="(创建预订,status=pending)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;fontSize=11;" parent="S6-SW6D6r2baJJB2Vsp8-13" vertex="1" connectable="0">
+          <mxGeometry x="0.0371" relative="1" as="geometry">
+            <mxPoint x="-6" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-18" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.4135294117646" y="160" as="sourcePoint" />
+            <mxPoint x="893.59" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-19" value="2. INSERT INTO bookings" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" parent="S6-SW6D6r2baJJB2Vsp8-18" vertex="1" connectable="0">
+          <mxGeometry x="-0.0153" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-20" value="(存储预订信息)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" parent="S6-SW6D6r2baJJB2Vsp8-18" vertex="1" connectable="0">
+          <mxGeometry x="-0.0382" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-21" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="70.00352941176465" y="340.0000000000002" as="sourcePoint" />
+            <mxPoint x="276.18" y="340.0000000000002" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-18" value="3. PUT /api/v1/bookings/:id/confirm" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="S6-SW6D6r2baJJB2Vsp8-21">
+          <mxGeometry x="-0.0101" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-19" value="(确认预订,status=confirmed)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="S6-SW6D6r2baJJB2Vsp8-21">
+          <mxGeometry x="0.0001" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S6-SW6D6r2baJJB2Vsp8-24" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="893.18" y="210" as="sourcePoint" />
+            <mxPoint x="275.00352941176465" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-44" value="(booking_id, status)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="S6-SW6D6r2baJJB2Vsp8-24">
+          <mxGeometry x="-0.0019" y="1" relative="1" as="geometry">
+            <mxPoint y="-2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-1" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.5000000000002" y="250" as="sourcePoint" />
+            <mxPoint x="69.32352941176464" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-56" value="(预订成功)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-1">
+          <mxGeometry x="-0.0067" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-3" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.41352941176467" y="380" as="sourcePoint" />
+            <mxPoint x="893.5899999999999" y="380" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="440.09000000000003" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-20" value="4. UPDATE bookings SET status=&#39;confirmed&#39;" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-3">
+          <mxGeometry x="-0.0335" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-21" value="(更新状态)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-3">
+          <mxGeometry x="-0.0505" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-4" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.5" y="480" as="sourcePoint" />
+            <mxPoint x="69.5" y="480" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-57" value="(确认成功)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-4">
+          <mxGeometry x="0.0043" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-5" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="893.5" y="430" as="sourcePoint" />
+            <mxPoint x="275.5" y="430" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-45" value="(success)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-5">
+          <mxGeometry x="-0.0074" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-9" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="69.44736842105249" y="610" as="sourcePoint" />
+            <mxPoint x="275.5000000000002" y="610" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-22" value="5. POST /api/v1/bookings/:id/checkin" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-9">
+          <mxGeometry x="-0.0143" y="-2" relative="1" as="geometry">
+            <mxPoint x="1" y="-4" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-23" value="(办理入住)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-9">
+          <mxGeometry x="-0.0041" relative="1" as="geometry">
+            <mxPoint x="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-10" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="274.9973684210527" y="650" as="sourcePoint" />
+            <mxPoint x="893.05" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-24" value="6. UPDATE bookings SET status=&#39;checked_in&#39;" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-10">
+          <mxGeometry x="0.0021" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-25" value="(标记已入住)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-10">
+          <mxGeometry x="0.0021" y="-2" relative="1" as="geometry">
+            <mxPoint y="-4" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-11" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.47736842105274" y="750" as="sourcePoint" />
+            <mxPoint x="893.53" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-26" value="7. SELECT device_id FROM devices" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-11">
+          <mxGeometry x="0.0006" y="-1" relative="1" as="geometry">
+            <mxPoint y="-2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-27" value="(查找room_terminal)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-11">
+          <mxGeometry x="0.004" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-12" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="69.99736842105249" y="840" as="sourcePoint" />
+            <mxPoint x="276.05000000000024" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-28" value="8. POST /devices/room-card" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-12">
+          <mxGeometry x="0.0008" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-29" value="(发放房卡权限)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-12">
+          <mxGeometry x="-0.0094" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-13" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="893.5" y="800" as="sourcePoint" />
+            <mxPoint x="275.5" y="800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-47" value="(device_id列表)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-13">
+          <mxGeometry x="0.0028" y="-2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-14" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="893.5" y="700" as="sourcePoint" />
+            <mxPoint x="275.5" y="700" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-46" value="&lt;span style=&quot;&quot;&gt;(success)&lt;/span&gt;" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-14">
+          <mxGeometry x="0.0028" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-15" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#1890ff;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275.4473684210527" y="970" as="sourcePoint" />
+            <mxPoint x="481.5" y="970" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-30" value="9. MQTT Publish" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-15">
+          <mxGeometry x="-0.001" y="-1" relative="1" as="geometry">
+            <mxPoint y="-2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-31" value="(topic: device/command, scene=welcome)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;labelBackgroundColor=default;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-15">
+          <mxGeometry x="-0.0112" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-16" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#52c41a;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="689.9973684210527" y="1070" as="sourcePoint" />
+            <mxPoint x="1099.5" y="1070" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-34" value="11. apply_room_scene(WELCOME)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-16">
+          <mxGeometry x="0.0023" y="2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-35" value="(灯光亮起、氛围灯暖色)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-16">
+          <mxGeometry x="-0.008" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-17" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#1890ff;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="480.9973684210527" y="1020" as="sourcePoint" />
+            <mxPoint x="687.05" y="1020" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-32" value="10. MQTT Subscribe" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-17">
+          <mxGeometry x="0.0018" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-33" value="(接收scene_welcome指令)" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-17">
+          <mxGeometry x="0.0018" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-36" value="" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=1;strokeWidth=2;strokeColor=#52c41a;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1097.9973684210524" y="1120" as="sourcePoint" />
+            <mxPoint x="1097.9973684210524" y="1170" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1169" y="1120" />
+              <mxPoint x="1169" y="1170" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-42" value="&lt;div&gt;12. 设备联动&lt;/div&gt;&lt;div&gt;(空调、窗帘、欢迎灯光)&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;labelBackgroundColor=default;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-36">
+          <mxGeometry x="-0.6233" relative="1" as="geometry">
+            <mxPoint y="-2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-58" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="276" y="880" as="sourcePoint" />
+            <mxPoint x="70" y="880" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-59" value="(房卡指令已下发)" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontColor=#666666;fontStyle=1" vertex="1" connectable="0" parent="upe3UBrg3ng9kQYLem1v-58">
+          <mxGeometry x="0.0043" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-61" value="阶段1: 预订" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1890ff;fontColor=#FFFFFF;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry y="60" width="930" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-62" value="阶段2: 系统确认" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#52c41a;fontColor=#FFFFFF;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry y="270" width="930" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-63" value="阶段3: 办理入住" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fa8c16;fontColor=#FFFFFF;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry y="520" width="1120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="upe3UBrg3ng9kQYLem1v-64" value="阶段4: 客房激活" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#722ed1;fontColor=#FFFFFF;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="250" y="900" width="870" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

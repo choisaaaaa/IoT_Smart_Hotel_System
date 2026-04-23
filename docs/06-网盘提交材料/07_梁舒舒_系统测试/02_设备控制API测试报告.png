@@ -1,0 +1,34 @@
+占位文件
+
+【配图编号】8.2
+【配图名称】设备控制API测试报告
+【所属章节】第八章：系统测试与验证
+【文件格式】PNG
+【内容要求】Postman Collection Runner运行结果，展示设备指令下发、状态查询、环境数据获取等IoT关键API的测试结果
+
+【截图获取】
+```bash
+# 使用Postman Collection Runner
+# 导入tests/api/IoT_Device_API_Collection.json后运行
+# 或直接使用Bruno测试工具
+```
+
+【截图要点】
+- 显示API测试用例列表（设备控制相关）
+- 显示HTTP状态码（200/201等）
+- 显示响应时间和通过率
+- 重点展示以下接口：
+  * POST /api/v1/devices/:id/command（设备指令下发）
+  * GET /api/v1/devices/:id/status（设备状态查询）
+  * GET /api/v1/environment（环境数据获取）
+- 包含接口通过率和平均响应时间
+
+【交付标准】
+- 格式：PNG
+- 分辨率：1920×1080
+- 文件大小：< 2MB
+- 命名规范：08_设备控制API测试报告.png
+
+⚠️ 匿名检查：确保截图中无个人文件路径、无姓名信息
+
+请替换此占位文件为实际截图

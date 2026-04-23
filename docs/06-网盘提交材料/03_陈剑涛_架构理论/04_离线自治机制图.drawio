@@ -1,0 +1,167 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.7.8 Chrome/128.0.6613.36 Electron/32.0.1 Safari/537.36" version="24.7.8">
+  <diagram name="第 1 页" id="_zjNN5pQf_19cMTur4m6">
+    <mxGraphModel dx="2390" dy="1407" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#ff4d4f;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-1" target="xzJp1IGT-RFrMSEumbbZ-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-7" value="网络断开" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontStyle=1;fontColor=#ff4d4f;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-6">
+          <mxGeometry x="-0.0132" relative="1" as="geometry">
+            <mxPoint x="40" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-8" value="(触发离线降级)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-6">
+          <mxGeometry x="0.022" y="-1" relative="1" as="geometry">
+            <mxPoint x="41" y="22" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-1" value="正常状态&#xa;&amp;nbsp;(云端在线)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#52c41a;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="400" y="140" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#52c41a;strokeWidth=3;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-4" target="xzJp1IGT-RFrMSEumbbZ-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-10" value="网络恢复" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontColor=#52c41a;fontStyle=1" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-9">
+          <mxGeometry x="-0.0129" relative="1" as="geometry">
+            <mxPoint x="40" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-11" value="(触发数据同步)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-9">
+          <mxGeometry x="0.0043" y="-1" relative="1" as="geometry">
+            <mxPoint x="41" y="18" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-4" value="离线状态&#xa;&amp;nbsp;(网络断开)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa8c16;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="400" y="353.5" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-5" value="恢复状态&#xa;&amp;nbsp;(数据补同步)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1890ff;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="400" y="570" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-14" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;curved=1;strokeColor=#1890ff;strokeWidth=3;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-5" target="xzJp1IGT-RFrMSEumbbZ-1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="530" y="500" as="sourcePoint" />
+            <mxPoint x="580" y="450" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="500" y="680" />
+              <mxPoint x="1030" y="680" />
+              <mxPoint x="1030" y="190" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-15" value="同步完成" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#1890ff;fontSize=14;fontStyle=1" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-14">
+          <mxGeometry x="0.0767" y="-1" relative="1" as="geometry">
+            <mxPoint x="-41" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-16" value="(回归正常运行)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#666666;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-14">
+          <mxGeometry x="0.0767" y="1" relative="1" as="geometry">
+            <mxPoint x="-39" y="20" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-18" value="&lt;b&gt;离线自治能力&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#fa8c16;strokeWidth=2;fontSize=16;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="610" y="334" width="280" height="120" as="geometry">
+            <mxRectangle x="640" y="294" width="140" height="30" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-19" value="本地控制继续执行" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;strokeWidth=2;fontColor=#52c41a;fontSize=14;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-18">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-20" value="设备状态本地缓存" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;strokeWidth=2;fontColor=#1890ff;fontSize=14;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-18">
+          <mxGeometry y="60" width="280" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-21" value="紧急场景本地优先响应" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;strokeWidth=2;fontColor=#ff4d4f;fontSize=14;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-18">
+          <mxGeometry y="90" width="280" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-22" value="&lt;span style=&quot;font-size: 14px;&quot;&gt;正常运行行为&lt;/span&gt;" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontColor=#52c41a;fontSize=14;strokeColor=#52c41a;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="140" y="110" width="250" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-23" value="MQTT实时通信" style="text;strokeColor=#52c41a;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#52c41a;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-22">
+          <mxGeometry y="30" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-24" value="数据云端同步" style="text;strokeColor=#52c41a;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#52c41a;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-22">
+          <mxGeometry y="60" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-25" value="远程指令控制" style="text;strokeColor=#52c41a;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#52c41a;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-22">
+          <mxGeometry y="90" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-26" value="前端实时展示" style="text;strokeColor=#52c41a;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#52c41a;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-22">
+          <mxGeometry y="120" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-27" value="离线降级行为" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontColor=#fa8c16;fontSize=14;strokeColor=#fa8c16;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="140" y="330" width="250" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-28" value="停止高频上报" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#fa8c16;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-27">
+          <mxGeometry y="30" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-29" value="本地逻辑继续执行" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#fa8c16;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-27">
+          <mxGeometry y="60" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-30" value="紧急告警本地触发" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#fa8c16;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-27">
+          <mxGeometry y="90" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-31" value="事件本地缓存(带时间戳)" style="text;strokeColor=#fa8c16;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#fa8c16;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-27">
+          <mxGeometry y="120" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-32" value="恢复同步行为" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontColor=#1890ff;fontSize=14;strokeColor=#1890ff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="610" y="510" width="250" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-33" value="MQTT自动重连(指数退避)" style="text;strokeColor=#1890ff;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#1890ff;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-32">
+          <mxGeometry y="30" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-34" value="缓存事件批量补报" style="text;strokeColor=#1890ff;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#1890ff;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-32">
+          <mxGeometry y="60" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-35" value="设备重新上线" style="text;strokeColor=#1890ff;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#1890ff;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-32">
+          <mxGeometry y="90" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-36" value="健康数据上报" style="text;strokeColor=#1890ff;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontColor=#1890ff;fontSize=14;strokeWidth=2;" vertex="1" parent="xzJp1IGT-RFrMSEumbbZ-32">
+          <mxGeometry y="120" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-37" target="xzJp1IGT-RFrMSEumbbZ-40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-43" value="false (断网)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#ff4d4f;fontSize=14;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-42">
+          <mxGeometry x="-0.0095" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-44" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;fontColor=#52c41a;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-37" target="xzJp1IGT-RFrMSEumbbZ-41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-45" value="true (在线)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontColor=#52c41a;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-44">
+          <mxGeometry x="-0.0254" y="2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-37" value="s_network_ready?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#722ed1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="730" width="130" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-39" value="MQTT重连(指数退避)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1890ff;" vertex="1" parent="1">
+          <mxGeometry x="710" y="730" width="130" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeWidth=2;curved=1;" edge="1" parent="1" source="xzJp1IGT-RFrMSEumbbZ-40" target="xzJp1IGT-RFrMSEumbbZ-39">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-47" value="网络恢复" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontColor=#1890ff;" vertex="1" connectable="0" parent="xzJp1IGT-RFrMSEumbbZ-46">
+          <mxGeometry x="-0.2303" y="7" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-40" value="停止MQTT上报" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ff4d4f;" vertex="1" parent="1">
+          <mxGeometry x="270" y="920" width="130" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-41" value="继续本地控制" style="rhombus;whiteSpace=wrap;html=1;fillColor=#52c41a;" vertex="1" parent="1">
+          <mxGeometry x="490" y="730" width="130" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-48" value="离线自治机制图" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontColor=#333333;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="xzJp1IGT-RFrMSEumbbZ-49" value="网络断开时本地决策流程" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="410" y="50" width="180" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
