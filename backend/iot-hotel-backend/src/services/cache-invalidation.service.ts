@@ -111,7 +111,7 @@ export class CacheInvalidationService {
       await CacheService.deletePattern(`delivery:list:${hotelId}*`);
       
       // 清除送物订单详情缓存
-      await CacheService.delete(CacheService.deliveryKeys.info(orderId));
+      await CacheService.delete(`delivery:info:${orderId}`);
       
       // 清除房间相关缓存
       if (roomId) {
@@ -135,7 +135,7 @@ export class CacheInvalidationService {
       await CacheService.deletePattern(`maintenance:list:${hotelId}*`);
       
       // 清除维修工单详情缓存
-      await CacheService.delete(CacheService.maintenanceKeys.info(ticketId));
+      await CacheService.delete(`maintenance:info:${ticketId}`);
       
       // 清除房间相关缓存
       if (roomId) {

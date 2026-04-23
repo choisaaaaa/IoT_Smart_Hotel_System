@@ -355,6 +355,7 @@ CREATE TABLE frequent_guests (
     phone VARCHAR(20) NOT NULL,
     id_type VARCHAR(50) DEFAULT 'idcard',
     id_number VARCHAR(50) NOT NULL,
+    relationship VARCHAR(50) DEFAULT 'self',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),

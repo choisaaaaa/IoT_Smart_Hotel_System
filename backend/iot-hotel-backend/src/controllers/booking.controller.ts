@@ -960,7 +960,7 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { 
       user_id, guest_name, guest_phone, guest_id_number, special_requests,
-      manual_discount, manual_reduce, total_price 
+      manual_discount, manual_reduce, total_price, room_id: bodyRoomId
     } = req.body || {};
 
     if (guest_id_number) {
@@ -979,15 +979,62 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 获取订单信息
-    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, guest_name, guest_phone, guest_id_number, status, auto_checkout_at, check_out_date, total_price FROM bookings WHERE id = ?', [id]);
+    const [bookingRows] = await connection.query<RowDataPacket[]>('SELECT room_id, room_type_id, hotel_id, guest_name, guest_phone, guest_id_number, id_type, status, auto_checkout_at, check_out_date, total_price, booking_number FROM bookings WHERE id = ?', [id]);
     if (bookingRows.length === 0) {
       await connection.rollback();
       res.status(404).json(errorResponse('预订不存在'));
       return;
     }
     const booking = bookingRows[0] as any;
-    const roomId = booking.room_id;
+
+    let finalRoomId = bodyRoomId || booking.room_id;
+    let roomNumber = null;
+
+    if (bodyRoomId && Number(bodyRoomId) !== Number(booking.room_id)) {
+      const [roomRows] = await connection.query<RowDataPacket[]>(
+        'SELECT id, room_number, room_status, room_type_id FROM rooms WHERE id = ? FOR UPDATE',
+        [bodyRoomId]
+      );
+      if (roomRows.length === 0) {
+        await connection.rollback();
+        res.status(404).json(errorResponse('所选房间不存在'));
+        return;
+      }
+
+      const targetRoom = roomRows[0] as any;
+      const isAvailable = targetRoom.room_status === 'available' || targetRoom.room_status === 'cleaning';
+      const isSameAsOldRoom = booking.room_id && Number(booking.room_id) === Number(bodyRoomId);
+
+      if (!isAvailable && !isSameAsOldRoom) {
+        await connection.rollback();
+        res.status(400).json(errorResponse('所选房间已被占用，请选择其他房间'));
+        return;
+      }
+
+      if (booking.room_id && Number(booking.room_id) !== Number(bodyRoomId)) {
+        await connection.query(
+          "UPDATE rooms SET room_status = 'available', locked_by_booking = NULL, locked_at = NULL WHERE id = ?",
+          [booking.room_id]
+        );
+      }
+
+      finalRoomId = bodyRoomId;
+      roomNumber = targetRoom.room_number;
+    } else if (finalRoomId) {
+      const [roomRows] = await connection.query<RowDataPacket[]>(
+        'SELECT room_number FROM rooms WHERE id = ?',
+        [finalRoomId]
+      );
+      if (roomRows.length > 0) {
+        roomNumber = roomRows[0].room_number;
+      }
+    }
+
+    if (!finalRoomId) {
+      await connection.rollback();
+      res.status(400).json(errorResponse('该预订尚未分配房间，请选择一个空房后办理入住'));
+      return;
+    }
 
     // 关键修复：实现同一证件号跨店入住限制
     const finalIdNumber = guest_id_number || booking.guest_id_number;
@@ -1036,9 +1083,13 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // 构建更新字段
-    const updateFields: string[] = ['status = ?', 'check_in_time = CURRENT_TIMESTAMP'];
-    const params: any[] = ['checked_in', id];
+    const updateFields: string[] = ['status = ?', 'check_in_time = CURRENT_TIMESTAMP', 'room_id = ?'];
+    const params: any[] = ['checked_in', finalRoomId, id];
+
+    if (roomNumber) {
+      updateFields.push('room_number = ?');
+      params.splice(params.length - 1, 0, roomNumber);
+    }
 
     // 如果能关联用户账号，则更新user_id
     if (resolvedUserId) {
@@ -1103,14 +1154,14 @@ export const checkin = async (req: AuthRequest, res: Response) => {
         guest_phone || booking.guest_phone, 
         booking.id_type || 'idcard',
         guest_id_number || booking.guest_id_number, 
-        roomId
+        finalRoomId
       ]
     );
 
-    // 同步更新房间状态为“在住”
-    if (roomId) {
-      await connection.query('UPDATE rooms SET room_status = ?, locked_by_booking = ?, locked_at = NOW() WHERE id = ?', ['occupied', id, roomId]);
-    }
+    await connection.query(
+      'UPDATE rooms SET room_status = ?, locked_by_booking = ?, locked_at = NOW() WHERE id = ?',
+      ['occupied', id, finalRoomId]
+    );
 
     if (booking.status === 'pending') {
       await connection.query(
@@ -1123,9 +1174,9 @@ export const checkin = async (req: AuthRequest, res: Response) => {
     await connection.commit();
     
     // 立即清除所有相关缓存，确保数据一致性
-    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, 'checked_in');
+    await clearBookingRelatedCaches(Number(id), booking.hotel_id, booking.booking_number, 'checked_in');
     
-    res.json(successResponse(null, '办理入住成功'));
+    res.json(successResponse({ room_id: finalRoomId, room_number: roomNumber }, '办理入住成功'));
   } catch (error: any) {
     await connection.rollback();
     logger.error('办理入住失败:', error?.message || error, error?.stack || '');
@@ -1240,7 +1291,7 @@ export const checkout = async (req: AuthRequest, res: Response) => {
     await connection.commit();
     
     // 立即清除所有相关缓存，确保数据一致性
-    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, 'checked_out');
+    await clearBookingRelatedCaches(Number(id), booking.hotel_id, booking.booking_number, 'checked_out');
     
     res.json(successResponse(null, '办理退房成功'));
   } catch (error) {
@@ -1571,7 +1622,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     await connection.commit();
     
     // 立即清除所有相关缓存，确保数据一致性
-    await clearBookingRelatedCaches(id, booking.hotel_id, booking.booking_number, status);
+    await clearBookingRelatedCaches(Number(id), booking.hotel_id, booking.booking_number, status);
     
     res.json(successResponse(null, '更新预订状态成功'));
   } catch (error) {
