@@ -385,7 +385,7 @@ esp_err_t service_network_read_nvs_string(const char *key, char *out_value, size
         return ESP_OK;
     }
     if (strcmp(key, "MQTT_BROKER_URI") == 0) {
-        strncpy(out_value, "mqtt://172.20.10.3:1883", max_len - 1);
+        strncpy(out_value, "mqtt://8.134.166.69:1883", max_len - 1);
         out_value[max_len - 1] = '\0';
         ESP_LOGI(TAG, "[MOCK] NVS 虚拟读取: 查找到键值 %s，返回固定 Broker 地址", key);
         return ESP_OK;
