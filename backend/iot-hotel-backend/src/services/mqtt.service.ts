@@ -797,9 +797,151 @@ class MQTTService {
 
       logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}, hotelId: ${hotelId}`);
 
+      // 如果是发卡器感应到卡片，更新设备的 last_card_uid，并尝试下发同步指令
+      if (data.event_type === 'card_uid_detected' && data.card_uid) {
+        const cardUid = data.card_uid;
+        const deviceId = data.device_id;
+        
+        // 关键修复：确保 hotelId 有效
+        let resolvedHotelId = hotelId;
+        if (!resolvedHotelId || resolvedHotelId === 0) {
+          const device = await this.getDeviceMetadata(deviceId);
+          resolvedHotelId = device?.hotel_id || 0;
+        }
+
+        await pool.query(
+          'UPDATE devices SET last_card_uid = ? WHERE device_id = ?',
+          [cardUid, deviceId]
+        );
+        logger.info(`[MQTT] 更新设备 ${deviceId} 的最新感应卡片 UID: ${cardUid}`);
+        
+        // 尝试查询数据库中该卡片的信息并同步回模拟器显示
+        const rfidService = require('./rfid.service').default;
+        const cardInfo = await rfidService.getCardInfo(cardUid, resolvedHotelId);
+        if (cardInfo) {
+          logger.info(`[MQTT] 发现已知卡片 ${cardUid} (酒店 ${resolvedHotelId}), 类型: ${cardInfo.card_type}, 持卡人: ${cardInfo.holder_name}`);
+          await this.sendDeviceCommand(
+            deviceId,
+            'room_card_op',
+            JSON.stringify({
+              action: 'sync',
+              card_uid: cardUid,
+              card_type: cardInfo.card_type,
+              holder_name: cardInfo.holder_name || cardInfo.member_name || '',
+              room_number: cardInfo.room_number || ''
+            }),
+            'system'
+          );
+        } else {
+          logger.info(`[MQTT] 未在数据库中找到卡片 ${cardUid} (酒店 ${resolvedHotelId})，通知模拟器保持空白状态`);
+          // 明确告知模拟器这是一个未知/空白卡，彻底清除任何残留显示
+          await this.sendDeviceCommand(
+            deviceId,
+            'room_card_op',
+            JSON.stringify({
+              action: 'sync_clear',
+              card_uid: cardUid
+            }),
+            'system'
+          );
+        }
+
+        // 清除相关缓存
+        await CacheService.deletePattern('device:list:*');
+      }
+
+      // 如果是发卡成功事件，更新 rfid_cards 表中的真实 UID
+      if (data.event_type === 'card_issued' && data.data?.card_uid) {
+        const realUid = data.data.card_uid;
+        const roomId = data.data.room_id;
+        const bookingId = data.data.booking_id;
+        const deviceId = data.device_id;
+
+        // 1. 首先检查是否有暂存的“特权卡签发”任务
+        const cacheKey = `pending_privilege_issue:${deviceId}`;
+        const pendingIssue = await CacheService.get(cacheKey);
+
+        if (pendingIssue) {
+          logger.info(`[MQTT] 发现硬件 ${deviceId} 的暂存签发任务，正在写入数据库...`);
+          const { card_type, hotel_id, operator_id, expires_at, holder_name, holder_id, remark, floors, rooms } = pendingIssue as any;
+
+          // 写入 rfid_cards
+          await pool.query(
+            `INSERT INTO rfid_cards (card_uid, hotel_id, card_type, expires_at, status, issued_at, holder_name, holder_id, remark)
+             VALUES (?, ?, ?, ?, 'active', NOW(), ?, ?, ?)
+             ON DUPLICATE KEY UPDATE 
+               card_type = VALUES(card_type),
+               expires_at = VALUES(expires_at),
+               status = 'active',
+               holder_name = VALUES(holder_name),
+               holder_id = VALUES(holder_id),
+               remark = VALUES(remark)`,
+            [realUid, hotel_id, card_type, expires_at, holder_name, holder_id, remark]
+          );
+
+          // 记录生命周期
+          await pool.query(
+            `INSERT INTO card_lifecycle_logs (card_uid, hotel_id, action_type, operator_id, target_user_id, notes)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [realUid, hotel_id, 'issue', operator_id, null, `签发特权卡: ${card_type}, 持卡人: ${holder_name}, 备注: ${remark}`]
+          );
+
+          // 如果有权限策略
+          if (card_type === 'floor' || card_type === 'staff') {
+            const scope = card_type === 'floor' ? 'floor' : 'room_list';
+            const scopeValue = card_type === 'floor' ? JSON.stringify(floors) : JSON.stringify(rooms);
+            await pool.query(
+              `INSERT INTO staff_access_policies (hotel_id, user_id, access_scope, scope_value, is_active)
+               VALUES (?, ?, ?, ?, 1)
+               ON DUPLICATE KEY UPDATE access_scope = VALUES(access_scope), scope_value = VALUES(scope_value), is_active = 1`,
+              [hotel_id, operator_id, scope, scopeValue]
+            );
+          }
+
+          // 清除缓存
+          await CacheService.delete(cacheKey);
+          logger.info(`[MQTT] 特权卡签发成功，UID: ${realUid}`);
+        } else {
+          // 2. 否则，查找最近一个使用 PRIV_ 前缀生成的临时卡片记录并更新为真实 UID (兼容普通客房发卡)
+          let updateQuery = '';
+          let updateParams = [];
+
+          if (bookingId) {
+            updateQuery = 'UPDATE rfid_cards SET card_uid = ? WHERE booking_id = ? AND card_uid LIKE "PRIV_%"';
+            updateParams = [realUid, bookingId];
+          } else if (roomId) {
+            updateQuery = `
+              UPDATE rfid_cards c
+              LEFT JOIN rooms r ON c.room_id = r.id
+              SET c.card_uid = ? 
+              WHERE (c.room_id = ? OR r.room_number = ?) AND c.card_uid LIKE "PRIV_%"
+            `;
+            updateParams = [realUid, roomId, roomId];
+          }
+
+          if (updateQuery) {
+            const [result] = await pool.query<ResultSetHeader>(updateQuery, updateParams);
+            if (result.affectedRows > 0) {
+              logger.info(`[MQTT] 已将临时客房卡片更新为真实物理 UID: ${realUid}`);
+              await pool.query(
+                'UPDATE card_lifecycle_logs SET card_uid = ? WHERE card_uid LIKE "PRIV_%" AND hotel_id = ? ORDER BY created_at DESC LIMIT 1',
+                [realUid, hotelId]
+              );
+            }
+          }
+        }
+      }
+
+      // 关键修复：确保 hotelId 有效
+      let resolvedHotelId = hotelId;
+      if (!resolvedHotelId || resolvedHotelId === 0) {
+        const device = await this.getDeviceMetadata(data.device_id);
+        resolvedHotelId = device?.hotel_id || 0;
+      }
+
       // 关键修复：安防事件只发送给所属酒店的前台
-      if (hotelId && this.wsInstance) {
-        const hotelRoom = `front_desk_hotel_${hotelId}`;
+      if (resolvedHotelId && this.wsInstance) {
+        const hotelRoom = `front_desk_hotel_${resolvedHotelId}`;
         logger.info(`发送安防事件到房间: ${hotelRoom}`);
         this.wsInstance.emit('security_event', {
           device_id: data.device_id,

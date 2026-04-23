@@ -91,6 +91,7 @@ export interface DeviceInfo {
   area?: string
   ip_address?: string
   mac_address?: string
+  last_card_uid?: string
   created_at: string
   updated_at: string
 }

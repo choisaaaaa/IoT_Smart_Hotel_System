@@ -7,6 +7,10 @@
       </div>
       <div class="header-extra">
         <a-space>
+          <a-button @click="showCardList = !showCardList">
+            <template #icon><HistoryOutlined /></template>
+            {{ showCardList ? '返回发放' : '发卡管理' }}
+          </a-button>
           <a-alert
             v-if="!selectedEncoder && encoders.length > 0"
             message="请选择发卡器"
@@ -45,7 +49,7 @@
       </div>
     </div>
 
-    <div class="privilege-grid">
+    <div v-if="!showCardList" class="privilege-grid">
       <a-card v-for="type in cardTypes" :key="type.key" class="privilege-item-card" :class="{ 'auth-required': !isAuthorized }" hoverable>
         <div class="card-body">
           <div class="card-icon-wrapper" :style="{ background: type.bgColor, color: type.color }">
@@ -76,6 +80,81 @@
         </div>
       </a-card>
     </div>
+
+    <!-- 发卡管理列表 -->
+    <div v-else class="card-management-container">
+      <a-card title="发卡记录与管理" :bordered="false">
+        <template #extra>
+          <a-space>
+            <a-input-search
+              v-model:value="cardQuery.search"
+              placeholder="搜索 UID / 房号"
+              style="width: 200px"
+              @search="fetchCardList"
+            />
+            <a-select v-model:value="cardQuery.card_type" placeholder="卡片类型" style="width: 120px" allowClear @change="fetchCardList">
+              <a-select-option value="master">万能卡</a-select-option>
+              <a-select-option value="floor">楼层卡</a-select-option>
+              <a-select-option value="staff">员工卡</a-select-option>
+              <a-select-option value="guest">客房卡</a-select-option>
+            </a-select>
+          </a-space>
+        </template>
+        
+        <a-table 
+          :dataSource="cardList" 
+          :columns="cardColumns" 
+          :loading="loadingCards"
+          :pagination="pagination"
+          @change="handleTableChange"
+          rowKey="card_uid"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'card_type'">
+              <a-tag :color="getCardTypeColor(record.card_type)">
+                {{ getCardTypeName(record.card_type) }}
+              </a-tag>
+            </template>
+            <template v-if="column.key === 'status'">
+              <a-badge :status="record.status === 'active' ? 'success' : 'error'" :text="record.status === 'active' ? '正常' : '已失效'" />
+            </template>
+            <template v-if="column.key === 'action'">
+              <a-space>
+                <a-button type="link" size="small" @click="openEditExpiryModal(record)">修改效期</a-button>
+                <a-popconfirm
+                  title="确定要作废这张卡片吗？作废后将无法开启对应门锁。"
+                  @confirm="handleDeactivate(record)"
+                >
+                  <a-button type="link" danger size="small">作废</a-button>
+                </a-popconfirm>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+      </a-card>
+    </div>
+
+    <!-- 修改有效期弹窗 -->
+    <a-modal
+      v-model:open="expiryModalVisible"
+      title="修改卡片有效期"
+      @ok="handleUpdateExpiry"
+      :confirmLoading="updatingExpiry"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="当前 UID">
+          <a-input :value="editingCard?.card_uid" disabled />
+        </a-form-item>
+        <a-form-item label="新有效期" required>
+          <a-date-picker
+            v-model:value="newExpiryDate"
+            show-time
+            format="YYYY-MM-DD HH:mm"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 经理授权弹窗 -->
     <a-modal
@@ -192,7 +271,13 @@
           </a-form>
 
           <div class="hardware-hint">
-            <InfoCircleOutlined style="color: #1890ff" /> 请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。
+            <InfoCircleOutlined style="color: #1890ff" /> 
+            <span v-if="encoders.find(e => e.device_id === selectedEncoder)?.last_card_uid">
+              检测到物理卡片 UID: <b style="color: #52c41a">{{ encoders.find(e => e.device_id === selectedEncoder)?.last_card_uid }}</b>
+            </span>
+            <span v-else>
+              请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。
+            </span>
           </div>
         </template>
 
@@ -220,9 +305,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
+import { getSocket } from '@/utils/websocket'
 import {
   SafetyOutlined,
   KeyOutlined,
@@ -235,7 +321,8 @@ import {
   LockOutlined,
   UnlockOutlined,
   UserOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined,
+  HistoryOutlined
 } from '@ant-design/icons-vue'
 import { deviceApi } from '@/api/device'
 import { useHotelStore } from '@/stores/hotel'
@@ -350,6 +437,124 @@ const cardTypes = [
 const floorList = ref<any[]>([])
 const allRooms = ref<any[]>([])
 
+// 卡片管理相关状态
+const showCardList = ref(false)
+const cardList = ref<any[]>([])
+const loadingCards = ref(false)
+const cardQuery = reactive({
+  page: 1,
+  limit: 10,
+  card_type: undefined,
+  status: undefined,
+  search: ''
+})
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true
+})
+
+const cardColumns = [
+  { title: '卡片 UID', dataIndex: 'card_uid', key: 'card_uid' },
+  { title: '类型', dataIndex: 'card_type', key: 'card_type' },
+  { title: '状态', dataIndex: 'status', key: 'status' },
+  { title: '关联房号/持卡人', key: 'room_info', customRender: ({ record }: any) => {
+      if (record.card_type === 'guest') return record.room_number || '未知房间';
+      const name = record.holder_name || '特权持卡人';
+      const id = record.holder_id ? ` (${record.holder_id})` : '';
+      let detail = '';
+      if (record.card_type === 'floor' && record.floors?.length) detail = ` [${record.floors.join(',')}层]`;
+      if (record.card_type === 'staff' && record.rooms?.length) detail = ` [${record.rooms.join(',')}]`;
+      return name + id + detail;
+    } 
+  },
+  { title: '签发时间', dataIndex: 'issued_at', key: 'issued_at', customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm') },
+  { title: '有效期至', dataIndex: 'expires_at', key: 'expires_at', customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm') },
+  { title: '操作', key: 'action' }
+]
+
+const expiryModalVisible = ref(false)
+const updatingExpiry = ref(false)
+const editingCard = ref<any>(null)
+const newExpiryDate = ref<any>(null)
+
+async function fetchCardList() {
+  loadingCards.value = true
+  try {
+    const res: any = await request.get('/rfid/list', { params: cardQuery })
+    // 后端返回结构通常是 { success: true, data: { list, total } }
+    const responseData = res.data.data || res.data
+    cardList.value = responseData.list || []
+    pagination.total = responseData.total || 0
+  } catch (error) {
+    message.error('获取卡片列表失败')
+  } finally {
+    loadingCards.value = false
+  }
+}
+
+function handleTableChange(pag: any) {
+  cardQuery.page = pag.current
+  cardQuery.limit = pag.pageSize
+  pagination.current = pag.current
+  pagination.pageSize = pag.pageSize
+  fetchCardList()
+}
+
+function getCardTypeColor(type: string) {
+  const map: any = { master: 'red', floor: 'orange', staff: 'blue', guest: 'green' }
+  return map[type] || 'default'
+}
+
+function getCardTypeName(type: string) {
+  const map: any = { master: '万能卡', floor: '楼层卡', staff: '员工卡', guest: '客房卡' }
+  return map[type] || type
+}
+
+async function handleDeactivate(record: any) {
+  try {
+    await request.put('/rfid/status', {
+      card_uid: record.card_uid,
+      status: 'inactive',
+      reason: '经理手动下线作废',
+      encoder_id: selectedEncoder.value // 传入当前选择的发卡器以便下发注销指令
+    })
+    message.success('卡片已作废')
+    fetchCardList()
+  } catch (error) {
+    message.error('操作失败')
+  }
+}
+
+function openEditExpiryModal(record: any) {
+  editingCard.value = record
+  newExpiryDate.value = dayjs(record.expires_at)
+  expiryModalVisible.value = true
+}
+
+async function handleUpdateExpiry() {
+  if (!newExpiryDate.value) return
+  updatingExpiry.value = true
+  try {
+    await request.put('/rfid/expiry', {
+      card_uid: editingCard.value.card_uid,
+      expiry_date: newExpiryDate.value.format('YYYY-MM-DD HH:mm:ss')
+    })
+    message.success('有效期已更新')
+    expiryModalVisible.value = false
+    fetchCardList()
+  } catch (error) {
+    message.error('更新失败')
+  } finally {
+    updatingExpiry.value = false
+  }
+}
+
+watch(showCardList, (val) => {
+  if (val) fetchCardList()
+})
+
 async function fetchEncoders() {
   try {
     const res = await deviceApi.getDeviceList({ audit_status: 'approved' })
@@ -383,6 +588,7 @@ const selectedType = ref<any>(null)
 const issuing = ref(false)
 const issueStep = ref<'form' | 'writing' | 'success' | 'error'>('form')
 const issueStatusMsg = ref('')
+const issuedUid = ref('')
 
 const issueForm = reactive({
   holder_name: '',
@@ -434,7 +640,8 @@ async function handleIssue() {
   try {
     issuing.value = true
     issueStep.value = 'writing'
-    issueStatusMsg.value = '正在向硬件下发写卡指令...'
+    issueStatusMsg.value = '正在向硬件下发写卡指令，请在发卡器上放置卡片...'
+    issuedUid.value = ''
 
     const payload = {
       card_type: selectedType.value.key,
@@ -442,40 +649,86 @@ async function handleIssue() {
       holder_id: issueForm.holder_id,
       floors: issueForm.floors,
       rooms: issueForm.rooms,
-      expiry_date: issueForm.expiry_date.toISOString(),
+      expiry_date: issueForm.expiry_date.format('YYYY-MM-DD HH:mm:ss'),
       remark: issueForm.remark,
       confirm_password: issueForm.confirm_password,
       encoder_id: selectedEncoder.value,
-      auth_manager_id: authForm.manager_id
+      auth_manager_id: authForm.manager_id,
+      // 关键：不再发送 card_uid，强制后端下发读卡指令获取当前最新 UID
+      // card_uid: encoders.value.find(e => e.device_id === selectedEncoder.value)?.last_card_uid || undefined 
     }
 
     const res: any = await request.post('/rfid/issue-privilege', payload)
     
-    if (res.data.success) {
-      issueStatusMsg.value = '写卡指令已成功接收，请等待设备蜂鸣...'
+    // 如果 WebSocket 已经把状态改为 success 了，就不要再覆盖它了
+    if (issueStep.value === 'success') return;
+
+    if (res.code === 200 || res.success) {
+      issueStatusMsg.value = '指令已下发，等待硬件响应...'
       
-      // 模拟等待硬件反馈的过程
-      setTimeout(() => {
-        issueStep.value = 'success'
-        issueStatusMsg.value = '特权卡签发成功！'
-        message.success(`${selectedType.value.name} 签发成功`)
-        isAuthorized.value = false // 成功后重置授权
-      }, 2000)
+      // 注意：现在我们等待 WebSocket 传回真实的 card_issued 事件
+      // 设置一个 15 秒的超时
+      const timeout = setTimeout(() => {
+        if (issueStep.value === 'writing') {
+          issueStep.value = 'success' // 兜底，即使没收到事件也认为指令发成功了
+          issueStatusMsg.value = '写卡指令已发出，请确认硬件蜂鸣。'
+        }
+      }, 15000)
+      
+      // 保存 timeout 以便在收到事件时清除
+      ;(window as any)._issueTimeout = timeout
     } else {
       issueStep.value = 'error'
-      issueStatusMsg.value = res.data.message || '下发指令失败'
+      issueStatusMsg.value = res.message || '下发指令失败'
     }
   } catch (error: any) {
-    issueStep.value = 'error'
-    issueStatusMsg.value = error.response?.data?.message || '服务器通信失败'
-  } finally {
+      // 如果硬件已经成功反馈了，忽略 HTTP 层的报错（可能是网络抖动或超时）
+      if (issueStep.value === 'success') return;
+      
+      issueStep.value = 'error'
+      issueStatusMsg.value = error.response?.data?.message || '服务器通信失败'
+    } finally {
     issuing.value = false
+  }
+}
+
+function handleSecurityEvent(event: any) {
+  // 1. 如果是卡片探测事件，实时更新 UI 上的物理 UID
+  if (event.event_type === 'card_uid_detected') {
+    const encoder = encoders.value.find(e => e.device_id === event.device_id)
+    if (encoder) {
+      encoder.last_card_uid = event.card_uid
+    }
+  }
+
+  // 2. 如果是发卡成功事件，处理签发流程
+  if (event.event_type === 'card_issued' && issueStep.value === 'writing') {
+    if (event.device_id === selectedEncoder.value) {
+      clearTimeout((window as any)._issueTimeout)
+      issueStep.value = 'success'
+      issuedUid.value = event.data?.card_uid || ''
+      issueStatusMsg.value = `硬件写卡成功！物理 UID: ${issuedUid.value}`
+      message.success(`${selectedType.value.name} 签发成功`)
+      isAuthorized.value = false 
+    }
   }
 }
 
 onMounted(() => {
   fetchEncoders()
   fetchMetadata()
+  
+  const socket = getSocket()
+  if (socket) {
+    socket.on('security_event', handleSecurityEvent)
+  }
+})
+
+onUnmounted(() => {
+  const socket = getSocket()
+  if (socket) {
+    socket.off('security_event', handleSecurityEvent)
+  }
 })
 </script>
 
@@ -535,6 +788,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.card-management-container {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .auth-modal-content {
