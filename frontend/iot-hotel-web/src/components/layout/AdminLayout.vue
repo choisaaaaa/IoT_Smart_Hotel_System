@@ -10,11 +10,11 @@
     >
       <div class="sider-header" @click="$router.push('/hotel-admin/dashboard')">
         <div class="sider-logo">
-          <img src="/logo-small.png" alt="Logo" class="logo-img" />
+          <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img" />
         </div>
         <div v-show="!collapsed" class="sider-brand">
           <span class="brand-title">管理后台</span>
-          <span class="brand-sub">慧宿智联</span>
+          <span class="brand-sub">{{ hotelStore.hotelInfo?.hotel_name || '慧宿智联' }}</span>
         </div>
       </div>
 
@@ -163,7 +163,7 @@
 
       <a-layout-footer class="admin-footer" :style="{ marginLeft: collapsed ? '80px' : '260px' }">
         <div class="footer-inner">
-          <span class="footer-text">慧宿智联 · 智慧酒店管理系统</span>
+          <span class="footer-text">{{ hotelStore.hotelInfo?.hotel_name || '智慧酒店管理系统' }}</span>
           <span class="footer-divider">|</span>
           <span class="footer-version">管理后台 v2.2.0</span>
         </div>
@@ -196,11 +196,17 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
+
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
 
 appStore.initUserInfo()
 
@@ -236,6 +242,7 @@ async function handleLogout() {
 }
 
 onMounted(() => {
+  hotelStore.fetchHotelInfo()
   // 检查权限
   const userRole = appStore.userInfo?.role
   if (!userRole || (userRole !== 'system_admin' && userRole !== 'hotel_admin')) {

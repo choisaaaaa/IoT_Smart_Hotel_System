@@ -6,11 +6,10 @@
         <div class="header-left">
           <div class="logo" @click="$router.push('/guest/booking')">
             <div class="logo-icon">
-              <img src="/logo-small.png" alt="Logo" class="logo-img" />
+              <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img" />
             </div>
             <div class="logo-text">
-              <span class="brand-name">慧宿智联</span>
-              <span class="brand-tagline">智慧酒店服务</span>
+              <span class="hotel-name">{{ hotelStore.hotelInfo?.hotel_name || '慧宿智联' }}</span>
             </div>
           </div>
         </div>
@@ -393,6 +392,7 @@ import {
   CustomerServiceOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
 import { authService, normalizeRole, CANONICAL_ROLES } from '@/api/auth'
 import { initWebSocket } from '@/utils/websocket'
 import QRCode from 'qrcode'
@@ -400,6 +400,11 @@ import QRCode from 'qrcode'
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
+
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
 
 // 用户信息
 const userInfo = computed(() => appStore.userInfo)
@@ -444,6 +449,7 @@ const fetchUserStatus = async () => {
 }
 
 onMounted(() => {
+  hotelStore.fetchHotelInfo()
   fetchUserStatus()
   if (route.query.login === '1') {
     appStore.showLoginModal = true
@@ -814,19 +820,13 @@ const handleLogout = async () => {
   line-height: 1.3;
 }
 
-.brand-name {
-  font-size: 22px;
-  font-weight: 800;
+.hotel-name {
+  font-size: 20px;
+  font-weight: 700;
   background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-gold) 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  letter-spacing: 2px;
-}
-
-.brand-tagline {
-  font-size: 12px;
-  color: var(--hotel-text-muted);
   letter-spacing: 1px;
 }
 

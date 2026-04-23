@@ -3,7 +3,7 @@
     <a-layout-sider v-model:collapsed="collapsed" :trigger="null" collapsible class="sider">
       <div class="logo">
         <img src="/logo-small.png" alt="Logo" class="logo-img" />
-        <span v-show="!collapsed">系统管理端</span>
+        <span v-show="!collapsed">{{ hotelStore.hotelInfo?.hotel_name || '系统管理端' }}</span>
       </div>
       <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline" @click="handleMenuClick">
         <a-menu-item key="/system/dashboard">
@@ -86,6 +86,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
 import {
   DashboardOutlined, BankOutlined, MobileOutlined,
@@ -97,6 +98,9 @@ import {
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const hotelStore = useHotelStore()
+
+hotelStore.fetchHotelInfo()
 
 // 初始化用户信息
 appStore.initUserInfo()

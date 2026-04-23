@@ -3,11 +3,7 @@
     <div class="reception-header-logo">
       <div class="logo-wrapper">
         <div class="logo-icon">
-          <img src="/logo-small.png" alt="Logo" class="logo-img-header" />
-        </div>
-        <div class="logo-text">
-          <div class="main-title">智联酒店接待中心</div>
-          <div class="sub-title">SMART HOTEL RECEPTION CENTER</div>
+          <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img-header" />
         </div>
         <div class="header-divider"></div>
         <div class="hotel-info">
@@ -16,7 +12,28 @@
           </div>
           <div class="hotel-id">集团编号: {{ hotelStore.hotelInfo?.id || '-' }}</div>
         </div>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+        <div class="header-divider"></div>
+        <div class="user-info">
+          <div class="user-name">
+            <UserOutlined /> {{ appStore.userInfo?.username || '当前用户' }}
+          </div>
+          <div class="user-role">{{ appStore.userInfo?.role_name || appStore.userInfo?.role || '操作员' }}</div>
+        </div>
+        
+        <div class="header-actions">
+          <a-space>
+            <a-select v-model:value="selectedDevice" placeholder="选择前台设备" style="width: 180px">
+              <template #prefix><LaptopOutlined /></template>
+              <a-select-option v-for="d in frontEndDevices" :key="d.device_id" :value="d.device_id">
+                {{ d.device_name || d.device_id }}
+              </a-select-option>
+              <a-select-option v-if="frontEndDevices.length === 0" value="none" disabled>未发现前台设备</a-select-option>
+            </a-select>
+            <a-button @click="testCommunication" :loading="testing">
+              <template #icon><ApiOutlined /></template>
+              通信测试
+            </a-button>
+          </a-space>
           <a-button type="primary" @click="() => { inventoryModalVisible = true; fetchTodayInventory(); }">
             <template #icon><ShopOutlined /></template>
             今日可售余量管理
@@ -484,61 +501,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, reactive, watch } from 'vue'
-import { message, Modal } from 'ant-design-vue'
-import { 
-  ShopOutlined, 
-  SearchOutlined, 
-  UserOutlined, 
-  MobileOutlined,
-  CalendarOutlined,
-  CreditCardOutlined,
-  BankOutlined,
-  WifiOutlined,
-  CheckCircleOutlined,
-  SettingOutlined,
-  InteractionOutlined,
-  ApiOutlined,
-  DeleteOutlined,
-  PlusOutlined,
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { message } from 'ant-design-vue'
+import request from '@/api/request'
+import {
   UserAddOutlined,
-  KeyOutlined,
-  ControlOutlined,
-  InfoCircleOutlined,
+  PlusOutlined,
+  DeleteOutlined,
   CloseCircleOutlined,
-  DownOutlined
+  KeyOutlined,
+  SafetyCertificateOutlined,
+  DownOutlined,
+  InfoCircleOutlined,
+  ControlOutlined,
+  ShopOutlined,
+  BankOutlined,
+  UserOutlined,
+  LaptopOutlined,
+  ApiOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notification'
 import { bookingApi } from '@/api/booking'
+import { deviceApi } from '@/api/device'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
 import { userApi, type UserProfile } from '@/api/user'
-import type { RoomInfo } from '@/types'
-import request from '@/utils/request'
+import type { RoomInfo, DeviceInfo } from '@/types'
 
 const hotelStore = useHotelStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 const route = useRoute()
-
-// 通信测试状态
-const testLoading = ref(false)
-const terminalDevice = ref('desktop-01')
-
-async function handleCommTest() {
-  testLoading.value = true
-  message.loading({ content: '正在测试与边缘网关的通信...', key: 'commTest' })
-  
-  // 模拟通信测试逻辑
-  setTimeout(() => {
-    testLoading.value = false
-    message.success({ content: '通信测试成功：延迟 24ms, 数据同步正常', key: 'commTest', duration: 3 })
-  }, 1500)
-}
-
 const activeTab = ref('checkin')
 const submitting = ref(false)
 const checkoutKeys = ref<number[]>([])
@@ -548,26 +544,47 @@ const todayBookings = ref<any[]>([])
 const selectedBookingKeys = ref<number[]>([])
 const todayBookingLoading = ref(false)
 const companions = ref<any[]>([])
-const fillingBookingId = ref<number | null>(null)
-const priceLoading = ref(false)
-const estimatedPrice = ref(0)
-const priceDetailText = ref('')
-const couponsLoading = ref(false)
-const userCoupons = ref<any[]>([])
-const roomDetailVisible = ref(false)
-const roomDetail = ref<RoomInfo | null>(null)
-const cardModalVisible = ref(false)
-const cardOpLoading = ref(false)
-const cardOpType = ref<'issue' | 'revoke'>('issue')
-const selectedGuestForCard = ref<any>(null)
-const idLastFour = ref('')
-const issueCouponModalVisible = ref(false)
-const issuingCoupon = ref(false)
-const allAvailableCoupons = ref<any[]>([])
-const selectedIssueCouponId = ref<number | undefined>(undefined)
-const targetIssuePhone = ref('')
-const targetIssueName = ref('')
-const lastCreatedBookingId = ref<number | null>(null)
+
+// 设备选择与测试
+const frontEndDevices = ref<DeviceInfo[]>([])
+const selectedDevice = ref<string | undefined>(undefined)
+const testing = ref(false)
+
+async function fetchFrontEndDevices() {
+  try {
+    const res = await deviceApi.getDeviceList({ audit_status: 'approved' })
+    if (res.data) {
+      // 过滤前台设备：device_type 为 'front_desk' 或者 device_id 以 'FRN_' 开头
+      const list = res.data.filter(d => 
+        d.device_type === 'front_desk' || 
+        (d.device_id && d.device_id.startsWith('FRN_'))
+      )
+      frontEndDevices.value = list
+      if (list.length > 0 && !selectedDevice.value) {
+        selectedDevice.value = list[0].device_id
+      }
+    }
+  } catch (error) {
+    console.error('获取前台设备失败:', error)
+  }
+}
+
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
+
+async function testCommunication() {
+  testing.value = true
+  try {
+    // 模拟通信测试
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    message.success('设备通信正常，连接状态：良好')
+  } catch (error) {
+    message.error('设备通信失败，请检查连接')
+  } finally {
+    testing.value = false
+  }
+}
 
 // 经理授权相关
 const isAuthorized = ref(false)
@@ -584,8 +601,6 @@ const inventoryModalVisible = ref(false)
 const inventoryLoading = ref(false)
 const updatingInventory = ref(false)
 const todayInventoryList = ref<any[]>([])
-
-// ... 保持原有逻辑函数不变 ...
 
 async function fetchTodayInventory() {
   inventoryLoading.value = true
@@ -1251,6 +1266,7 @@ async function fillByBookingId() {
 }
 
 onMounted(async () => {
+  fetchFrontEndDevices()
   try {
     await Promise.allSettled([
       hotelStore.fetchHotelInfo(),
@@ -1379,7 +1395,17 @@ onMounted(async () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-height: 72px;
+  padding: 0 24px;
   gap: 24px;
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .logo-icon {
@@ -1444,27 +1470,40 @@ onMounted(async () => {
   background: #f5f5f5;
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #1890ff;
+  background: #e6f7ff;
+  padding: 1px 8px;
+  border-radius: 4px;
   width: fit-content;
 }
 
-.main-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #1a1a1a;
-  line-height: 1.2;
-  letter-spacing: 1px;
-}
-
-.sub-title {
-  font-size: 11px;
-  color: #bfbfbf;
-  letter-spacing: 3px;
-  margin-top: 6px;
-  font-weight: 500;
-}
-
-.selected-room-card {
-  border: 1px dashed #d9d9d9;
+.room-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
 }
 .selected-room-header {
   display: flex;

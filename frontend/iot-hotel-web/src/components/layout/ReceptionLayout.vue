@@ -10,7 +10,7 @@
     >
       <div class="sider-header" @click="$router.push('/reception/dashboard')">
         <div class="sider-logo">
-          <img src="/logo-small.png" alt="Logo" class="logo-img" />
+          <img :src="getLogoUrl(hotelStore.hotelInfo?.logo)" alt="Logo" class="logo-img" />
         </div>
         <div v-show="!collapsed" class="sider-brand">
           <span class="brand-title">前台工作台</span>
@@ -317,6 +317,10 @@ const appStore = useAppStore()
 const hotelStore = useHotelStore()
 const notificationStore = useNotificationStore()
 
+const getLogoUrl = (url?: string) => {
+  return appStore.resolveImageUrl(url) || '/logo-small.png'
+}
+
 appStore.initUserInfo()
 
 const collapsed = ref(false)
@@ -326,7 +330,15 @@ const currentTime = ref(dayjs().format('HH:mm'))
 
 let timeInterval: ReturnType<typeof setInterval>
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await hotelStore.fetchHotelInfo()
+    setupGlobalWebSocket()
+    // 初始加载
+    notificationStore.fetchAllUnreadCounts()
+    notificationStore.fetchAlarmNotifications()
+  } catch (error) {}
+  
   timeInterval = setInterval(() => {
     currentTime.value = dayjs().format('HH:mm')
     // 定期刷新未读数
@@ -347,8 +359,6 @@ function setupGlobalWebSocket() {
   initWebSocket()
 }
 
-onUnmounted(() => {})
-
 const unreadCount = computed(() => notificationStore.unreadCount)
 const notifications = computed(() => notificationStore.notifications)
 const hasCriticalAlarm = computed(() => notificationStore.hasCriticalAlarm)
@@ -363,16 +373,6 @@ watch(() => route.path, (path) => {
 function handleMenuClick({ key }: { key: string }) {
   router.push(key)
 }
-
-onMounted(async () => {
-  try {
-    await hotelStore.fetchHotelInfo()
-    setupGlobalWebSocket()
-    // 初始加载
-    notificationStore.fetchAllUnreadCounts()
-    notificationStore.fetchAlarmNotifications()
-  } catch (error) {}
-})
 
 function handleNotificationClick(item: any) {
   notificationStore.markNotificationRead(item.id)
