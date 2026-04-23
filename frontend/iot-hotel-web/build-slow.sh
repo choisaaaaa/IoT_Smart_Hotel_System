@@ -7,26 +7,21 @@
 
 set -e
 
-echo ">>> [1/4] Cleaning previous build..."
+echo ">>> [1/3] Cleaning previous build..."
 rm -rf dist
 echo "Done."
 
 echo ""
-echo ">>> [2/4] Installing dependencies..."
+echo ">>> [2/3] Installing dependencies..."
 # Use --no-audit and --no-fund to save some CPU/Network
-npm install --no-audit --no-fund
+npm install --no-audit --no-fund --prefer-offline
 echo "Done."
 
 echo ""
-echo ">>> [3/4] Running type check..."
-# Limit memory for vue-tsc
-node --max-old-space-size=1024 ./node_modules/vue-tsc/bin/vue-tsc.js -b
-echo "Done."
-
-echo ""
-echo ">>> [4/4] Building frontend (Production)..."
-# Limit memory for Vite build
-NODE_OPTIONS="--max-old-space-size=1024" npm run build
+echo ">>> [3/3] Building frontend (Production)..."
+# Skip vue-tsc type checking as it's too heavy for low-spec servers.
+# Use only Vite build which handles compilation.
+NODE_OPTIONS="--max-old-space-size=512" npm run build
 echo "Done."
 
 echo ""
