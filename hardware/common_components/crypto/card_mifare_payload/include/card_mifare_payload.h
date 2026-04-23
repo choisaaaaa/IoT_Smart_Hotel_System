@@ -25,10 +25,9 @@ extern "C" {
 
 bool card_mifare_parse_hex_key(const char *hex32, uint8_t key_out[16]);
 
-bool card_mifare_encrypt_room_payload(const char *room_id, const uint8_t key[16], uint8_t block16[16]);
+bool card_mifare_encrypt_room_payload(const char *room_id, uint32_t expire_time, const char *card_level, const uint8_t key[16], uint8_t block16[16]);
 
-bool card_mifare_parse_sector_room(const uint8_t block16[16], const uint8_t key[16], char *room_out,
-                                   size_t room_out_sz);
+bool card_mifare_parse_sector_room(const uint8_t block16[16], const uint8_t key[16], char *room_out, size_t room_out_sz, uint32_t *expire_out, char *level_out, size_t level_out_sz);
 
 #ifdef __cplusplus
 }

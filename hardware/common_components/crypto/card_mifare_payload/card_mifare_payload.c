@@ -94,29 +94,37 @@ static bool pkcs7_unpad(const uint8_t in16[16], uint8_t *out_plain, size_t *out_
     return true;
 }
 
-bool card_mifare_encrypt_room_payload(const char *room_id, const uint8_t key[16], uint8_t block16[16]) {
+bool card_mifare_encrypt_room_payload(const char *room_id, uint32_t expire_time, const char *card_level, const uint8_t key[16], uint8_t block16[16]) {
     if (room_id == NULL || key == NULL || block16 == NULL) {
         return false;
     }
     if (room_id[0] == '\0') {
         return false;
     }
-    if (strlen(room_id) > 10) {
+    if (strlen(room_id) > 5) { // Ensure fits in 6 bytes with null
         return false;
     }
 
-    char inner[20];
-    int n = snprintf(inner, sizeof(inner), "%s%s", CARD_MIFARE_ROOM_PREFIX, room_id);
-    if (n <= 0 || n >= (int)sizeof(inner)) {
-        return false;
+    uint8_t plain[16] = {0};
+    plain[0] = 'H';
+    plain[1] = 'C';
+    strncpy((char *)&plain[2], room_id, 6);
+    
+    plain[8] = (uint8_t)(expire_time & 0xFF);
+    plain[9] = (uint8_t)((expire_time >> 8) & 0xFF);
+    plain[10] = (uint8_t)((expire_time >> 16) & 0xFF);
+    plain[11] = (uint8_t)((expire_time >> 24) & 0xFF);
+    
+    uint8_t level_enum = 0;
+    if (card_level) {
+        if (strcmp(card_level, "silver") == 0) level_enum = 1;
+        else if (strcmp(card_level, "gold") == 0) level_enum = 2;
+        else if (strcmp(card_level, "platinum") == 0) level_enum = 3;
+        else if (strcmp(card_level, "diamond") == 0) level_enum = 4;
     }
+    plain[12] = level_enum;
 
-    uint8_t padded[16];
-    if (!pkcs7_pad((const uint8_t *)inner, (size_t)n, padded)) {
-        return false;
-    }
-
-    return aes128_ecb_block(key, padded, block16, true);
+    return aes128_ecb_block(key, plain, block16, true);
 }
 
 static bool parse_room_prefix(const char *plain, size_t len, char *room_out, size_t room_out_sz) {
@@ -135,7 +143,7 @@ static bool parse_room_prefix(const char *plain, size_t len, char *room_out, siz
 }
 
 bool card_mifare_parse_sector_room(const uint8_t block16[16], const uint8_t key[16], char *room_out,
-                                   size_t room_out_sz) {
+                                   size_t room_out_sz, uint32_t *expire_out, char *level_out, size_t level_out_sz) {
     if (block16 == NULL || key == NULL || room_out == NULL || room_out_sz == 0) {
         return false;
     }
@@ -144,6 +152,11 @@ bool card_mifare_parse_sector_room(const uint8_t block16[16], const uint8_t key[
     memcpy(as_text, block16, 16);
     as_text[16] = '\0';
     if (strncmp(as_text, CARD_MIFARE_ROOM_PREFIX, strlen(CARD_MIFARE_ROOM_PREFIX)) == 0) {
+        if (expire_out) *expire_out = 0;
+        if (level_out && level_out_sz > 0) {
+            strncpy(level_out, "guest", level_out_sz - 1);
+            level_out[level_out_sz - 1] = '\0';
+        }
         return parse_room_prefix(as_text, strnlen(as_text, 16), room_out, room_out_sz);
     }
 
@@ -152,10 +165,37 @@ bool card_mifare_parse_sector_room(const uint8_t block16[16], const uint8_t key[
         return false;
     }
 
+    if (plain[0] == 'H' && plain[1] == 'C') {
+        size_t rlen = strnlen((char *)&plain[2], 6);
+        if (rlen >= room_out_sz) return false;
+        memcpy(room_out, &plain[2], rlen);
+        room_out[rlen] = '\0';
+
+        if (expire_out) {
+            *expire_out = (uint32_t)plain[8] | ((uint32_t)plain[9] << 8) |
+                          ((uint32_t)plain[10] << 16) | ((uint32_t)plain[11] << 24);
+        }
+        if (level_out && level_out_sz > 0) {
+            const char *ls = "guest";
+            if (plain[12] == 1) ls = "silver";
+            else if (plain[12] == 2) ls = "gold";
+            else if (plain[12] == 3) ls = "platinum";
+            else if (plain[12] == 4) ls = "diamond";
+            strncpy(level_out, ls, level_out_sz - 1);
+            level_out[level_out_sz - 1] = '\0';
+        }
+        return true;
+    }
+
     size_t body_len = 0;
     uint8_t unpadded[16];
     if (!pkcs7_unpad(plain, unpadded, &body_len, sizeof(unpadded))) {
         return false;
+    }
+    if (expire_out) *expire_out = 0;
+    if (level_out && level_out_sz > 0) {
+        strncpy(level_out, "guest", level_out_sz - 1);
+        level_out[level_out_sz - 1] = '\0';
     }
     return parse_room_prefix((const char *)unpadded, body_len, room_out, room_out_sz);
 }

@@ -275,15 +275,29 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
     cJSON *command_value = parse_command_value_object(root, &owned_command_value);
     if (strcmp(cmd_type, "issue_card") == 0 || strcmp(cmd_type, "write_blank_card") == 0) {
         const char *room_id = target_room_id;
+        uint32_t expire_time = 0;
+        char card_level[16] = "guest";
+
         if (cJSON_IsObject(command_value)) {
             cJSON *room_item = cJSON_GetObjectItem(command_value, "room_id");
             if (cJSON_IsString(room_item)) {
                 room_id = room_item->valuestring;
+            } else {
+                cJSON *room_num_item = cJSON_GetObjectItem(command_value, "room_number");
+                if (cJSON_IsString(room_num_item)) room_id = room_num_item->valuestring;
+            }
+            cJSON *expire_item = cJSON_GetObjectItem(command_value, "expire_time");
+            if (cJSON_IsNumber(expire_item)) {
+                expire_time = (uint32_t)expire_item->valuedouble;
+            }
+            cJSON *level_item = cJSON_GetObjectItem(command_value, "card_level");
+            if (cJSON_IsString(level_item)) {
+                strncpy(card_level, level_item->valuestring, sizeof(card_level) - 1);
             }
         }
 
         uint8_t block[16] = {0};
-        if (!card_mifare_encrypt_room_payload(room_id, s_card_aes_key, block)) {
+        if (!card_mifare_encrypt_room_payload(room_id, expire_time, card_level, s_card_aes_key, block)) {
             *out_msg = "房号无效或过长，无法组包";
             if (owned_command_value != NULL) {
                 cJSON_Delete(owned_command_value);
@@ -319,7 +333,9 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         }
 
         char room_id[16] = {0};
-        if (card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id))) {
+        uint32_t expire_time = 0;
+        char card_level[16] = {0};
+        if (card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id), &expire_time, card_level, sizeof(card_level))) {
             copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
             *out_msg = "刷卡通过";
             if (owned_command_value != NULL) {
