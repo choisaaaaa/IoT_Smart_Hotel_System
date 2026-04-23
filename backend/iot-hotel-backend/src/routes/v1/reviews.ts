@@ -59,10 +59,60 @@ router.get('/appeals', authenticate as any, authorize(staffRoles), reviewControl
 router.get('/:id', reviewController.getById);
 router.post('/', authenticate as any, reviewController.create);
 router.put('/:id', authenticate as any, reviewController.update);
+/**
+ * @swagger
+ * /reviews/{id}/reply:
+ *   post:
+ *     summary: 回复住客评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reply_content]
+ *             properties:
+ *               reply_content: { type: string }
+ *     responses:
+ *       200:
+ *         description: 回复成功
+ */
 router.delete('/:id', authenticate as any, authorize(adminRoles), reviewController.remove);
 router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewController.reply);
+
+/**
+ * @swagger
+ * /reviews/appeals:
+ *   post:
+ *     summary: 发起评价申诉
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [review_id, reason]
+ *             properties:
+ *               review_id: { type: integer }
+ *               reason: { type: string }
+ *     responses:
+ *       201:
+ *         description: 申诉已提交
+ */
 router.post('/appeals', authenticate as any, reviewController.createAppeal);
 router.put('/appeals/:id', authenticate as any, authorize(adminRoles), reviewController.handleAppeal);
+
 
 
 export default router;

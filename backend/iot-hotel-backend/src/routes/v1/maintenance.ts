@@ -52,9 +52,54 @@ router.get('/', authenticate as any, authorize(allRoles), maintenanceController.
 router.get('/:id', authenticate as any, authorize(allRoles), maintenanceController.getById);
 router.post('/', authenticate as any, authorize(allRoles), maintenanceController.create);
 
+/**
+ * @swagger
+ * /maintenance/{id}/assign:
+ *   put:
+ *     summary: 指派维修工单
+ *     tags: [Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [staff_id]
+ *             properties:
+ *               staff_id: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 指派成功
+ */
 router.put('/:id/assign', authenticate as any, authorize(staffRoles), maintenanceController.assign);
+
+/**
+ * @swagger
+ * /maintenance/{id}/complete:
+ *   put:
+ *     summary: 完成维修工单
+ *     tags: [Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 工单已完成
+ */
 router.put('/:id/status', authenticate as any, authorize(staffRoles), maintenanceController.updateStatus);
 router.put('/:id/complete', authenticate as any, authorize(staffRoles), maintenanceController.complete);
+
 router.delete('/:id', authenticate as any, authorize(adminRoles), maintenanceController.remove);
 
 export default router;

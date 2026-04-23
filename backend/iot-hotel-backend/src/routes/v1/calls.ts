@@ -73,7 +73,31 @@ router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN
  * 创建 WebRTC 语音会话
  * 用于前端浏览器与房间硬件设备建立 WebRTC 语音通话
  */
+/**
+ * @swagger
+ * /calls/webrtc/session:
+ *   post:
+ *     summary: 创建 WebRTC 语音会话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [call_id]
+ *             properties:
+ *               call_id: { type: string }
+ *               room_id: { type: integer }
+ *               room_number: { type: string }
+ *     responses:
+ *       200:
+ *         description: 会话已创建
+ */
 router.post('/webrtc/session', authenticate as any, async (req: AuthRequest, res) => {
+
   try {
     const { call_id, room_id, room_number } = req.body;
     const currentUser = req.user as any;

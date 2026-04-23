@@ -59,6 +59,31 @@ const router = Router();
  *       200:
  *         description: 成功
  */
+/**
+ * @swagger
+ * /bookings/calculate-price:
+ *   get:
+ *     summary: 计算预订总价
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: room_type_id
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: check_in
+ *         required: true
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: check_out
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: 成功返回总价
+ */
 router.get('/lookup', bookingController.lookupForGuest);
 router.get('/my', authenticate as any, bookingController.getMyBookings);
 router.get('/calculate-price', authenticate, bookingController.getCalculatedPrice);
@@ -163,6 +188,32 @@ router.put('/:id/checkin', authenticate as any, authorize([CANONICAL_ROLES.HOTEL
 router.put('/:id/reject-pre-checkin', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), bookingController.rejectPreCheckin);
 router.put('/:id/checkout', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), bookingController.checkout);
 
+/**
+ * @swagger
+ * /bookings/{id}/extend:
+ *   put:
+ *     summary: 办理续住
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [new_check_out]
+ *             properties:
+ *               new_check_out: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: 续住成功
+ */
 router.put('/:id/cancel', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), bookingController.cancel);
 router.put('/:id/extend', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), bookingController.extendStay);
 router.post('/:id/extend-price', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), bookingController.calculateExtendPrice);

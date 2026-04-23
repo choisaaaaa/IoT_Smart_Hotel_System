@@ -61,8 +61,43 @@ router.get('/fire-alarms', authenticate as any, authorize([CANONICAL_ROLES.HOTEL
 router.put('/fire-alarms/:id/acknowledge', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), environmentController.acknowledgeAlarm);
 router.put('/fire-alarms/:id/resolve', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), environmentController.resolveAlarm);
 
+/**
+ * @swagger
+ * /environment/devices:
+ *   get:
+ *     summary: 获取环境传感器设备列表
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/devices', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getRoomDevices);
-router.post('/devices/:id/control', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), environmentController.controlDevice);
+
+/**
+ * @swagger
+ * /environment/control:
+ *   post:
+ *     summary: 环境相关设备批量控制 (如一键通风)
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [room_id, action]
+ *             properties:
+ *               room_id: { type: integer }
+ *               action: { type: string, enum: [ventilate, purify, optimize] }
+ *     responses:
+ *       200:
+ *         description: 指令已发送
+ */
+router.post('/control', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), environmentController.controlDevice);
 router.get('/event-logs', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getEventLogs);
 router.get('/dashboard', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getDashboardStats);
 

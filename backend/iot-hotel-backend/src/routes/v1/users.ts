@@ -76,8 +76,44 @@ router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CA
 
 router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), update);
 router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), remove);
+/**
+ * @swagger
+ * /users/{id}/lock:
+ *   post:
+ *     summary: 锁定用户账户
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 用户已锁定
+ */
 router.put('/:id/password', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), updatePassword);
 router.post('/:id/lock', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), lock);
+
+/**
+ * @swagger
+ * /users/{id}/unlock:
+ *   post:
+ *     summary: 解锁用户账户
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 用户已解锁
+ */
 router.post('/:id/unlock', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), unlock);
+
 
 export default router;
