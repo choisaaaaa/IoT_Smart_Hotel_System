@@ -238,7 +238,26 @@ router.get('/qr-status', async (req, res) => {
   }
 });
 
-// 生成 API Token (用于扫码登录)
+/**
+ * @swagger
+ * /auth/generate-token:
+ *   post:
+ *     summary: 生成API Token（用于扫码登录）
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, password]
+ *             properties:
+ *               phone: { type: string, example: "13800138000" }
+ *               password: { type: string, format: password, example: "123456" }
+ *     responses:
+ *       200:
+ *         description: Token生成成功
+ */
 router.post('/generate-token', async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -900,7 +919,31 @@ router.get('/me', async (req: AuthRequest, res) => {
   }
 });
 
-// 角色升级申请
+/**
+ * @swagger
+ * /auth/role-application:
+ *   post:
+ *     summary: 提交角色升级申请
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [application_type]
+ *             properties:
+ *               application_type: { type: string, enum: [create_hotel, bind_employee], description: "申请类型" }
+ *               hotel_id: { type: integer, description: "绑定酒店ID(bind_employee时必填)" }
+ *               hotel_name: { type: string, description: "新建酒店名称(create_hotel时必填)" }
+ *               hotel_address: { type: string, description: "新建酒店地址(create_hotel时必填)" }
+ *               reason: { type: string, description: "申请理由" }
+ *     responses:
+ *       200:
+ *         description: 申请已提交
+ */
 router.post('/role-application', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -956,7 +999,23 @@ router.post('/role-application', async (req: AuthRequest, res) => {
   }
 });
 
-// 获取角色申请列表（管理端/系统管理员）
+/**
+ * @swagger
+ * /auth/role-applications:
+ *   get:
+ *     summary: 获取角色申请列表（管理端/系统管理员）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, approved, rejected] }
+ *         description: 按状态筛选
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/role-applications', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -1003,7 +1062,33 @@ router.get('/role-applications', async (req: AuthRequest, res) => {
   }
 });
 
-// 审核角色申请
+/**
+ * @swagger
+ * /auth/role-applications/{id}/review:
+ *   put:
+ *     summary: 审核角色申请（管理员操作）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [approved, rejected] }
+ *               review_note: { type: string, description: "审核备注" }
+ *     responses:
+ *       200:
+ *         description: 审核完成
+ */
 router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
   const connection = await (await import('../../config/database')).default.getConnection();
   try {
@@ -1120,7 +1205,27 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
   }
 });
 
-// 切换酒店 (仅系统管理员可用)
+/**
+ * @swagger
+ * /auth/switch-hotel:
+ *   post:
+ *     summary: 切换酒店上下文（仅系统管理员）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [hotel_id]
+ *             properties:
+ *               hotel_id: { type: integer, description: "目标酒店ID，0表示集团总部" }
+ *     responses:
+ *       200:
+ *         description: 切换成功，返回新JWT
+ */
 router.post('/switch-hotel', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const user = req.user;

@@ -69,7 +69,56 @@ router.get('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, 
  *         description: 创建成功
  */
 router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.createRoomType);
+
+/**
+ * @swagger
+ * /room-types/{id}:
+ *   put:
+ *     summary: 更新房型信息
+ *     tags: [RoomTypes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除房型
+ *     tags: [RoomTypes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.updateRoomType);
+
+/**
+ * @swagger
+ * /room-types/{id}:
+ *   delete:
+ *     summary: 删除房型
+ *     tags: [RoomTypes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), RoomTypeController.deleteRoomType);
 
 export default router;

@@ -27,6 +27,31 @@ const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
  *     responses:
  *       200:
  *         description: 成功获取列表
+ */
+router.get('/', authenticate as any, authorize(allRoles), maintenanceController.get);
+
+/**
+ * @swagger
+ * /maintenance/{id}:
+ *   get:
+ *     summary: 获取维修工单详情
+ *     tags: [Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功获取详情
+ */
+router.get('/:id', authenticate as any, authorize(allRoles), maintenanceController.getById);
+
+/**
+ * @swagger
+ * /maintenance:
  *   post:
  *     summary: 创建维修工单
  *     tags: [Maintenance]
@@ -48,8 +73,6 @@ const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
  *       201:
  *         description: 创建成功
  */
-router.get('/', authenticate as any, authorize(allRoles), maintenanceController.get);
-router.get('/:id', authenticate as any, authorize(allRoles), maintenanceController.getById);
 router.post('/', authenticate as any, authorize(allRoles), maintenanceController.create);
 
 /**
@@ -82,6 +105,25 @@ router.put('/:id/assign', authenticate as any, authorize(staffRoles), maintenanc
 
 /**
  * @swagger
+ * /maintenance/{id}/status:
+ *   put:
+ *     summary: 更新维修工单状态
+ *     tags: [Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
+router.put('/:id/status', authenticate as any, authorize(staffRoles), maintenanceController.updateStatus);
+
+/**
+ * @swagger
  * /maintenance/{id}/complete:
  *   put:
  *     summary: 完成维修工单
@@ -97,9 +139,24 @@ router.put('/:id/assign', authenticate as any, authorize(staffRoles), maintenanc
  *       200:
  *         description: 工单已完成
  */
-router.put('/:id/status', authenticate as any, authorize(staffRoles), maintenanceController.updateStatus);
 router.put('/:id/complete', authenticate as any, authorize(staffRoles), maintenanceController.complete);
-
+/**
+ * @swagger
+ * /maintenance/{id}:
+ *   delete:
+ *     summary: 删除维修工单
+ *     tags: [Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authenticate as any, authorize(adminRoles), maintenanceController.remove);
 
 export default router;

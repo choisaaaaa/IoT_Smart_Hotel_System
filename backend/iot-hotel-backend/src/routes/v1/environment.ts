@@ -24,6 +24,18 @@ const router = Router();
  *       200:
  *         description: 成功获取
  */
+/**
+ * @swagger
+ * /environment:
+ *   get:
+ *     summary: 获取环境监控数据
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getEnvironmentData);
 
 /**
@@ -38,7 +50,32 @@ router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CAN
  *       200:
  *         description: 成功获取
  */
+/**
+ * @swagger
+ * /environment/history:
+ *   get:
+ *     summary: 获取环境历史数据
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取历史数据
+ */
 router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getEnvironmentHistory);
+
+/**
+ * @swagger
+ * /environment/fire-alarms:
+ *   get:
+ *     summary: 获取火警报警列表
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/fire-alarms', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getFireAlarms);
 
 /**
@@ -59,6 +96,24 @@ router.get('/fire-alarms', authenticate as any, authorize([CANONICAL_ROLES.HOTEL
  *         description: 确认成功
  */
 router.put('/fire-alarms/:id/acknowledge', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), environmentController.acknowledgeAlarm);
+
+/**
+ * @swagger
+ * /environment/fire-alarms/{id}/resolve:
+ *   put:
+ *     summary: 解决火警报警
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 已解决
+ */
 router.put('/fire-alarms/:id/resolve', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), environmentController.resolveAlarm);
 
 /**
@@ -98,7 +153,33 @@ router.get('/devices', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADM
  *         description: 指令已发送
  */
 router.post('/control', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), environmentController.controlDevice);
+
+/**
+ * @swagger
+ * /environment/event-logs:
+ *   get:
+ *     summary: 获取环境事件日志
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取日志
+ */
 router.get('/event-logs', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getEventLogs);
+
+/**
+ * @swagger
+ * /environment/dashboard:
+ *   get:
+ *     summary: 获取环境监控仪表盘数据
+ *     tags: [Environment]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/dashboard', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), environmentController.getDashboardStats);
 
 export default router;

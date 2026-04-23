@@ -127,6 +127,27 @@ router.post('/chat',
  * @desc 纯语音识别接口 - 识别语音并用AI优化文本（去重、修正口语化）
  * @access Private
  */
+/**
+ * @swagger
+ * /ai-butler/asr:
+ *   post:
+ *     summary: 语音识别（ASR）
+ *     tags: [AI Butler]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [audio]
+ *             properties:
+ *               audio: { type: string, description: "Base64编码的音频数据" }
+ *     responses:
+ *       200:
+ *         description: 识别成功
+ */
 router.post('/asr',
   authenticate,
   [
@@ -191,6 +212,27 @@ router.post('/asr',
  * @desc 验证房间入住状态
  * @access Private
  */
+/**
+ * @swagger
+ * /ai-butler/verify:
+ *   post:
+ *     summary: 验证房间入住状态
+ *     tags: [AI Butler]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [room_id]
+ *             properties:
+ *               room_id: { type: string }
+ *     responses:
+ *       200:
+ *         description: 验证结果
+ */
 router.post('/verify',
   authenticate,
   [
@@ -252,6 +294,28 @@ router.post('/verify',
  * @desc AI管家唤醒检测
  * @access Private
  */
+/**
+ * @swagger
+ * /ai-butler/wake:
+ *   post:
+ *     summary: AI管家唤醒词检测
+ *     tags: [AI Butler]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [room_id, text]
+ *             properties:
+ *               room_id: { type: string }
+ *               text: { type: string, description: "语音文本" }
+ *     responses:
+ *       200:
+ *         description: 检测结果
+ */
 router.post('/wake',
   authenticate,
   [
@@ -301,6 +365,28 @@ router.post('/wake',
  * @route POST /api/v1/ai-butler/broadcast
  * @desc 房间广播接口（AI语音下发）
  * @access Private
+ */
+/**
+ * @swagger
+ * /ai-butler/broadcast:
+ *   post:
+ *     summary: 房间广播（AI语音下发）
+ *     tags: [AI Butler]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [room_id, text]
+ *             properties:
+ *               room_id: { type: string, description: "房间号或房间号数组" }
+ *               text: { type: string, description: "广播文本" }
+ *     responses:
+ *       200:
+ *         description: 广播已下发
  */
 router.post('/broadcast',
   authenticate,

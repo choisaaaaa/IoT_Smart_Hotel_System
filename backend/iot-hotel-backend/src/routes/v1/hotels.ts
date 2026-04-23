@@ -111,10 +111,95 @@ router.get('/:hotelId/images', getHotelImages);
 // 房型可用性查询 - 游客也可访问
 router.get('/:hotelId/rooms/availability', getRoomAvailability);
 
-
+/**
+ * @swagger
+ * /hotels/{hotelId}:
+ *   put:
+ *     summary: 更新酒店信息（管理员）
+ *     tags: [Hotels]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
 router.put('/:hotelId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotel);
+
+/**
+ * @swagger
+ * /hotels/{hotelId}/images:
+ *   post:
+ *     summary: 添加酒店图片
+ *     tags: [Hotels]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               image: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: 添加成功
+ */
 router.post('/:hotelId/images', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), addHotelImage);
+
+/**
+ * @swagger
+ * /hotels/{hotelId}/images/{imageId}:
+ *   put:
+ *     summary: 更新酒店图片信息
+ *     tags: [Hotels]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: imageId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
 router.put('/:hotelId/images/:imageId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), updateHotelImage);
+
+/**
+ * @swagger
+ * /hotels/{hotelId}/images/{imageId}:
+ *   delete:
+ *     summary: 删除酒店图片
+ *     tags: [Hotels]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: imageId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:hotelId/images/:imageId', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), deleteHotelImage);
 
 export default router;

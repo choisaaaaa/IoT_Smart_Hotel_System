@@ -48,6 +48,18 @@ const authenticatedRouter = Router();
 
 authenticatedRouter.use(authenticate);
 
+/**
+ * @swagger
+ * /favorites:
+ *   get:
+ *     summary: 获取收藏列表
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -91,6 +103,18 @@ authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /favorites:
+ *   post:
+ *     summary: 添加收藏
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: 添加成功
+ */
 authenticatedRouter.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;

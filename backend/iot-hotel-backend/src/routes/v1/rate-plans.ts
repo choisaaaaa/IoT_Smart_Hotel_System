@@ -24,6 +24,8 @@ const router = Router();
  *       200:
  *         description: 成功获取列表
  */
+router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.getRatePlans);
+
 /**
  * @swagger
  * /rate-plans:
@@ -36,7 +38,6 @@ const router = Router();
  *       201:
  *         description: 创建成功
  */
-router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.getRatePlans);
 router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.createRatePlan);
 
 /**
@@ -55,6 +56,12 @@ router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CA
  *     responses:
  *       200:
  *         description: 更新成功
+ */
+router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.updateRatePlan);
+
+/**
+ * @swagger
+ * /rate-plans/{id}:
  *   delete:
  *     summary: 删除价格方案
  *     tags: [RatePlans]
@@ -69,7 +76,6 @@ router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CA
  *       200:
  *         description: 删除成功
  */
-router.put('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.updateRatePlan);
 router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), ratePlanController.deleteRatePlan);
 
 export default router;

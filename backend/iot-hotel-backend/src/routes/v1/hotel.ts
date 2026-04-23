@@ -22,15 +22,8 @@ const router = Router();
  *     responses:
  *       200:
  *         description: 成功获取
- *   put:
- *     summary: 更新酒店信息
- *     tags: [HotelManagement]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 更新成功
  */
+router.get('/', get as any);
 
 /**
  * @swagger
@@ -44,7 +37,6 @@ const router = Router();
  *       200:
  *         description: 成功获取
  */
-router.get('/', get as any);
 router.get('/all', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.HOTEL_ADMIN]), getAll);
 
 /**
@@ -59,10 +51,54 @@ router.get('/all', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN,
  *       200:
  *         description: 成功获取统计
  */
-router.post('/', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), create);
-router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), remove);
-router.put('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), update);
 router.get('/statistics', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), getStatistics);
+
+/**
+ * @swagger
+ * /hotel:
+ *   post:
+ *     summary: 创建新酒店（系统管理员）
+ *     tags: [HotelManagement]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
+router.post('/', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), create);
+
+/**
+ * @swagger
+ * /hotel/{id}:
+ *   delete:
+ *     summary: 删除酒店（系统管理员）
+ *     tags: [HotelManagement]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
+router.delete('/:id', authenticate as any, authorize([CANONICAL_ROLES.SYSTEM_ADMIN]), remove);
+
+/**
+ * @swagger
+ * /hotel:
+ *   put:
+ *     summary: 更新酒店信息
+ *     tags: [HotelManagement]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
+router.put('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), update);
 
 /**
  * @swagger

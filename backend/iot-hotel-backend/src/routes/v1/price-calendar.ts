@@ -14,9 +14,9 @@ const router = Router();
 
 /**
  * @swagger
- * /price-calendar/today:
+ * /price-calendar:
  *   get:
- *     summary: 获取今日房态与价格概览
+ *     summary: 获取价格日历列表
  *     tags: [Pricing]
  *     security:
  *       - bearerAuth: []
@@ -24,6 +24,8 @@ const router = Router();
  *       200:
  *         description: 成功获取
  */
+router.get('/', authenticate as any, priceController.getPriceCalendar);
+
 /**
  * @swagger
  * /price-calendar/set:
@@ -36,8 +38,21 @@ const router = Router();
  *       200:
  *         description: 设置成功
  */
-router.get('/', authenticate as any, priceController.getPriceCalendar);
 router.post('/set', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), priceController.setPriceCalendar);
+
+/**
+ * @swagger
+ * /price-calendar/today:
+ *   get:
+ *     summary: 获取今日房态与价格概览
+ *     tags: [Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
+router.get('/today', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), priceController.getTodayInventory);
 
 /**
  * @swagger
@@ -51,7 +66,6 @@ router.post('/set', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN,
  *       200:
  *         description: 更新成功
  */
-router.get('/today', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), priceController.getTodayInventory);
 router.post('/today/update', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), priceController.updateTodayInventory);
 
 

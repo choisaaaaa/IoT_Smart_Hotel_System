@@ -17,46 +17,6 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 
 /**
  * @swagger
- * /devices:
- *   get:
- *     summary: 获取设备列表
- *     tags: [Devices]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 成功获取列表
- */
-
-/**
- * @swagger
- * /devices/{id}/command:
- *   post:
- *     summary: 向设备发送控制指令
- *     tags: [Devices]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [command, payload]
- *             properties:
- *               command: { type: string, example: "light_on" }
- *               payload: { type: object }
- *     responses:
- *       200:
- *         description: 指令已发送
- */
-/**
- * @swagger
  * /devices/register:
  *   post:
  *     summary: 设备注册/上线
@@ -96,7 +56,38 @@ router.post('/test-beep', authenticate as any, authorize(allRoles), deviceContro
  *         description: 处理成功
  */
 router.post('/room-card', authenticate as any, authorize(allRoles), deviceController.handleRoomCard);
+
+/**
+ * @swagger
+ * /devices:
+ *   get:
+ *     summary: 获取设备列表
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/', authenticate as any, authorize(allRoles), deviceController.getAll);
+
+/**
+ * @swagger
+ * /devices/{id}:
+ *   get:
+ *     summary: 获取设备详情
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取详情
+ */
 router.get('/:id', authenticate as any, authorize(allRoles), deviceController.getById);
 
 /**
@@ -117,7 +108,54 @@ router.get('/:id', authenticate as any, authorize(allRoles), deviceController.ge
  *         description: 审核成功
  */
 router.put('/:id/audit', authenticate as any, authorize(adminRoles), deviceController.audit);
+
+/**
+ * @swagger
+ * /devices/{id}:
+ *   delete:
+ *     summary: 删除设备
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authenticate as any, authorize(adminRoles), deviceController.delete);
+
+/**
+ * @swagger
+ * /devices/{id}/command:
+ *   post:
+ *     summary: 向设备发送控制指令
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [command, payload]
+ *             properties:
+ *               command: { type: string, example: "light_on" }
+ *               payload: { type: object }
+ *     responses:
+ *       200:
+ *         description: 指令已发送
+ */
+router.post('/:id/command', authenticate as any, authorize(allRoles), deviceController.sendCommand);
 
 /**
  * @swagger
@@ -136,7 +174,7 @@ router.delete('/:id', authenticate as any, authorize(adminRoles), deviceControll
  *       200:
  *         description: 成功获取
  */
-router.post('/:id/command', authenticate as any, authorize(allRoles), deviceController.sendCommand);
+router.get('/:id/sensor-data', authenticate as any, authorize(allRoles), deviceController.getSensorData);
 
 /**
  * @swagger
@@ -155,8 +193,25 @@ router.post('/:id/command', authenticate as any, authorize(allRoles), deviceCont
  *       200:
  *         description: 成功获取
  */
-router.get('/:id/sensor-data', authenticate as any, authorize(allRoles), deviceController.getSensorData);
 router.get('/:id/sensor-data/latest', authenticate as any, authorize(allRoles), deviceController.getLatestSensorData);
+
+/**
+ * @swagger
+ * /devices/{id}/commands:
+ *   get:
+ *     summary: 获取设备指令历史
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取指令历史
+ */
 router.get('/:id/commands', authenticate as any, authorize(allRoles), deviceController.getCommandHistory);
 
 

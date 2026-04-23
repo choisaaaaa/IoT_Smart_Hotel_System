@@ -12,6 +12,8 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
+router.use(authenticate);
+
 /**
  * @swagger
  * /frequent-guests:
@@ -23,6 +25,12 @@ const router = Router();
  *     responses:
  *       200:
  *         description: 成功获取列表
+ */
+router.get('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.list);
+
+/**
+ * @swagger
+ * /frequent-guests:
  *   post:
  *     summary: 添加新常住人
  *     tags: [FrequentGuests]
@@ -32,7 +40,7 @@ const router = Router();
  *       201:
  *         description: 添加成功
  */
-router.use(authenticate);
+router.post('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.create);
 
 /**
  * @swagger
@@ -50,6 +58,12 @@ router.use(authenticate);
  *     responses:
  *       200:
  *         description: 更新成功
+ */
+router.put('/:id', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.update);
+
+/**
+ * @swagger
+ * /frequent-guests/{id}:
  *   delete:
  *     summary: 删除常住人
  *     tags: [FrequentGuests]
@@ -64,9 +78,6 @@ router.use(authenticate);
  *       200:
  *         description: 删除成功
  */
-router.get('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.list);
-router.post('/', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.create);
-router.put('/:id', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.update);
 router.delete('/:id', authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), guestController.remove);
 
 

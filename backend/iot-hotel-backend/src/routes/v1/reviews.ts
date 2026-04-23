@@ -51,13 +51,123 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
 const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
 
-// 评价列表和统计 - 游客也可访问
+/**
+ * @swagger
+ * /reviews:
+ *   get:
+ *     summary: 获取评价列表
+ *     tags: [Reviews]
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/', reviewController.get);
+
+/**
+ * @swagger
+ * /reviews/my:
+ *   get:
+ *     summary: 获取当前用户的评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/my', authenticate as any, reviewController.getMyReviews);
+
+/**
+ * @swagger
+ * /reviews/stats:
+ *   get:
+ *     summary: 获取评价统计数据
+ *     tags: [Reviews]
+ *     parameters:
+ *       - in: query
+ *         name: hotel_id
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功获取统计
+ */
 router.get('/stats', reviewController.getStats);
+
+/**
+ * @swagger
+ * /reviews/appeals:
+ *   get:
+ *     summary: 获取评价申诉列表（管理员）
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/appeals', authenticate as any, authorize(staffRoles), reviewController.getAppeals);
+
+/**
+ * @swagger
+ * /reviews/{id}:
+ *   get:
+ *     summary: 获取评价详情
+ *     tags: [Reviews]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/:id', reviewController.getById);
+
+/**
+ * @swagger
+ * /reviews:
+ *   post:
+ *     summary: 创建评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
 router.post('/', authenticate as any, reviewController.create);
+
+/**
+ * @swagger
+ * /reviews/{id}:
+ *   put:
+ *     summary: 更新评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/:id', authenticate as any, reviewController.update);
 /**
  * @swagger
@@ -86,6 +196,24 @@ router.put('/:id', authenticate as any, reviewController.update);
  *         description: 回复成功
  */
 router.delete('/:id', authenticate as any, authorize(adminRoles), reviewController.remove);
+
+/**
+ * @swagger
+ * /reviews/{id}/reply:
+ *   post:
+ *     summary: 回复评价
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 回复成功
+ */
 router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewController.reply);
 
 /**
@@ -111,6 +239,24 @@ router.post('/:id/reply', authenticate as any, authorize(staffRoles), reviewCont
  *         description: 申诉已提交
  */
 router.post('/appeals', authenticate as any, reviewController.createAppeal);
+
+/**
+ * @swagger
+ * /reviews/appeals/{id}:
+ *   put:
+ *     summary: 处理评价申诉（管理员）
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 处理完成
+ */
 router.put('/appeals/:id', authenticate as any, authorize(adminRoles), reviewController.handleAppeal);
 
 

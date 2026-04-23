@@ -12,6 +12,24 @@ import { CANONICAL_ROLES } from '../../utils/role';
 
 const router = Router();
 
+const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
+const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
+const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
+
+/**
+ * @swagger
+ * /coupons:
+ *   get:
+ *     summary: 获取优惠券列表
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
+router.get('/', authenticate as any, authorize(allRoles), couponController.get);
+
 /**
  * @swagger
  * /coupons/me:
@@ -24,12 +42,6 @@ const router = Router();
  *       200:
  *         description: 成功获取
  */
-
-const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST];
-const staffRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN];
-const adminRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN];
-
-router.get('/', authenticate as any, authorize(allRoles), couponController.get);
 router.get('/me', authenticate as any, couponController.getMe);
 
 /**
@@ -92,12 +104,103 @@ router.post('/redeem', authenticate as any, authorize(staffRoles), couponControl
  *         description: 发放成功
  */
 router.post('/issue-to-user', authenticate as any, authorize(adminRoles), couponController.issueToUser);
+
+/**
+ * @swagger
+ * /coupons/hotels:
+ *   get:
+ *     summary: 获取优惠券关联酒店列表
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/hotels', authenticate as any, couponController.getHotels);
 
-
+/**
+ * @swagger
+ * /coupons/{id}:
+ *   get:
+ *     summary: 获取优惠券详情
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/:id', authenticate as any, authorize(allRoles), couponController.getById);
+
+/**
+ * @swagger
+ * /coupons:
+ *   post:
+ *     summary: 创建优惠券（管理员）
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
 router.post('/', authenticate as any, authorize(adminRoles), couponController.create);
+
+/**
+ * @swagger
+ * /coupons/{id}:
+ *   put:
+ *     summary: 更新优惠券
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除优惠券
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/:id', authenticate as any, authorize(adminRoles), couponController.update);
+
+/**
+ * @swagger
+ * /coupons/{id}:
+ *   delete:
+ *     summary: 删除优惠券
+ *     tags: [Coupons]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authenticate as any, authorize(adminRoles), couponController.remove);
 /**
  * @swagger
