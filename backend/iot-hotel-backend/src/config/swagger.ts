@@ -64,6 +64,28 @@ const options: swaggerJsdoc.Options = {
             is_online: { type: 'boolean' },
           },
         },
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            username: { type: 'string' },
+            phone: { type: 'string' },
+            role: { type: 'string' },
+            hotel_id: { type: 'integer' },
+          },
+        },
+        Booking: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            hotel_id: { type: 'integer' },
+            room_id: { type: 'integer' },
+            guest_name: { type: 'string' },
+            check_in: { type: 'string', format: 'date' },
+            check_out: { type: 'string', format: 'date' },
+            status: { type: 'string' },
+          },
+        },
       },
     },
     security: [

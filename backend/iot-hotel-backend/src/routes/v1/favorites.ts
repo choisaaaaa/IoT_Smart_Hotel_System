@@ -131,6 +131,23 @@ authenticatedRouter.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /favorites/{hotelId}:
+ *   delete:
+ *     summary: 取消收藏酒店
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 取消成功
+ */
 authenticatedRouter.delete('/:hotelId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -156,6 +173,21 @@ authenticatedRouter.delete('/:hotelId', async (req: AuthRequest, res: Response) 
   }
 });
 
+/**
+ * @swagger
+ * /favorites/check/{hotelId}:
+ *   get:
+ *     summary: 查询酒店是否已收藏
+ *     tags: [Favorites]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功返回状态
+ */
 // 公开路由 - 游客也可访问
 router.get('/check/:hotelId', async (req: AuthRequest, res: Response) => {
   try {

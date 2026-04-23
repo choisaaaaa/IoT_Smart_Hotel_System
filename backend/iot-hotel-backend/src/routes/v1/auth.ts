@@ -589,7 +589,28 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 用户注册
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: 用户注册 (Customer)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [username, password, phone]
+ *             properties:
+ *               username: { type: string, example: "张三" }
+ *               password: { type: string, format: password, example: "123456" }
+ *               phone: { type: string, example: "13800138001" }
+ *               email: { type: string, example: "zhangsan@example.com" }
+ *     responses:
+ *       200:
+ *         description: 注册成功
+ */
 router.post('/register', async (req, res) => {
   try {
     const { username, password, phone, email, role, hotel_id } = req.body;
@@ -664,7 +685,25 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 发送密码重置验证码
+/**
+ * @swagger
+ * /auth/reset-password/send-code:
+ *   post:
+ *     summary: 发送密码重置验证码
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone: { type: string, example: "13800138000" }
+ *     responses:
+ *       200:
+ *         description: 验证码已发送
+ */
 router.post('/reset-password/send-code', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -698,7 +737,27 @@ router.post('/reset-password/send-code', async (req, res) => {
   }
 });
 
-// 手机号找回密码（需要短信验证）
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: 手机号找回密码
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, new_password, verification_code]
+ *             properties:
+ *               phone: { type: string }
+ *               new_password: { type: string, format: password }
+ *               verification_code: { type: string }
+ *     responses:
+ *       200:
+ *         description: 密码重置成功
+ */
 router.post('/reset-password', async (req, res) => {
   try {
     const { phone, new_password, verification_code } = req.body;
@@ -753,7 +812,18 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// 登出
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: 用户登出
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 登出成功
+ */
 router.post('/logout', async (req: AuthRequest, res) => {
   try {
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
@@ -772,7 +842,18 @@ router.post('/logout', async (req: AuthRequest, res) => {
   }
 });
 
-// 获取当前用户信息
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: 获取当前登录用户信息
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/me', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
