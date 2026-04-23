@@ -405,6 +405,7 @@ import type { DeviceInfo, RoomInfo } from '@/types'
 import { deviceApi } from '@/api/device'
 import { roomApi } from '@/api/room'
 import request from '@/api/request'
+import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { formatDotDateTime } from '@/utils/date'
@@ -412,6 +413,7 @@ import { formatDotDateTime } from '@/utils/date'
 dayjs.extend(relativeTime)
 
 const router = useRouter()
+const appStore = useAppStore()
 
 // UI State
 const activeTab = ref('active')
@@ -674,7 +676,13 @@ const formatTime = (t: string) => t ? dayjs(t).fromNow() : '从未连接'
 async function fetchDevices() {
   loading.value = true
   try {
-    const res: any = await deviceApi.getDeviceList()
+    // 从 appStore 获取用户信息，传递 hotel_id 以获取该酒店的所有设备
+    const userInfo = appStore.userInfo
+    const params: any = {}
+    if (userInfo?.hotel_id) {
+      params.hotel_id = userInfo.hotel_id
+    }
+    const res: any = await deviceApi.getDeviceList(params)
     // 兼容多种响应格式: { success: true, data: [...] } 或 { code: 200, data: [...] }
     if (res && res.success && Array.isArray(res.data)) {
       devices.value = res.data

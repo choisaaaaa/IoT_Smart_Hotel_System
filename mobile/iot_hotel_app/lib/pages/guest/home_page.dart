@@ -151,14 +151,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () => context.push('/ai-butler'),
+                      onTap: () => context.push('/qr-scanner'),
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 22),
+                        child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -428,17 +428,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                           child: const Text('AI管家', style: TextStyle(color: Colors.white, fontSize: 12)),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => context.push('/checkout/${stay.id}', extra: {'bookingId': stay.id}),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white54),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('自助退房', style: TextStyle(color: Colors.white, fontSize: 12)),
-                        ),
-                      ),
                     ],
                   ),
                 ],
@@ -468,9 +457,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent]),
-        ),
-        child: const Text('把春天装进眼睛里\n花间赏花季邀您入画', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
+        ),;
   }
 }

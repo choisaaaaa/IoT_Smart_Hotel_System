@@ -66,9 +66,12 @@ import {
 import * as echarts from 'echarts'
 import { useHotelStore } from '@/stores/hotel'
 import { useDeviceStore } from '@/stores/device'
+import { useAppStore } from '@/stores/app'
+import { deviceApi } from '@/api/device'
 
 const hotelStore = useHotelStore()
 const deviceStore = useDeviceStore()
+const appStore = useAppStore()
 const deviceChartRef = ref<HTMLDivElement>()
 let chartInstance: echarts.ECharts | null = null
 
@@ -97,6 +100,26 @@ function statusText(s: string): string {
 
 onMounted(async () => {
   await Promise.all([hotelStore.fetchHotelInfo(), hotelStore.fetchRooms()])
+
+  // 加载设备数据到 deviceStore，确保设备在线数统计正确
+  try {
+    const userInfo = appStore.userInfo
+    const params: any = {}
+    if (userInfo?.hotel_id) {
+      params.hotel_id = userInfo.hotel_id
+    }
+    const res: any = await deviceApi.getDeviceList(params)
+    if (res && res.success && Array.isArray(res.data)) {
+      deviceStore.setDevices(res.data)
+    } else if (res && Array.isArray(res.data)) {
+      deviceStore.setDevices(res.data)
+    } else if (Array.isArray(res)) {
+      deviceStore.setDevices(res)
+    }
+  } catch (err) {
+    console.error('Dashboard 加载设备数据失败:', err)
+  }
+
   await nextTick()
   if (deviceChartRef.value) {
     chartInstance = echarts.init(deviceChartRef.value)

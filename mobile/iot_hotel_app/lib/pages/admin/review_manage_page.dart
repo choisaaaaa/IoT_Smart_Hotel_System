@@ -42,10 +42,12 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
     setState(() => _isLoading = true);
     try {
       final hotelIdStr = await LocalStorage().read('hotel_id');
-      final hotelId = safeToInt(hotelIdStr);
+      final hotelId = hotelIdStr != null ? int.tryParse(hotelIdStr) : null;
+      // hotelId为null或0时不传hotelId参数，让后端返回该酒店管理员关联酒店的评价
+      final effectiveHotelId = (hotelId != null && hotelId > 0) ? hotelId : null;
       final results = await Future.wait([
-        ref.read(reviewServiceProvider).getAllReviews(page: _reviewPage, pageSize: 20, hotelId: hotelId),
-        ref.read(reviewServiceProvider).getAppeals(page: _appealPage, pageSize: 20),
+        ref.read(reviewServiceProvider).getAllReviews(page: _reviewPage, pageSize: 20, hotelId: effectiveHotelId),
+        ref.read(reviewServiceProvider).getAppeals(page: _appealPage, pageSize: 20, hotelId: effectiveHotelId),
       ]);
 
       if (results[0].success && results[0].data != null) {

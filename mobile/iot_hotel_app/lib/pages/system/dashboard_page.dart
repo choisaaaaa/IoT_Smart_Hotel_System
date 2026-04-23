@@ -1177,13 +1177,13 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
           Text('选择酒店：', style: GoogleFonts.notoSansSc(fontSize: 13, fontWeight: FontWeight.w500)),
           const SizedBox(width: 8),
           Expanded(
-            child: DropdownButton<int>(
+            child: DropdownButton<int?>(
               value: _selectedHotelId,
               isExpanded: true,
               hint: const Text('全部酒店'),
               items: [
-                const DropdownMenuItem<int>(value: null, child: Text('全部酒店')),
-                ..._hotels.map<DropdownMenuItem<int>>((h) => DropdownMenuItem(
+                const DropdownMenuItem<int?>(value: null, child: Text('全部酒店')),
+                ..._hotels.map<DropdownMenuItem<int?>>((h) => DropdownMenuItem(
                   value: h.id,
                   child: Text(h.hotelName, overflow: TextOverflow.ellipsis),
                 )),

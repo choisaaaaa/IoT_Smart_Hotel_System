@@ -95,31 +95,31 @@ const fetchLogs = async () => {
   loading.value = true
   try {
     const params: any = {
-      page: pagination.value.current,
-      pageSize: pagination.value.pageSize
+      limit: pagination.value.pageSize
     }
-    if (filterType.value) params.device_type = filterType.value
+    if (filterType.value) params.event_type = mapFilterTypeToEventType(filterType.value)
     if (dateRange.value && dateRange.value.length === 2) {
       params.start_date = dateRange.value[0].format('YYYY-MM-DD')
       params.end_date = dateRange.value[1].format('YYYY-MM-DD')
     }
 
-    const res: any = await request.get('/device-alarms', { params })
-    if (res.data?.code === 200) {
-      const data = res.data.data
-      const alarmList = data?.list || []
-      logs.value = alarmList.map((alarm: any) => ({
-        id: alarm.id,
-        device_name: alarm.device_name || '未知设备',
-        device_id: alarm.device_id || alarm.id,
-        device_type: alarm.alarm_type,
-        action: getAlarmActionText(alarm.alarm_type),
-        level: getAlarmLevel(alarm.alarm_level),
-        operator: alarm.handled_by || '系统',
-        detail: alarm.alarm_content || `${alarm.alarm_type}告警`,
-        created_at: alarm.created_at || ''
+    const res: any = await request.get('/environment/event-logs', { params })
+    // 兼容多种响应格式
+    const data = res.data || res
+    if (data) {
+      const logList = Array.isArray(data.logs) ? data.logs : (Array.isArray(data) ? data : [])
+      logs.value = logList.map((log: any) => ({
+        id: log.id,
+        device_name: log.room_number || '未知区域',
+        device_id: `room_${log.room_id || 0}`,
+        device_type: log.event_type,
+        action: getEventTypeText(log.event_type),
+        level: mapSeverityToLevel(log.severity),
+        operator: log.handled_by || (log.resolved ? '系统' : '待处理'),
+        detail: log.description || log.title,
+        created_at: log.created_at || ''
       }))
-      pagination.value.total = data?.pagination?.total || logs.value.length
+      pagination.value.total = data.total || logs.value.length
     }
   } catch (error) {
     message.error('获取日志失败')
@@ -128,30 +128,37 @@ const fetchLogs = async () => {
   }
 }
 
-function getAlarmActionText(alarmType: string): string {
+function mapFilterTypeToEventType(filterType: string): string {
   const map: Record<string, string> = {
-    smoke: '烟雾告警',
-    fire: '火灾告警',
-    temperature: '温度异常',
-    overheat: '过热告警',
-    offline: '设备离线',
-    device_error: '设备故障'
+    smart_lock: 'device_control',
+    ac: 'environment_warning',
+    light: 'device_control',
+    curtain: 'device_control',
+    smoke_detector: 'fire_alarm'
   }
-  return map[alarmType] || '设备告警'
+  return map[filterType] || filterType
 }
 
-function getAlarmLevel(alarmLevel: string): string {
+function getEventTypeText(eventType: string): string {
   const map: Record<string, string> = {
-    emergency: 'error',
+    fire_alarm: '火灾告警',
+    device_error: '设备故障',
+    environment_warning: '环境预警',
+    device_control: '设备控制',
+    maintenance: '设备维护',
+    energy_alert: '能耗异常'
+  }
+  return map[eventType] || eventType
+}
+
+function mapSeverityToLevel(severity: string): string {
+  const map: Record<string, string> = {
     critical: 'error',
     error: 'error',
-    high: 'warning',
     warning: 'warning',
-    medium: 'warning',
-    info: 'info',
-    low: 'info'
+    info: 'info'
   }
-  return map[alarmLevel] || 'info'
+  return map[severity] || 'info'
 }
 
 const handleTableChange = (pag: any) => {

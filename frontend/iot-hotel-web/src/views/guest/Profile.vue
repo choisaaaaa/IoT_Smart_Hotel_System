@@ -393,6 +393,54 @@
               </div>
             </div>
           </a-tab-pane>
+
+          <!-- 我的收藏 -->
+          <a-tab-pane key="favorites" v-if="isCustomer">
+            <template #tab>
+              <span><HeartOutlined /> 我的收藏</span>
+            </template>
+            <div class="favorites-section">
+              <div v-if="favoritesLoading" style="text-align: center; padding: 40px;">
+                <a-spin />
+              </div>
+              <div v-else-if="myFavorites.length === 0" class="empty-state">
+                <a-empty description="暂无收藏的酒店">
+                  <template #image>
+                    <HeartOutlined style="font-size: 48px; color: #d9d9d9;" />
+                  </template>
+                  <a-button type="primary" @click="$router.push('/guest/booking')">去发现酒店</a-button>
+                </a-empty>
+              </div>
+              <div v-else class="favorites-grid">
+                <div v-for="hotel in myFavorites" :key="hotel.id" class="favorite-card">
+                  <div class="favorite-cover">
+                    <img v-if="hotel.image_url || hotel.logo" :src="appStore.resolveImageUrl(hotel.image_url || hotel.logo)" alt="" />
+                    <HomeFilled v-else class="cover-placeholder" />
+                  </div>
+                  <div class="favorite-info">
+                    <div class="favorite-header">
+                      <h4 class="favorite-name">{{ hotel.hotel_name }}</h4>
+                      <a-popconfirm title="确定取消收藏吗？" @confirm="handleRemoveFavorite(hotel.id)">
+                        <a-button type="text" size="small" danger>
+                          <template #icon><DeleteOutlined /></template>
+                        </a-button>
+                      </a-popconfirm>
+                    </div>
+                    <div class="favorite-meta">
+                      <span v-if="hotel.hotel_star"><StarFilled style="color: #faad14;" /> {{ hotel.hotel_star }}星级</span>
+                      <span v-if="hotel.rating"><StarFilled style="color: #faad14;" /> {{ hotel.rating }}分</span>
+                    </div>
+                    <div class="favorite-address" v-if="hotel.hotel_address || hotel.city">
+                      <EnvironmentOutlined /> {{ hotel.city || '' }}{{ hotel.hotel_address || '' }}
+                    </div>
+                    <div class="favorite-actions">
+                      <a-button type="primary" size="small" @click="$router.push('/guest/booking')">立即预订</a-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </a-tab-pane>
         </a-tabs>
       </div>
     </div>
@@ -508,7 +556,11 @@ import {
   CameraOutlined,
   WechatOutlined,
   AlipayCircleOutlined,
-  QrcodeOutlined
+  QrcodeOutlined,
+  HeartOutlined,
+  DeleteOutlined,
+  StarFilled,
+  EnvironmentOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { userApi } from '@/api/user'
@@ -516,6 +568,7 @@ import request from '@/api/request'
 import { getImageUrl } from '@/utils/url'
 import { systemConfigApi } from '@/api/system-config'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
+import { favoritesApi } from '@/api/favorites'
 import { formatDate } from '@/utils/date'
 
 const router = useRouter()
@@ -813,6 +866,7 @@ const fetchData = async () => {
       }
 
       fetchFrequentGuests()
+      fetchFavorites()
     }
   } catch (error) {
     console.error('获取个人信息失败:', error)
@@ -830,6 +884,34 @@ const fetchFrequentGuests = async () => {
     console.error('获取联系人失败:', error)
   } finally {
     guestsLoading.value = false
+  }
+}
+
+// 收藏相关
+const myFavorites = ref<any[]>([])
+const favoritesLoading = ref(false)
+
+const fetchFavorites = async () => {
+  try {
+    favoritesLoading.value = true
+    const res: any = await favoritesApi.getFavorites()
+    const data = res.data || res
+    myFavorites.value = Array.isArray(data) ? data : []
+  } catch (error) {
+    console.error('获取收藏列表失败:', error)
+    myFavorites.value = []
+  } finally {
+    favoritesLoading.value = false
+  }
+}
+
+const handleRemoveFavorite = async (hotelId: number) => {
+  try {
+    await favoritesApi.removeFavorite(hotelId)
+    message.success('已取消收藏')
+    fetchFavorites()
+  } catch (error) {
+    message.error('取消收藏失败')
   }
 }
 
@@ -2030,6 +2112,109 @@ onMounted(() => {
 
 .text-danger { color: var(--hotel-error); }
 
+/* ==================== 收藏页 ==================== */
+.favorites-section {
+  padding: 10px 0;
+}
+
+.favorites-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.favorite-card {
+  display: flex;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  border-radius: var(--hotel-radius-xl);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(26, 43, 74, 0.1), 0 0 0 1px rgba(201, 169, 98, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.favorite-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(26, 43, 74, 0.15), 0 0 0 1px rgba(201, 169, 98, 0.2);
+}
+
+.favorite-cover {
+  width: 160px;
+  min-height: 160px;
+  background: linear-gradient(135deg, rgba(26, 43, 74, 0.05) 0%, rgba(201, 169, 98, 0.08) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.favorite-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.favorite-cover .cover-placeholder {
+  font-size: 48px;
+  color: #d9d9d9;
+}
+
+.favorite-info {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.favorite-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.favorite-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--hotel-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--hotel-text-secondary);
+}
+
+.favorite-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.favorite-address {
+  font-size: 13px;
+  color: var(--hotel-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-actions {
+  margin-top: auto;
+}
+
 /* ==================== 响应式 ==================== */
 @media (max-width: 1200px) {
   .profile-content {
@@ -2076,6 +2261,10 @@ onMounted(() => {
   }
   
   .coupons-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .favorites-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -41,6 +41,8 @@ class AuthService {
           phone: user?['phone'] as String?,
           uid: user?['uid'] as String?,
         );
+        // 登录成功后异步获取完整用户信息（包含会员等级、积分等）
+        _syncMemberInfo();
         return ApiResult.success(data as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '登录失败');
@@ -192,6 +194,46 @@ class AuthService {
     } catch (e) {
       return ApiResult.failure('系统错误：$e');
     }
+  }
+
+  /// 登录成功后异步同步完整用户信息（会员等级、积分等）
+  Future<void> _syncMemberInfo() async {
+    try {
+      // 先通过 /auth/me 获取最新用户信息
+      final meResult = await getMe();
+      if (!meResult.success) return;
+
+      // 尝试获取会员信息（如果后端支持 /members/me 或 /members/info）
+      try {
+        final memberResponse = await _dioClient.get('${ApiConstants.members}/me');
+        if (memberResponse.statusCode == 200 && memberResponse.data['code'] == 200) {
+          final memberData = memberResponse.data['data'];
+          if (memberData != null) {
+            // 将会员信息合并保存到本地
+            await _localStorage.save('member_info', jsonEncode(memberData));
+            debugPrint('会员信息已同步');
+          }
+        }
+      } catch (_) {
+        // 会员接口可能不存在或未开通，忽略错误
+        debugPrint('会员信息接口不可用，跳过同步');
+      }
+    } catch (e) {
+      debugPrint('同步用户信息失败: $e');
+    }
+  }
+
+  /// 获取缓存的会员信息
+  Future<Map<String, dynamic>?> getMemberInfo() async {
+    final infoStr = await _localStorage.read('member_info');
+    if (infoStr != null) {
+      try {
+        return jsonDecode(infoStr) as Map<String, dynamic>;
+      } catch (e) {
+        debugPrint('解析会员信息失败: $e');
+      }
+    }
+    return null;
   }
 }
 

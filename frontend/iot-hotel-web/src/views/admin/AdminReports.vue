@@ -136,13 +136,15 @@ const fetchReports = async () => {
   loading.value = true
   try {
     const res: any = await request.get('/hotel/reports')
-    const data = res.data
+    // 兼容多种响应格式: res 可能是 { code: 200, data: {...} } 或直接就是数据
+    const data = res.data || res
     reports.today_revenue = data.today_revenue || 0
     reports.month_revenue = data.month_revenue || 0
     reports.pending_bills = data.pending_bills || 0
-    reports.revenue_trend = data.revenue_trend || []
-    reports.income_composition = data.income_composition || []
-    reports.bills = data.bills || []
+    reports.revenue_trend = Array.isArray(data.revenue_trend) ? data.revenue_trend : []
+    reports.income_composition = Array.isArray(data.income_composition) ? data.income_composition : []
+    reports.bills = Array.isArray(data.bills) ? data.bills : []
+    console.log('[AdminReports] 报表数据:', { revenue_trend: reports.revenue_trend, income_composition: reports.income_composition })
     await nextTick()
     renderCharts()
   } catch (error) {
@@ -155,8 +157,13 @@ const fetchReports = async () => {
 const renderCharts = () => {
   if (revenueChartRef.value) {
     if (!revenueChart) revenueChart = echarts.init(revenueChartRef.value)
-    const dates = reports.revenue_trend.map(item => item.date.substring(5))
-    const values = reports.revenue_trend.map(item => item.revenue)
+    const trendData = reports.revenue_trend
+    const dates = trendData.map(item => {
+      // 兼容 date 可能是 Date 对象或字符串
+      const dateStr = typeof item.date === 'string' ? item.date : new Date(item.date).toISOString().split('T')[0]
+      return dateStr.substring(5)
+    })
+    const values = trendData.map(item => item.revenue)
     revenueChart.setOption({
       grid: { top: 40, right: 20, bottom: 30, left: 55 },
       tooltip: { trigger: 'axis', formatter: '{b}<br/>营收: ¥{c}' },

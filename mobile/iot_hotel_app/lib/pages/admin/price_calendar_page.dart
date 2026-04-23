@@ -47,7 +47,8 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
       setState(() {
         _roomTypes = result.data ?? [];
         if (_roomTypes.isNotEmpty && _selectedRoomTypeId == null) {
-          _selectedRoomTypeId = _roomTypes.first['id'] as int?;
+          final rawId = _roomTypes.first['id'];
+          _selectedRoomTypeId = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
         }
       });
     }
@@ -353,8 +354,10 @@ class _PriceCalendarPageState extends ConsumerState<PriceCalendarPage> {
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               items: _roomTypes.map((type) {
+                final rawId = type['id'];
+                final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
                 return DropdownMenuItem<int>(
-                  value: type['id'] as int,
+                  value: id,
                   child: Text(type['name'] ?? '未命名'),
                 );
               }).toList(),

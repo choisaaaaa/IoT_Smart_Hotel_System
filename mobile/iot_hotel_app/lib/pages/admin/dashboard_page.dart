@@ -47,7 +47,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   final List<_MoreItem> _moreItems = const [
     _MoreItem(icon: Icons.hotel_rounded, label: '酒店信息', pageKey: 'hotel'),
     _MoreItem(icon: Icons.assessment_rounded, label: '报表', pageKey: 'reports'),
-    _MoreItem(icon: Icons.fact_check_rounded, label: '审核', pageKey: 'review'),
     _MoreItem(icon: Icons.rate_review_rounded, label: '评价管理', pageKey: 'review_manage'),
     _MoreItem(icon: Icons.thermostat_rounded, label: '环境', pageKey: 'environment'),
     _MoreItem(icon: Icons.layers_rounded, label: '楼层', pageKey: 'floor'),
@@ -88,7 +87,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     switch (pageKey) {
       case 'hotel': page = const HotelEditPage(); break;
       case 'reports': page = const ReportsPage(); break;
-      case 'review': page = const _AdminReviewTab(); break;
       case 'review_manage': page = const AdminReviewManagePage(); break;
       case 'environment': page = const EnvironmentMonitorPage(); break;
       case 'floor': page = const FloorManagePage(); break;
@@ -410,10 +408,12 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     final occupancyRateVal = _stats?['occupancy_rate'];
     final rateDouble = occupancyRateVal != null ? (double.tryParse(occupancyRateVal.toString()) ?? 0) : 0;
     final occupancyRate = '${(rateDouble * 100).toStringAsFixed(0)}%';
-    final onlineDevices = _stats?['online_devices']?.toString() ?? '0';
+    final onlineDevices = (_deviceStats['online'] ?? 0).toString();
     final todayBookings = _stats?['today_bookings']?.toString() ?? '0';
-    final todayRevenue = double.tryParse(_stats?['total_revenue']?.toString() ?? '0') ?? 0;
-    final monthRevenue = double.tryParse(_stats?['total_revenue']?.toString() ?? '0') ?? 0;
+    final todayRevenueVal = _stats?['today_revenue'];
+    final todayRevenue = todayRevenueVal != null ? (todayRevenueVal is num ? todayRevenueVal.toDouble() : double.tryParse(todayRevenueVal.toString()) ?? 0) : 0;
+    final monthRevenueVal = _stats?['month_revenue'];
+    final monthRevenue = monthRevenueVal != null ? (monthRevenueVal is num ? monthRevenueVal.toDouble() : double.tryParse(monthRevenueVal.toString()) ?? 0) : 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,

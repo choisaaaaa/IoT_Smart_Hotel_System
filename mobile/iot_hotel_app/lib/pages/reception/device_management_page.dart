@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/device_service.dart';
 import '../../services/room_service.dart';
+import '../../services/auth_service.dart';
 
 class DeviceManagementPage extends ConsumerStatefulWidget {
   const DeviceManagementPage({super.key});
@@ -18,11 +20,20 @@ class _DeviceManagementPageState extends ConsumerState<DeviceManagementPage> {
   List<dynamic> _rooms = [];
   int? _selectedRoomId;
   String _searchQuery = '';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // 每30秒自动刷新设备状态
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadDevices());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -35,8 +46,10 @@ class _DeviceManagementPageState extends ConsumerState<DeviceManagementPage> {
   }
 
   Future<void> _loadDevices() async {
+    final hotelId = await ref.read(authServiceProvider).getCurrentHotelId();
     final result = await ref.read(deviceServiceProvider).getAllDevices(
           roomId: _selectedRoomId,
+          hotelId: hotelId,
         );
     if (result.success && mounted) {
       setState(() => _devices = result.data ?? []);
@@ -64,15 +77,16 @@ class _DeviceManagementPageState extends ConsumerState<DeviceManagementPage> {
   Map<String, int> get _statusCounts {
     final counts = <String, int>{};
     for (final device in _devices) {
-      final status = device['status']?.toString() ?? 'offline';
+      // 同时检查 device['status'] 和 device['device_status']，兼容不同后端返回格式
+      final status = (device['device_status'] ?? device['status'])?.toString() ?? 'offline';
       counts[status] = (counts[status] ?? 0) + 1;
     }
     return counts;
   }
 
   Future<void> _toggleDevice(dynamic device) async {
-    final currentStatus = device['status']?.toString() ?? 'off';
-    final newStatus = currentStatus == 'on' ? 'off' : 'on';
+    final currentStatus = (device['device_status'] ?? device['status'])?.toString() ?? 'off';
+    final newStatus = currentStatus == 'on' || currentStatus == 'online' ? 'off' : 'on';
 
     final result = await ref.read(deviceServiceProvider).controlDevice(
           device['id'],
@@ -378,7 +392,7 @@ class _DeviceCard extends StatelessWidget {
     final deviceType = device['device_type'] ?? device['type'] ?? 'unknown';
     final deviceName = device['device_name'] ?? device['name'] ?? '未命名设备';
     final roomNumber = device['room_number'] ?? device['room_id'] ?? '-';
-    final status = device['status']?.toString() ?? 'offline';
+    final status = (device['device_status'] ?? device['status'])?.toString() ?? 'offline';
     final isOn = status == 'on' || status == 'online';
 
     IconData deviceIcon;

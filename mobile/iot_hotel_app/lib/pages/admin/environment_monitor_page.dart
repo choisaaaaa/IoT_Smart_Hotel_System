@@ -21,12 +21,11 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
   List<dynamic> _fireAlarms = [];
   List<dynamic> _eventLogs = [];
   List<dynamic> _devices = [];
-  Map<String, dynamic>? _energyData;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadData();
   }
 
@@ -43,7 +42,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
       _loadFireAlarms(),
       _loadEventLogs(),
       _loadDevices(),
-      _loadEnergyData(),
     ]);
     setState(() => _isLoading = false);
   }
@@ -86,13 +84,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     }
   }
 
-  Future<void> _loadEnergyData() async {
-    final result = await ref.read(environmentServiceProvider).getEnergyConsumption(period: 'month');
-    if (result.success && mounted) {
-      setState(() => _energyData = result.data);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -117,7 +108,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
             Tab(icon: Icon(Icons.thermostat), text: '环境'),
             Tab(icon: Icon(Icons.fire_extinguisher), text: '消防'),
             Tab(icon: Icon(Icons.device_hub), text: '设备'),
-            Tab(icon: Icon(Icons.bolt), text: '能耗'),
             Tab(icon: Icon(Icons.history), text: '日志'),
           ],
         ),
@@ -131,7 +121,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 _buildEnvironmentTab(),
                 _buildFireAlarmTab(),
                 _buildDeviceTab(),
-                _buildEnergyTab(),
                 _buildEventLogTab(),
               ],
             ),
@@ -142,7 +131,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     final env = _dashboardStats?['environment'] ?? {};
     final fire = _dashboardStats?['fire_safety'] ?? {};
     final devices = _dashboardStats?['devices'] ?? {};
-    final energy = _dashboardStats?['energy'] ?? {};
     final alerts = _dashboardStats?['alerts'] ?? {};
 
     return RefreshIndicator(
@@ -181,12 +169,14 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
               children: [
                 Expanded(
                   child: _EnvironmentCard(
-                    title: '今日能耗',
-                    value: '${energy['today_total']?.toStringAsFixed(1) ?? '--'}',
-                    unit: 'kWh',
-                    icon: Icons.bolt,
+                    title: '设备在线率',
+                    value: devices['total'] != null && (devices['total'] as int) > 0
+                        ? ((devices['online'] as int) / (devices['total'] as int) * 100).toStringAsFixed(0)
+                        : '--',
+                    unit: '%',
+                    icon: Icons.devices,
                     color: Colors.amber,
-                    subtitle: '较昨日 ${energy['savings_percent'] != null ? (energy['savings_percent'] > 0 ? '↓' : '↑') : ''}${energy['savings_percent']?.abs()?.toStringAsFixed(1) ?? '--'}%',
+                    subtitle: '${devices['online'] ?? 0}/${devices['total'] ?? 0} 在线',
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -435,161 +425,6 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
           final device = _devices[index];
           return _DeviceCard(device: device);
         },
-      ),
-    );
-  }
-
-  Widget _buildEnergyTab() {
-    final summary = _energyData?['summary'] as Map<String, dynamic>? ?? {};
-    final trend = _energyData?['trend'] as List<dynamic>? ?? [];
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _EnergyStatCard(
-                    title: '今日能耗',
-                    value: (summary['total_today_kwh'] as num?)?.toStringAsFixed(1) ?? '--',
-                    unit: 'kWh',
-                    icon: Icons.bolt,
-                    color: Colors.amber,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _EnergyStatCard(
-                    title: '昨日能耗',
-                    value: (summary['total_yesterday_kwh'] as num?)?.toStringAsFixed(1) ?? '--',
-                    unit: 'kWh',
-                    icon: Icons.history,
-                    color: Colors.blue,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _EnergyStatCard(
-                    title: '本月能耗',
-                    value: (summary['total_month_kwh'] as num?)?.toStringAsFixed(1) ?? '--',
-                    unit: 'kWh',
-                    icon: Icons.calendar_month,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _EnergyStatCard(
-                    title: '节省率',
-                    value: (summary['savings_rate'] as num?)?.toStringAsFixed(1) ?? '--',
-                    unit: '%',
-                    icon: Icons.trending_down,
-                    color: ((summary['savings_rate'] as num?)?.toDouble() ?? 0) > 0
-                        ? Colors.green
-                        : Colors.red,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _EnergyStatCard(
-              title: '预计月费用',
-              value: '¥${(summary['estimated_monthly_cost'] as num?)?.toStringAsFixed(2) ?? '--'}',
-              unit: '',
-              icon: Icons.payments,
-              color: AppColors.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '能耗趋势',
-              style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            if (trend.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text('暂无能耗趋势数据', style: TextStyle(color: Colors.grey[500])),
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    ...trend.take(14).map((item) {
-                      final date = item['date']?.toString() ?? '';
-                      final value = (item['value'] as num?)?.toDouble() ?? 0;
-                      final maxVal = trend.fold<double>(0, (max, e) =>
-                          ((e['value'] as num?)?.toDouble() ?? 0) > max
-                              ? (e['value'] as num?)?.toDouble() ?? 0
-                              : max);
-                      final percent = maxVal > 0 ? value / maxVal : 0.0;
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 80,
-                              child: Text(
-                                DateUtils.formatDateDynamic(date),
-                                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                              ),
-                            ),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: percent,
-                                  backgroundColor: Colors.grey[200],
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    value > maxVal * 0.8 ? Colors.red : AppColors.primary,
-                                  ),
-                                  minHeight: 16,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 60,
-                              child: Text(
-                                '${value.toStringAsFixed(1)} kWh',
-                                style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -1444,82 +1279,6 @@ class _EventLogCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EnergyStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String unit;
-  final IconData icon;
-  final Color color;
-
-  const _EnergyStatCard({
-    required this.title,
-    required this.value,
-    required this.unit,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.notoSansSc(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-              if (unit.isNotEmpty) ...[
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ],
           ),
         ],
       ),

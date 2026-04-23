@@ -506,10 +506,25 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
       return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
     }
 
-    final todayCheckIn = _dashboardStats?['today_checkin']?.toString() ?? _todayCheckIns.length.toString();
-    final todayCheckOut = _dashboardStats?['today_checkout']?.toString() ?? _todayCheckOuts.length.toString();
-    final currentGuests = _dashboardStats?['current_guests']?.toString() ?? _currentGuests.length.toString();
-    final pendingTasks = _dashboardStats?['pending_tasks']?.toString() ?? _workOrders.length.toString();
+    // 优先使用本地计算的数据，_dashboardStats 作为次要数据源
+    // 当 _dashboardStats 返回0值时不应覆盖本地计算的正确数据
+    final statsCheckIn = _dashboardStats?['today_checkin'];
+    final statsCheckOut = _dashboardStats?['today_checkout'];
+    final statsGuests = _dashboardStats?['current_guests'];
+    final statsTasks = _dashboardStats?['pending_tasks'];
+
+    final todayCheckIn = (statsCheckIn != null && statsCheckIn != 0)
+        ? statsCheckIn.toString()
+        : _todayCheckIns.length.toString();
+    final todayCheckOut = (statsCheckOut != null && statsCheckOut != 0)
+        ? statsCheckOut.toString()
+        : _todayCheckOuts.length.toString();
+    final currentGuests = (statsGuests != null && statsGuests != 0)
+        ? statsGuests.toString()
+        : _currentGuests.length.toString();
+    final pendingTasks = (statsTasks != null && statsTasks != 0)
+        ? statsTasks.toString()
+        : _workOrders.length.toString();
 
     return RefreshIndicator(
       onRefresh: _loadDashboardData,

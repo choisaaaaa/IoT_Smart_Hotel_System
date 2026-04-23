@@ -584,7 +584,6 @@ class _AiButlerTab extends StatelessWidget {
                 _buildFeatureChip(context, '🧹', '保洁服务'),
                 _buildFeatureChip(context, '🍽️', '客房送餐'),
                 _buildFeatureChip(context, '📶', 'WiFi查询'),
-                _buildFeatureChip(context, '🔑', '自助退房'),
               ],
             ),
             const SizedBox(height: 32),
