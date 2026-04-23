@@ -182,17 +182,16 @@
     <a-result
       v-if="currentStep === 4"
       status="success"
-      title="🎉 在线入住办理成功！"
-      sub-title="您的房间已准备就绪，到店后请向前台出示此页面领取房卡。"
+      title="🎉 预入住成功！"
+      sub-title="您的房间已预留，请按时到店，出示身份证件即可办理入住并领取房卡。"
     >
       <template #extra>
         <a-space direction="vertical" :size="12">
-          <a-card size="small" style="text-align: center;">
-            <p style="font-size: 14px;">入住房间</p>
-            <h2 style="color: #1890ff; margin: 4px 0;">{{ foundBooking?.room_name }}</h2>
-            <p style="color: rgba(0,0,0,0.45);">房卡密码：{{ roomPin }}</p>
+          <a-card size="small" style="text-align: center; min-width: 200px;">
+            <p style="font-size: 14px; margin-bottom: 4px;">入住房间</p>
+            <h2 style="color: #1890ff; margin: 0;">{{ foundBooking?.room_name }}</h2>
           </a-card>
-          <a-button @click="resetAll">返回首页</a-button>
+          <a-button type="primary" size="large" @click="resetAll">返回首页</a-button>
         </a-space>
       </template>
     </a-result>
@@ -218,7 +217,6 @@ const searchKey = ref('')
 const searching = ref(false)
 const confirming = ref(false)
 const foundBooking = ref<any>(null)
-const roomPin = ref('')
 
 // 选房相关
 const availableRooms = ref<RoomInfo[]>([])
@@ -396,7 +394,6 @@ async function confirmCheckin() {
       room_id: selectedRoomId.value
     })
     const payload = res?.data || {}
-    roomPin.value = payload.room_pin || ''
     
     const guestInfo = {
       booking_id: foundBooking.value?.id,

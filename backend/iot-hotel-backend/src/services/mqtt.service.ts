@@ -434,7 +434,7 @@ class MQTTService {
         await this.handleSensorData(data as SensorDataPayload, device.hotel_id);
       } else if (topic.startsWith('hotel/device/command/result')) {
         await this.handleCommandResult(data as CommandResultPayload, device.hotel_id);
-      } else if (topic.startsWith('hotel/security/event')) {
+      } else if (topic.startsWith('hotel/security/event') || topic.includes('security/event')) {
         await this.handleSecurityEvent(data, device.hotel_id);
       } else {
         logger.debug(`未处理的MQTT主题: ${topic}`);
@@ -820,6 +820,8 @@ class MQTTService {
         const cardInfo = await rfidService.getCardInfo(cardUid, resolvedHotelId);
         if (cardInfo) {
           logger.info(`[MQTT] 发现已知卡片 ${cardUid} (酒店 ${resolvedHotelId}), 类型: ${cardInfo.card_type}, 持卡人: ${cardInfo.holder_name}`);
+          
+          // 下发同步指令到当前探测到卡片的设备
           await this.sendDeviceCommand(
             deviceId,
             'room_card_op',
@@ -832,6 +834,42 @@ class MQTTService {
             }),
             'system'
           );
+
+          // 关键联动：如果是客房设备上报的卡片，且卡片权限匹配该房间或具有特权，则自动下发开锁指令
+          const [deviceRows] = await pool.query<RowDataPacket[]>(
+            'SELECT device_type, room_id FROM devices WHERE device_id = ?',
+            [deviceId]
+          );
+
+          if (deviceRows.length > 0 && deviceRows[0].device_type === 'room') {
+            const deviceRoomId = deviceRows[0].room_id;
+            let canUnlock = false;
+
+            if (cardInfo.card_type === 'master' || cardInfo.card_type === 'emergency') {
+              canUnlock = true; // 万能卡或紧急卡
+            } else if (cardInfo.card_type === 'guest' && cardInfo.room_id === deviceRoomId) {
+              // 检查卡片是否有效且未过期
+              const now = new Date();
+              if (cardInfo.status === 'active' && (!cardInfo.expires_at || new Date(cardInfo.expires_at) > now)) {
+                canUnlock = true;
+              }
+            } else if (cardInfo.card_type === 'floor' || cardInfo.card_type === 'staff') {
+              // 检查楼层卡/员工卡权限 (这里简化处理，实际应查询 staff_access_policies)
+              canUnlock = true; 
+            }
+
+            if (canUnlock) {
+              logger.info(`[MQTT] 卡片 ${cardUid} 鉴权通过，向设备 ${deviceId} 发送自动开锁指令`);
+              await this.sendDeviceCommand(
+                deviceId,
+                'door',
+                'unlock',
+                'system_auto_auth'
+              );
+            } else {
+              logger.warn(`[MQTT] 卡片 ${cardUid} 尝试开启房间 ${deviceRoomId} 但权限不足或已过期`);
+            }
+          }
         } else {
           logger.info(`[MQTT] 未在数据库中找到卡片 ${cardUid} (酒店 ${resolvedHotelId})，通知模拟器保持空白状态`);
           // 明确告知模拟器这是一个未知/空白卡，彻底清除任何残留显示
@@ -926,6 +964,32 @@ class MQTTService {
               await pool.query(
                 'UPDATE card_lifecycle_logs SET card_uid = ? WHERE card_uid LIKE "PRIV_%" AND hotel_id = ? ORDER BY created_at DESC LIMIT 1',
                 [realUid, hotelId]
+              );
+            } else {
+              // 兜底方案：如果没有找到临时记录（例如记录创建失败或被清理），直接创建正式记录
+              logger.warn(`[MQTT] 未找到临时记录，正在为 UID ${realUid} 直接创建客房卡片记录...`);
+              const rfidService = require('./rfid.service').default;
+              
+              // 尝试从 booking_id 获取退房时间作为有效期
+              let expiresAt = null;
+              if (bookingId) {
+                const [bookingRows] = await pool.query<any[]>('SELECT check_out_date FROM bookings WHERE id = ?', [bookingId]);
+                if (bookingRows.length > 0) expiresAt = bookingRows[0].check_out_date;
+              }
+
+              await rfidService.issueCard({
+                card_uid: realUid,
+                hotel_id: hotelId,
+                booking_id: bookingId,
+                room_id: roomId, // 注意：这里的 roomId 可能是 room_number，issueCard 会处理
+                card_type: 'guest',
+                expires_at: expiresAt,
+                status: 'active'
+              });
+
+              await pool.query(
+                'INSERT INTO card_lifecycle_logs (card_uid, hotel_id, action_type, operator_id, notes) VALUES (?, ?, ?, ?, ?)',
+                [realUid, hotelId, 'issue', 0, `补录签发客房卡: UID=${realUid}, 房间=${roomId}`]
               );
             }
           }

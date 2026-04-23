@@ -14,11 +14,17 @@ export const deviceApi = {
   deleteDevice: (id: number) =>
     request.delete<ApiResponse<any>>(`/devices/${id}`),
 
-  sendCommand: (id: number, commandType: string, commandValue: string) =>
+  sendCommand: (id: number | string, commandType: string, commandValue: string) =>
     request.post<ApiResponse<any>>(`/devices/${id}/command`, {
       command_type: commandType,
       command_value: commandValue
     }),
+
+  testBeep: (deviceId: string) =>
+    request.post<ApiResponse<any>>('/devices/test-beep', { device_id: deviceId }),
+
+  getBookingCards: (bookingId: number) =>
+    request.get<ApiResponse<any[]>>(`/rfid/booking/${bookingId}`),
 
   getDeviceStatusHistory: (deviceId: string, params?: { limit?: number }) =>
     request.get<ApiResponse<any[]>>(`/devices/${deviceId}/history`, { params })

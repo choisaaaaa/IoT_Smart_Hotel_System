@@ -272,12 +272,7 @@
 
           <div class="hardware-hint">
             <InfoCircleOutlined style="color: #1890ff" /> 
-            <span v-if="encoders.find(e => e.device_id === selectedEncoder)?.last_card_uid">
-              检测到物理卡片 UID: <b style="color: #52c41a">{{ encoders.find(e => e.device_id === selectedEncoder)?.last_card_uid }}</b>
-            </span>
-            <span v-else>
-              请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。
-            </span>
+            <span>请确保物理卡片已放置在发卡器 <b>{{ encoders.find(e => e.device_id === selectedEncoder)?.device_name || '未选择' }}</b> 上。</span>
           </div>
         </template>
 
@@ -707,9 +702,16 @@ function handleSecurityEvent(event: any) {
       clearTimeout((window as any)._issueTimeout)
       issueStep.value = 'success'
       issuedUid.value = event.data?.card_uid || ''
-      issueStatusMsg.value = `硬件写卡成功！物理 UID: ${issuedUid.value}`
+      issueStatusMsg.value = `硬件写卡成功，权限已生效。`
       message.success(`${selectedType.value.name} 签发成功`)
       isAuthorized.value = false 
+      
+      // 成功后 2 秒自动关闭弹窗
+      setTimeout(() => {
+        if (issueModalVisible.value) {
+          issueModalVisible.value = false
+        }
+      }, 2000)
     }
   }
 }

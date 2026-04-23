@@ -12,7 +12,8 @@ const allRoles = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_
 // 方式1: 设备预注册Token认证 (新设备)
 // 方式2: 管理员认证 (手动注册)
 router.post('/register', optionalDeviceAuthMiddleware as any, deviceController.register);
-router.post('/room-card', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF]), deviceController.handleRoomCard);
+router.post('/test-beep', authenticate as any, authorize(allRoles), deviceController.testBeep);
+router.post('/room-card', authenticate as any, authorize(allRoles), deviceController.handleRoomCard);
 router.get('/', authenticate as any, authorize(allRoles), deviceController.getAll);
 router.get('/:id', authenticate as any, authorize(allRoles), deviceController.getById);
 router.put('/:id/audit', authenticate as any, authorize(adminRoles), deviceController.audit);
