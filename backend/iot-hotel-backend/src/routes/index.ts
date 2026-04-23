@@ -26,15 +26,25 @@ import ratePlanRouter from './v1/rate-plans';
 import systemConfigRouter from './v1/system-config';
 import environmentRouter from './v1/environment';
 import knowledgeBaseRouter from './v1/knowledge-base';
-import mqttRouter from './v1/mqtt';
+// 已删除: import mqttRouter from './v1/mqtt';
 import rfidRouter from './v1/rfid';
 import favoriteRouter from './v1/favorites';
-import deviceAlarmRouter from './v1/device-alarms';
-import deviceGroupRouter from './v1/device-groups';
-import sceneRouter from './v1/scenes';
-import firmwareRouter from './v1/firmware';
-import irRemoteRouter from './v1/ir-remote';
+// 已删除: import deviceAlarmRouter from './v1/device-alarms';
+// 已删除: import deviceGroupRouter from './v1/device-groups';
+// 已删除: import sceneRouter from './v1/scenes';
+// 已删除: import firmwareRouter from './v1/firmware';
+// 已删除: import irRemoteRouter from './v1/ir-remote';
 import rfidAccessRouter from './v1/rfid-access';
+
+/**
+ * 已删除的前端未实现接口路由：
+ * - mqtt.ts (MQTT管理)
+ * - scenes.ts (场景模式管理)
+ * - ir-remote.ts (红外遥控管理)
+ * - device-groups.ts (设备分组管理)
+ * - device-alarms.ts (设备报警管理)
+ * - firmware.ts (固件管理)
+ */
 
 const router = Router();
 
@@ -70,14 +80,14 @@ router.use('/rate-plans', ratePlanRouter);
 router.use('/system-config', systemConfigRouter);
 router.use('/environment', environmentRouter);
 router.use('/knowledge-base', knowledgeBaseRouter);
-router.use('/mqtt', mqttRouter);
+// 已删除: router.use('/mqtt', mqttRouter);
 router.use('/rfid', rfidRouter);
 router.use('/favorites', favoriteRouter);
-router.use('/device-alarms', deviceAlarmRouter);
-router.use('/device-groups', deviceGroupRouter);
-router.use('/scenes', sceneRouter);
-router.use('/firmware', firmwareRouter);
-router.use('/ir-remote', irRemoteRouter);
+// 已删除: router.use('/device-alarms', deviceAlarmRouter);
+// 已删除: router.use('/device-groups', deviceGroupRouter);
+// 已删除: router.use('/scenes', sceneRouter);
+// 已删除: router.use('/firmware', firmwareRouter);
+// 已删除: router.use('/ir-remote', irRemoteRouter);
 router.use('/rfid-access', rfidAccessRouter);
 
 export default router;

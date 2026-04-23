@@ -5,14 +5,17 @@ import { message } from 'ant-design-vue'
 function shouldClearAuth(error: any): boolean {
   const msg = String(error?.response?.data?.message || '').toLowerCase()
   if (!msg) {
-    return false
+    // 如果没有错误消息，但状态码是 401，也可能是 Token 缺失，需要清理
+    return error?.response?.status === 401
   }
-  // 只有当明确提示令牌过期或非法时才清除，避免因偶发的 header 丢失导致全站登出
+  // 增加对中文提示的支持
   return (
     msg.includes('令牌验证失败') ||
     msg.includes('token expired') ||
     msg.includes('invalid token') ||
-    msg.includes('jwt expired')
+    msg.includes('jwt expired') ||
+    msg.includes('未提供认证令牌') ||
+    msg.includes('未授权')
   )
 }
 
@@ -108,12 +111,19 @@ request.interceptors.response.use(
 
       switch (status) {
         case 401:
-          message.error(serverMsg || '登录已过期，请重新登录')
+          // 如果当前已经在 booking 页面，且正在显示登录弹窗，则不需要重定向，防止循环刷新
+          const isAtBooking = window.location.pathname.includes('/guest/booking')
+          const hasLoginQuery = window.location.search.includes('login=1')
+          
           if (shouldClearAuth(error)) {
             localStorage.removeItem('auth_token')
             localStorage.removeItem('user_info')
-            window.location.href = '/guest/booking?login=1'
+            
+            if (!isAtBooking || !hasLoginQuery) {
+              window.location.href = '/guest/booking?login=1'
+            }
           }
+          message.error(serverMsg || '登录已过期，请重新登录')
           break
         case 403:
           message.error(serverMsg || '无权限访问')
