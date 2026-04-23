@@ -102,7 +102,7 @@ export class BookingService {
             totalPages: Math.ceil(total / Number(pageSize))
           };
         },
-        { ttl: 120 } // 预订列表缓存2分钟
+        { ttl: 10 } // 预订列表缓存10秒（高频变更数据）
       );
     } catch (error) {
       logger.error('获取预订列表失败:', (error as Error).message);
@@ -121,7 +121,7 @@ export class BookingService {
           );
           return (rows[0] as Booking) || null;
         },
-        { ttl: 180 }
+        { ttl: 10 } // 订单详情缓存10秒（高频变更数据）
       );
     } catch (error) {
       logger.error('获取预订详情失败:', (error as Error).message);

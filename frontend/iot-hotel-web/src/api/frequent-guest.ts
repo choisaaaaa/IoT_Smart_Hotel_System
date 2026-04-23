@@ -6,8 +6,9 @@ export interface FrequentGuest {
   user_id?: number
   name: string
   phone: string
-  id_type: 'idcard' | 'passport'
+  id_type: 'idcard' | 'passport' | 'hkm_pass' | 'taiwan_pass' | 'other'
   id_number: string
+  relationship?: string
   created_at?: string
   updated_at?: string
 }

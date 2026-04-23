@@ -1,5 +1,5 @@
-import { calculateSignature, verifySignature } from '../src/utils/signature';
-import logger from '../src/utils/logger';
+import { calculateSignature, verifySignature } from '../../src/utils/signature';
+import logger from '../../src/utils/logger';
 
 /**
  * 工具函数测试

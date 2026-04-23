@@ -21,6 +21,8 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
   List<dynamic> _fireAlarms = [];
   List<dynamic> _eventLogs = [];
   List<dynamic> _devices = [];
+  List<dynamic> _environmentList = [];
+  Map<String, dynamic> _environmentSummary = {};
 
   @override
   void initState() {
@@ -42,8 +44,20 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
       _loadFireAlarms(),
       _loadEventLogs(),
       _loadDevices(),
+      _loadEnvironmentData(),
     ]);
     setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadEnvironmentData() async {
+    final result = await ref.read(environmentServiceProvider).getEnvironmentData();
+    if (result.success && mounted) {
+      final data = result.data ?? {};
+      setState(() {
+        _environmentList = List<dynamic>.from(data['list'] ?? []);
+        _environmentSummary = data['summary'] ?? {};
+      });
+    }
   }
 
   Future<void> _loadDashboardStats() async {
@@ -136,6 +150,9 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     final devices = _dashboardStats?['devices'] ?? {};
     final alerts = _dashboardStats?['alerts'] ?? {};
 
+    // 优先使用 environment 接口的 summary 数据
+    final summary = _environmentSummary;
+
     // 安全地获取数值
     double? parseDouble(dynamic value) {
       if (value == null) return null;
@@ -153,8 +170,9 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
       return null;
     }
 
-    final avgTemp = parseDouble(env['avg_temperature']);
-    final avgHumidity = parseDouble(env['avg_humidity']);
+    // 优先使用 environment 接口的 summary 数据，如果没有则使用 dashboard stats
+    final avgTemp = parseDouble(summary['avg_temperature']) ?? parseDouble(env['avg_temperature']);
+    final avgHumidity = parseDouble(summary['avg_humidity']) ?? parseDouble(env['avg_humidity']);
     final onlineCount = parseInt(devices['online']) ?? 0;
     final totalCount = parseInt(devices['total']) ?? 0;
     final runningCount = parseInt(devices['running']) ?? 0;
@@ -165,7 +183,7 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     final unresolvedAlerts = parseInt(alerts['unresolved']) ?? 0;
     final criticalAlerts = parseInt(alerts['critical']) ?? 0;
     final warningAlerts = parseInt(alerts['warning']) ?? 0;
-    final envScore = parseInt(_dashboardStats?['environment_score']);
+    final envScore = parseInt(summary['avg_environment_score']) ?? parseInt(_dashboardStats?['environment_score']);
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -255,16 +273,8 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
   }
 
   Widget _buildEnvironmentTab() {
-    final sensorDevices = _devices.where((d) {
-      final type = d['device_type']?.toString() ?? '';
-      return type == 'sensor' ||
-          type == 'smoke_detector' ||
-          type == 'temperature_sensor' ||
-          type == 'humidity_sensor' ||
-          type == 'thermostat';
-    }).toList();
-
-    if (sensorDevices.isEmpty) {
+    // 优先使用 environment 接口的数据（和Web端一致）
+    if (_environmentList.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -281,34 +291,30 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
       onRefresh: _loadData,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: sensorDevices.length,
+        itemCount: _environmentList.length,
         itemBuilder: (context, index) {
-          final device = sensorDevices[index];
-          final status = device['device_status'] ?? device['status'] ?? 'offline';
-          final isOnline = status == 'online';
-          final deviceName = device['device_name'] ?? '传感器';
-          final roomNumber = device['room_number'] ?? device['room_id'] ?? '-';
-          final deviceType = device['device_type'] ?? 'sensor';
+          final env = _environmentList[index];
+          final roomNumber = env['room_number']?.toString() ?? '-';
+          final temperature = env['temperature'];
+          final humidity = env['humidity'];
+          final smokeLevel = env['smoke_level'];
+          final status = env['status']?.toString() ?? 'normal';
+          final updateTime = env['update_time']?.toString() ?? '';
 
-          IconData deviceIcon;
-          Color deviceColor;
-          switch (deviceType) {
-            case 'smoke_detector':
-              deviceIcon = Icons.smoke_free;
-              deviceColor = Colors.red;
+          Color statusColor;
+          String statusText;
+          switch (status) {
+            case 'warning':
+              statusColor = Colors.orange;
+              statusText = '警告';
               break;
-            case 'temperature_sensor':
-            case 'thermostat':
-              deviceIcon = Icons.thermostat;
-              deviceColor = Colors.orange;
-              break;
-            case 'humidity_sensor':
-              deviceIcon = Icons.water_drop;
-              deviceColor = Colors.blue;
+            case 'danger':
+              statusColor = Colors.red;
+              statusText = '危险';
               break;
             default:
-              deviceIcon = Icons.sensors;
-              deviceColor = Colors.green;
+              statusColor = Colors.green;
+              statusText = '正常';
           }
 
           return Container(
@@ -325,47 +331,81 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: deviceColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(deviceIcon, color: deviceColor, size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        deviceName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.room, color: AppColors.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          '房间 $roomNumber',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '房间 $roomNumber · ${isOnline ? '在线' : '离线'}',
+                      child: Text(
+                        statusText,
                         style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 13,
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: isOnline ? Colors.green : Colors.grey,
-                    shape: BoxShape.circle,
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _EnvironmentMetric(
+                        icon: Icons.thermostat,
+                        label: '温度',
+                        value: temperature != null ? '$temperature°C' : '--',
+                        color: Colors.orange,
+                      ),
+                    ),
+                    Expanded(
+                      child: _EnvironmentMetric(
+                        icon: Icons.water_drop,
+                        label: '湿度',
+                        value: humidity != null ? '$humidity%' : '--',
+                        color: Colors.blue,
+                      ),
+                    ),
+                    Expanded(
+                      child: _EnvironmentMetric(
+                        icon: Icons.smoke_free,
+                        label: '烟雾',
+                        value: smokeLevel != null ? '$smokeLevel%' : '--',
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
                 ),
+                if (updateTime.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '更新时间: $updateTime',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ],
             ),
           );
@@ -595,6 +635,45 @@ class _EnvironmentCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EnvironmentMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _EnvironmentMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[500],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -7,22 +7,36 @@ import { test, expect } from '@playwright/test';
 
 test.describe('预订流程', () => {
   test.beforeEach(async ({ page }) => {
-    // 每个测试前登录为管理员
-    await page.goto('/login');
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin123');
+    // 每个测试前登录为酒店经理 137...
+    await page.goto('/guest/booking');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+    
+    const loginModal = page.locator('.login-modal');
+    if (!await loginModal.isVisible()) {
+      await page.click('.login-btn');
+    }
+    
+    await page.waitForTimeout(1000);
+    await page.getByPlaceholder('请输入手机号').fill('13777777777');
+    await page.waitForTimeout(500);
+    await page.getByPlaceholder('请输入密码').fill('password123');
+    await page.waitForTimeout(500);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*admin.*/);
+    await page.waitForURL(/.*hotel-admin.*/, { timeout: 30000 });
   });
 
-  test('应该能够创建新预订', async ({ page }) => {
-    // 导航到预订管理
+  test('应该能成功创建预订', async ({ page }) => {
+    // 点击预订管理菜单
     await page.click('text=预订管理');
-    await page.click('text=新建预订');
+    await page.waitForTimeout(1000);
     
-    // 填写预订表单
+    await page.click('text=新增预订');
+    await page.waitForTimeout(1000);
+    
+    // 填写预订表单 - 使用普通顾客手机号 139...
     await page.fill('input[name="guest_name"]', '测试住客');
-    await page.fill('input[name="guest_phone"]', '13800138000');
+    await page.fill('input[name="guest_phone"]', '13999999999');
     await page.fill('input[name="check_in_date"]', '2026-05-01');
     await page.fill('input[name="check_out_date"]', '2026-05-03');
     

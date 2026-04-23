@@ -7,12 +7,23 @@ import { test, expect } from '@playwright/test';
 
 test.describe('设备控制', () => {
   test.beforeEach(async ({ page }) => {
-    // 登录为管理员
-    await page.goto('/login');
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin123');
+    // 登录为酒店经理 137...
+    await page.goto('/guest/booking');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+    
+    const loginModal = page.locator('.login-modal');
+    if (!await loginModal.isVisible()) {
+      await page.click('.login-btn');
+    }
+    
+    await page.waitForTimeout(1000);
+    await page.getByPlaceholder('请输入手机号').fill('13777777777');
+    await page.waitForTimeout(500);
+    await page.getByPlaceholder('请输入密码').fill('password123');
+    await page.waitForTimeout(500);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*admin.*/);
+    await page.waitForURL(/.*hotel-admin.*/, { timeout: 30000 });
   });
 
   test('应该显示设备列表', async ({ page }) => {
@@ -25,26 +36,19 @@ test.describe('设备控制', () => {
     await expect(page.locator('.device-card, .ant-table')).toBeVisible();
   });
 
-  test('应该能够控制设备开关', async ({ page }) => {
+  test('应该能成功控制设备', async ({ page }) => {
+    // 点击设备管理菜单
     await page.click('text=设备管理');
+    await page.waitForTimeout(2000);
     
-    // 找到第一个可控制的设备
-    const toggleSwitch = page.locator('.device-switch').first();
+    // 查找第一个设备的开关按钮并点击
+    const switchBtn = page.locator('.ant-switch').first();
+    await switchBtn.waitFor({ state: 'visible' });
+    await switchBtn.click();
+    await page.waitForTimeout(1000);
     
-    if (await toggleSwitch.isVisible().catch(() => false)) {
-      // 记录当前状态
-      const isChecked = await toggleSwitch.isChecked();
-      
-      // 切换状态
-      await toggleSwitch.click();
-      
-      // 等待状态更新
-      await page.waitForTimeout(1000);
-      
-      // 验证状态改变
-      const newState = await toggleSwitch.isChecked();
-      expect(newState).not.toBe(isChecked);
-    }
+    // 验证成功提示
+    await expect(page.locator('.ant-message-success')).toBeVisible({ timeout: 20000 });
   });
 
   test('应该能够切换睡眠模式', async ({ page }) => {

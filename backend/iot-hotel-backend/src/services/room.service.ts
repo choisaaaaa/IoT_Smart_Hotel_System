@@ -117,7 +117,7 @@ export class RoomService {
             totalPages: Math.ceil(total / Number(pageSize))
           };
         },
-        { ttl: 1 }
+        { ttl: 300 } // 房间列表缓存5分钟（相对稳定数据）
       );
     } catch (error) {
       logger.error('获取房间列表失败:', error.message);
@@ -151,7 +151,7 @@ export class RoomService {
             rooms: grouped[Number(floor)]
           }));
         },
-        { ttl: 1 }
+        { ttl: 300 } // 按楼层分组房间缓存5分钟（相对稳定数据）
       );
     } catch (error) {
       logger.error('按楼层获取房间失败:', error.message);
@@ -176,7 +176,7 @@ export class RoomService {
           const [rows] = await pool.query<RowDataPacket[]>(getByIdSql, [id, hotelId]);
           return (rows[0] as Room) || null;
         },
-        { ttl: 1 }
+        { ttl: 300 } // 房间详情缓存5分钟（相对稳定数据）
       );
     } catch (error) {
       logger.error('获取房间详情失败:', error.message);

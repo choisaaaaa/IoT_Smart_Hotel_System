@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
@@ -38,6 +39,12 @@ class MessageService {
         return ApiResult.success(list);
       }
       return ApiResult.failure(response.data['message'] ?? '获取消息列表失败');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages接口未实现(404)，返回空列表');
+        return ApiResult.success([]);
+      }
+      return ApiResult.failure('消息服务暂不可用');
     } catch (e) {
       return ApiResult.failure('消息服务暂不可用');
     }
@@ -54,6 +61,12 @@ class MessageService {
         final data = response.data['data'];
         return ApiResult.success(safeToInt(data is Map ? data['count'] : data));
       }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages/unread/count接口未实现(404)，返回0');
+        return ApiResult.success(0);
+      }
+      debugPrint('专用未读计数接口失败，尝试通过消息列表统计: $e');
     } catch (e) {
       debugPrint('专用未读计数接口失败，尝试通过消息列表统计: $e');
     }
@@ -76,6 +89,12 @@ class MessageService {
         final total = data is Map ? safeToInt(data['total']) : list.length;
         return ApiResult.success(total > 0 ? total : list.length);
       }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages接口未实现(404)，返回0');
+        return ApiResult.success(0);
+      }
+      debugPrint('通过消息列表统计未读数也失败: $e');
     } catch (e) {
       debugPrint('通过消息列表统计未读数也失败: $e');
     }
@@ -90,6 +109,12 @@ class MessageService {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '标记已读失败');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages/$messageId/read接口未实现(404)');
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure('网络错误：$e');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
@@ -102,6 +127,12 @@ class MessageService {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '全部标记已读失败');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages/read-all接口未实现(404)');
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure('网络错误：$e');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
@@ -114,6 +145,12 @@ class MessageService {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '删除消息失败');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages/$messageId接口未实现(404)');
+        return ApiResult.success(null);
+      }
+      return ApiResult.failure('网络错误：$e');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }
@@ -144,6 +181,12 @@ class MessageService {
         return ApiResult.success({});
       }
       return ApiResult.failure(response.data['message'] ?? '发送消息失败');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        debugPrint('[MessageService] messages发送接口未实现(404)');
+        return ApiResult.failure('消息发送功能暂不可用');
+      }
+      return ApiResult.failure('网络错误：$e');
     } catch (e) {
       return ApiResult.failure('网络错误：$e');
     }

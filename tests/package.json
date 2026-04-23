@@ -20,11 +20,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
+    "@vue/test-utils": "^2.4.0",
+    "jsdom": "^23.0.0",
     "newman": "^6.0.0",
     "newman-reporter-htmlextra": "^1.23.0",
-    "vitest": "^1.0.0",
-    "@vue/test-utils": "^2.4.0",
-    "jsdom": "^23.0.0"
+    "vitest": "^1.0.0"
   },
   "keywords": [
     "testing",
@@ -32,5 +32,8 @@
     "e2e-testing",
     "performance-testing",
     "smart-hotel"
-  ]
+  ],
+  "dependencies": {
+    "k6": "^0.0.0"
+  }
 }

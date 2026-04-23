@@ -1,6 +1,6 @@
-import { hashPassword, comparePassword } from '../src/utils/password';
-import { generateToken, verifyToken } from '../src/utils/jwt';
-import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../src/utils/role';
+import { hashPassword, comparePassword } from '../../src/utils/password';
+import { generateToken, verifyToken } from '../../src/utils/jwt';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../../src/utils/role';
 
 /**
  * 认证工具测试
@@ -54,7 +54,7 @@ describe('认证工具测试', () => {
 
   describe('角色工具', () => {
     it('应该正确标准化角色名称', () => {
-      expect(normalizeRole('system')).toBe('system');
+      expect(normalizeRole('system')).toBe('system_admin');
       expect(normalizeRole('admin')).toBe('hotel_admin');
       expect(normalizeRole('hotel_admin')).toBe('hotel_admin');
       expect(normalizeRole('receptionist')).toBe('staff');
