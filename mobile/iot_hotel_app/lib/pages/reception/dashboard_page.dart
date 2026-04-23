@@ -67,18 +67,52 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
 
   Future<void> _loadNotificationCount() async {
     try {
-      final maintenanceResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 1);
-      final deliveryResult = await ref.read(deliveryServiceProvider).getDeliveryOrders(status: 'pending', pageSize: 1);
+      // 获取待处理工单数量
+      final maintenanceResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 100);
+      final deliveryResult = await ref.read(deliveryServiceProvider).getDeliveryOrders(status: 'pending', pageSize: 100);
+
       int count = 0;
-      if (maintenanceResult.success) count += 1;
-      if (deliveryResult.success) count += 1;
-      try {
-        final envResult = await ref.read(environmentServiceProvider).getEventLogs(limit: 5);
-        if (envResult.success && (envResult.data?.isNotEmpty ?? false)) {
-          _hasEnvAlert = true;
-          count += 1;
+      int pendingWorkOrders = 0;
+      int pendingDeliveries = 0;
+
+      if (maintenanceResult.success && maintenanceResult.data != null) {
+        final dynamic data = maintenanceResult.data;
+        if (data is List) {
+          pendingWorkOrders = data.length;
+        } else if (data is Map) {
+          final listData = data['list'];
+          pendingWorkOrders = (listData is List) ? listData.length : 0;
         }
-      } catch (_) {}
+      }
+
+      if (deliveryResult.success && deliveryResult.data != null) {
+        final dynamic data = deliveryResult.data;
+        if (data is List) {
+          pendingDeliveries = data.length;
+        } else if (data is Map) {
+          final listData = data['list'];
+          pendingDeliveries = (listData is List) ? listData.length : 0;
+        }
+      }
+
+      count = pendingWorkOrders + pendingDeliveries;
+
+      // 检查环境异常告警
+      try {
+        final envResult = await ref.read(environmentServiceProvider).getFireAlarms(status: 'active', limit: 20);
+        if (envResult.success && envResult.data != null) {
+          final data = envResult.data!;
+          final alarms = data['alarms'] as List? ?? [];
+          final activeAlarms = alarms.where((a) => a['status'] == 'active').length;
+          if (activeAlarms > 0) {
+            _hasEnvAlert = true;
+            count += activeAlarms;
+          }
+        }
+      } catch (e) {
+        debugPrint('环境告警检查失败: $e');
+      }
+
       if (mounted) setState(() => _notificationCount = count);
     } catch (e) {
       debugPrint('✗ notifications: $e');

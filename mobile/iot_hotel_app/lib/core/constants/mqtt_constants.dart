@@ -23,12 +23,18 @@ class MqttConstants {
 
   static String get username {
     const String envUsername = String.fromEnvironment('MQTT_USERNAME');
-    return envUsername;
+    if (envUsername.isNotEmpty) {
+      return envUsername;
+    }
+    return 'root';
   }
 
   static String get password {
     const String envPassword = String.fromEnvironment('MQTT_PASSWORD');
-    return envPassword;
+    if (envPassword.isNotEmpty) {
+      return envPassword;
+    }
+    return 'IotHotel2026';
   }
 
   static const String clientIdPrefix = 'iot_hotel_app_';

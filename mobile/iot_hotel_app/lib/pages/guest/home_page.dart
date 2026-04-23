@@ -457,6 +457,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent]),
-        ),;
+        ),
+      ),
+    );
   }
 }

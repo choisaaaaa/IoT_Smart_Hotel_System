@@ -186,28 +186,33 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
       // 并行加载统计数据和报表数据（包含周营收）
       final statsRes = await ref.read(hotelServiceProvider).getGlobalStatistics();
       final reportsRes = await ref.read(hotelServiceProvider).getReports();
-      
+
       if (reportsRes.success && reportsRes.data != null) {
         final reportData = reportsRes.data!;
         final trendData = reportData['revenue_trend'] as List<dynamic>? ?? [];
-        _weeklyRevenue = trendData.map((e) => (e['revenue'] as num?)?.toDouble() ?? 0).toList();
+        _weeklyRevenue = trendData.map((e) {
+          if (e is Map) {
+            return (e['revenue'] as num?)?.toDouble() ?? 0;
+          }
+          return (e as num?)?.toDouble() ?? 0;
+        }).toList();
       }
-      
+
       if (statsRes.success && statsRes.data != null) {
         final data = statsRes.data!;
-        
+
         if (mounted) {
           setState(() {
             _stats = {
               'hotels': data['hotel_count'] ?? 0,
               'users': data['member_count'] ?? 0,
               'devices': data['device_count'] ?? 0,
-              'online_devices': data['online_devices'] ?? 0, // Backend might need to provide this
-              'pending_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'pending', orElse: () => {'count': 0})['count'] ?? 0,
-              'confirmed_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'confirmed', orElse: () => {'count': 0})['count'] ?? 0,
-              'checked_in_bookings': (data['booking_stats'] as List?)?.firstWhere((b) => b['status'] == 'checked_in', orElse: () => {'count': 0})['count'] ?? 0,
+              'online_devices': data['online_devices'] ?? data['device_count'] ?? 0,
+              'pending_bookings': _extractBookingCount(data['booking_stats'], 'pending'),
+              'confirmed_bookings': _extractBookingCount(data['booking_stats'], 'confirmed'),
+              'checked_in_bookings': _extractBookingCount(data['booking_stats'], 'checked_in'),
             };
-            
+
             double parseRevenue(dynamic value) {
               if (value == null) return 0;
               if (value is double) return value;
@@ -215,13 +220,14 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
               if (value is String) return double.tryParse(value) ?? 0;
               return 0;
             }
-            
+
+            // 优先使用后端返回的今日收入和本月收入
             _revenueStats = {
-              'today_revenue': parseRevenue(data['total_revenue']),
-              'month_revenue': parseRevenue(data['total_revenue']), // Backend could provide monthly separate
+              'today_revenue': parseRevenue(data['today_revenue'] ?? data['daily_revenue']),
+              'month_revenue': parseRevenue(data['month_revenue'] ?? data['monthly_revenue_total']),
               'revenue_trend': (data['monthly_revenue'] as List?)?.map((e) => parseRevenue(e)).toList() ?? [],
             };
-            
+
             final topHotelsData = data['top_hotels'] as List?;
             _topHotels = topHotelsData?.map((h) => Hotel(
               id: h['id'] ?? 0,
@@ -234,7 +240,6 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
           });
         }
       } else {
-        // Fallback or error handling
         debugPrint('Failed to load global stats: ${statsRes.message}');
       }
     } catch (e) {
@@ -242,6 +247,18 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  int _extractBookingCount(dynamic bookingStats, String status) {
+    if (bookingStats == null) return 0;
+    if (bookingStats is List) {
+      final found = bookingStats.firstWhere(
+        (b) => b is Map && b['status'] == status,
+        orElse: () => {'count': 0},
+      );
+      return (found is Map) ? (found['count'] as num?)?.toInt() ?? 0 : 0;
+    }
+    return 0;
   }
 
   @override
@@ -335,12 +352,8 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
         final val = (displayTrend[i] as num?)?.toDouble() ?? 0;
         spots.add(FlSpot(i.toDouble(), val));
       }
-    } else {
-      final now = DateTime.now();
-      for (int i = 0; i < 7; i++) {
-        spots.add(FlSpot(i.toDouble(), (now.millisecondsSinceEpoch % 10000 + i * 500).toDouble()));
-      }
     }
+    // 如果没有数据，spots 将为空列表，图表会显示空状态
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -358,35 +371,46 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
           const SizedBox(height: 20),
           SizedBox(
             height: 180,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(show: true, drawVerticalLine: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
-                    final labels = _isMonthlyView 
-                        ? (displayTrend.isNotEmpty ? List.generate(displayTrend.length, (i) => '${i + 1}日') : ['1日', '5日', '10日', '15日', '20日', '25日', '30日'])
-                        : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-                    final idx = v.toInt();
-                    if (idx < 0 || idx >= labels.length) return const SizedBox();
-                    return Text(labels[idx], style: const TextStyle(fontSize: 10));
-                  }, reservedSize: 22)),
-                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, _) => Text('${(v / 10000).toStringAsFixed(1)}万', style: const TextStyle(fontSize: 9)))),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppColors.primary,
-                    barWidth: 3,
-                    dotData: FlDotData(show: spots.length <= 12),
-                    belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.1)),
+            child: spots.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.show_chart, size: 48, color: AppColors.textHint.withValues(alpha: 0.5)),
+                      const SizedBox(height: 8),
+                      Text('暂无数据', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                )
+              : LineChart(
+                  LineChartData(
+                    gridData: FlGridData(show: true, drawVerticalLine: false),
+                    titlesData: FlTitlesData(
+                      bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
+                        final labels = _isMonthlyView
+                            ? (displayTrend.isNotEmpty ? List.generate(displayTrend.length, (i) => '${i + 1}日') : ['1日', '5日', '10日', '15日', '20日', '25日', '30日'])
+                            : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                        final idx = v.toInt();
+                        if (idx < 0 || idx >= labels.length) return const SizedBox();
+                        return Text(labels[idx], style: const TextStyle(fontSize: 10));
+                      }, reservedSize: 22)),
+                      leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, _) => Text('${(v / 10000).toStringAsFixed(1)}万', style: const TextStyle(fontSize: 9)))),
+                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: AppColors.primary,
+                        barWidth: 3,
+                        dotData: FlDotData(show: spots.length <= 12),
+                        belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.1)),
+                      ),
+                    ],
+                  ),
+                ),
           ),
         ],
       ),
@@ -554,8 +578,6 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
   }
 
   Widget _buildTopHotelsSection() {
-    if (_topHotels.isEmpty) return const SizedBox();
-    final top5 = _topHotels.take(5).toList();
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -566,28 +588,40 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('酒店排行', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('共${_topHotels.length}家', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              if (_topHotels.isNotEmpty)
+                Text('共${_topHotels.length}家', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ],
           ),
           const SizedBox(height: 16),
-          ...top5.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final hotel = entry.value;
-            final colors = [AppColors.warning, AppColors.textSecondary, AppColors.bronze, AppColors.textHint, AppColors.textHint];
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                Container(
-                  width: 24, height: 24,
-                  decoration: BoxDecoration(color: colors[idx].withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: Center(child: Text('${idx + 1}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors[idx]))),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(hotel.hotelName, style: const TextStyle(fontWeight: FontWeight.w500))),
-                Text('${hotel.effectiveStar}星', style: const TextStyle(color: AppColors.warning, fontSize: 12)),
-              ]),
-            );
-          }),
+          if (_topHotels.isEmpty)
+            Center(
+              child: Column(
+                children: [
+                  Icon(Icons.hotel_outlined, size: 48, color: AppColors.textHint.withValues(alpha: 0.5)),
+                  const SizedBox(height: 8),
+                  Text('暂无排行数据', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                ],
+              ),
+            )
+          else
+            ..._topHotels.take(5).toList().asMap().entries.map((entry) {
+              final idx = entry.key;
+              final hotel = entry.value;
+              final colors = [AppColors.warning, AppColors.textSecondary, AppColors.bronze, AppColors.textHint, AppColors.textHint];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Container(
+                    width: 24, height: 24,
+                    decoration: BoxDecoration(color: colors[idx].withValues(alpha: 0.1), shape: BoxShape.circle),
+                    child: Center(child: Text('${idx + 1}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors[idx]))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(hotel.hotelName, style: const TextStyle(fontWeight: FontWeight.w500))),
+                  Text('${hotel.effectiveStar}星', style: const TextStyle(color: AppColors.warning, fontSize: 12)),
+                ]),
+              );
+            }),
         ],
       ),
     );

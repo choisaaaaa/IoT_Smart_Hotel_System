@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -517,26 +518,28 @@ class EnvironmentService {
 
   Future<ApiResult<Map<String, dynamic>>> getDashboardStats() async {
     try {
-      final results = await Future.wait([
-        _dioClient.get(ApiConstants.devices),
-        _dioClient.get('${ApiConstants.deviceAlarms}/stats'),
-        _dioClient.get('${ApiConstants.energy}/stats'),
-      ]);
-
+      // 使用 try-catch 包裹每个 API 调用，避免一个接口失败影响整个方法
       Map<String, dynamic> deviceData = {};
       Map<String, dynamic> alarmStats = {};
-      Map<String, dynamic> energyStats = {};
 
-      if (results[0].statusCode == 200 && results[0].data['code'] == 200) {
-        deviceData = results[0].data['data'] as Map<String, dynamic>? ?? {};
+      // 获取设备数据
+      try {
+        final deviceResponse = await _dioClient.get(ApiConstants.devices);
+        if (deviceResponse.statusCode == 200 && deviceResponse.data['code'] == 200) {
+          deviceData = deviceResponse.data['data'] as Map<String, dynamic>? ?? {};
+        }
+      } catch (e) {
+        debugPrint('获取设备数据失败: $e');
       }
 
-      if (results[1].statusCode == 200 && results[1].data['code'] == 200) {
-        alarmStats = results[1].data['data'] as Map<String, dynamic>? ?? {};
-      }
-
-      if (results[2].statusCode == 200 && results[2].data['code'] == 200) {
-        energyStats = results[2].data['data'] as Map<String, dynamic>? ?? {};
+      // 获取告警统计数据
+      try {
+        final alarmResponse = await _dioClient.get('${ApiConstants.deviceAlarms}/stats');
+        if (alarmResponse.statusCode == 200 && alarmResponse.data['code'] == 200) {
+          alarmStats = alarmResponse.data['data'] as Map<String, dynamic>? ?? {};
+        }
+      } catch (e) {
+        debugPrint('获取告警统计失败: $e');
       }
 
       List<dynamic> deviceList = [];
@@ -602,15 +605,8 @@ class EnvironmentService {
       final pendingCount = (alarmStats['pending_count'] as num?)?.toInt() ?? 0;
       final totalCount = (alarmStats['total_count'] as num?)?.toInt() ?? 0;
 
-      final totalEnergy = (energyStats['total'] as num?)?.toDouble() ?? 0;
-      final trend = energyStats['trend'] as List<dynamic>? ?? [];
-      double yesterdayEnergy = 0;
-      if (trend.length >= 2) {
-        yesterdayEnergy = (trend[trend.length - 2]['value'] as num?)?.toDouble() ?? 0;
-      }
-      final savingsPercent = yesterdayEnergy > 0
-          ? ((yesterdayEnergy - totalEnergy) / yesterdayEnergy * 100)
-          : 0.0;
+      // 删除能耗相关的计算逻辑（totalEnergy, yesterdayEnergy, savingsPercent）
+      // 能耗接口已删除，不再获取这些数据
 
       int environmentScore = 85;
       if (errorCount > 0) environmentScore -= (errorCount * 10);
@@ -662,14 +658,7 @@ class EnvironmentService {
           'running': runningCount,
           'maintenance_due': 0,
         },
-        'energy': {
-          'today_total': totalEnergy,
-          'yesterday_total': yesterdayEnergy,
-          'savings_percent': savingsPercent,
-          'monthly_estimate': totalEnergy * 30,
-          'monthly_cost': totalEnergy * 30 * 0.85,
-          'peak_hour': '19:00-20:00',
-        },
+        // 删除返回数据中的 'energy' 字段，因为能耗接口已删除
         'alerts': {
           'critical': (byLevel['critical'] as num?)?.toInt() ?? (byLevel['emergency'] as num?)?.toInt() ?? 0,
           'warning': (byLevel['warning'] as num?)?.toInt() ?? (byLevel['medium'] as num?)?.toInt() ?? 0,

@@ -1,7 +1,12 @@
 import { config } from 'dotenv';
 import path from 'path';
 
-config({ path: path.resolve(process.cwd(), '.env') });
+const envPath = path.resolve(process.cwd(), '.env');
+console.log('[Config] Loading .env from:', envPath);
+config({ path: envPath });
+
+console.log('[Config] MQTT_HOST:', process.env.MQTT_HOST);
+console.log('[Config] MQTT_PORT:', process.env.MQTT_PORT);
 
 export default {
   app: {
