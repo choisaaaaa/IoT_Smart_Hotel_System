@@ -445,9 +445,14 @@ class EnvironmentController {
       const alarmId = parseInt(req.params.id);
       const { handler, notes } = req.body;
 
+      // 获取当前用户信息作为处理人
+      const currentUser = req.user as any;
+      const handlerId = currentUser?.id || null;
+      const handlerName = handler || currentUser?.username || 'admin';
+
       await pool.query(
         `UPDATE device_alarms SET status = 'processing', handled_by = ?, handled_at = NOW(), handle_remark = ? WHERE id = ?`,
-        [handler, notes || '', alarmId]
+        [handlerId, notes || `确认处理: ${handlerName}`, alarmId]
       );
 
       res.json({
@@ -457,7 +462,7 @@ class EnvironmentController {
           alarm_id: alarmId,
           status: 'acknowledged',
           acknowledged_at: new Date().toISOString(),
-          handled_by: handler
+          handled_by: handlerName
         }
       });
     } catch (error) {
@@ -471,9 +476,14 @@ class EnvironmentController {
       const alarmId = parseInt(req.params.id);
       const { resolution, handler } = req.body;
 
+      // 获取当前用户信息作为处理人
+      const currentUser = req.user as any;
+      const handlerId = currentUser?.id || null;
+      const handlerName = handler || currentUser?.username || 'admin';
+
       await pool.query(
         `UPDATE device_alarms SET status = 'resolved', handled_by = ?, handled_at = NOW(), handle_remark = ? WHERE id = ?`,
-        [handler, resolution, alarmId]
+        [handlerId, resolution || `标记解决: ${handlerName}`, alarmId]
       );
 
       res.json({

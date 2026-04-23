@@ -794,15 +794,15 @@ class WebSocketService {
         try {
           const callId = String(data.callId || data.call_id).trim();
           const currentClient = this.clients.get(socket.id);
-          
+
           const [call] = await pool.query<RowDataPacket[]>('SELECT * FROM calls WHERE call_id = ?', [callId]);
           if (call.length === 0) {
             socket.emit('call_error', { message: '通话不存在' });
             return;
           }
-          
+
           const callData = call[0];
-          
+
           if (['ended', 'rejected'].includes(callData.status)) {
             socket.emit('call_error', { message: '通话已结束或已拒接' });
             return;
@@ -830,20 +830,44 @@ class WebSocketService {
               normalizedCalleeId = String(roomRows[0].id);
             }
           }
-          
+
           const [result] = await pool.query<ResultSetHeader>(
             `UPDATE calls SET status = ?, answered_at = ? WHERE call_id = ?`,
             ['connected', new Date(), callId]
           );
-          
+
+          // 保持与 incoming_call 一致的 ID 格式（房间使用房号）
+          let answerCallerId = callData.caller_id;
+          let answerCalleeId = callData.callee_id;
+
+          if (callData.caller_type === 'room') {
+            const [roomRows] = await pool.query<RowDataPacket[]>(
+              'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+              [callData.caller_id, callData.caller_id]
+            );
+            if (roomRows.length > 0) {
+              answerCallerId = roomRows[0].room_number;
+            }
+          }
+
+          if (callData.callee_type === 'room') {
+            const [roomRows] = await pool.query<RowDataPacket[]>(
+              'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+              [callData.callee_id, callData.callee_id]
+            );
+            if (roomRows.length > 0) {
+              answerCalleeId = roomRows[0].room_number;
+            }
+          }
+
           const answerData = {
             call_id: callId,
             status: 'connected',
             answered_at: new Date().toISOString(),
             caller_type: callData.caller_type,
-            caller_id: callData.caller_id,
+            caller_id: answerCallerId,
             callee_type: callData.callee_type,
-            callee_id: callData.callee_id
+            callee_id: answerCalleeId
           };
           
           const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;

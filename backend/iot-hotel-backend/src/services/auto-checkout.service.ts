@@ -1,5 +1,6 @@
 import pool, { RowDataPacket } from '../config/database';
 import logger from '../utils/logger';
+import CacheService from './cache.service';
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 
@@ -77,6 +78,15 @@ class AutoCheckoutService {
 
       await connection.commit();
       logger.info(`[AutoCheckout] 已自动退房: ${booking.booking_number}, 房间 ${booking.room_number} 进入待打扫状态`);
+
+      // 清除相关缓存，避免前端显示旧状态
+      try {
+        await CacheService.delete(CacheService.bookingKeys.info(booking.id));
+        await CacheService.deletePattern('booking:list:*');
+        logger.info(`[AutoCheckout] 已清除订单缓存: ${booking.id}`);
+      } catch (cacheError) {
+        logger.error(`[AutoCheckout] 清除缓存失败: ${cacheError.message}`);
+      }
     } catch (error) {
       await connection.rollback();
       logger.error(`[AutoCheckout] 自动退房失败: ${booking.booking_number} - ${error.message}`);

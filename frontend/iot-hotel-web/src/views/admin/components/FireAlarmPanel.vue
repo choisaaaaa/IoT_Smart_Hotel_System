@@ -135,10 +135,16 @@
       </div>
     </a-modal>
 
-    <a-modal v-model:open="resolveModalVisible" title="标记警报为已解决" @ok="confirmResolve" :confirmLoading="resolving">
+    <a-modal v-model:open="resolveModalVisible" title="标记警报为已解决" :footer="null">
       <a-form layout="vertical">
         <a-form-item label="解决方案">
           <a-textarea v-model:value="resolution" placeholder="请输入处理结果和解决方案..." :rows="4" />
+        </a-form-item>
+        <a-form-item>
+          <a-space style="float: right;">
+            <a-button @click="resolveModalVisible = false">取消</a-button>
+            <a-button type="primary" :loading="resolving" @click="confirmResolve">确定</a-button>
+          </a-space>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -151,7 +157,10 @@ import { message, Modal } from 'ant-design-vue'
 import { WarningFilled, ExclamationCircleFilled, CheckCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type FireAlarmRecord } from '@/api/environment'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import { formatDateTime } from '@/utils/date'
+
+dayjs.extend(relativeTime)
 
 const loading = ref(false)
 const alarms = ref<FireAlarmRecord[]>([])

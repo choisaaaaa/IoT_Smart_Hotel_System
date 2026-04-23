@@ -2,7 +2,6 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import path from 'path';
 import expressWinston from 'express-winston';
 import logger from './utils/logger';
@@ -116,62 +115,6 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads'), {
   etag: true,
   lastModified: true
 }));
-
-// 全局请求频率限制
-const globalLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分钟
-  max: 1000,
-  message: {
-    code: 429,
-    message: '请求过于频繁，请稍后再试',
-    timestamp: Date.now()
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logger.warn(`请求频率超限: ${req.ip} - ${req.method} ${req.url}`);
-    res.status(429).json({
-      code: 429,
-      message: '请求过于频繁，请稍后再试',
-      timestamp: Date.now()
-    });
-  }
-});
-app.use(globalLimiter);
-
-// 认证接口严格限流
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 10, // 每个IP最多10次登录尝试
-  skipSuccessfulRequests: true, // 成功的请求不计数
-  message: {
-    code: 429,
-    message: '登录尝试次数过多，请15分钟后再试',
-    timestamp: Date.now()
-  },
-  handler: (req, res) => {
-    logger.warn(`登录频率超限: ${req.ip}`);
-    res.status(429).json({
-      code: 429,
-      message: '登录尝试次数过多，请15分钟后再试',
-      timestamp: Date.now()
-    });
-  }
-});
-app.use('/api/v1/auth/login', authLimiter);
-app.use('/api/v1/auth/reset-password', authLimiter);
-
-// 设备注册接口限流
-const deviceRegisterLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1小时
-  max: 50, // 每小时最多50个设备注册
-  message: {
-    code: 429,
-    message: '设备注册过于频繁，请稍后再试',
-    timestamp: Date.now()
-  }
-});
-app.use('/api/v1/devices/register', deviceRegisterLimiter);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({

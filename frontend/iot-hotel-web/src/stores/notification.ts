@@ -5,6 +5,7 @@ import { deliveryApi } from '@/api/delivery'
 import { environmentApi } from '@/api/environment'
 import { bookingApi } from '@/api/booking'
 import { callApi } from '@/api/call'
+import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
 
 export interface NotificationItem {
@@ -63,54 +64,57 @@ export const useNotificationStore = defineStore('notification', () => {
    */
   async function fetchAllUnreadCounts() {
     try {
-      const [
-        maintenanceRes,
-        deliveryRes,
-        envRes,
-        bookingRes,
-        callRes
-      ] = await Promise.allSettled([
-        maintenanceApi.getList({ status: 'pending', pageSize: 1 }),
-        deliveryApi.getList({ status: 'pending', pageSize: 1 }),
-        environmentApi.getEventLogs({ severity: 'warning', limit: 1 }),
-        bookingApi.getBookingList({ status: 'pending', pageSize: 1 }),
-        // 通话记录：只获取未处理的（ringing/calling）
-        callApi.getActive()
-      ])
+      const appStore = useAppStore()
+      const role = appStore.userInfo?.role
+      const isStaffOrAdmin = ['hotel_admin', 'system_admin', 'staff'].includes(role)
 
-      if (maintenanceRes.status === 'fulfilled') {
-        const res = maintenanceRes.value as any
-        moduleUnreadCounts.value['/reception/workorders'] = Number(res.data?.total || res.data?.data?.total || 0)
+      const apiCalls: Promise<any>[] = []
+      const apiNames: string[] = []
+
+      if (isStaffOrAdmin) {
+        apiCalls.push(
+          maintenanceApi.getList({ status: 'pending', pageSize: 1 }),
+          deliveryApi.getList({ status: 'pending', pageSize: 1 }),
+          environmentApi.getEventLogs({ severity: 'warning', limit: 1 }),
+          bookingApi.getBookingList({ status: 'pending', pageSize: 1 }),
+          callApi.getActive()
+        )
+        apiNames.push('maintenance', 'delivery', 'environment', 'booking', 'call')
+      } else if (role === 'customer' || role === 'guest') {
+        apiCalls.push(
+          bookingApi.getBookingList({ status: 'pending', pageSize: 1 })
+        )
+        apiNames.push('booking')
       }
 
-      if (deliveryRes.status === 'fulfilled') {
-        const res = deliveryRes.value as any
-        moduleUnreadCounts.value['/reception/delivery'] = Number(res.data?.total || res.data?.data?.total || 0)
+      if (apiCalls.length === 0) return
+
+      const results = await Promise.allSettled(apiCalls)
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        const name = apiNames[i]
+        if (result.status !== 'fulfilled') continue
+        const res = result.value as any
+
+        if (name === 'maintenance') {
+          moduleUnreadCounts.value['/reception/workorders'] = Number(res.data?.total || res.data?.data?.total || 0)
+        } else if (name === 'delivery') {
+          moduleUnreadCounts.value['/reception/delivery'] = Number(res.data?.total || res.data?.data?.total || 0)
+        } else if (name === 'environment') {
+          const logs = res.data?.logs || res.data?.data?.logs || []
+          moduleUnreadCounts.value['/reception/environment'] = logs.filter((l: any) => !l.resolved).length
+        } else if (name === 'booking') {
+          const total = Number(res.data?.total || res.data?.data?.total || 0)
+          moduleUnreadCounts.value['/reception/bookings'] = total
+          moduleUnreadCounts.value['/reception/reception-center'] = total
+        } else if (name === 'call') {
+          const activeCalls = res.data?.items || []
+          moduleUnreadCounts.value['/reception/voice-calls'] = activeCalls.length
+        }
       }
 
-      if (envRes.status === 'fulfilled') {
-        const res = envRes.value as any
-        const logs = res.data?.logs || res.data?.data?.logs || []
-        moduleUnreadCounts.value['/reception/environment'] = logs.filter((l: any) => !l.resolved).length
-      }
-
-      if (bookingRes.status === 'fulfilled') {
-        const res = bookingRes.value as any
-        const total = Number(res.data?.total || res.data?.data?.total || 0)
-        moduleUnreadCounts.value['/reception/bookings'] = total
-        moduleUnreadCounts.value['/reception/reception-center'] = total 
-      }
-
-      if (callRes.status === 'fulfilled') {
-        const res = callRes.value as any
-        // 只计入活跃通话（正在响铃或呼叫中）
-        const activeCalls = res.data?.items || []
-        moduleUnreadCounts.value['/reception/voice-calls'] = activeCalls.length
-      }
-
-      // 执行日清
       dailyClear()
-      // 更新通知列表
       updateNotificationItems()
     } catch (error) {
       console.error('Failed to fetch unread counts:', error)

@@ -398,12 +398,36 @@ export const answerCall = async (req: AuthRequest, res: Response) => {
         }
       }
 
+      // 保持与 incoming_call 一致的 ID 格式（房间使用房号）
+      let answerCallerId = callData.caller_id;
+      let answerCalleeId = callData.callee_id;
+
+      if (callData.caller_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.caller_id, callData.caller_id]
+        );
+        if (roomRows.length > 0) {
+          answerCallerId = roomRows[0].room_number;
+        }
+      }
+
+      if (callData.callee_type === 'room') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT room_number FROM rooms WHERE id = ? OR room_number = ?',
+          [callData.callee_id, callData.callee_id]
+        );
+        if (roomRows.length > 0) {
+          answerCalleeId = roomRows[0].room_number;
+        }
+      }
+
       const answeredData = {
         call_id,
         caller_type: callData.caller_type,
-        caller_id: callData.caller_id,
+        caller_id: answerCallerId,
         callee_type: callData.callee_type,
-        callee_id: callData.callee_id,
+        callee_id: answerCalleeId,
         status: 'connected',
         answered_at: new Date().toISOString()
       };

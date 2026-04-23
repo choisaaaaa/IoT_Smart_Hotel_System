@@ -30,16 +30,16 @@ export async function create(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('请先登录', 401));
     }
 
-    const { name, phone, id_type = 'idcard', id_number } = req.body;
+    const { name, phone, id_type = 'idcard', id_number, relationship = 'self' } = req.body;
 
     if (!name || !phone || !id_number) {
       return sendError(res, errorResponse('姓名、电话和证件号不能为空', 400));
     }
 
     const [result]: any = await db.execute(
-      `INSERT INTO frequent_guests (user_id, name, phone, id_type, id_number) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [userId, name, phone, id_type, id_number]
+      `INSERT INTO frequent_guests (user_id, name, phone, id_type, id_number, relationship) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, name, phone, id_type, id_number, relationship]
     );
 
     sendSuccess(res, {
@@ -48,6 +48,7 @@ export async function create(req: AuthRequest, res: Response) {
       phone,
       id_type,
       id_number,
+      relationship,
       message: '添加成功'
     });
   } catch (error) {
@@ -65,7 +66,7 @@ export async function update(req: AuthRequest, res: Response) {
       return sendError(res, errorResponse('请先登录', 401));
     }
 
-    const { name, phone, id_type, id_number } = req.body;
+    const { name, phone, id_type, id_number, relationship } = req.body;
 
     // 检查权限
     const [guests]: any = await db.execute(
@@ -79,9 +80,9 @@ export async function update(req: AuthRequest, res: Response) {
 
     await db.execute(
       `UPDATE frequent_guests 
-       SET name = ?, phone = ?, id_type = ?, id_number = ? 
+       SET name = ?, phone = ?, id_type = ?, id_number = ?, relationship = ? 
        WHERE id = ?`,
-      [name, phone, id_type, id_number, guestId]
+      [name, phone, id_type, id_number, relationship || 'self', guestId]
     );
 
     sendSuccess(res, { message: '更新成功' });

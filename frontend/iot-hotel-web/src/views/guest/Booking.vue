@@ -1215,8 +1215,8 @@ const selectPlan = async (type: any, plan: any) => {
 const fetchFrequentGuests = async () => {
   try {
     const res = await guestService.list()
-    if (res.code === 200) {
-      frequentGuests.value = res.data.guests
+    if (res && res.guests) {
+      frequentGuests.value = res.guests
     }
   } catch (error) {
     console.error('获取常用联系人失败:', error)
@@ -1245,11 +1245,9 @@ const handleEditGuest = (guest: FrequentGuest) => {
 
 const handleDeleteGuest = async (id: number) => {
   try {
-    const res = await guestService.remove(id)
-    if (res.code === 200) {
-      message.success('删除成功')
-      fetchFrequentGuests()
-    }
+    await guestService.remove(id)
+    message.success('删除成功')
+    fetchFrequentGuests()
   } catch (error) {
     message.error('删除失败')
   }
@@ -1268,17 +1266,14 @@ const saveGuest = async () => {
     return message.warning('证件号码至少5位')
   }
   try {
-    let res
     if (editingGuestId.value) {
-      res = await guestService.update(editingGuestId.value, guestModalForm)
+      await guestService.update(editingGuestId.value, guestModalForm)
     } else {
-      res = await guestService.create(guestModalForm)
+      await guestService.create(guestModalForm)
     }
-    if (res.code === 200) {
-      message.success(editingGuestId.value ? '更新成功' : '添加成功')
-      showGuestModal.value = false
-      fetchFrequentGuests()
-    }
+    message.success(editingGuestId.value ? '更新成功' : '添加成功')
+    showGuestModal.value = false
+    fetchFrequentGuests()
   } catch (error) {
     message.error('操作失败')
   }
