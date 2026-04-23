@@ -166,6 +166,35 @@ class RFIDController {
       res.status(500).json(errorResponse('获取信息失败'));
     }
   }
+
+  async getBookingCards(req: Request, res: Response) {
+    try {
+      const { booking_id } = req.params;
+      const user = (req as any).user;
+      const hotelId = user?.hotel_id;
+
+      if (!booking_id) return res.status(400).json(errorResponse('Booking ID required'));
+
+      let query = `
+        SELECT c.*, r.room_number 
+        FROM rfid_cards c
+        LEFT JOIN rooms r ON c.room_id = r.id
+        WHERE c.booking_id = ?
+      `;
+      const params: any[] = [booking_id];
+
+      if (hotelId && hotelId !== 0) {
+        query += ' AND c.hotel_id = ?';
+        params.push(hotelId);
+      }
+
+      const [cards] = await pool.query<any[]>(query, params);
+      res.json(successResponse(cards, '获取订单房卡列表成功'));
+    } catch (error) {
+      logger.error('Get booking cards error:', error.message);
+      res.status(500).json(errorResponse('获取房卡列表失败'));
+    }
+  }
 }
 
 export default new RFIDController();

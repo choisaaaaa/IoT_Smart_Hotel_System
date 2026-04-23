@@ -21,6 +21,7 @@ except ImportError:
     HAS_PYAUDIO = False
 from datetime import datetime
 from common.device_base import BaseDeviceEmulator
+from common.rfid_simulator import RFIDCardSimulator
 from common.config import (
     CMD_LIGHT, CMD_AIR, CMD_CURTAIN, CMD_DOOR, CMD_SCENE,
     CMD_INCOMING_CALL, CMD_HANGUP_CALL,
@@ -36,6 +37,8 @@ from common.config import (
 class RoomTerminalEmulator(BaseDeviceEmulator):
     def __init__(self, root):
         self.room_id = "" # 初始为空，由配网或资产同步填充
+        self.rfid = RFIDCardSimulator()
+        self.card_uid_var = tk.StringVar(value="")
         
         self.light_on = False
         self.air_on = False
@@ -85,6 +88,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         )
 
         self._sync_room_info()
+        self._draw_card()
 
     def _sync_room_info(self):
         old_room_id = self.room_id
@@ -130,16 +134,26 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         tk.Label(rc522_frame, text="📟 RC522 RFID", font=("Arial", 10, "bold"), bg="#f5f5f5").pack()
         self.rfid_status_label = tk.Label(rc522_frame, text="✓ 就绪", font=("Arial", 9), bg="#f5f5f5", fg=self.colors['success'])
         self.rfid_status_label.pack()
-        tk.Label(rc522_frame, text="SPI: SDA→GPIO10 SCK→GPIO12\nMOSI→GPIO11 MISO→GPIO13", 
-                 font=("Consolas", 8), bg="#f5f5f5", fg="#666").pack(pady=5)
+        
+        # 放置卡片区域
+        rfid_input_f = tk.Frame(rc522_frame, bg="#f5f5f5")
+        rfid_input_f.pack(pady=5)
+        tk.Entry(rfid_input_f, textvariable=self.card_uid_var, width=10, font=("Consolas", 9)).pack(side=tk.LEFT, padx=2)
+        tk.Button(rfid_input_f, text="放置", command=self._place_card, 
+                  bg="#e0e0e0", font=("Arial", 8)).pack(side=tk.LEFT)
         
         rc522_btn_f = tk.Frame(rc522_frame, bg="#f5f5f5")
         rc522_btn_f.pack()
         tk.Button(rc522_btn_f, text="刷卡开门", command=self._simulate_card_swipe,
                   relief=tk.FLAT, bg=self.colors['primary'], fg="white", font=("Arial", 8)).pack(side=tk.LEFT, padx=2)
-        self.power_card_btn = tk.Button(rc522_btn_f, text="放置取电", command=self._toggle_power_card,
+        self.power_card_btn = tk.Button(rc522_btn_f, text="插卡取电", command=self._toggle_power_card,
                   relief=tk.FLAT, bg=self.colors['warning'], fg="white", font=("Arial", 8))
         self.power_card_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 卡片图形显示
+        self.card_canvas = tk.Canvas(rc522_frame, width=120, height=80, bg="#f5f5f5", highlightthickness=0)
+        self.card_canvas.pack(pady=5)
+        self._draw_card()
         
         # OLED状态
         oled_frame = tk.Frame(comm_grid, bg="#f5f5f5", padx=10, pady=10)
@@ -488,14 +502,17 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             self._log("未连接到服务器，无法校验刷卡", "ERROR")
             return
         
-        # 允许用户输入自定义 UID 进行刷卡测试
-        from tkinter import simpledialog
-        uid_hex = simpledialog.askstring("RFID 模拟", "请输入卡片 UID (8位十六进制):", initialvalue="A1B2C3D4")
-        
-        if not uid_hex:
-            return
+        success, result = self.rfid.swipe_card()
+        if not success:
+            # 只有在完全没放置卡片时，才弹出窗口要求输入 UID（用于测试未探测到的卡片）
+            from tkinter import simpledialog
+            uid_hex = simpledialog.askstring("RFID 模拟", "未探测到物理卡片，请输入模拟 UID (8位十六进制):", initialvalue="A1B2C3D4")
+            if not uid_hex: return
+            uid_hex = uid_hex.strip().upper()
+        else:
+            # 只要感应区有卡（哪怕是空白卡），直接读取其 UID 进行鉴权
+            uid_hex = result['uid']
 
-        uid_hex = uid_hex.strip().upper()
         self._log(f"探测到卡片 [UID: {uid_hex}]，正在请求云端鉴权...")
         self._beep(1)
         self.rfid_status_label.config(text="● 正在校验...", fg=self.colors['primary'])
@@ -506,6 +523,43 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         # 3秒后恢复状态
         self.root.after(3000, lambda: self.rfid_status_label.config(text="✓ 就绪", fg=self.colors['success']))
     
+    def _place_card(self):
+        uid = self.card_uid_var.get()
+        success, msg = self.rfid.place_card(uid)
+        self.card_uid_var.set(self.rfid.uid)
+        self._log(msg)
+        self._draw_card()
+        
+        # 上报 card_uid_detected 事件，以便后端知道当前发卡器上有卡
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish_security_event("card_uid_detected", level="info", event_data={
+                "card_uid": self.rfid.uid,
+                "device_id": self.device_id
+            })
+
+    def _draw_card(self):
+        self.card_canvas.delete("all")
+        cx, cy = 60, 40 # 针对客房端较小的 canvas 调整中心
+        if self.rfid.has_card:
+            # 绘制放置在读卡器上的卡片 (缩小版)
+            self.card_canvas.create_rectangle(cx-50, cy-35, cx+50, cy+35,
+                                             fill="#FFD700", outline="#B8860B", width=2)
+            self.card_canvas.create_rectangle(cx-40, cy-15, cx-25, cy+5, fill="#C0C0C0", outline="#A0A0A0")
+
+            if self.rfid.uid:
+                self.card_canvas.create_text(cx+5, cy-10, text=f"UID: {self.rfid.uid}", font=("Consolas", 8, "bold"), fill="#595959")
+            
+            if self.rfid.card_data:
+                room_id = self.rfid.card_data.get("room_id", "")
+                self.card_canvas.create_text(cx+5, cy+15, text=f"ROOM: {room_id}", font=("Consolas", 10, "bold"), fill="#333")
+            else:
+                self.card_canvas.create_text(cx+5, cy+10, text="GUEST CARD", font=("Arial", 8), fill="#8B4513")
+        else:
+            # 绘制空的读卡器区域
+            self.card_canvas.create_rectangle(cx-50, cy-35, cx+50, cy+35,
+                                             fill="#f0f0f0", outline="#cccccc", dash=(4, 4), width=1)
+            self.card_canvas.create_text(cx, cy, text="无卡", font=("Microsoft YaHei", 8), fill="#999")
+
     def _clear_card(self):
         """清除卡片状态"""
         self.rfid_card_present = False
@@ -759,6 +813,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             return
         self.door_unlocked = True
         self.door_btn.config(text="已开启", bg=self.colors['danger'])
+        
+        # 联动第四路继电器 (假设为门锁继电器)
+        if not self.relay_status[3]:
+            self._toggle_relay(3)
+            
         self._update_oled()
         self._log(f"{'[云端]' if from_cloud else '[本地]'} 门锁已开启")
 
@@ -772,6 +831,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             return
         self.door_unlocked = False
         self.door_btn.config(text="已锁定", bg=self.colors['success'])
+        
+        # 关闭第四路继电器
+        if self.relay_status[3]:
+            self._toggle_relay(3)
+            
         self._update_oled()
         self._log(f"{'[云端]' if from_cloud else '[本地]'} 门锁已锁定")
 
@@ -783,6 +847,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         if self.door_unlocked:
             self.door_unlocked = False
             self.door_btn.config(text="已锁定", bg=self.colors['success'])
+            
+            # 自动关闭第四路继电器
+            if self.relay_status[3]:
+                self._toggle_relay(3)
+                
             self._update_oled()
             self._log("门锁已自动回锁")
             self._door_relock_timer = None
@@ -1015,6 +1084,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.mqtt_client.register_command_handler("reject_call", self._handle_hangup_call)
         # 注册报警复位指令
         self.mqtt_client.register_command_handler("alarm_reset", self._handle_alarm_reset)
+        # 注册房卡同步指令
+        self.mqtt_client.register_command_handler("room_card_op", self._handle_room_card_op)
 
     def _handle_alarm_reset(self, data):
         """处理报警复位指令"""
@@ -1026,6 +1097,39 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         # 停止持续蜂鸣器
         self._stop_continuous_beep()
         return True
+
+    def _handle_room_card_op(self, data):
+        """处理房卡同步指令 (来自后端同步卡片信息)"""
+        try:
+            cmd_value = data.get('command_value', '{}')
+            if isinstance(cmd_value, str):
+                import json
+                cmd_value = json.loads(cmd_value)
+            
+            action = cmd_value.get('action', '')
+            card_uid = cmd_value.get('card_uid', '')
+            
+            # 如果 UID 匹配当前放置的卡片
+            if card_uid == self.rfid.uid:
+                if action == 'sync':
+                    card_type = cmd_value.get('card_type', 'guest')
+                    room_number = cmd_value.get('room_number', '')
+                    holder_name = cmd_value.get('holder_name', '')
+                    
+                    self._log(f"[MQTT] 收到卡片同步: UID={card_uid}, 类型={card_type}, 房间={room_number}")
+                    # 更新本地模拟器卡片数据
+                    self.rfid.issue_card(room_number, card_type=card_type, holder_name=holder_name)
+                    self._draw_card()
+                    return True
+                elif action == 'sync_clear':
+                    self._log(f"[MQTT] 收到同步反馈: UID {card_uid} 为未知卡片")
+                    self.rfid.reset_card()
+                    self._draw_card()
+                    return True
+            return False
+        except Exception as e:
+            self._log(f"处理房卡同步指令失败: {e}", "ERROR")
+            return False
 
     def _handle_light_on(self, data):
         self.root.after(0, lambda: self._set_light(True, from_cloud=True))

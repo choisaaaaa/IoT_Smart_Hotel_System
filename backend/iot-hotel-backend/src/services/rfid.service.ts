@@ -19,8 +19,21 @@ class RFIDService {
    * 注册/发卡
    */
   async issueCard(data: Partial<RFIDCard>) {
-    const { card_uid, hotel_id, booking_id, room_id, member_id, expires_at, card_type } = data;
+    let { card_uid, hotel_id, booking_id, room_id, member_id, expires_at, card_type } = data;
     try {
+      // 兼容逻辑：如果 room_id 是字符串（房号），尝试转换成数据库 ID
+      if (typeof room_id === 'string' && isNaN(Number(room_id))) {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE room_number = ? AND hotel_id = ?',
+          [room_id, hotel_id]
+        );
+        if (roomRows.length > 0) {
+          room_id = roomRows[0].id;
+        } else {
+          room_id = undefined;
+        }
+      }
+
       const [result] = await pool.query<ResultSetHeader>(
         `INSERT INTO rfid_cards (card_uid, hotel_id, booking_id, room_id, member_id, expires_at, status, card_type, issued_at)
          VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NOW())

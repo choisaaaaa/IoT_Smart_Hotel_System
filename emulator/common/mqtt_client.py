@@ -414,7 +414,7 @@ class MQTTClient:
     def publish_card_uid_event(self, uid_hex, room_id=None):
         payload = {
             "device_id": self.device_id,
-            "device_type": "front_desk",
+            "device_type": self.device_type,
             "event_type": "card_uid_detected",
             "card_uid": uid_hex,
             "timestamp": datetime.now().isoformat()

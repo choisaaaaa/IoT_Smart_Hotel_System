@@ -860,13 +860,11 @@ export const checkinOnline = async (req: Request, res: Response) => {
     );
 
     await connection.commit();
-    const roomPin = uuidv4().replace(/-/g, '').slice(0, 6).toUpperCase();
     res.json(successResponse({
       booking_id: booking.id,
       booking_no: booking.booking_number,
       room_id: finalRoomId,
       room_name: roomNumber || booking.room_name || booking.room_number,
-      room_pin: roomPin,
       profile: {
         real_name,
         id_type: id_type || 'idcard',
@@ -874,7 +872,7 @@ export const checkinOnline = async (req: Request, res: Response) => {
         arrival_time: arrival_time || null,
         plate_number: plate_number || null
       }
-    }, '在线入住办理成功'));
+    }, '预入住成功按时到店即可'));
   } catch (error) {
     await connection.rollback();
     logger.error('在线办理入住失败:', error.message);
@@ -1184,6 +1182,17 @@ export const checkout = async (req: AuthRequest, res: Response) => {
       );
     }
 
+    // 立即失效该订单关联的所有房卡
+    try {
+      await connection.query(
+        "UPDATE rfid_cards SET status = 'inactive' WHERE booking_id = ?",
+        [id]
+      );
+      logger.info(`订单 ${id} 退房，已自动失效关联房卡`);
+    } catch (cardError) {
+      logger.error(`订单 ${id} 退房时失效房卡失败:`, cardError.message);
+    }
+
     // 更新会员成长值
     if (booking.guest_phone && booking.total_price) {
       await updateMemberExperienceAfterCheckout(connection, booking.guest_phone, booking.total_price, booking.guest_name);
@@ -1384,6 +1393,14 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         'UPDATE bookings SET check_out_time = NOW() WHERE id = ? AND check_out_time IS NULL',
         [id]
       );
+
+      // 立即失效房卡
+      await connection.query(
+        "UPDATE rfid_cards SET status = 'inactive' WHERE booking_id = ?",
+        [id]
+      );
+      logger.info(`订单 ${id} 通过状态更新退房，已自动失效关联房卡`);
+
       if (booking.guest_phone && booking.total_price) {
         await updateMemberExperienceAfterCheckout(connection, booking.guest_phone, booking.total_price, booking.guest_name);
       }

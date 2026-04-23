@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from common.device_base import BaseDeviceEmulator
 from common.mqtt_client import MQTTClient
+from common.rfid_simulator import RFIDCardSimulator
 from common.config import (
     CMD_LIGHT, CMD_DOOR, CMD_SCENE,
     CMD_ISSUE_CARD, CMD_VERIFY_CARD, CMD_SWIPE_CARD,
@@ -23,68 +24,6 @@ from common.config import (
     CMD_VAL_WELCOME,
     TOPIC_DEVICE_COMMAND_PREFIX, TOPIC_SECURITY_EVENT
 )
-
-
-class RFIDCardSimulator:
-    def __init__(self):
-        self.card_data = None
-        self.has_card = False
-        self.uid = None
-
-    def place_card(self, custom_uid=None):
-        self.has_card = True
-        # 关键修复：每次放置卡片时必须先清空旧卡残留数据，等待后续写入或后端同步
-        self.card_data = None
-        
-        if custom_uid and custom_uid.strip():
-            self.uid = custom_uid.strip().upper()
-        else:
-            # 随机生成一个 8 位十六进制 UID
-            import random
-            self.uid = ''.join(random.choices('0123456789ABCDEF', k=8))
-        return True, f"卡片已放置 [UID: {self.uid}]"
-
-    def issue_card(self, room_id, card_type='guest', holder_name=''):
-        if not self.has_card:
-            return False, "写入失败: 未检测到物理卡片"
-        self.card_data = {
-            "uid": self.uid,
-            "room_id": room_id, 
-            "card_type": card_type,
-            "holder_name": holder_name,
-            "issued_at": datetime.now().isoformat()
-        }
-        type_str = "房间卡" if card_type == 'guest' else "特权卡"
-        return True, f"写卡成功: UID {self.uid} -> {type_str} ({room_id or card_type})"
-
-    def verify_card(self):
-        if not self.has_card:
-            return False, "读取失败: 感应区无卡片"
-        if not self.card_data:
-            return True, f"读取成功: 空白卡 [UID: {self.uid}]"
-        room_id = self.card_data.get("room_id", "unknown")
-        return True, f"读取成功: UID {self.uid} | 房号 {room_id}"
-
-    def swipe_card(self):
-        if not self.has_card:
-            return False, "刷卡失败: 请先放置卡片"
-        if not self.card_data:
-            return False, "刷卡无效: 该卡尚未写入任何数据"
-        return True, self.card_data
-
-    def remove_card(self):
-        self.has_card = False
-        old_uid = self.uid
-        self.uid = None
-        # 关键修复：收回卡片时彻底清空数据状态
-        self.card_data = None
-        return True, f"卡片 {old_uid} 已取走"
-
-    def reset_card(self):
-        if not self.has_card:
-            return False, "重置失败: 无物理卡片"
-        self.card_data = None
-        return True, "卡片数据已擦除 (格式化)"
 
 
 class FrontDeskEmulator(BaseDeviceEmulator):
@@ -596,7 +535,14 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
         if success:
             uid_hex = result['uid']
-            room_id = result['room_id']
+            card_data = result['data']
+            
+            if not card_data:
+                self._log(f"刷卡无效: 卡片 {uid_hex} 尚未写入数据", "ERROR")
+                self._beep(2)
+                return
+
+            room_id = card_data['room_id']
             self.last_card_room = room_id
             self._update_led(0, 255, 0)
             self._beep(1)
@@ -608,13 +554,10 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
                 self.mqtt_client.publish_to_room(room_id, CMD_DOOR, CMD_VAL_UNLOCK)
                 self._log(f"已发送开锁指令到房间{room_id}: command_type=door, command_value=unlock")
-
-                self._request_rfid_verify(uid_hex, room_id)
         else:
             self._update_led(255, 0, 0)
             self._beep(2)
-            self._log(result, "WARNING")
-            messagebox.showwarning("刷卡失败", result)
+            self._log(result, "ERROR")
 
         self.root.after(3000, lambda: self._update_led(0, 0, 255))
 
@@ -691,7 +634,8 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
     def _on_connected(self):
         # 订阅业务 ID 的指令主题 (用于后端下发指令)
-        biz_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/{self.device_id}"
+        # 路径必须匹配后端 hotel/device/command/front_desk/{device_id}
+        biz_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/{self.device_id}"
         self.mqtt_client.subscribe(biz_cmd_topic)
         self._log(f"已订阅指令主题: {biz_cmd_topic}")
         
@@ -831,6 +775,8 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         self.mqtt_client.register_command_handler(CMD_ISSUE_CARD, self._handle_issue_card)
         self.mqtt_client.register_command_handler(CMD_VERIFY_CARD, self._handle_verify_card)
         self.mqtt_client.register_command_handler(CMD_SWIPE_CARD, self._handle_swipe_card)
+        # 注册蜂鸣器测试指令
+        self.mqtt_client.register_command_handler("buzzer", self._handle_buzzer_command)
         # 注册房间控制指令处理器
         self.mqtt_client.register_command_handler(CMD_DOOR, self._handle_door_command)
         self.mqtt_client.register_command_handler(CMD_LIGHT, self._handle_light_command)
@@ -855,6 +801,22 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # 停止持续蜂鸣器
         self._stop_continuous_beep()
         return True
+
+    def _handle_buzzer_command(self, data):
+        """处理蜂鸣器控制指令"""
+        try:
+            cmd_value = data.get('command_value', '{}')
+            if isinstance(cmd_value, str):
+                import json
+                cmd_value = json.loads(cmd_value)
+            
+            count = cmd_value.get('count', 1)
+            self._log(f"[Web指令] 触发蜂鸣器: {count} 次")
+            self._beep(count)
+            return True
+        except Exception as e:
+            self._log(f"处理蜂鸣器指令失败: {e}", "ERROR")
+            return False
 
     def _handle_issue_card(self, data):
         room_id = data.get('command_value', {}).get('room_id', self.target_room_var.get()) if isinstance(data.get('command_value'), dict) else self.target_room_var.get()
@@ -910,6 +872,15 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                 holder_name = cmd_value.get('holder_name', '')
                 card_uid = cmd_value.get('card_uid', '')
                 
+                # 如果是发卡操作，且后端指定了 UID，我们尝试匹配或强制更新
+                if action == 'issue' and card_uid:
+                    if not self.rfid.has_card:
+                        self._log(f"发卡失败: 物理感应区无卡片，但后端要求写入 {card_uid}", "ERROR")
+                        return False
+                    if self.rfid.uid != card_uid:
+                        self._log(f"UID 警告: 当前卡片 {self.rfid.uid} 与后端预期 {card_uid} 不符，将强制更新...", "WARNING")
+                        self.rfid.uid = card_uid # 强制同步 UID (模拟物理层面的 UID 确认)
+                
                 # 如果是同步指令且 UID 匹配，更新本地显示
                 if action == 'sync':
                     if card_uid != self.rfid.uid:
@@ -954,6 +925,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             
             elif action == 'revoke' or action == 'deactivate':
                 # 执行退卡或作废
+                card_uid = self.rfid.uid
                 self.rfid.remove_card()
                 self.root.after(0, self._draw_card)
                 self._beep(1)
@@ -961,6 +933,15 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                 if room_number:
                     self._update_room_status_on_wall(room_number, "check_out")
                 self._log(f"[Web指令] { '退卡' if action=='revoke' else '作废' }成功: 房间 {room_number or 'N/A'}")
+                
+                if self.mqtt_client and self.connected:
+                    self.mqtt_client.publish_security_event("card_revoked", level="info", event_data={
+                        "card_uid": card_uid,
+                        "room_id": room_number,
+                        "booking_id": booking_id,
+                        "action": action
+                    })
+                
                 self.root.after(3000, lambda: self._update_led(0, 0, 255))
                 return True
             

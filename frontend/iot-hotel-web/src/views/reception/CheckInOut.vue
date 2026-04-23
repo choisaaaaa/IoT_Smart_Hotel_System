@@ -320,7 +320,7 @@
         </a-row>
       </a-tab-pane>
 
-      <a-tab-pane key="checkout" tab="📤 退房办理">
+      <a-tab-pane key="checkout" tab="📤 在店人员信息">
         <div class="checkout-actions" style="margin-bottom: 16px;">
           <a-space>
             <a-popconfirm
@@ -465,77 +465,70 @@
       :title="cardOpType === 'issue' ? '发放房卡' : '收回房卡'"
       @ok="handleCardOp"
       :confirmLoading="cardOpLoading"
-      width="500px"
+      width="600px"
     >
       <div v-if="selectedGuestForCard" class="card-op-info">
-        <div class="hardware-status-panel" v-if="selectedDevice">
-          <div class="status-title">
-            <LaptopOutlined /> 当前发卡设备状态
-          </div>
-          <div class="status-tags">
-            <a-tag :color="deviceOnline ? 'success' : 'error'">
-              <template #icon>
-                <CheckCircleOutlined v-if="deviceOnline" />
-                <CloseCircleOutlined v-else />
-              </template>
-              {{ deviceOnline ? '设备在线' : '设备离线' }}
-            </a-tag>
-            <a-tag v-if="deviceOnline" color="blue">
-              <template #icon><WifiOutlined /></template>
-              信号: {{ deviceSignal }}%
-            </a-tag>
-            <a-tag v-if="deviceOnline" :color="deviceBattery < 20 ? 'red' : 'green'">
-              <template #icon><ThunderboltOutlined /></template>
-              电量: {{ deviceBattery }}%
-            </a-tag>
-          </div>
-        </div>
-        <a-alert
-          v-else
-          message="未选择发卡器"
-          description="请在页面顶部选择前台发卡设备，否则无法执行物理写卡操作。"
-          type="warning"
-          show-icon
-          style="margin-bottom: 16px"
-        />
+        <a-row :gutter="24">
+          <a-col :span="10">
+            <a-descriptions :column="1" size="small" style="margin-bottom: 16px;" bordered>
+              <a-descriptions-item label="房间号">{{ selectedGuestForCard.room_number }}</a-descriptions-item>
+              <a-descriptions-item label="住客姓名">{{ selectedGuestForCard.guest_name }}</a-descriptions-item>
+              <a-descriptions-item label="已发卡">{{ bookingCards.length }} 张</a-descriptions-item>
+            </a-descriptions>
 
-        <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px;">
-          <a-descriptions-item label="房间号">{{ selectedGuestForCard.room_number }}</a-descriptions-item>
-          <a-descriptions-item label="住客姓名">{{ selectedGuestForCard.guest_name }}</a-descriptions-item>
-          <a-descriptions-item label="入住日期">{{ dayjs(selectedGuestForCard.check_in_date).format('MM-DD') }}</a-descriptions-item>
-          <a-descriptions-item label="退房日期">{{ dayjs(selectedGuestForCard.check_out_date).format('MM-DD') }}</a-descriptions-item>
-        </a-descriptions>
-
-        <template v-if="cardOpType === 'issue'">
-          <div class="verify-section">
-            <div style="margin-bottom: 12px; font-weight: 500; display: flex; justify-content: space-between; align-items: center;">
-              <span>安全验证</span>
-              <a-checkbox v-model:checked="autoVerify">自动核验物理 ID</a-checkbox>
-            </div>
-            <a-input-password
-              v-model:value="idLastFour"
-              placeholder="请输入住客证件号后四位"
-              :maxlength="4"
-              size="large"
-            >
-              <template #prefix><SafetyCertificateOutlined /></template>
-            </a-input-password>
-            <div style="margin-top: 12px; color: #8c8c8c; font-size: 12px; line-height: 1.5;">
-              <p style="margin-bottom: 4px;">• 请确保房卡已放置在发卡器感应区</p>
-              <p style="margin-bottom: 0;">• 系统将自动写入房间授权、时间期限及加密扇区</p>
-            </div>
-          </div>
-        </template>
-        <template v-else>
-          <div style="text-align: center; padding: 24px 0; background: #f9f9f9; border-radius: 8px;">
-            <a-spin v-if="cardOpLoading" tip="正在执行物理注销..." />
-            <template v-else>
-              <div style="font-size: 48px; color: #ff4d4f; margin-bottom: 16px;"><CloseCircleOutlined /></div>
-              <p style="font-size: 16px; font-weight: 500;">准备注销并回收房卡</p>
-              <p style="color: #8c8c8c;">请将待注销的房卡置于感应区，点击确认执行</p>
+            <template v-if="cardOpType === 'issue'">
+              <div class="verify-section">
+                <div style="margin-bottom: 8px; font-weight: 500;">安全验证：</div>
+                <a-input-password
+                  v-model:value="idLastFour"
+                  placeholder="证件号后四位"
+                  :maxlength="4"
+                  size="large"
+                >
+                  <template #prefix><SafetyCertificateOutlined /></template>
+                </a-input-password>
+                <div style="margin-top: 8px; color: #8c8c8c; font-size: 12px;">
+                  * 请核对住客身份。支持多次发卡。
+                </div>
+              </div>
             </template>
-          </div>
-        </template>
+            <template v-else>
+              <div style="text-align: center; padding: 10px 0;">
+                <p>请将房卡置于发卡器上执行注销。</p>
+                <a-spin v-if="cardOpLoading" tip="正在通信..." />
+              </div>
+            </template>
+          </a-col>
+          
+          <a-col :span="14">
+            <div style="margin-bottom: 8px; font-weight: 500; display: flex; justify-content: space-between;">
+              <span>当前已发房卡详情：</span>
+              <a-button type="link" size="small" @click="fetchBookingCards(selectedGuestForCard.id)" :loading="cardsLoading">刷新</a-button>
+            </div>
+            <a-table
+              :columns="[
+                { title: 'UID', dataIndex: 'card_uid', key: 'uid', width: 120 },
+                { title: '状态', dataIndex: 'status', key: 'status', width: 80 },
+                { title: '发卡时间', dataIndex: 'issued_at', key: 'time' }
+              ]"
+              :data-source="bookingCards"
+              size="small"
+              :pagination="false"
+              scroll="{ y: 200 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'status'">
+                  <a-tag :color="record.status === 'active' ? 'success' : 'default'">
+                    {{ record.status === 'active' ? '有效' : '无效' }}
+                  </a-tag>
+                </template>
+                <template v-if="column.key === 'time'">
+                  {{ dayjs(record.issued_at).format('MM-DD HH:mm') }}
+                </template>
+              </template>
+            </a-table>
+          </a-col>
+        </a-row>
       </div>
     </a-modal>
   </div>
@@ -559,10 +552,7 @@ import {
   BankOutlined,
   UserOutlined,
   LaptopOutlined,
-  ApiOutlined,
-  CheckCircleOutlined,
-  WifiOutlined,
-  ThunderboltOutlined
+  ApiOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { useHotelStore } from '@/stores/hotel'
@@ -570,6 +560,7 @@ import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notification'
 import { bookingApi } from '@/api/booking'
 import { deviceApi } from '@/api/device'
+import { initWebSocket } from '@/utils/websocket'
 import { useRoute } from 'vue-router'
 import { memberApi } from '@/api/member'
 import { userApi, type UserProfile } from '@/api/user'
@@ -607,40 +598,26 @@ async function fetchFrontEndDevices() {
       if (list.length > 0 && !selectedDevice.value) {
         selectedDevice.value = list[0].device_id
       }
-      updateDeviceStatus()
     }
   } catch (error) {
     console.error('获取前台设备失败:', error)
   }
 }
 
-function updateDeviceStatus() {
-  if (!selectedDevice.value) return
-  const device = frontEndDevices.value.find(d => d.device_id === selectedDevice.value)
-  if (device) {
-    deviceOnline.value = device.device_status === 'online'
-    // 模拟或从扩展字段获取硬件指标
-    deviceSignal.value = deviceOnline.value ? 92 + Math.floor(Math.random() * 8) : 0
-    deviceBattery.value = 100
-  }
-}
-
-watch(selectedDevice, () => {
-  updateDeviceStatus()
-})
-
 const getLogoUrl = (url?: string) => {
   return appStore.resolveImageUrl(url) || '/logo-small.png'
 }
 
 async function testCommunication() {
+  if (!selectedDevice.value) {
+    return message.warning('请先选择一个前台设备')
+  }
   testing.value = true
   try {
-    // 模拟通信测试
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    message.success('设备通信正常，连接状态：良好')
+    await deviceApi.testBeep(selectedDevice.value)
+    message.success('测试指令已发送，请检查设备蜂鸣器')
   } catch (error) {
-    message.error('设备通信失败，请检查连接')
+    message.error('通信测试失败，请检查设备连接')
   } finally {
     testing.value = false
   }
@@ -754,12 +731,23 @@ const cardOpLoading = ref(false)
 const cardOpType = ref<'issue' | 'revoke'>('issue')
 const selectedGuestForCard = ref<any>(null)
 const idLastFour = ref('')
+const bookingCards = ref<any[]>([])
+const cardsLoading = ref(false)
 
-// 硬件状态相关
-const deviceOnline = ref(true)
-const deviceSignal = ref(98)
-const deviceBattery = ref(100)
-const autoVerify = ref(true)
+async function fetchBookingCards(bookingId: number) {
+  if (!bookingId) return
+  cardsLoading.value = true
+  try {
+    const res = await deviceApi.getBookingCards(bookingId)
+    if (res.data) {
+      bookingCards.value = res.data
+    }
+  } catch (error) {
+    console.error('获取房卡列表失败:', error)
+  } finally {
+    cardsLoading.value = false
+  }
+}
 
 function openCardModal(type: 'issue' | 'revoke', record?: any) {
   if (record) {
@@ -772,6 +760,8 @@ function openCardModal(type: 'issue' | 'revoke', record?: any) {
 
   cardOpType.value = type
   idLastFour.value = ''
+  bookingCards.value = []
+  fetchBookingCards(selectedGuestForCard.value.id)
   cardModalVisible.value = true
 }
 
@@ -789,8 +779,8 @@ async function handleCardOp() {
     })
 
     if (res.data.success) {
-      message.success(cardOpType.value === 'issue' ? '房卡发放指令已下发' : '房卡收回指令已下发')
-      cardModalVisible.value = false
+      message.loading({ content: cardOpType.value === 'issue' ? '正在制卡中，请在设备上放置卡片...' : '正在注销中...', key: 'card_op', duration: 0 })
+      // 不立即关闭弹窗，等待 WebSocket 反馈或手动刷新
     } else {
       message.error(res.data.message || '操作失败')
     }
@@ -1333,6 +1323,23 @@ async function fillByBookingId() {
 
 onMounted(async () => {
   fetchFrontEndDevices()
+  
+  // 初始化 WebSocket 监听发卡反馈
+  const socket = initWebSocket()
+  socket.on('security_event', (event: any) => {
+    if (event.event_type === 'card_issued') {
+      message.success({ content: `房卡制作成功！UID: ${event.data?.card_uid}`, key: 'card_op', duration: 3 })
+      if (selectedGuestForCard.value) {
+        fetchBookingCards(selectedGuestForCard.value.id)
+      }
+    } else if (event.event_type === 'card_revoked') {
+      message.success({ content: '房卡已成功销毁/收回', key: 'card_op', duration: 3 })
+      if (selectedGuestForCard.value) {
+        fetchBookingCards(selectedGuestForCard.value.id)
+      }
+    }
+  })
+
   try {
     await Promise.allSettled([
       hotelStore.fetchHotelInfo(),
@@ -1432,29 +1439,6 @@ onMounted(async () => {
 
 .card-op-info {
   padding: 8px;
-}
-
-.hardware-status-panel {
-  background: #f0f5ff;
-  border: 1px solid #adc6ff;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-}
-
-.status-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: #1d39c4;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-tags {
-  display: flex;
-  gap: 8px;
 }
 
 .verify-section {
