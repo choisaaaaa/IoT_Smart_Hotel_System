@@ -1,0 +1,911 @@
+{
+  "config": {
+    "configFile": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\playwright.config.ts",
+    "rootDir": "D:/IoT_Smart_Hotel_System/tests/e2e/specs",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/IoT_Smart_Hotel_System/tests/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "D:/IoT_Smart_Hotel_System/tests/e2e/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 300000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "reports/e2e_results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "auth.spec.ts",
+      "file": "auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "认证模块",
+          "file": "auth.spec.ts",
+          "line": 8,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "管理员登录",
+              "file": "auth.spec.ts",
+              "line": 9,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "应该成功登录并跳转到管理后台",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 15659,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=集团运营总览|管理后台')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=集团运营总览|管理后台')\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=集团运营总览|管理后台')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=集团运营总览|管理后台')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:49:54",
+                            "location": {
+                              "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                              "column": 54,
+                              "line": 49
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 47 |\u001b[39m       \n \u001b[90m 48 |\u001b[39m       \u001b[90m// 验证页面包含管理后台元素\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 49 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=集团运营总览|管理后台'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 50 |\u001b[39m     })\u001b[33m;\u001b[39m\n \u001b[90m 51 |\u001b[39m\n \u001b[90m 52 |\u001b[39m     test(\u001b[32m'错误密码应该显示错误提示'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                                "column": 54,
+                                "line": 49
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=集团运营总览|管理后台')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=集团运营总览|管理后台')\u001b[22m\n\n\n  47 |       \n  48 |       // 验证页面包含管理后台元素\n> 49 |       await expect(page.locator('text=集团运营总览|管理后台')).toBeVisible();\n     |                                                      ^\n  50 |     });\n  51 |\n  52 |     test('错误密码应该显示错误提示', async ({ page }) => {\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:49:54"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:11.991Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-管理员登录-应该成功登录并跳转到管理后台-chromium\\test-failed-1.png"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-管理员登录-应该成功登录并跳转到管理后台-chromium\\error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                            "column": 54,
+                            "line": 49
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-059e13be5f682bee8e4c",
+                  "file": "auth.spec.ts",
+                  "line": 10,
+                  "column": 9
+                },
+                {
+                  "title": "错误密码应该显示错误提示",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 7983,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:30.118Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-7733e131bc3ca56ea758",
+                  "file": "auth.spec.ts",
+                  "line": 52,
+                  "column": 9
+                },
+                {
+                  "title": "空表单应该显示验证错误",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 2529,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.ant-form-item-explain-error')\nExpected: visible\nError: strict mode violation: locator('.ant-form-item-explain-error') resolved to 2 elements:\n    1) <div class=\"ant-form-item-explain-error\">请输入手机号</div> aka getByText('请输入手机号')\n    2) <div class=\"ant-form-item-explain-error\">请输入密码</div> aka getByText('请输入密码')\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.ant-form-item-explain-error')\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.ant-form-item-explain-error')\nExpected: visible\nError: strict mode violation: locator('.ant-form-item-explain-error') resolved to 2 elements:\n    1) <div class=\"ant-form-item-explain-error\">请输入手机号</div> aka getByText('请输入手机号')\n    2) <div class=\"ant-form-item-explain-error\">请输入密码</div> aka getByText('请输入密码')\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.ant-form-item-explain-error')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:81:66",
+                            "location": {
+                              "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                              "column": 66,
+                              "line": 81
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 79 |\u001b[39m       \n \u001b[90m 80 |\u001b[39m       \u001b[90m// 验证验证错误\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 81 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'.ant-form-item-explain-error'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 82 |\u001b[39m     })\u001b[33m;\u001b[39m\n \u001b[90m 83 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 84 |\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                                "column": 66,
+                                "line": 81
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.ant-form-item-explain-error')\nExpected: visible\nError: strict mode violation: locator('.ant-form-item-explain-error') resolved to 2 elements:\n    1) <div class=\"ant-form-item-explain-error\">请输入手机号</div> aka getByText('请输入手机号')\n    2) <div class=\"ant-form-item-explain-error\">请输入密码</div> aka getByText('请输入密码')\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.ant-form-item-explain-error')\u001b[22m\n\n\n  79 |       \n  80 |       // 验证验证错误\n> 81 |       await expect(page.locator('.ant-form-item-explain-error')).toBeVisible();\n     |                                                                  ^\n  82 |     });\n  83 |   });\n  84 |\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:81:66"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:38.349Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-管理员登录-空表单应该显示验证错误-chromium\\test-failed-1.png"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-管理员登录-空表单应该显示验证错误-chromium\\error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                            "column": 66,
+                            "line": 81
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-82de6aec319f92a0b2a8",
+                  "file": "auth.spec.ts",
+                  "line": 73,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "前台登录",
+              "file": "auth.spec.ts",
+              "line": 85,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "前台员工应该跳转到前台工作台",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 13411,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=前台工作台|接待中心')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=前台工作台|接待中心')\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=前台工作台|接待中心')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=前台工作台|接待中心')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:104:53",
+                            "location": {
+                              "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                              "column": 53,
+                              "line": 104
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 102 |\u001b[39m       \n \u001b[90m 103 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page)\u001b[33m.\u001b[39mtoHaveURL(\u001b[35m/.*reception.*/\u001b[39m\u001b[33m,\u001b[39m { timeout\u001b[33m:\u001b[39m \u001b[35m30000\u001b[39m })\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 104 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=前台工作台|接待中心'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                     \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 105 |\u001b[39m     })\u001b[33m;\u001b[39m\n \u001b[90m 106 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 107 |\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                                "column": 53,
+                                "line": 104
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=前台工作台|接待中心')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=前台工作台|接待中心')\u001b[22m\n\n\n  102 |       \n  103 |       await expect(page).toHaveURL(/.*reception.*/, { timeout: 30000 });\n> 104 |       await expect(page.locator('text=前台工作台|接待中心')).toBeVisible();\n      |                                                     ^\n  105 |     });\n  106 |   });\n  107 |\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:104:53"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:42.535Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-前台登录-前台员工应该跳转到前台工作台-chromium\\test-failed-1.png"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-前台登录-前台员工应该跳转到前台工作台-chromium\\error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                            "column": 53,
+                            "line": 104
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-45e61868ffa5445d7a48",
+                  "file": "auth.spec.ts",
+                  "line": 86,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "权限控制",
+              "file": "auth.spec.ts",
+              "line": 108,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "未登录用户访问受保护页面应该重定向到登录页",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 3,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 1491,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:57.891Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-21b2ed8dbb00bafe333b",
+                  "file": "auth.spec.ts",
+                  "line": 109,
+                  "column": 9
+                },
+                {
+                  "title": "前台员工不应该访问管理员页面",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 300000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 3,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 38910,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=无权限|403|Forbidden|前台工作台')\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=无权限|403|Forbidden|前台工作台')\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=无权限|403|Forbidden|前台工作台')\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=无权限|403|Forbidden|前台工作台')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:141:66",
+                            "location": {
+                              "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                              "column": 66,
+                              "line": 141
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 139 |\u001b[39m       \n \u001b[90m 140 |\u001b[39m       \u001b[90m// 应该显示无权限提示或重定向回前台工作台\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 141 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=无权限|403|Forbidden|前台工作台'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m30000\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 142 |\u001b[39m     })\u001b[33m;\u001b[39m\n \u001b[90m 143 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 144 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                                "column": 66,
+                                "line": 141
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('text=无权限|403|Forbidden|前台工作台')\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('text=无权限|403|Forbidden|前台工作台')\u001b[22m\n\n\n  139 |       \n  140 |       // 应该显示无权限提示或重定向回前台工作台\n> 141 |       await expect(page.locator('text=无权限|403|Forbidden|前台工作台')).toBeVisible({ timeout: 30000 });\n      |                                                                  ^\n  142 |     });\n  143 |   });\n  144 | });\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts:141:66"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-04-23T19:36:59.667Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-权限控制-前台员工不应该访问管理员页面-chromium\\test-failed-1.png"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\auth-认证模块-权限控制-前台员工不应该访问管理员页面-chromium\\error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\auth.spec.ts",
+                            "column": 66,
+                            "line": 141
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-65d4244136729b5ccc3e",
+                  "file": "auth.spec.ts",
+                  "line": 117,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "booking.spec.ts",
+      "file": "booking.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "预订流程",
+          "file": "booking.spec.ts",
+          "line": 8,
+          "column": 6,
+          "specs": [
+            {
+              "title": "应该能成功创建预订",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 39786,
+                      "error": {
+                        "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n",
+                        "stack": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:31:16",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                          "column": 16,
+                          "line": 31
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 29 |\u001b[39m   test(\u001b[32m'应该能成功创建预订'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 30 |\u001b[39m     \u001b[90m// 点击预订管理菜单\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 31 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=预订管理'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 32 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 33 |\u001b[39m     \n \u001b[90m 34 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=新增预订'\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                            "column": 16,
+                            "line": 31
+                          },
+                          "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n\n  29 |   test('应该能成功创建预订', async ({ page }) => {\n  30 |     // 点击预订管理菜单\n> 31 |     await page.click('text=预订管理');\n     |                ^\n  32 |     await page.waitForTimeout(1000);\n  33 |     \n  34 |     await page.click('text=新增预订');\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:31:16"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:37:40.547Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能成功创建预订-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能成功创建预订-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                        "column": 16,
+                        "line": 31
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "a3a10f2351dcc49e1cb9-8dd68d47fe8b3f834cdb",
+              "file": "booking.spec.ts",
+              "line": 29,
+              "column": 7
+            },
+            {
+              "title": "应该能够查询预订列表",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 38872,
+                      "error": {
+                        "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n",
+                        "stack": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:55:16",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                          "column": 16,
+                          "line": 55
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 53 |\u001b[39m\n \u001b[90m 54 |\u001b[39m   test(\u001b[32m'应该能够查询预订列表'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 55 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=预订管理'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 56 |\u001b[39m     \n \u001b[90m 57 |\u001b[39m     \u001b[90m// 验证预订列表加载\u001b[39m\n \u001b[90m 58 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'.booking-list'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                            "column": 16,
+                            "line": 55
+                          },
+                          "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n\n  53 |\n  54 |   test('应该能够查询预订列表', async ({ page }) => {\n> 55 |     await page.click('text=预订管理');\n     |                ^\n  56 |     \n  57 |     // 验证预订列表加载\n  58 |     await expect(page.locator('.booking-list')).toBeVisible();\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:55:16"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:38:22.645Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能够查询预订列表-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能够查询预订列表-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                        "column": 16,
+                        "line": 55
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "a3a10f2351dcc49e1cb9-6e23ed44a9b1cd0fbbe9",
+              "file": "booking.spec.ts",
+              "line": 54,
+              "column": 7
+            },
+            {
+              "title": "应该能够办理入住",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 38807,
+                      "error": {
+                        "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n",
+                        "stack": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:66:16",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                          "column": 16,
+                          "line": 66
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 64 |\u001b[39m\n \u001b[90m 65 |\u001b[39m   test(\u001b[32m'应该能够办理入住'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 66 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=预订管理'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 67 |\u001b[39m     \n \u001b[90m 68 |\u001b[39m     \u001b[90m// 找到第一个待入住的预订\u001b[39m\n \u001b[90m 69 |\u001b[39m     \u001b[36mconst\u001b[39m checkInButton \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"办理入住\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                            "column": 16,
+                            "line": 66
+                          },
+                          "message": "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=预订管理')\u001b[22m\n\n\n  64 |\n  65 |   test('应该能够办理入住', async ({ page }) => {\n> 66 |     await page.click('text=预订管理');\n     |                ^\n  67 |     \n  68 |     // 找到第一个待入住的预订\n  69 |     const checkInButton = page.locator('button:has-text(\"办理入住\")').first();\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts:66:16"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:39:03.380Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能够办理入住-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\booking-预订流程-应该能够办理入住-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\booking.spec.ts",
+                        "column": 16,
+                        "line": 66
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "a3a10f2351dcc49e1cb9-db815efd036aeee58021",
+              "file": "booking.spec.ts",
+              "line": 65,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "device.spec.ts",
+      "file": "device.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "设备控制",
+          "file": "device.spec.ts",
+          "line": 8,
+          "column": 6,
+          "specs": [
+            {
+              "title": "应该显示设备列表",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 14103,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.device-list')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.device-list')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.device-list')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.device-list')\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:33:48",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                          "column": 48,
+                          "line": 33
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 31 |\u001b[39m     \n \u001b[90m 32 |\u001b[39m     \u001b[90m// 验证设备列表页面\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 33 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'.device-list'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 34 |\u001b[39m     \n \u001b[90m 35 |\u001b[39m     \u001b[90m// 验证设备卡片或表格\u001b[39m\n \u001b[90m 36 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'.device-card, .ant-table'\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                            "column": 48,
+                            "line": 33
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.device-list')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.device-list')\u001b[22m\n\n\n  31 |     \n  32 |     // 验证设备列表页面\n> 33 |     await expect(page.locator('.device-list')).toBeVisible();\n     |                                                ^\n  34 |     \n  35 |     // 验证设备卡片或表格\n  36 |     await expect(page.locator('.device-card, .ant-table')).toBeVisible();\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:33:48"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:39:44.106Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该显示设备列表-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该显示设备列表-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                        "column": 48,
+                        "line": 33
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d52a75ab1f83e9bd0b93-6097f65628f3d50a6108",
+              "file": "device.spec.ts",
+              "line": 29,
+              "column": 7
+            },
+            {
+              "title": "应该能成功控制设备",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 41093,
+                      "error": {
+                        "message": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-switch').first() to be visible\u001b[22m\n",
+                        "stack": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-switch').first() to be visible\u001b[22m\n\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:46:21",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                          "column": 21,
+                          "line": 46
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 44 |\u001b[39m     \u001b[90m// 查找第一个设备的开关按钮并点击\u001b[39m\n \u001b[90m 45 |\u001b[39m     \u001b[36mconst\u001b[39m switchBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'.ant-switch'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 46 |\u001b[39m     \u001b[36mawait\u001b[39m switchBtn\u001b[33m.\u001b[39mwaitFor({ state\u001b[33m:\u001b[39m \u001b[32m'visible'\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                     \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 47 |\u001b[39m     \u001b[36mawait\u001b[39m switchBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 48 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 49 |\u001b[39m     \u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                            "column": 21,
+                            "line": 46
+                          },
+                          "message": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-switch').first() to be visible\u001b[22m\n\n\n  44 |     // 查找第一个设备的开关按钮并点击\n  45 |     const switchBtn = page.locator('.ant-switch').first();\n> 46 |     await switchBtn.waitFor({ state: 'visible' });\n     |                     ^\n  47 |     await switchBtn.click();\n  48 |     await page.waitForTimeout(1000);\n  49 |     \n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:46:21"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:40:00.098Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该能成功控制设备-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该能成功控制设备-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                        "column": 21,
+                        "line": 46
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d52a75ab1f83e9bd0b93-1fa7defb8ee6c64c622a",
+              "file": "device.spec.ts",
+              "line": 39,
+              "column": 7
+            },
+            {
+              "title": "应该能够切换睡眠模式",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 38158,
+                      "error": {
+                        "message": "TimeoutError: page.waitForURL: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n============================================================\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:26:16",
+                        "location": {
+                          "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                          "column": 16,
+                          "line": 26
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 24 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m500\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 25 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'button[type=\"submit\"]'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 26 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForURL(\u001b[35m/.*hotel-admin.*/\u001b[39m\u001b[33m,\u001b[39m { timeout\u001b[33m:\u001b[39m \u001b[35m30000\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 27 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 28 |\u001b[39m\n \u001b[90m 29 |\u001b[39m   test(\u001b[32m'应该显示设备列表'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                            "column": 16,
+                            "line": 26
+                          },
+                          "message": "TimeoutError: page.waitForURL: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n============================================================\n\n  24 |     await page.waitForTimeout(500);\n  25 |     await page.click('button[type=\"submit\"]');\n> 26 |     await page.waitForURL(/.*hotel-admin.*/, { timeout: 30000 });\n     |                ^\n  27 |   });\n  28 |\n  29 |   test('应该显示设备列表', async ({ page }) => {\n    at D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts:26:16"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-23T19:40:43.255Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该能够切换睡眠模式-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\IoT_Smart_Hotel_System\\tests\\test-results\\device-设备控制-应该能够切换睡眠模式-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\IoT_Smart_Hotel_System\\tests\\e2e\\specs\\device.spec.ts",
+                        "column": 16,
+                        "line": 26
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d52a75ab1f83e9bd0b93-55612279e47c8b5bb959",
+              "file": "device.spec.ts",
+              "line": 54,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-04-23T19:36:10.696Z",
+    "duration": 311638.844,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 10,
+    "flaky": 0
+  }
+}

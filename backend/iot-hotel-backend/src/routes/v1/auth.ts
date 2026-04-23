@@ -11,7 +11,39 @@ import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, isGuest, CANONI
 
 const router = Router();
 
-// 生成扫码登录二维码Token（无需认证）
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: 用户认证与扫码登录接口
+ */
+
+/**
+ * @swagger
+ * /auth/qr-generate:
+ *   post:
+ *     summary: 生成扫码登录二维码Token
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: 成功生成Token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     expiresAt:
+ *                       type: string
+ *                       format: date-time
+ */
 router.post('/qr-generate', async (req, res) => {
   try {
     const token = crypto.randomBytes(32).toString('hex');
@@ -66,7 +98,23 @@ router.post('/qr-confirm', authenticate as any, async (req: AuthRequest, res) =>
   }
 });
 
-// Web端轮询扫码状态（无需认证）
+/**
+ * @swagger
+ * /auth/qr-status:
+ *   get:
+ *     summary: Web端轮询扫码状态
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 扫码Token
+ *     responses:
+ *       200:
+ *         description: 扫码状态
+ */
 router.get('/qr-status', async (req, res) => {
   try {
     const { token } = req.query;
@@ -322,7 +370,33 @@ router.post('/scan-login', async (req, res) => {
   }
 });
 
-// 手机号密码登录
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: 手机号密码登录
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "13800138000"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: 登录成功
+ */
 router.post('/login', async (req, res) => {
   try {
     const { phone, password } = req.body;

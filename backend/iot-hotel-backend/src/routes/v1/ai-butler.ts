@@ -8,12 +8,38 @@ import websocketService from '../../services/websocket.service';
 import { authenticate } from '../../middleware/auth';
 import logger from '../../utils/logger';
 
+/**
+ * @swagger
+ * tags:
+ *   name: AI Butler
+ *   description: AI 管家语音与文本交互接口
+ */
+
 const router = Router();
 
 /**
- * @route POST /api/v1/ai-butler/chat
- * @desc AI管家对话接口
- * @access Private
+ * @swagger
+ * /ai-butler/chat:
+ *   post:
+ *     summary: AI管家对话接口
+ *     tags: [AI Butler]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [room_id]
+ *             properties:
+ *               room_id: { type: string, example: "301" }
+ *               text: { type: string, example: "打开空调" }
+ *               audio: { type: string, description: "Base64编码的音频数据" }
+ *               session_id: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取AI响应
  */
 router.post('/chat',
   authenticate,

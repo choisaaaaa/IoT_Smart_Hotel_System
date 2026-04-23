@@ -4,11 +4,13 @@ import helmet from 'helmet';
 import compression from 'compression';
 import path from 'path';
 import expressWinston from 'express-winston';
+import swaggerUi from 'swagger-ui-express';
 import logger from './utils/logger';
 import { redisClient } from './utils/redis';
 import { requestIdMiddleware } from './middleware/request-id';
 
 import appConfig from './config/app';
+import swaggerSpec from './config/swagger';
 import routes from './routes';
 import { notFoundHandler, errorHandler } from './middleware/error';
 
@@ -29,7 +31,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:"],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
@@ -128,6 +130,14 @@ app.get('/', (_req: Request, res: Response) => {
     }
   });
 });
+
+// API文档路由 (Swagger UI)
+app.use(`${appConfig.apiPrefix}/docs`, swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: '慧宿智联 API 接口文档',
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
+}));
 
 app.use(appConfig.apiPrefix, (req, res, next) => {
   logger.info(`路由进入 API Prefix: ${req.method} ${req.url}`);

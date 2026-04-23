@@ -3,14 +3,49 @@ import * as roomController from '../../controllers/room.controller';
 import { authenticate, authorize } from '../../middleware/auth';
 import { CANONICAL_ROLES } from '../../utils/role';
 
+/**
+ * @swagger
+ * tags:
+ *   name: Rooms
+ *   description: 房间管理接口
+ */
+
 const router = Router();
 
-console.log('[Rooms Router] 开始注册路由...');
-
-// 注意：具体路由必须放在参数路由之前，否则会被参数路由拦截
+/**
+ * @swagger
+ * /rooms:
+ *   get:
+ *     summary: 获取房间列表
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: hotel_id
+ *         schema: { type: integer }
+ *         description: 酒店ID
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/guest/my-room/devices', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getMyRoomDevices);
+
+/**
+ * @swagger
+ * /rooms/guest/my-room:
+ *   get:
+ *     summary: 获取当前住客的房间信息
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/guest/my-room', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getGuestRoom);
 router.get('/guest/:id/devices', authenticate as any, authorize([CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST, CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.getGuestRoomDevices);
+
 
 router.get('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN, CANONICAL_ROLES.CUSTOMER, CANONICAL_ROLES.GUEST]), roomController.get);
 router.post('/', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), roomController.create);
