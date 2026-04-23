@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -48,15 +49,38 @@ class MessageService {
 
   Future<ApiResult<int>> getUnreadCount() async {
     try {
-      final response = await _dioClient.get('${ApiConstants.messages}unread/count');
+      final response = await _dioClient.get('${ApiConstants.messages}/unread/count');
       if (response.statusCode == 200 && isApiSuccess(response.data)) {
         final data = response.data['data'];
         return ApiResult.success(safeToInt(data is Map ? data['count'] : data));
       }
-      return ApiResult.success(0);
     } catch (e) {
-      return ApiResult.success(0);
+      debugPrint('专用未读计数接口失败，尝试通过消息列表统计: $e');
     }
+
+    try {
+      final messagesResponse = await _dioClient.get(
+        ApiConstants.messages,
+        queryParameters: {'page': 1, 'pageSize': 100, 'is_read': false},
+      );
+      if (messagesResponse.statusCode == 200 && isApiSuccess(messagesResponse.data)) {
+        final data = messagesResponse.data['data'];
+        List<dynamic> list;
+        if (data is Map) {
+          list = List<dynamic>.from(data['list'] ?? data['items'] ?? []);
+        } else if (data is List) {
+          list = List<dynamic>.from(data);
+        } else {
+          list = [];
+        }
+        final total = data is Map ? safeToInt(data['total']) : list.length;
+        return ApiResult.success(total > 0 ? total : list.length);
+      }
+    } catch (e) {
+      debugPrint('通过消息列表统计未读数也失败: $e');
+    }
+
+    return ApiResult.success(0);
   }
 
   Future<ApiResult<void>> markAsRead(int messageId) async {

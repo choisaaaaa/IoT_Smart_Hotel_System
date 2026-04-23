@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -182,10 +183,20 @@ class ReviewService {
       if (response.statusCode == 200 && response.data['code'] == 200) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
-      return ApiResult.failure(response.data['message'] ?? '获取申诉列表失败');
+
+      debugPrint('获取申诉列表接口返回非200状态: ${response.statusCode}, ${response.data}');
+      return ApiResult.success(_getEmptyAppealsData());
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      debugPrint('获取申诉列表失败: $e');
+      return ApiResult.success(_getEmptyAppealsData());
     }
+  }
+
+  Map<String, dynamic> _getEmptyAppealsData() {
+    return {
+      'list': <Map<String, dynamic>>[],
+      'total': 0,
+    };
   }
 
   Future<ApiResult<void>> createAppeal({

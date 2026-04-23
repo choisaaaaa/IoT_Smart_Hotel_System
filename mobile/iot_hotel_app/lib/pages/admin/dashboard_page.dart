@@ -24,7 +24,6 @@ import 'coupon_manage_page.dart';
 import 'user_manage_page.dart';
 import 'room_type_manage_page.dart';
 import 'review_manage_page.dart';
-import 'device_logs_page.dart';
 import 'knowledge_base_manage_page.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
@@ -54,7 +53,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     _MoreItem(icon: Icons.local_offer_rounded, label: '优惠券', pageKey: 'coupon'),
     _MoreItem(icon: Icons.people_rounded, label: '用户', pageKey: 'user'),
     _MoreItem(icon: Icons.hotel_rounded, label: '房型', pageKey: 'room_type'),
-    _MoreItem(icon: Icons.article_rounded, label: '设备日志', pageKey: 'device_logs'),
     _MoreItem(icon: Icons.menu_book_rounded, label: '知识库', pageKey: 'knowledge_base'),
   ];
 
@@ -94,7 +92,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       case 'coupon': page = const CouponManagePage(); break;
       case 'user': page = const UserManagePage(); break;
       case 'room_type': page = const RoomTypeManagePage(); break;
-      case 'device_logs': page = const DeviceLogsPage(); break;
       case 'knowledge_base': page = const KnowledgeBaseManagePage(); break;
       default: return;
     }
@@ -292,6 +289,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   List<dynamic> _weeklyRevenue = []; // 周营收数据
   bool _isLoading = true;
   bool _isMonthlyView = true; // true = 月视图, false = 周视图
+  double _todayRevenueFromReport = 0;
+  double _monthRevenueFromReport = 0;
 
   @override
   void initState() {
@@ -305,16 +304,24 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
       // 获取当前酒店ID
       final hotelIdStr = await LocalStorage().read('hotel_id');
       final hotelId = hotelIdStr != null ? int.tryParse(hotelIdStr) : null;
-      
+
       // 并行加载统计数据和报表数据（包含周营收）
       final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
       final distResult = await ref.read(roomServiceProvider).getRoomStatusDistribution();
       final reportsRes = await ref.read(hotelServiceProvider).getReports(hotelId: hotelId);
-      
+
       if (reportsRes.success && reportsRes.data != null) {
         final reportData = reportsRes.data!;
+        // 优先使用报表接口的营收数据
+        final todayRev = reportData['today_revenue'];
+        final monthRev = reportData['month_revenue'];
+        if (todayRev != null) {
+          _todayRevenueFromReport = (todayRev is num) ? todayRev.toDouble() : double.tryParse(todayRev.toString()) ?? 0;
+        }
+        if (monthRev != null) {
+          _monthRevenueFromReport = (monthRev is num) ? monthRev.toDouble() : double.tryParse(monthRev.toString()) ?? 0;
+        }
         final trendData = reportData['revenue_trend'] as List<dynamic>? ?? [];
-        debugPrint('DEBUG: trendData = $trendData');
         _weeklyRevenue = trendData.map((e) {
           if (e is Map) {
             final rev = e['revenue'];
@@ -323,7 +330,6 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           }
           return 0.0;
         }).toList();
-        debugPrint('DEBUG: _weeklyRevenue = $_weeklyRevenue');
       }
       final deviceResult = await ref.read(deviceServiceProvider).getAllDevices();
 
@@ -410,10 +416,17 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     final occupancyRate = '${(rateDouble * 100).toStringAsFixed(0)}%';
     final onlineDevices = (_deviceStats['online'] ?? 0).toString();
     final todayBookings = _stats?['today_bookings']?.toString() ?? '0';
-    final todayRevenueVal = _stats?['today_revenue'];
-    final todayRevenue = todayRevenueVal != null ? (todayRevenueVal is num ? todayRevenueVal.toDouble() : double.tryParse(todayRevenueVal.toString()) ?? 0) : 0;
-    final monthRevenueVal = _stats?['month_revenue'];
-    final monthRevenue = monthRevenueVal != null ? (monthRevenueVal is num ? monthRevenueVal.toDouble() : double.tryParse(monthRevenueVal.toString()) ?? 0) : 0;
+
+    // 优先使用报表接口的营收数据，如果没有则使用dashboard stats的数据
+    final todayRevenueVal = _todayRevenueFromReport > 0 ? _todayRevenueFromReport : _stats?['today_revenue'];
+    final todayRevenue = todayRevenueVal != null
+        ? (todayRevenueVal is num ? todayRevenueVal.toDouble() : double.tryParse(todayRevenueVal.toString()) ?? 0)
+        : 0;
+
+    final monthRevenueVal = _monthRevenueFromReport > 0 ? _monthRevenueFromReport : _stats?['month_revenue'];
+    final monthRevenue = monthRevenueVal != null
+        ? (monthRevenueVal is num ? monthRevenueVal.toDouble() : double.tryParse(monthRevenueVal.toString()) ?? 0)
+        : 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,

@@ -114,25 +114,8 @@ class _BillsPageState extends ConsumerState<BillsPage> {
   }
 
   Widget _buildDateFilter() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-      child: Row(
-        children: ['today', 'week', 'month', 'year'].map((key) {
-          final labels = {'today': '今日', 'week': '本周', 'month': '本月', 'year': '本年'};
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() { _dateRange = key; _loadStats(); }),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: _dateRange == key ? AppColors.primary : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                child: Center(child: Text(labels[key]!, style: TextStyle(color: _dateRange == key ? Colors.white : AppColors.textSecondary, fontWeight: _dateRange == key ? FontWeight.w600 : FontWeight.normal, fontSize: 13))),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    // 固定显示近7日数据，不再提供日期筛选按钮
+    return const SizedBox.shrink();
   }
 
   Widget _buildStatCards(double today, double month, int pending) {
@@ -155,7 +138,9 @@ class _BillsPageState extends ConsumerState<BillsPage> {
   }
 
   Widget _buildRevenueChart(List<dynamic> trend) {
-    final spots = trend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), _parseAmount(e.value['amount']))).toList();
+    // 只取最近7天的数据
+    final recentTrend = trend.length > 7 ? trend.sublist(trend.length - 7) : trend;
+    final spots = recentTrend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), _parseAmount(e.value['amount']))).toList();
     final maxY = spots.isEmpty ? 100.0 : spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.2;
 
     return Container(
@@ -164,28 +149,59 @@ class _BillsPageState extends ConsumerState<BillsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('营收趋势', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('营收趋势', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('近7日', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            ],
+          ),
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
             child: LineChart(
               LineChartData(
-                gridData: FlGridData(show: false),
+                gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: maxY > 0 ? maxY / 4 : 100),
                 titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (value, meta) => Text('¥${value.toInt()}', style: TextStyle(color: Colors.grey[600], fontSize: 10)))),
-                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (value, meta) {
-                    if (value.toInt() >= 0 && value.toInt() < trend.length) {
-                      final date = trend[value.toInt()]['date']?.toString() ?? '';
-                      return Text(date.length >= 5 ? date.substring(5) : date, style: TextStyle(color: Colors.grey[600], fontSize: 10));
-                    }
-                    return const SizedBox();
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 50, interval: maxY > 0 ? maxY / 4 : 100, getTitlesWidget: (value, meta) {
+                    if (value == 0) return const Text('0', style: TextStyle(color: Colors.grey, fontSize: 10));
+                    return Text('¥${(value / 1000).toStringAsFixed(0)}k', style: TextStyle(color: Colors.grey[600], fontSize: 9));
                   })),
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.toInt();
+                      if (index < 0 || index >= recentTrend.length) return const SizedBox();
+                      final date = recentTrend[index]['date']?.toString() ?? '';
+                      // 只显示月-日，例如 "04-23"
+                      String displayDate = '';
+                      if (date.length >= 10) {
+                        displayDate = '${date.substring(5, 7)}-${date.substring(8, 10)}';
+                      } else if (date.length >= 5) {
+                        displayDate = date.substring(5);
+                      }
+                      // 旋转显示避免重叠
+                      return Transform.rotate(
+                        angle: -0.3,
+                        child: Text(displayDate, style: TextStyle(color: Colors.grey[600], fontSize: 9)),
+                      );
+                    },
+                  )),
                   rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
                 borderData: FlBorderData(show: false),
-                minX: 0, maxX: (trend.length - 1).toDouble(), minY: 0, maxY: maxY,
-                lineBarsData: [LineChartBarData(spots: spots, isCurved: true, color: AppColors.primary, barWidth: 3, dotData: FlDotData(show: false), belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.1)))],
+                minX: 0, maxX: (recentTrend.length - 1).toDouble(), minY: 0, maxY: maxY,
+                lineBarsData: [LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: AppColors.primary,
+                  barWidth: 3,
+                  dotData: FlDotData(show: recentTrend.length <= 10),
+                  belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.1)),
+                )],
               ),
             ),
           ),

@@ -49,7 +49,10 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
   Future<void> _loadDashboardStats() async {
     final result = await ref.read(environmentServiceProvider).getDashboardStats();
     if (result.success && mounted) {
-      setState(() => _dashboardStats = result.data);
+      setState(() {
+        _dashboardStats = result.data;
+        debugPrint('Environment dashboard stats: $_dashboardStats');
+      });
     }
   }
 
@@ -133,6 +136,37 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
     final devices = _dashboardStats?['devices'] ?? {};
     final alerts = _dashboardStats?['alerts'] ?? {};
 
+    // 安全地获取数值
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+
+    int? parseInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is double) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    final avgTemp = parseDouble(env['avg_temperature']);
+    final avgHumidity = parseDouble(env['avg_humidity']);
+    final onlineCount = parseInt(devices['online']) ?? 0;
+    final totalCount = parseInt(devices['total']) ?? 0;
+    final runningCount = parseInt(devices['running']) ?? 0;
+    final errorCount = parseInt(devices['error']) ?? 0;
+    final activeAlarms = parseInt(fire['active_alarms']) ?? 0;
+    final detectorsOnline = parseInt(fire['detectors_online']) ?? 0;
+    final detectorsTotal = parseInt(fire['detectors_total']) ?? 0;
+    final unresolvedAlerts = parseInt(alerts['unresolved']) ?? 0;
+    final criticalAlerts = parseInt(alerts['critical']) ?? 0;
+    final warningAlerts = parseInt(alerts['warning']) ?? 0;
+    final envScore = parseInt(_dashboardStats?['environment_score']);
+
     return RefreshIndicator(
       onRefresh: _loadData,
       child: SingleChildScrollView(
@@ -144,7 +178,7 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 Expanded(
                   child: _EnvironmentCard(
                     title: '平均温度',
-                    value: '${env['avg_temperature']?.toStringAsFixed(1) ?? '--'}',
+                    value: avgTemp != null ? avgTemp.toStringAsFixed(1) : '--',
                     unit: '°C',
                     icon: Icons.thermostat,
                     color: Colors.orange,
@@ -155,7 +189,7 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 Expanded(
                   child: _EnvironmentCard(
                     title: '平均湿度',
-                    value: '${env['avg_humidity']?.toStringAsFixed(0) ?? '--'}',
+                    value: avgHumidity != null ? avgHumidity.toStringAsFixed(0) : '--',
                     unit: '%',
                     icon: Icons.water_drop,
                     color: Colors.blue,
@@ -170,20 +204,20 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 Expanded(
                   child: _EnvironmentCard(
                     title: '设备在线率',
-                    value: devices['total'] != null && (devices['total'] as int) > 0
-                        ? ((devices['online'] as int) / (devices['total'] as int) * 100).toStringAsFixed(0)
+                    value: totalCount > 0
+                        ? ((onlineCount / totalCount) * 100).toStringAsFixed(0)
                         : '--',
                     unit: '%',
                     icon: Icons.devices,
                     color: Colors.amber,
-                    subtitle: '${devices['online'] ?? 0}/${devices['total'] ?? 0} 在线',
+                    subtitle: '$onlineCount/$totalCount 在线',
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _EnvironmentCard(
                     title: '环境评分',
-                    value: '${_dashboardStats?['environment_score'] ?? '--'}',
+                    value: envScore?.toString() ?? '--',
                     unit: '分',
                     icon: Icons.eco,
                     color: Colors.green,
@@ -194,25 +228,25 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
             ),
             const SizedBox(height: 16),
             _FireSafetyCard(
-              activeAlarms: fire['active_alarms'] ?? 0,
-              detectorsOnline: fire['detectors_online'] ?? 0,
-              detectorsTotal: fire['detectors_total'] ?? 0,
+              activeAlarms: activeAlarms,
+              detectorsOnline: detectorsOnline,
+              detectorsTotal: detectorsTotal,
               onTap: () => _tabController.animateTo(2),
             ),
             const SizedBox(height: 16),
             _DeviceStatusCard(
-              online: devices['online'] ?? 0,
-              total: devices['total'] ?? 0,
-              running: devices['running'] ?? 0,
-              error: devices['error'] ?? 0,
+              online: onlineCount,
+              total: totalCount,
+              running: runningCount,
+              error: errorCount,
               onTap: () => _tabController.animateTo(3),
             ),
             const SizedBox(height: 16),
-            if ((alerts['unresolved'] ?? 0) > 0)
+            if (unresolvedAlerts > 0)
               _AlertsCard(
-                unresolved: alerts['unresolved'] ?? 0,
-                critical: alerts['critical'] ?? 0,
-                warning: alerts['warning'] ?? 0,
+                unresolved: unresolvedAlerts,
+                critical: criticalAlerts,
+                warning: warningAlerts,
               ),
           ],
         ),

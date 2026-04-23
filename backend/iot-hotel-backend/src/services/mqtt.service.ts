@@ -182,6 +182,9 @@ class MQTTService {
       const port = useTLS ? (parseInt(config.mqtt.port as any) || 8883) : (parseInt(config.mqtt.port as any) || 1883);
       const url = `${protocol}://${config.mqtt.host}:${port}`;
 
+      logger.info(`MQTT连接地址: ${url}`);
+      logger.info(`MQTT配置: host=${config.mqtt.host}, port=${port}, username=${config.mqtt.username || '无'}`);
+
       try {
         this.client = mqtt.connect(url, options);
       } catch (error) {
@@ -201,6 +204,12 @@ class MQTTService {
 
       this.client.on('error', (error) => {
         logger.error('MQTT连接错误:', error.message || error);
+        logger.error('MQTT连接配置:', {
+          host: config.mqtt.host,
+          port: config.mqtt.port,
+          username: config.mqtt.username ? '已设置' : '未设置',
+          password: config.mqtt.password ? '已设置' : '未设置'
+        });
         this.connected = false;
       });
 
