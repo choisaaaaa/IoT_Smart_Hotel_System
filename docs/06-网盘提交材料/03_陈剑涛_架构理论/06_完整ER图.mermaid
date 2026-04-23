@@ -1,0 +1,704 @@
+erDiagram
+    %% =============================================
+    %% 核心酒店与房间管理
+    %% =============================================
+    hotels {
+        int id PK "酒店ID"
+        string hotel_name UK "酒店名称"
+        string hotel_address "地址"
+        string hotel_phone "电话"
+        int hotel_star "星级"
+        int total_rooms "总房间数"
+        int occupied_rooms "已入住房数"
+        decimal occupancy_rate "入住率"
+        string hotel_code "酒店编码"
+        string city "城市"
+        decimal rating "评分"
+        int review_count "评价数"
+        datetime created_at
+        datetime updated_at
+    }
+
+    floors {
+        int id PK "楼层ID"
+        int hotel_id FK "酒店ID"
+        int floor_number "楼层号"
+        string floor_name "楼层名称"
+        datetime created_at
+    }
+
+    room_types {
+        int id PK "房型ID"
+        int hotel_id "酒店ID(0=全局)"
+        string name "房型名称"
+        string code "房型代码"
+        decimal base_price "基础价格"
+        decimal area "面积"
+        string bed_type "床型"
+        int max_guests "最大入住人数"
+        json facilities "设施"
+        json images "图片"
+    }
+
+    rate_plans {
+        int id PK "价格方案ID"
+        int hotel_id FK "酒店ID"
+        int room_type_id FK "房型ID"
+        string plan_name "方案名称"
+        decimal base_price "基础价格"
+        enum meal_plan "餐食方案"
+        enum cancellation_policy "取消政策"
+        tinyint is_active "是否启用"
+    }
+
+    rooms {
+        int id PK "房间ID"
+        int hotel_id FK "酒店ID"
+        string room_number "房间号"
+        string room_type "房型分类"
+        int room_type_id FK "房型ID"
+        string room_name "房间名称"
+        decimal room_price "房间价格"
+        string room_status "房间状态"
+        int floor "楼层"
+        decimal area "面积"
+        string bed_type "床型"
+        int max_guests "最大入住人数"
+        json facilities "设施"
+        json images "图片"
+    }
+
+    room_prices {
+        int id PK "价格日历ID"
+        int room_type_id FK "房型ID"
+        int hotel_id "酒店ID"
+        date price_date "价格日期"
+        decimal discount_rate "折扣率"
+        decimal base_price "基础价格"
+        decimal final_price "最终价格"
+    }
+
+    hotel_images {
+        int id PK "图片ID"
+        int hotel_id FK "酒店ID"
+        string image_url "图片URL"
+        enum image_type "图片类型"
+        int sort_order "排序"
+        tinyint is_active "是否启用"
+    }
+
+    %% =============================================
+    %% 用户与认证体系
+    %% =============================================
+    users {
+        int id PK "用户ID"
+        string username UK "用户名"
+        string password "密码"
+        string phone UK "手机号"
+        string uid UK "用户UID"
+        string email "邮箱"
+        string avatar "头像"
+        string role "角色"
+        int hotel_id "所属酒店(0=系统)"
+        json permissions "权限"
+        datetime last_login_at "最后登录"
+    }
+
+    roles {
+        int id PK "角色ID"
+        string role_name UK "角色名称"
+        string role_description "角色描述"
+        json permissions "权限列表"
+    }
+
+    user_roles {
+        int id PK
+        int user_id FK "用户ID"
+        int role_id FK "角色ID"
+    }
+
+    user_hotels {
+        int id PK
+        int user_id FK "用户ID"
+        int hotel_id FK "酒店ID"
+        string role "角色"
+    }
+
+    role_applications {
+        int id PK
+        int user_id FK "用户ID"
+        string application_type "申请类型"
+        int hotel_id "申请酒店"
+        string hotel_name "酒店名称"
+        string status "状态"
+        int reviewed_by "审核人"
+        datetime reviewed_at "审核时间"
+    }
+
+    api_tokens {
+        int id PK
+        int user_id FK "用户ID"
+        string token UK "令牌"
+        string token_type "令牌类型"
+        datetime expires_at "过期时间"
+        tinyint is_used "是否使用"
+    }
+
+    login_sessions {
+        int id PK
+        int user_id FK "用户ID"
+        string session_token UK "会话令牌"
+        string device_info "设备信息"
+        string ip_address "IP地址"
+        datetime expires_at "过期时间"
+    }
+
+    sms_verifications {
+        int id PK
+        string phone "手机号"
+        string verification_code "验证码"
+        string purpose "用途"
+        tinyint is_used "是否使用"
+        datetime expires_at "过期时间"
+    }
+
+    %% =============================================
+    %% 预订与业务管理
+    %% =============================================
+    bookings {
+        int id PK "预订ID"
+        string booking_number UK "预订编号"
+        int user_id FK "用户ID"
+        int room_id FK "房间ID"
+        int hotel_id "酒店ID"
+        string guest_name "客人姓名"
+        string guest_phone "客人电话"
+        string guest_id_number "证件号"
+        date check_in_date "入住日期"
+        date check_out_date "退房日期"
+        string payment_method "支付方式"
+        int coupon_id "优惠券ID"
+        int used_points "使用积分"
+        decimal total_price "总价"
+        decimal deposit "押金"
+        string status "状态"
+        datetime check_in_time "入住时间"
+        datetime check_out_time "退房时间"
+    }
+
+    guests {
+        int id PK "住客ID"
+        int booking_id FK "预订ID"
+        string guest_name "客人姓名"
+        string guest_phone "客人电话"
+        string guest_id_number "证件号"
+        int room_id FK "房间ID"
+        datetime check_in_time "入住时间"
+        datetime check_out_time "退房时间"
+    }
+
+    frequent_guests {
+        int id PK
+        int user_id FK "用户ID"
+        string name "姓名"
+        string phone "手机号"
+        string id_type "证件类型"
+        string id_number "证件号"
+    }
+
+    payments {
+        int id PK "支付ID"
+        string payment_no UK "支付编号"
+        int hotel_id FK "酒店ID"
+        string order_type "订单类型"
+        int order_id "订单ID"
+        decimal amount "金额"
+        string payment_method "支付方式"
+        string status "状态"
+        datetime paid_at "支付时间"
+        int user_id "支付用户ID"
+    }
+
+    %% =============================================
+    %% 会员与营销体系
+    %% =============================================
+    members {
+        int id PK "会员ID"
+        string phone UK "手机号"
+        string name "姓名"
+        string id_number "证件号"
+        enum member_level "会员等级"
+        int experience "经验值"
+        int points "积分"
+        decimal balance "余额"
+        decimal total_spent "总消费"
+        int total_stays "总入住次数"
+        date last_checkin_date "最后签到日期"
+    }
+
+    coupons {
+        int id PK "优惠券ID"
+        int hotel_id "酒店ID(0=全局)"
+        string coupon_name "优惠券名称"
+        string coupon_code UK "优惠券代码"
+        enum coupon_type "类型"
+        decimal discount_value "折扣值"
+        decimal min_amount "最低消费"
+        int total_count "总数量"
+        int received_count "已领取"
+        date valid_from "生效日期"
+        date valid_to "失效日期"
+    }
+
+    member_coupons {
+        int id PK
+        int member_id FK "会员ID"
+        int coupon_id FK "优惠券ID"
+        string status "状态"
+        datetime used_at "使用时间"
+    }
+
+    user_favorites {
+        int id PK
+        int user_id FK "用户ID"
+        int hotel_id FK "酒店ID"
+        datetime created_at "收藏时间"
+    }
+
+    %% =============================================
+    %% IoT设备管理
+    %% =============================================
+    devices {
+        int id PK "设备内部ID"
+        string device_id UK "设备标识"
+        string device_type "设备类型"
+        string device_name "设备名称"
+        string device_key "设备密钥"
+        string device_status "设备状态"
+        string firmware_version "固件版本"
+        string ip_address "IP地址"
+        string mac_address "MAC地址"
+        string last_card_uid "最后感应卡UID"
+        int hotel_id "酒店ID"
+        int room_id "房间ID"
+        string audit_status "审核状态"
+        datetime last_seen "最后在线"
+    }
+
+    device_groups {
+        int id PK "设备组ID"
+        int hotel_id FK "酒店ID"
+        string group_name "组名称"
+        enum group_type "组类型"
+        string description "描述"
+        int created_by "创建人"
+    }
+
+    device_group_members {
+        int id PK
+        int group_id FK "设备组ID"
+        string device_id FK "设备ID"
+    }
+
+    device_alarms {
+        int id PK "告警ID"
+        string device_id FK "设备ID"
+        enum alarm_type "告警类型"
+        enum alarm_level "告警级别"
+        string message "告警内容"
+        tinyint is_acknowledged "是否确认"
+        int acknowledged_by "确认人"
+        datetime acknowledged_at "确认时间"
+    }
+
+    device_status_history {
+        int id PK
+        string device_id FK "设备ID"
+        string old_status "旧状态"
+        string new_status "新状态"
+        string reason "变更原因"
+    }
+
+    sensor_data {
+        int id PK
+        string device_id FK "设备ID"
+        string sensor_type "传感器类型"
+        string sensor_value "传感器值"
+        datetime created_at "记录时间"
+    }
+
+    control_commands {
+        int id PK
+        string device_id FK "设备ID"
+        string command_type "指令类型"
+        text command_value "指令值"
+        string command_status "执行状态"
+        string created_by "创建人"
+        datetime executed_at "执行时间"
+    }
+
+    security_events {
+        int id PK
+        string device_id FK "设备ID"
+        string event_type "事件类型"
+        text event_data "事件数据"
+        string event_level "事件级别"
+    }
+
+    firmware_updates {
+        int id PK
+        string device_type "设备类型"
+        string version "版本号"
+        string file_url "文件URL"
+        int file_size "文件大小"
+        string checksum "校验值"
+        string release_notes "更新说明"
+        tinyint is_force_update "是否强制"
+        enum status "状态"
+        int created_by "创建人"
+    }
+
+    ir_remote_codes {
+        int id PK
+        string device_id FK "设备ID"
+        string brand "品牌"
+        string device_type "设备类型"
+        string code_name "编码名称"
+        json code_data "红外编码数据"
+    }
+
+    energy_consumption {
+        int id PK
+        string device_id FK "设备ID"
+        string energy_type "能耗类型"
+        decimal consumption_value "消耗值"
+        string unit "单位"
+        datetime recorded_at "记录时间"
+    }
+
+    %% =============================================
+    %% 门禁与安全体系
+    %% =============================================
+    rfid_cards {
+        int id PK "房卡ID"
+        string card_uid UK "卡片UID"
+        int hotel_id FK "酒店ID"
+        int booking_id "预订ID"
+        int room_id "房间ID"
+        int member_id "会员ID"
+        enum card_type "卡片类型"
+        enum status "状态"
+        datetime issued_at "发卡时间"
+        datetime expires_at "过期时间"
+    }
+
+    rfid_access_logs {
+        int id PK
+        string card_uid "卡片UID"
+        int room_id "房间ID"
+        int hotel_id "酒店ID"
+        enum access_type "进出类型"
+        enum access_result "刷卡结果"
+        string fail_reason "失败原因"
+        string device_id "设备ID"
+    }
+
+    card_lifecycle_logs {
+        int id PK
+        string card_uid "卡片UID"
+        int hotel_id "酒店ID"
+        enum action_type "操作类型"
+        int operator_id "操作人"
+        int target_booking_id "目标预订"
+        int target_user_id "目标用户"
+        string notes "备注"
+    }
+
+    staff_access_policies {
+        int id PK
+        int hotel_id "酒店ID"
+        int user_id "用户ID"
+        enum access_scope "访问范围"
+        text scope_value "范围值"
+        json time_slots "时间段"
+        tinyint is_emergency "是否紧急"
+        tinyint is_active "是否启用"
+    }
+
+    door_security_states {
+        int id PK
+        int room_id FK "房间ID"
+        string device_id "设备ID"
+        enum lock_state "门锁状态"
+        tinyint internal_deadbolt "内反锁"
+        tinyint battery_level "电池电量"
+        enum last_event_type "最后事件类型"
+        datetime last_event_time "最后事件时间"
+    }
+
+    occupancy_verification {
+        int id PK
+        int room_id FK "房间ID"
+        int booking_id "预订ID"
+        datetime last_pir_activity "最后人体感应"
+        tinyint last_card_power_state "最后取电状态"
+        datetime last_energy_pulse "最后能耗脉冲"
+        tinyint discrepancy_flag "异常标记"
+        datetime verified_at "验证时间"
+    }
+
+    %% =============================================
+    %% 场景与自动化
+    %% =============================================
+    scene_configs {
+        int id PK "场景ID"
+        int hotel_id FK "酒店ID"
+        string scene_name "场景名称"
+        string scene_code "场景代码"
+        json config_json "场景配置"
+    }
+
+    scene_execution_logs {
+        int id PK
+        int scene_id FK "场景ID"
+        string device_id FK "设备ID"
+        string action "执行动作"
+        enum status "执行结果"
+        text error_message "错误信息"
+        datetime executed_at "执行时间"
+    }
+
+    %% =============================================
+    %% 酒店服务
+    %% =============================================
+    delivery_orders {
+        int id PK "送物订单ID"
+        string order_no UK "订单编号"
+        int booking_id "预订ID"
+        int guest_id "客人ID"
+        int room_id FK "房间ID"
+        string item_category "物品类别"
+        string item_name "物品名称"
+        int quantity "数量"
+        string note "备注"
+        string status "状态"
+        datetime completed_at "完成时间"
+    }
+
+    maintenance_tickets {
+        int id PK "报修工单ID"
+        string ticket_no UK "工单编号"
+        int booking_id "预订ID"
+        int guest_id "客人ID"
+        int room_id FK "房间ID"
+        string fault_type "故障类型"
+        text fault_description "故障描述"
+        json photos "照片"
+        string priority "优先级"
+        string status "状态"
+        text repair_description "维修描述"
+        decimal repair_cost "维修费用"
+        datetime completed_at "完成时间"
+    }
+
+    calls {
+        int id PK "通话ID"
+        string call_id UK "通话标识"
+        int hotel_id FK "酒店ID"
+        enum caller_type "呼叫方类型"
+        string caller_id "呼叫方ID"
+        enum callee_type "被叫方类型"
+        string callee_id "被叫方ID"
+        enum status "通话状态"
+        int duration_sec "通话时长"
+        string recording_url "录音URL"
+        datetime started_at "开始时间"
+        datetime answered_at "接听时间"
+        datetime ended_at "结束时间"
+    }
+
+    call_quality_logs {
+        int id PK
+        string call_id "通话ID"
+        decimal mos_score "语音质量评分"
+        int jitter_ms "抖动毫秒"
+        decimal packet_loss_pct "丢包率"
+        int latency_ms "延迟毫秒"
+        datetime recorded_at "记录时间"
+    }
+
+    reviews {
+        int id PK "评价ID"
+        int order_id "订单ID"
+        string order_type "订单类型"
+        int member_id FK "会员ID"
+        int hotel_id "酒店ID"
+        int room_type_id "房型ID"
+        int user_id "用户ID"
+        decimal score "总评分"
+        int environment_rating "环境评分"
+        int facility_rating "设施评分"
+        int comfort_rating "舒适评分"
+        text content "评价内容"
+        json photos "照片"
+        text reply "酒店回复"
+        datetime replied_at "回复时间"
+        tinyint is_deleted "软删除标记"
+    }
+
+    review_appeals {
+        int id PK
+        int review_id FK "评价ID"
+        int hotel_id "酒店ID"
+        int appellant_id "申诉人ID"
+        text appeal_reason "申诉理由"
+        enum status "申诉状态"
+        int handler_id "处理人"
+        text handle_reason "处理理由"
+        datetime handled_at "处理时间"
+    }
+
+    %% =============================================
+    %% 通信与日志
+    %% =============================================
+    mqtt_communication_logs {
+        int id PK
+        int hotel_id "酒店ID"
+        string device_id "设备ID"
+        string topic "MQTT主题"
+        text payload "消息内容"
+        enum direction "方向"
+        tinyint qos "QoS级别"
+        tinyint retain "保留标志"
+        datetime timestamp "时间戳"
+    }
+
+    %% =============================================
+    %% AI智能服务
+    %% =============================================
+    ai_knowledge_base {
+        int id PK "知识条目ID"
+        int hotel_id "酒店ID(0=全局)"
+        string category "分类"
+        string title "标题"
+        text content "内容"
+        string keywords "关键词"
+        int priority "优先级"
+        tinyint is_active "是否启用"
+        int sort_order "排序权重"
+        int usage_count "使用次数"
+        int created_by "创建人"
+        int updated_by "更新人"
+    }
+
+    ai_conversations {
+        int id PK "对话ID"
+        string session_id "会话ID"
+        int user_id "用户ID"
+        enum user_type "用户类型"
+        int hotel_id "酒店ID"
+        int room_id "房间ID"
+        text message "消息内容"
+        enum role "消息角色"
+        string intent "识别意图"
+        int matched_entry_id FK "匹配知识条目ID"
+        int tokens_used "使用token数"
+        int response_time_ms "响应时间"
+        tinyint is_helpful "是否有帮助"
+        string ip_address "用户IP"
+    }
+
+    %% =============================================
+    %% 系统配置
+    %% =============================================
+    system_settings {
+        int id PK
+        string config_key UK "配置键"
+        text config_value "配置值"
+        string description "描述"
+    }
+
+    %% =============================================
+    %% 关系定义
+    %% =============================================
+    
+    %% 酒店与房间关系
+    hotels ||--o{ floors : "拥有"
+    hotels ||--o{ rooms : "包含"
+    hotels ||--o{ room_types : "定义"
+    hotels ||--o{ rate_plans : "设置"
+    hotels ||--o{ hotel_images : "展示"
+    hotels ||--o{ device_groups : "管理"
+    hotels ||--o{ scene_configs : "配置"
+    hotels ||--o{ calls : "记录"
+    hotels ||--o{ user_favorites : "收藏"
+    hotels ||--o{ rfid_cards : "发卡"
+    hotels ||--o{ reviews : "收到"
+    hotels ||--o{ review_appeals : "处理"
+    hotels ||--o{ coupons : "发行"
+
+    floors ||--o{ rooms : "分层"
+    room_types ||--o{ rooms : "分类"
+    room_types ||--o{ rate_plans : "定价方案"
+    room_types ||--o{ room_prices : "价格日历"
+    rate_plans ||--o{ room_prices : "价格细化"
+    rooms ||--o{ bookings : "预订"
+    rooms ||--o{ guests : "入住"
+    rooms ||--o{ delivery_orders : "送物"
+    rooms ||--o{ maintenance_tickets : "报修"
+    rooms ||--o{ door_security_states : "门锁状态"
+    rooms ||--o{ occupancy_verification : "占用校验"
+
+    %% 用户与认证关系
+    users ||--o{ user_roles : "拥有角色"
+    users ||--o{ user_hotels : "关联酒店"
+    users ||--o{ role_applications : "申请"
+    users ||--o{ api_tokens : "令牌"
+    users ||--o{ login_sessions : "会话"
+    users ||--o{ frequent_guests : "常用联系人"
+    users ||--o{ user_favorites : "收藏"
+    users ||--o{ bookings : "预订"
+    users ||--o{ reviews : "评价"
+    roles ||--o{ user_roles : "被分配"
+
+    %% 预订与支付关系
+    bookings ||--o{ guests : "实际住客"
+    bookings ||--o{ payments : "支付"
+    bookings ||--o{ rfid_cards : "房卡"
+    bookings ||--o{ delivery_orders : "送物订单"
+    bookings ||--o{ maintenance_tickets : "报修工单"
+    bookings ||--o{ occupancy_verification : "入住验证"
+
+    %% 会员与营销关系
+    members ||--o{ member_coupons : "持有优惠券"
+    members ||--o{ reviews : "发表评价"
+    members ||--o{ rfid_cards : "特权卡"
+    coupons ||--o{ member_coupons : "被领取"
+
+    %% 设备关系
+    devices ||--o{ device_group_members : "加入组"
+    devices ||--o{ device_alarms : "产生告警"
+    devices ||--o{ device_status_history : "状态变更"
+    devices ||--o{ sensor_data : "上报数据"
+    devices ||--o{ control_commands : "接收指令"
+    devices ||--o{ security_events : "安全事件"
+    devices ||--o{ ir_remote_codes : "红外码"
+    devices ||--o{ energy_consumption : "能耗记录"
+    devices ||--o{ scene_execution_logs : "场景执行"
+    device_groups ||--o{ device_group_members : "包含设备"
+
+    %% 门禁关系
+    rfid_cards ||--o{ rfid_access_logs : "刷卡记录"
+    rfid_cards ||--o{ card_lifecycle_logs : "生命周期"
+
+    %% 场景关系
+    scene_configs ||--o{ scene_execution_logs : "执行记录"
+
+    %% 通话关系
+    calls ||--o{ call_quality_logs : "质量日志"
+
+    %% 评价关系
+    reviews ||--o{ review_appeals : "申诉"
+
+    %% AI关系
+    ai_knowledge_base ||--o{ ai_conversations : "匹配回答"

@@ -1,0 +1,107 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.7.8 Chrome/128.0.6613.36 Electron/32.0.1 Safari/537.36" version="24.7.8">
+  <diagram name="第 1 页" id="dVWb7LKgAL0IBiX3yVW2">
+    <mxGraphModel dx="1292" dy="974" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-26" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=default;strokeWidth=2;strokeColor=#1890ff;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="9" y="270" width="1150" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#52c41a;" edge="1" parent="1" source="zoCEwNkJ6u1gDNWh_-mj-1" target="zoCEwNkJ6u1gDNWh_-mj-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-14" value="反向代理" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#52c41a;fontSize=12;fontStyle=1" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-13">
+          <mxGeometry x="-0.0181" y="-1" relative="1" as="geometry">
+            <mxPoint x="31" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-15" value="proxy_pass" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#999999;fontSize=10;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-13">
+          <mxGeometry x="-0.0181" y="-1" relative="1" as="geometry">
+            <mxPoint x="31" y="20" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-1" value="Nginx反向代理&#xa;&amp;nbsp;(nginx:alpine)&#xa;&amp;nbsp;端口: 80, 443" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1890ff;fontColor=#FFFFFF;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="479" y="280" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-2" value="Redis缓存&#xa;&amp;nbsp;(redis:7-alpine)&#xa;&amp;nbsp;端口: 6379" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#722ed1;fontStyle=1;fontSize=14;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="729" y="680" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-16" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#fa8c16;strokeWidth=3;fontColor=#fa8c16;" edge="1" parent="1" source="zoCEwNkJ6u1gDNWh_-mj-3" target="zoCEwNkJ6u1gDNWh_-mj-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-17" value="数据库连接" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#fa8c16;fontStyle=1" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-16">
+          <mxGeometry x="-0.0188" relative="1" as="geometry">
+            <mxPoint x="-41" y="-29" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-19" value="端口 3306" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#999999;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-16">
+          <mxGeometry x="-0.0105" relative="1" as="geometry">
+            <mxPoint x="-41" y="-9" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-22" value="端口 6379" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#999999;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-16">
+          <mxGeometry x="-0.0105" relative="1" as="geometry">
+            <mxPoint x="379" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-25" value="端口 1883/9001" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#999999;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-16">
+          <mxGeometry x="-0.0105" relative="1" as="geometry">
+            <mxPoint x="209" y="11" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-20" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#722ed1;strokeWidth=3;" edge="1" parent="1" source="zoCEwNkJ6u1gDNWh_-mj-3" target="zoCEwNkJ6u1gDNWh_-mj-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-21" value="缓存连接" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#722ed1;fontStyle=1" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-20">
+          <mxGeometry x="-0.0031" y="1" relative="1" as="geometry">
+            <mxPoint x="43" y="-19" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-23" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#faad14;" edge="1" parent="1" source="zoCEwNkJ6u1gDNWh_-mj-3" target="zoCEwNkJ6u1gDNWh_-mj-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-24" value="MQTT连接" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#faad14;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-23">
+          <mxGeometry x="-0.0181" relative="1" as="geometry">
+            <mxPoint x="40" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <UserObject label="Node.js后端服务&lt;br&gt;&amp;nbsp;(node:20-alpine)&lt;br&gt;&amp;nbsp;端口: 9000" link="Node.js后端服务&#xa; (node:20-alpine)&#xa; 端口: 3000" id="zoCEwNkJ6u1gDNWh_-mj-3">
+          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#52c41a;fontColor=#FFFFFF;fontSize=14;fontStyle=1" vertex="1" parent="1">
+            <mxGeometry x="479" y="480" width="180" height="100" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-4" value="MySQL数据库&#xa;&amp;nbsp;(mysql:8.0)&#xa;&amp;nbsp;端口: 3306" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa8c16;fontSize=14;fontStyle=1;fontColor=#FFFFFF;labelBackgroundColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="680" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-5" value="MQTT Broker&#xa;&amp;nbsp;(eclipse-mosquitto:2.0)&#xa;&amp;nbsp;端口: 1883, 9001" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faad14;fontStyle=1;fontSize=14;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="479" y="680" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1890ff;strokeWidth=3;" edge="1" parent="1" source="zoCEwNkJ6u1gDNWh_-mj-7" target="zoCEwNkJ6u1gDNWh_-mj-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-10" value="HTTP/HTTPS" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#1890ff;fontSize=12;fontStyle=1" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-9">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="50" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-12" value="端口 80/443" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#999999;" vertex="1" connectable="0" parent="zoCEwNkJ6u1gDNWh_-mj-9">
+          <mxGeometry y="-1" relative="1" as="geometry">
+            <mxPoint x="51" y="14" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-7" value="用户/前端访问" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeWidth=2;strokeColor=#999999;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="469" y="150" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-27" value="Docker Network (iot-network)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1890ff;" vertex="1" parent="1">
+          <mxGeometry x="189" y="280" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-30" value="&lt;div&gt;1. MySQL → Redis → MQTT (独立启动)&lt;/div&gt;&lt;div&gt;2. Backend (依赖mysql, redis, mqtt)&lt;/div&gt;&lt;div style=&quot;&quot;&gt;3. Nginx (依赖backend)&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f6ffed;strokeColor=#52c41a;strokeWidth=2;align=left;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="149" y="100" width="250" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="zoCEwNkJ6u1gDNWh_-mj-31" value="启动顺序 (depends_on)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="149" y="100" width="250" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
