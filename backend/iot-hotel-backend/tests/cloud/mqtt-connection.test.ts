@@ -23,6 +23,9 @@ describe('MQTT连接测试（云端环境）', () => {
 
   let client: mqtt.MqttClient;
 
+  // 设置全局超时
+  jest.setTimeout(60000);
+
   // 跳过所有测试如果环境变量设置
   const shouldSkip = process.env.SKIP_MQTT_TESTS === 'true';
 
@@ -208,12 +211,19 @@ describe('MQTT连接测试（云端环境）', () => {
         }
       });
 
-      // 模拟断开连接
+      // 模拟断开连接 - 销毁底层流以触发自动重连逻辑
       setTimeout(() => {
         reconnected = true;
-        client.end(true);
-      }, 500);
-    });
+        // @ts-ignore - 访问内部流来模拟非正常断开
+        if (client.stream && typeof client.stream.destroy === 'function') {
+          client.stream.destroy();
+        } else {
+          // 回退方案：如果无法销毁流，则手动触发错误或重新连接逻辑
+          console.log('⚠️ 无法直接销毁流，尝试强制重连...');
+          (client as any).reconnect();
+        }
+      }, 1000);
+    }, 60000); // 增加超时时间到 60 秒
   });
 });
 

@@ -1,6 +1,6 @@
-import { hashPassword, comparePassword } from '../src/utils/password';
-import { generateToken, verifyToken } from '../src/utils/jwt';
-import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../src/utils/role';
+import { hashPassword, comparePassword } from '../../src/utils/password';
+import { generateToken, verifyToken } from '../../src/utils/jwt';
+import { normalizeRole, isSystemAdmin, isHotelAdmin, isStaff, isCustomer, isGuest } from '../../src/utils/role';
 
 /**
  * 认证工具测试

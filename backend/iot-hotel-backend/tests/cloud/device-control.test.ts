@@ -18,6 +18,9 @@ describe('设备控制测试（云端环境）', () => {
   let client: mqtt.MqttClient;
   const shouldSkip = process.env.SKIP_MQTT_TESTS === 'true';
 
+  // 设置全局超时
+  jest.setTimeout(60000);
+
   beforeEach((done) => {
     if (shouldSkip) {
       done();
