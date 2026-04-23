@@ -422,3 +422,15 @@ class MQTTClient:
         if room_id:
             payload["room_id"] = room_id
         return self.publish(TOPIC_SECURITY_EVENT, payload)
+
+    def publish_occupancy_data(self, pir_activity, card_power_state, power_consumption=0.0):
+        """上报房间占用及电力状态 (新增)"""
+        topic = f"hotel/devices/{self.device_id}/occupancy/report"
+        payload = {
+            "device_id": self.device_id,
+            "pir_activity": pir_activity,
+            "card_power_state": 1 if card_power_state else 0,
+            "power_consumption": power_consumption,
+            "timestamp": datetime.now().isoformat()
+        }
+        return self.publish(topic, payload)

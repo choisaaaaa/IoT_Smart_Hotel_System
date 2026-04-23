@@ -461,6 +461,7 @@ class BaseDeviceEmulator:
             'success': '#52c41a',
             'warning': '#faad14',
             'danger': '#ff4d4f',
+            'info': '#13c2c2',
             'bg': '#f0f2f5',
             'card': '#ffffff',
             'text': '#262626',
@@ -600,25 +601,51 @@ class BaseDeviceEmulator:
             if level == "INFO": self.logger.info(message)
             elif level == "ERROR": self.logger.error(message)
             elif level == "WARNING": self.logger.warning(message)
+            elif level == "SUCCESS": self.logger.info(f"[SUCCESS] {message}")
+        else:
+            print(log_msg.strip())
 
-        # 记录到 GUI
+        # 在主线程更新 GUI
         if hasattr(self, 'log_text') and self.log_text:
-            try:
-                self.log_text.insert(tk.END, log_msg)
-                self.log_text.see(tk.END)
+            self.root.after(0, lambda: self._append_log_to_ui(log_msg, level))
 
-                # 设置颜色
-                if level == "ERROR":
-                    self.log_text.tag_add("error", "end-2c linestart", "end-1c")
-                    self.log_text.tag_config("error", foreground=self.colors['danger'])
-                elif level == "WARNING":
-                    self.log_text.tag_add("warning", "end-2c linestart", "end-1c")
-                    self.log_text.tag_config("warning", foreground=self.colors['warning'])
-                elif level == "SUCCESS":
-                    self.log_text.tag_add("success", "end-2c linestart", "end-1c")
-                    self.log_text.tag_config("success", foreground=self.colors['success'])
-            except Exception:
-                pass
+    def _play_beep(self, frequency=1000, duration=200):
+        """播放蜂鸣声 (跨平台支持)"""
+        import platform
+        import threading
+
+        def do_beep():
+            try:
+                if platform.system() == "Windows":
+                    import winsound
+                    winsound.Beep(frequency, duration)
+                else:
+                    # Linux/macOS 使用终端响铃
+                    print("\a", end="", flush=True)
+            except Exception as e:
+                print(f"Buzzer error: {e}")
+
+        # 使用线程避免阻塞 UI
+        threading.Thread(target=do_beep, daemon=True).start()
+
+    def _append_log_to_ui(self, log_msg, level):
+        """在主线程中将日志内容添加到 GUI 控件"""
+        try:
+            self.log_text.insert(tk.END, log_msg)
+            self.log_text.see(tk.END)
+
+            # 设置颜色
+            if level == "ERROR":
+                self.log_text.tag_add("error", "end-2c linestart", "end-1c")
+                self.log_text.tag_config("error", foreground=self.colors['danger'])
+            elif level == "WARNING":
+                self.log_text.tag_add("warning", "end-2c linestart", "end-1c")
+                self.log_text.tag_config("warning", foreground=self.colors['warning'])
+            elif level == "SUCCESS":
+                self.log_text.tag_add("success", "end-2c linestart", "end-1c")
+                self.log_text.tag_config("success", foreground=self.colors['success'])
+        except Exception:
+            pass
 
     def _toggle_connection(self):
         """切换连接状态"""
@@ -806,17 +833,28 @@ class BaseDeviceEmulator:
         # 使用 daemon 线程，程序退出时自动终止
         threading.Thread(target=play_thread, daemon=True).start()
 
-    def _play_beep(self, frequency=1000, duration=200):
-        """异步播放模拟蜂鸣器声音 (避免卡死UI)"""
-        def beep_thread():
+    def _beep(self, count=1):
+        """蜂鸣器提示音 - 增强跨平台兼容性"""
+        import threading
+        def play_beep():
             try:
-                import winsound
-                # winsound.Beep 是同步阻塞的，必须放在独立线程
-                winsound.Beep(frequency, duration)
-            except (ImportError, Exception):
-                pass
-
-        threading.Thread(target=beep_thread, daemon=True).start()
+                import platform
+                if platform.system() == "Windows":
+                    import winsound
+                    for i in range(count):
+                        winsound.Beep(1200 if count == 1 else 1800, 250)
+                        if i < count - 1: time.sleep(0.1)
+                else:
+                    # Linux/Mac 尝试使用 print ASCII 控制字符
+                    for i in range(count):
+                        print('\a', end='', flush=True)
+                        time.sleep(0.3)
+            except Exception as e:
+                self._log(f"[音频异常] {e}", "DEBUG")
+        
+        # 异步播放，避免阻塞 UI 线程
+        threading.Thread(target=play_beep, daemon=True).start()
+        self._log(f"[蜂鸣器] 嘀{'嘀' * (count - 1)}")
 
     def _update_audit_status_display(self):
         """更新审核状态显示"""

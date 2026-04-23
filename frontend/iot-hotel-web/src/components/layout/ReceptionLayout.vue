@@ -18,104 +18,103 @@
         </div>
       </div>
       
-      <a-menu
-        v-model:selectedKeys="selectedKeys"
-        mode="inline"
-        theme="light"
-        @click="handleMenuClick"
-        class="reception-menu"
-      >
-        <a-menu-item key="/reception/dashboard">
-          <template #icon><DashboardOutlined /></template>
-          <span>前台总览</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/reception-center">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/reception-center']" :offset="[10, 0]">
-              <BellOutlined />
-            </a-badge>
-          </template>
-          <span>接待中心</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/device-management">
-          <template #icon><ControlOutlined /></template>
-          <span>设备管理</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/bookings">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/bookings']" :offset="[10, 0]">
-              <CalendarOutlined />
-            </a-badge>
-          </template>
-          <span>预订管理</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/room-availability">
-          <template #icon><ApartmentOutlined /></template>
-          <span>客房余量</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/workorders">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/workorders']" :offset="[10, 0]">
-              <ToolOutlined />
-            </a-badge>
-          </template>
-          <span>工单处理</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/delivery">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/delivery']" :offset="[10, 0]">
-              <SendOutlined />
-            </a-badge>
-          </template>
-          <span>客房送物</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/voice-calls">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/voice-calls']" :offset="[10, 0]">
-              <PhoneOutlined />
-            </a-badge>
-          </template>
-          <span>语音通话</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/environment">
-          <template #icon>
-            <a-badge :count="notificationStore.moduleUnreadCounts['/reception/environment']" :offset="[10, 0]">
-              <EnvironmentOutlined />
-            </a-badge>
-          </template>
-          <span>环境监测</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/price-calendar">
-          <template #icon><DollarOutlined /></template>
-          <span>价格日历</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/coupons">
-          <template #icon><TagOutlined /></template>
-          <span>优惠券</span>
-        </a-menu-item>
-        
-        <a-menu-item key="/reception/bills">
-          <template #icon><FileTextOutlined /></template>
-          <span>账单报表</span>
-        </a-menu-item>
-      </a-menu>
-      
-      <div v-show="!collapsed" class="sider-footer">
-        <div class="work-status">
-          <span class="status-indicator online"></span>
-          <span class="status-text">工作中</span>
-        </div>
-        <div class="work-time">{{ currentTime }}</div>
+      <div class="sider-menu-wrapper">
+        <a-menu
+          v-model:selectedKeys="selectedKeys"
+          mode="inline"
+          theme="light"
+          @click="handleMenuClick"
+          class="reception-menu"
+        >
+          <a-menu-item key="/reception/dashboard">
+            <template #icon><DashboardOutlined /></template>
+            <span>前台总览</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/reception-center">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/reception-center']" :offset="[10, 0]">
+                <BellOutlined />
+              </a-badge>
+            </template>
+            <span>接待中心</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/device-management">
+            <template #icon><ControlOutlined /></template>
+            <span>设备管理</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/bookings">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/bookings']" :offset="[10, 0]">
+                <CalendarOutlined />
+              </a-badge>
+            </template>
+            <span>预订管理</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/room-availability">
+            <template #icon><ApartmentOutlined /></template>
+            <span>客房余量</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/workorders">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/workorders']" :offset="[10, 0]">
+                <ToolOutlined />
+              </a-badge>
+            </template>
+            <span>工单处理</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/delivery">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/delivery']" :offset="[10, 0]">
+                <SendOutlined />
+              </a-badge>
+            </template>
+            <span>客房送物</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/voice-calls">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/voice-calls']" :offset="[10, 0]">
+                <PhoneOutlined />
+              </a-badge>
+            </template>
+            <span>语音通话</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/environment">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/environment']" :offset="[10, 0]">
+                <EnvironmentOutlined />
+              </a-badge>
+            </template>
+            <span>环境监测</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/price-calendar">
+            <template #icon><DollarOutlined /></template>
+            <span>价格日历</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/coupons">
+            <template #icon><TagOutlined /></template>
+            <span>优惠券</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/bills">
+            <template #icon><FileTextOutlined /></template>
+            <span>账单报表</span>
+          </a-menu-item>
+          
+          <a-menu-item key="/reception/privilege-card">
+            <template #icon><SafetyOutlined /></template>
+            <span>特权卡发放</span>
+          </a-menu-item>
+        </a-menu>
       </div>
     </a-layout-sider>
 
@@ -410,6 +409,7 @@ function playNotificationSound() {
 .reception-layout {
   min-height: 100vh;
   background: var(--hotel-bg);
+  overflow-x: hidden; /* 防止水平滚动条 */
 }
 
 .reception-sider {
@@ -420,6 +420,27 @@ function playNotificationSound() {
   z-index: 100;
   box-shadow: 2px 0 12px rgba(26, 43, 74, 0.08);
   background: #fff;
+}
+
+.reception-sider :deep(.ant-layout-sider-children) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sider-menu-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sider-menu-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(26, 43, 74, 0.1);
+  border-radius: 2px;
 }
 
 .sider-header {
@@ -494,52 +515,6 @@ function playNotificationSound() {
 
 .reception-menu :deep(.ant-menu-item-selected .anticon) {
   color: #fff;
-}
-
-.sider-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 16px 20px;
-  border-top: 1px solid var(--hotel-border);
-  background: var(--hotel-bg-secondary);
-}
-
-.work-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--hotel-text-muted);
-}
-
-.status-indicator.online {
-  background: var(--hotel-success);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.status-text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--hotel-text);
-}
-
-.work-time {
-  font-size: 12px;
-  color: var(--hotel-text-muted);
-  padding-left: 16px;
 }
 
 .reception-header {
@@ -678,7 +653,7 @@ function playNotificationSound() {
 .reception-content {
   margin: 24px;
   margin-left: 264px;
-  min-height: calc(100vh - 72px - 80px);
+  min-height: calc(100vh - 72px - 80px); /* 减去 header 和 footer 高度 */
   transition: margin-left 0.2s;
 }
 

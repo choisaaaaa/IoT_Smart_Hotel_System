@@ -72,6 +72,7 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.ptt_button_pressed = False  # PTT/接听按键状态
         self.scene_button_pressed = False  # 场景按键状态
         self.rfid_card_present = False  # RFID卡片状态
+        self.power_card_inserted = False  # 插卡取电状态
         self.spi_flash_w25q64 = True  # W25Q64 SPI Flash状态
 
         super().__init__(
@@ -131,8 +132,14 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.rfid_status_label.pack()
         tk.Label(rc522_frame, text="SPI: SDA→GPIO10 SCK→GPIO12\nMOSI→GPIO11 MISO→GPIO13", 
                  font=("Consolas", 8), bg="#f5f5f5", fg="#666").pack(pady=5)
-        tk.Button(rc522_frame, text="模拟刷卡", command=self._simulate_card_swipe,
-                  relief=tk.FLAT, bg=self.colors['primary'], fg="white", font=("Arial", 8)).pack()
+        
+        rc522_btn_f = tk.Frame(rc522_frame, bg="#f5f5f5")
+        rc522_btn_f.pack()
+        tk.Button(rc522_btn_f, text="刷卡开门", command=self._simulate_card_swipe,
+                  relief=tk.FLAT, bg=self.colors['primary'], fg="white", font=("Arial", 8)).pack(side=tk.LEFT, padx=2)
+        self.power_card_btn = tk.Button(rc522_btn_f, text="放置取电", command=self._toggle_power_card,
+                  relief=tk.FLAT, bg=self.colors['warning'], fg="white", font=("Arial", 8))
+        self.power_card_btn.pack(side=tk.LEFT, padx=2)
         
         # OLED状态
         oled_frame = tk.Frame(comm_grid, bg="#f5f5f5", padx=10, pady=10)
@@ -433,13 +440,71 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.ai_chat.config(state=tk.DISABLED)
         self._add_chat("assistant", "您好，我是您的智能管家。您可以对我说\"开灯\"、\"帮我叫前台\"或者\"我想睡觉了\"。")
 
+    def _toggle_power_card(self):
+        """切换插卡取电状态"""
+        self.power_card_inserted = not self.power_card_inserted
+        if self.power_card_inserted:
+            self.power_card_btn.config(text="取走房卡", bg="#595959")
+            self._log("房卡已插入取电槽，开启全屋电力 (继电器4)")
+            self._beep(1)
+            # 开启继电器4 (插座/总电)
+            if not self.relay_status[3]:
+                self._toggle_relay(3)
+            # 开启主灯
+            if not self.light_on:
+                self._toggle_light()
+        else:
+            self.power_card_btn.config(text="放置取电", bg=self.colors['warning'])
+            self._log("房卡已取走，10秒后将自动断电...", "WARNING")
+            self._beep(2)
+            
+            # 模拟延时断电
+            def delayed_power_off():
+                time.sleep(10)
+                if not self.power_card_inserted:
+                    self._log("延时断电触发：关闭全屋电力")
+                    if self.relay_status[3]: self._toggle_relay(3)
+                    if self.light_on: self._toggle_light()
+                    if self.air_on: self._toggle_ac()
+                    self._update_oled()
+            
+            threading.Thread(target=delayed_power_off, daemon=True).start()
+        
+        self._update_oled()
+        self._report_occupancy() # 立即上报一次状态
+
+    def _report_occupancy(self):
+        """上报房间占用状态"""
+        if self.mqtt_client and self.connected:
+            self.mqtt_client.publish_occupancy_data(
+                pir_activity=self.millimeter_wave_detected,
+                card_power_state=self.power_card_inserted,
+                power_consumption=120.5 if self.power_card_inserted else 5.0
+            )
+
     def _simulate_card_swipe(self):
-        """模拟RFID刷卡"""
-        self.rfid_card_present = True
-        self.rfid_status_label.config(text="✓ 已刷卡", fg=self.colors['success'])
-        self._log("RFID卡片已刷卡 (模拟)")
+        """模拟 RFID 刷卡开门"""
+        if not self.mqtt_client or not self.connected:
+            self._log("未连接到服务器，无法校验刷卡", "ERROR")
+            return
+        
+        # 允许用户输入自定义 UID 进行刷卡测试
+        from tkinter import simpledialog
+        uid_hex = simpledialog.askstring("RFID 模拟", "请输入卡片 UID (8位十六进制):", initialvalue="A1B2C3D4")
+        
+        if not uid_hex:
+            return
+
+        uid_hex = uid_hex.strip().upper()
+        self._log(f"探测到卡片 [UID: {uid_hex}]，正在请求云端鉴权...")
         self._beep(1)
-        self.root.after(2000, self._clear_card)
+        self.rfid_status_label.config(text="● 正在校验...", fg=self.colors['primary'])
+        
+        # 发送刷卡事件到服务器
+        self.mqtt_client.publish_card_uid_event(uid_hex, room_id=self.room_id_var.get())
+        
+        # 3秒后恢复状态
+        self.root.after(3000, lambda: self.rfid_status_label.config(text="✓ 就绪", fg=self.colors['success']))
     
     def _clear_card(self):
         """清除卡片状态"""
@@ -554,16 +619,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         self.root.after(2000, lambda: self.amp_status.config(text="状态: 正常", fg=self.colors['success']))
 
     def _beep(self, count=1):
-        """蜂鸣器提示音"""
-        try:
-            import winsound
-            for i in range(count):
-                winsound.Beep(1000 if count == 1 else 2000, 200)
-                if i < count - 1:
-                    time.sleep(0.1)
-        except Exception:
-            # 如果winsound不可用，使用视觉反馈代替
-            self._log(f"[蜂鸣器] 嘀{'嘀' * (count - 1)}")
+        """覆盖基类蜂鸣器，确保异步播放"""
+        super()._beep(count)
 
     def _update_oled(self):
         self.oled_canvas.delete("all")
@@ -585,7 +642,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             status_str = f"LIGHT: {'ON' if self.light_on else 'OFF'} | AC: {'ON' if self.air_on else 'OFF'} | DOOR: {'OPEN' if self.door_unlocked else 'LOCKED'}"
             self.oled_canvas.create_text(30, 115, text=status_str, fill="#1890ff", font=("Consolas", 12), anchor=tk.W)
             
-            # 显示雷达状态
+            # 显示雷达和房卡状态
+            power_str = "CARD: " + ("INSERTED" if self.power_card_inserted else "REMOVED")
+            power_color = "#52c41a" if self.power_card_inserted else "#faad14"
+            self.oled_canvas.create_text(w-30, 80, text=power_str, fill=power_color, font=("Consolas", 10, "bold"), anchor=tk.E)
+
             radar_str = "RADAR: " + ("DETECT" if self.millimeter_wave_detected else "CLEAR")
             radar_color = "#ff4d4f" if self.millimeter_wave_detected else "#52c41a"
             self.oled_canvas.create_text(w-30, 115, text=radar_str, fill=radar_color, font=("Consolas", 10), anchor=tk.E)
