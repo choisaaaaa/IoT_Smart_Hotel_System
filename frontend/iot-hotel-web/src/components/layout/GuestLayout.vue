@@ -6,7 +6,7 @@
         <div class="header-left">
           <div class="logo" @click="$router.push('/guest/booking')">
             <div class="logo-icon">
-              <HomeOutlined />
+              <img src="/logo-small.png" alt="Logo" class="logo-img" />
             </div>
             <div class="logo-text">
               <span class="brand-name">慧宿智联</span>
@@ -773,20 +773,18 @@ const handleLogout = async () => {
 }
 
 .logo-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, var(--hotel-primary) 0%, var(--hotel-primary-light) 100%);
-  border-radius: var(--hotel-radius-lg);
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 24px;
-  box-shadow: 
-    0 4px 15px rgba(26, 43, 74, 0.25),
-    0 0 0 2px rgba(201, 169, 98, 0.2);
-  position: relative;
-  overflow: hidden;
+  margin-right: 12px;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .logo-icon::before {

@@ -10,7 +10,7 @@
     >
       <div class="sider-header" @click="$router.push('/hotel-admin/dashboard')">
         <div class="sider-logo">
-          <SettingOutlined />
+          <img src="/logo-small.png" alt="Logo" class="logo-img" />
         </div>
         <div v-show="!collapsed" class="sider-brand">
           <span class="brand-title">管理后台</span>
@@ -283,16 +283,18 @@ onMounted(() => {
 }
 
 .sider-logo {
-  width: 44px;
-  height: 44px;
-  background: var(--hotel-gold);
-  border-radius: var(--hotel-radius);
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 22px;
   flex-shrink: 0;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sider-brand {
