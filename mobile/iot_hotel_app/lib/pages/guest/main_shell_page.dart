@@ -7,6 +7,7 @@ import 'member_page.dart';
 import 'profile_page.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../core/services/notification_provider.dart';
 
 class MainShellPage extends ConsumerStatefulWidget {
   const MainShellPage({super.key});
@@ -22,6 +23,7 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final mode = authState.currentMode;
+    final unreadCount = ref.watch(realtimeNotificationProvider).unreadCount;
 
     final List<Widget> pages;
     final List<BottomNavigationBarItem> navItems;
@@ -33,10 +35,22 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
           const HotelListPage(),
           const ProfilePage(),
         ];
-        navItems = const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-          BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
+        navItems = [
+          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          const BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          BottomNavigationBarItem(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person_outline),
+            ),
+            activeIcon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person),
+            ),
+            label: '我的',
+          ),
         ];
         break;
       case AppMode.customer:
@@ -47,12 +61,24 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
           const MemberPage(),
           const ProfilePage(),
         ];
-        navItems = const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
-          BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
-          BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
-          BottomNavigationBarItem(icon: Icon(Icons.card_membership_outlined), activeIcon: Icon(Icons.card_membership), label: '会员'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '我的'),
+        navItems = [
+          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
+          const BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
+          const BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
+          const BottomNavigationBarItem(icon: Icon(Icons.card_membership_outlined), activeIcon: Icon(Icons.card_membership), label: '会员'),
+          BottomNavigationBarItem(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person_outline),
+            ),
+            activeIcon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person),
+            ),
+            label: '我的',
+          ),
         ];
         break;
       case AppMode.system:
@@ -79,7 +105,19 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
           const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '首页'),
           const BottomNavigationBarItem(icon: Icon(Icons.search_outlined), activeIcon: Icon(Icons.search), label: '逛逛'),
           const BottomNavigationBarItem(icon: Icon(Icons.room_service_outlined), activeIcon: Icon(Icons.room_service), label: '服务'),
-          BottomNavigationBarItem(icon: const Icon(Icons.person_outline), activeIcon: const Icon(Icons.person), label: mode == AppMode.manager ? '管理' : '前台'),
+          BottomNavigationBarItem(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person_outline),
+            ),
+            activeIcon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.person),
+            ),
+            label: mode == AppMode.manager ? '管理' : '前台',
+          ),
         ];
         break;
     }

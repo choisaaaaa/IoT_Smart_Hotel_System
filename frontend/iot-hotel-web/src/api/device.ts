@@ -2,7 +2,7 @@ import request from './request'
 import type { DeviceInfo, ApiResponse } from '@/types'
 
 export const deviceApi = {
-  getDeviceList: (params?: { status?: string; audit_status?: string; room_id?: number }) =>
+  getDeviceList: (params?: { status?: string; audit_status?: string; room_id?: number; hotel_id?: number }) =>
     request.get<ApiResponse<DeviceInfo[]>>('/devices', { params }),
 
   getDeviceDetail: (id: number) =>

@@ -75,19 +75,6 @@ export interface DeviceInfo {
   last_maintenance?: string
 }
 
-export interface EnergyConsumption {
-  room_id: number
-  room_number: string
-  floor_id: number
-  today_kwh: number
-  yesterday_kwh: number
-  this_month_kwh: number
-  peak_usage: number
-  peak_time: string
-  devices_count: number
-  efficiency_rating: 'A' | 'B' | 'C' | 'D' | 'F'
-}
-
 export interface EventLog {
   id: number
   event_type: 'fire_alarm' | 'device_error' | 'environment_warning' | 'device_control' | 'maintenance' | 'energy_alert'
@@ -172,18 +159,6 @@ export const environmentApi = {
       action: data.action,
       value: data.value
     })
-  },
-
-  getEnergyConsumption: async (params?: { room_id?: number; period?: string }) => {
-    const queryParams: any = {}
-    if (params?.room_id) queryParams.room_id = params.room_id
-    if (params?.period) queryParams.period = params.period
-
-    const res: any = await request.get('/environment/energy', { params: queryParams })
-    if (res?.success && res?.data) {
-      return { data: res.data }
-    }
-    return { data: { consumption: [], total: 0, summary: { total_today_kwh: 0, total_yesterday_kwh: 0, total_month_kwh: 0, savings_rate: 0, estimated_monthly_cost: 0, most_efficient_room: '-', least_efficient_room: '-' } } }
   },
 
   getEventLogs: async (params?: { event_type?: string; severity?: string; limit?: number }) => {

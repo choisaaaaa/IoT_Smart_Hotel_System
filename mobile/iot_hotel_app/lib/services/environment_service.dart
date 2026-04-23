@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
+import '../core/utils/type_utils.dart';
 
 class EnvironmentService {
   final DioClient _dioClient = DioClient();
@@ -14,56 +15,19 @@ class EnvironmentService {
     try {
       final queryParams = <String, dynamic>{};
       if (roomId != null) queryParams['room_id'] = roomId;
+      if (floorId != null) queryParams['floor_id'] = floorId;
       if (status != null) queryParams['status'] = status;
 
       final response = await _dioClient.get(
-        ApiConstants.devices,
+        ApiConstants.environment,
         queryParameters: queryParams,
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         final data = response.data['data'];
-        List<dynamic> deviceList = [];
-        if (data is List) {
-          deviceList = List<dynamic>.from(data);
-        } else if (data is Map && data.containsKey('list')) {
-          deviceList = List<dynamic>.from(data['list'] ?? []);
+        if (data is Map<String, dynamic>) {
+          return ApiResult.success(data);
         }
-
-        final sensorDevices = deviceList.where((d) =>
-            d['device_type'] == 'sensor' ||
-            d['device_type'] == 'smoke_detector' ||
-            d['device_type'] == 'temperature_sensor' ||
-            d['device_type'] == 'humidity_sensor' ||
-            d['device_type'] == 'thermostat').toList();
-
-        final List<Map<String, dynamic>> envList = [];
-        for (final device in sensorDevices) {
-          try {
-            final sensorRes = await _dioClient.get(
-              '${ApiConstants.devices}/${device['id']}/sensor-data/latest',
-            );
-            if (sensorRes.statusCode == 200 && sensorRes.data['code'] == 200) {
-              final sensorData = sensorRes.data['data'];
-              if (sensorData is List && sensorData.isNotEmpty) {
-                envList.add({
-                  'room_id': device['room_id'],
-                  'room_number': device['room_number'] ?? device['room_id'] ?? '-',
-                  'device_id': device['id'],
-                  'device_name': device['device_name'] ?? '传感器',
-                  'device_type': device['device_type'],
-                  'sensor_data': sensorData,
-                  'status': device['device_status'] ?? device['status'] ?? 'offline',
-                });
-              }
-            }
-          } catch (_) {}
-        }
-
-        return ApiResult.success({
-          'list': envList,
-          'total': envList.length,
-          'devices': deviceList,
-        });
+        return ApiResult.success({'list': [], 'total': 0});
       }
       return ApiResult.failure(response.data['message'] ?? '获取环境数据失败');
     } catch (e) {
@@ -86,12 +50,12 @@ class EnvironmentService {
         '${ApiConstants.energy}/consumption',
         queryParameters: queryParams,
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>);
       }
       return ApiResult.failure(response.data['message'] ?? '获取环境历史失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -118,7 +82,7 @@ class EnvironmentService {
         ApiConstants.deviceAlarms,
         queryParameters: queryParams,
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         final data = response.data['data'] as Map<String, dynamic>;
         final List<dynamic> alarmList = List<dynamic>.from(data['list'] ?? []);
 
@@ -195,7 +159,7 @@ class EnvironmentService {
       }
       return ApiResult.failure(response.data['message'] ?? '获取火警记录失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -209,12 +173,12 @@ class EnvironmentService {
           if (notes != null) 'handle_remark': notes,
         },
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '确认火警失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -227,12 +191,12 @@ class EnvironmentService {
           if (resolution != null) 'handle_remark': resolution,
         },
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '解决火警失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -245,7 +209,7 @@ class EnvironmentService {
         ApiConstants.devices,
         queryParameters: queryParams,
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         final data = response.data['data'];
         List<dynamic> deviceList = [];
         if (data is List) {
@@ -282,7 +246,7 @@ class EnvironmentService {
       }
       return ApiResult.failure(response.data['message'] ?? '获取房间设备失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -321,12 +285,12 @@ class EnvironmentService {
           'command_value': commandValue,
         },
       );
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(response.data['data'] as Map<String, dynamic>? ?? {});
       }
       return ApiResult.failure(response.data['message'] ?? '控制设备失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -403,7 +367,7 @@ class EnvironmentService {
         'trend': trend,
       });
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -502,7 +466,7 @@ class EnvironmentService {
         },
       });
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 
@@ -522,7 +486,7 @@ class EnvironmentService {
         break;
       case 'warning':
       case 'medium':
-        levelEmoji = '⚡';
+        levelEmoji = '🔔';
         break;
       default:
         levelEmoji = 'ℹ️';
@@ -715,7 +679,7 @@ class EnvironmentService {
         'environment_score': environmentScore,
       });
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('网络错误�?e');
     }
   }
 }

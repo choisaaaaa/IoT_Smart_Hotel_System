@@ -351,6 +351,41 @@
         </a-form>
       </div>
     </a-modal>
+
+    <!-- Sensor Data Modal -->
+    <a-modal 
+      v-model:open="sensorModalVisible" 
+      :title="`实时数据 - ${currentSensor.deviceName}`" 
+      width="700px"
+      :footer="null"
+    >
+      <a-spin :spinning="sensorLoading">
+        <div v-if="sensorData.length === 0 && !sensorLoading" style="text-align: center; padding: 40px; color: #8c8c8c;">
+          <LineChartOutlined style="font-size: 48px; color: #d9d9d9; margin-bottom: 16px;" />
+          <p>暂无传感器数据</p>
+          <p style="font-size: 12px;">设备可能未上报数据或尚未配置传感器</p>
+        </div>
+        <div v-else>
+          <a-row :gutter="[12, 12]">
+            <a-col :xs="24" :sm="12" v-for="sensor in sensorData" :key="sensor.sensor_type">
+              <a-card size="small" :class="['sensor-card', getSensorStatus(sensor)]">
+                <div class="sensor-header">
+                  <span class="sensor-type">{{ getSensorTypeName(sensor.sensor_type) }}</span>
+                  <a-tag :color="getSensorStatusColor(sensor)" size="small">{{ getSensorStatusText(sensor) }}</a-tag>
+                </div>
+                <div class="sensor-value">
+                  {{ sensor.sensor_value ?? '--' }}
+                  <span class="sensor-unit">{{ sensor.unit || '' }}</span>
+                </div>
+                <div class="sensor-meta">
+                  <span>更新: {{ formatTime(sensor.created_at) }}</span>
+                </div>
+              </a-card>
+            </a-col>
+          </a-row>
+        </div>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
@@ -458,6 +493,16 @@ const currentCmd = reactive({
   deviceType: '',
   commandType: 'ping',
   commandValue: ''
+})
+
+const sensorModalVisible = ref(false)
+const sensorLoading = ref(false)
+const sensorData = ref<any[]>([])
+const currentSensor = reactive({
+  id: 0,
+  deviceId: '',
+  deviceName: '',
+  deviceType: ''
 })
 
 // Debug Terminal State
@@ -767,7 +812,71 @@ async function confirmCommand() {
 }
 
 function viewData(device: any) {
-  message.info('实时数据分析功能开发中...')
+  Object.assign(currentSensor, {
+    id: device.id,
+    deviceId: device.device_id,
+    deviceName: device.device_name,
+    deviceType: device.device_type
+  })
+  sensorModalVisible.value = true
+  fetchSensorData(device.id)
+}
+
+async function fetchSensorData(deviceId: number) {
+  sensorLoading.value = true
+  try {
+    const res: any = await request.get(`/devices/${deviceId}/sensor-data/latest`)
+    if (res && res.success && Array.isArray(res.data)) {
+      sensorData.value = res.data
+    } else {
+      sensorData.value = []
+    }
+  } catch (err) {
+    sensorData.value = []
+  } finally {
+    sensorLoading.value = false
+  }
+}
+
+function getSensorTypeName(type: string): string {
+  const map: Record<string, string> = {
+    temperature: '温度',
+    humidity: '湿度',
+    smoke_level: '烟雾浓度',
+    light_level: '光照强度',
+    noise_level: '噪音',
+    pm25: 'PM2.5',
+    co2: 'CO2',
+    motion: '人体感应',
+    door: '门磁',
+    lock: '门锁',
+    power: '功率',
+    voltage: '电压',
+    current: '电流'
+  }
+  return map[type] || type
+}
+
+function getSensorStatus(sensor: any): string {
+  const val = parseFloat(sensor.sensor_value)
+  if (isNaN(val)) return 'normal'
+  const type = sensor.sensor_type
+  if (type === 'temperature' && (val > 35 || val < 10)) return 'warning'
+  if (type === 'humidity' && (val > 80 || val < 20)) return 'warning'
+  if (type === 'smoke_level' && val > 50) return 'danger'
+  if (type === 'pm25' && val > 150) return 'danger'
+  if (type === 'pm25' && val > 75) return 'warning'
+  return 'normal'
+}
+
+function getSensorStatusColor(sensor: any): string {
+  const status = getSensorStatus(sensor)
+  return { normal: 'green', warning: 'orange', danger: 'red' }[status] || 'default'
+}
+
+function getSensorStatusText(sensor: any): string {
+  const status = getSensorStatus(sensor)
+  return { normal: '正常', warning: '预警', danger: '报警' }[status] || '未知'
 }
 
 onMounted(() => {
@@ -1009,6 +1118,29 @@ onMounted(() => {
 .mb-4 { margin-bottom: 16px; }
 .mt-4 { margin-top: 16px; }
 .disabled { cursor: not-allowed; opacity: 0.3; }
+
+.sensor-card {
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+.sensor-card.normal { border-left: 3px solid #52c41a; }
+.sensor-card.warning { border-left: 3px solid #faad14; }
+.sensor-card.danger { border-left: 3px solid #ff4d4f; }
+.sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.sensor-type { font-weight: 600; font-size: 13px; color: #595959; }
+.sensor-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1890ff;
+  line-height: 1.2;
+}
+.sensor-unit { font-size: 14px; font-weight: 400; color: #8c8c8c; margin-left: 4px; }
+.sensor-meta { font-size: 11px; color: #bfbfbf; margin-top: 8px; }
 
 :deep(.ant-tabs-nav) { margin-bottom: 24px; }
 :deep(.ant-card-actions) { background: #fafafa; }

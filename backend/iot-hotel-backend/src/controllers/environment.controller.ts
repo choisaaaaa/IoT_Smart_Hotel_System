@@ -49,19 +49,6 @@ interface FireAlarmRecord {
   description: string;
 }
 
-interface EnergyConsumption {
-  room_id: number;
-  room_number: string;
-  floor_id: number;
-  today_kwh: number;
-  yesterday_kwh: number;
-  this_month_kwh: number;
-  peak_usage: number;
-  peak_time: string;
-  devices_count: number;
-  efficiency_rating: 'A' | 'B' | 'C' | 'D' | 'F';
-}
-
 interface EventLog {
   id: number;
   event_type: 'fire_alarm' | 'device_error' | 'environment_warning' | 'device_control' | 'maintenance' | 'energy_alert';
@@ -674,50 +661,6 @@ class EnvironmentController {
     return map[type] || type;
   }
 
-  async getEnergyConsumption(req: AuthRequest, res: Response) {
-    try {
-      const { room_id, period = 'today' } = req.query;
-
-      const mockEnergyData: EnergyConsumption[] = [
-        { room_id: 1, room_number: '101', floor_id: 1, today_kwh: 12.5, yesterday_kwh: 14.2, this_month_kwh: 385.6, peak_usage: 3.2, peak_time: '19:30', devices_count: 5, efficiency_rating: 'A' },
-        { room_id: 2, room_number: '102', floor_id: 1, today_kwh: 8.3, yesterday_kwh: 9.1, this_month_kwh: 278.4, peak_usage: 2.1, peak_time: '21:00', devices_count: 2, efficiency_rating: 'A' },
-        { room_id: 3, room_number: '111', floor_id: 1, today_kwh: 15.7, yesterday_kwh: 16.8, this_month_kwh: 456.2, peak_usage: 4.5, peak_time: '20:15', devices_count: 2, efficiency_rating: 'B' },
-      ];
-
-      let filteredData = mockEnergyData;
-
-      if (room_id) {
-        filteredData = mockEnergyData.filter(item => item.room_id === parseInt(room_id as string));
-      }
-
-      const totalToday = filteredData.reduce((sum, item) => sum + item.today_kwh, 0);
-      const totalYesterday = filteredData.reduce((sum, item) => sum + item.yesterday_kwh, 0);
-      const totalMonth = filteredData.reduce((sum, item) => sum + item.this_month_kwh, 0);
-
-      const savingsRate = totalYesterday > 0 ? parseFloat(((totalYesterday - totalToday) / totalYesterday * 100).toFixed(1)) : 0;
-
-      res.json({
-        success: true,
-        data: {
-          consumption: filteredData,
-          total: filteredData.length,
-          summary: {
-            total_today_kwh: parseFloat(totalToday.toFixed(1)),
-            total_yesterday_kwh: parseFloat(totalYesterday.toFixed(1)),
-            total_month_kwh: parseFloat(totalMonth.toFixed(1)),
-            savings_rate: savingsRate,
-            estimated_monthly_cost: parseFloat((totalMonth * 0.85).toFixed(2)),
-            most_efficient_room: filteredData.sort((a, b) => a.today_kwh - b.today_kwh)[0]?.room_number || '-',
-            least_efficient_room: filteredData.sort((a, b) => b.today_kwh - a.today_kwh)[0]?.room_number || '-'
-          }
-        }
-      });
-    } catch (error) {
-      logger.error('Get energy consumption error:', (error as Error).message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  }
-
   async getEventLogs(req: AuthRequest, res: Response) {
     try {
       const { event_type, severity, limit = 100 } = req.query;
@@ -970,14 +913,6 @@ class EnvironmentController {
           error: errorDevices,
           running: onlineDevices,
           maintenance_due: 0
-        },
-        energy: {
-          today_total: 0,
-          yesterday_total: 0,
-          savings_percent: 0,
-          monthly_estimate: 0,
-          monthly_cost: 0,
-          peak_hour: '19:00-20:00'
         },
         alerts: {
           critical: byLevel['emergency'] || byLevel['critical'] || 0,

@@ -1061,17 +1061,31 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
   String _searchQuery = '';
   String? _statusFilter;
   String? _typeFilter;
+  int? _selectedHotelId;
+  List<Hotel> _hotels = [];
 
   @override
   void initState() {
     super.initState();
-    _loadDevices();
+    _loadHotelsAndDevices();
+  }
+
+  Future<void> _loadHotelsAndDevices() async {
+    try {
+      final hotelResult = await ref.read(hotelServiceProvider).getHotels(pageSize: 100);
+      if (hotelResult.success && hotelResult.data != null) {
+        _hotels = hotelResult.data ?? [];
+      }
+    } catch (e) {
+      debugPrint('load hotels: $e');
+    }
+    await _loadDevices();
   }
 
   Future<void> _loadDevices() async {
     setState(() => _isLoading = true);
     try {
-      final result = await ref.read(deviceServiceProvider).getAllDevices(status: _statusFilter);
+      final result = await ref.read(deviceServiceProvider).getAllDevices(status: _statusFilter, hotelId: _selectedHotelId);
       if (result.success && mounted) {
         setState(() => _devices = List<Map<String, dynamic>>.from(result.data ?? []));
       }
@@ -1105,6 +1119,7 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
+      if (_hotels.isNotEmpty) _buildHotelSelector(),
       _buildStatsBar(),
       _buildSearchBar(),
       _buildFilterBar(),
@@ -1149,6 +1164,39 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
               ),
       ),
     ]);
+  }
+
+  Widget _buildHotelSelector() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Icon(Icons.hotel, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text('选择酒店：', style: GoogleFonts.notoSansSc(fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<int>(
+              value: _selectedHotelId,
+              isExpanded: true,
+              hint: const Text('全部酒店'),
+              items: [
+                const DropdownMenuItem<int>(value: null, child: Text('全部酒店')),
+                ..._hotels.map<DropdownMenuItem<int>>((h) => DropdownMenuItem(
+                  value: h.id,
+                  child: Text(h.hotelName, overflow: TextOverflow.ellipsis),
+                )),
+              ],
+              onChanged: (v) {
+                setState(() => _selectedHotelId = v);
+                _loadDevices();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStatsBar() {

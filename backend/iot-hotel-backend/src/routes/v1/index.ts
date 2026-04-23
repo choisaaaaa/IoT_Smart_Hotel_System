@@ -33,7 +33,6 @@ import deviceGroups from './device-groups';
 import deviceAlarms from './device-alarms';
 import irRemote from './ir-remote';
 import scenes from './scenes';
-import energy from './energy';
 import firmware from './firmware';
 
 const router = Router();
@@ -59,7 +58,6 @@ router.use('/device-groups', deviceGroups);
 router.use('/device-alarms', deviceAlarms);
 router.use('/ir-remote', irRemote);
 router.use('/scenes', scenes);
-router.use('/energy', energy);
 router.use('/firmware', firmware);
 router.use('/users', users);
 router.use('/upload', upload);

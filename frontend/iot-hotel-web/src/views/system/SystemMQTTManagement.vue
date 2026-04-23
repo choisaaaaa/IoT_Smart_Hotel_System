@@ -1,7 +1,6 @@
 <template>
   <div class="mqtt-management">
     <a-row :gutter="16">
-      <!-- MQTT 服务状态 -->
       <a-col :span="24" style="margin-bottom: 16px;">
         <a-card title="MQTT 服务状态" :bordered="false">
           <template #extra>
@@ -18,7 +17,6 @@
         </a-card>
       </a-col>
 
-      <!-- 手动下发指令 -->
       <a-col :span="8">
         <a-card title="手动下发指令" :bordered="false">
           <a-form :model="commandForm" layout="vertical" @finish="sendCommand">
@@ -61,11 +59,22 @@
         </a-card>
       </a-col>
 
-      <!-- 通信记录 -->
       <a-col :span="16">
         <a-card title="MQTT 通信记录" :bordered="false">
           <template #extra>
             <a-space>
+              <a-select
+                v-if="isSystemAdmin"
+                v-model:value="filterHotelId"
+                placeholder="筛选酒店"
+                style="width: 180px"
+                allow-clear
+                @change="fetchLogs"
+              >
+                <a-select-option v-for="hotel in hotels" :key="hotel.id" :value="hotel.id">
+                  {{ hotel.hotel_name }}
+                </a-select-option>
+              </a-select>
               <a-input-search
                 v-model:value="filter.deviceId"
                 placeholder="搜索设备ID"
@@ -112,11 +121,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import { formatDotDateTime, formatDateTime } from '@/utils/date'
+import { hotelManageApi, type HotelManageInfo } from '@/api/hotel-manage'
+import { useAppStore } from '@/stores/app'
+import { normalizeRole, CANONICAL_ROLES } from '@/api/auth'
+
+const appStore = useAppStore()
+appStore.initUserInfo()
+
+const isSystemAdmin = computed(() => normalizeRole(appStore.userInfo?.role) === CANONICAL_ROLES.SYSTEM_ADMIN)
 
 const status = ref({
   connected: false,
@@ -148,6 +165,8 @@ const logs = ref([])
 const filter = reactive({
   deviceId: ''
 })
+const filterHotelId = ref<number | undefined>(undefined)
+const hotels = ref<HotelManageInfo[]>([])
 
 const pagination = reactive({
   current: 1,
@@ -183,15 +202,16 @@ const fetchStatus = async () => {
 const fetchLogs = async () => {
   loading.logs = true
   try {
-    const res = await request.get('/mqtt/logs', {
-      params: {
-        device_id: filter.deviceId,
-        limit: pagination.pageSize,
-        offset: (pagination.current - 1) * pagination.pageSize
-      }
-    })
+    const params: any = {
+      device_id: filter.deviceId,
+      limit: pagination.pageSize,
+      offset: (pagination.current - 1) * pagination.pageSize
+    }
+    if (isSystemAdmin.value && filterHotelId.value) {
+      params.hotel_id = filterHotelId.value
+    }
+    const res = await request.get('/mqtt/logs', { params })
     logs.value = res.data
-    // 模拟总数，实际后端应返回总数
     pagination.total = res.data.length < pagination.pageSize ? (pagination.current - 1) * pagination.pageSize + res.data.length : 1000
   } catch (err) {
     message.error('获取通信日志失败')
@@ -200,15 +220,28 @@ const fetchLogs = async () => {
   }
 }
 
+const fetchHotels = async () => {
+  if (!isSystemAdmin.value) return
+  try {
+    const res: any = await hotelManageApi.getAllHotels()
+    if (res && res.code === 200 && Array.isArray(res.data)) {
+      hotels.value = res.data
+    } else {
+      hotels.value = []
+    }
+  } catch (error) {
+    console.error('获取酒店列表失败:', error)
+    hotels.value = []
+  }
+}
+
 const sendCommand = async () => {
   loading.send = true
   try {
-    // 尝试解析 JSON
     let payload = commandForm.payload
     try {
       payload = JSON.parse(commandForm.payload)
     } catch (e) {
-      // 如果不是 JSON，则按原样发送
     }
 
     await request.post('/mqtt/send', {
@@ -218,7 +251,7 @@ const sendCommand = async () => {
       retain: commandForm.retain
     })
     message.success('指令已发送')
-    fetchLogs() // 刷新日志以显示发出的指令
+    fetchLogs()
   } catch (err) {
     message.error('指令发送失败')
   } finally {
@@ -235,6 +268,7 @@ const handleTableChange = (pag: any) => {
 onMounted(() => {
   fetchStatus()
   fetchLogs()
+  fetchHotels()
 })
 </script>
 

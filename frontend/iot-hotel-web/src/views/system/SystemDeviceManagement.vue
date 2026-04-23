@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { deviceApi } from '@/api/device'
 import { hotelManageApi, type HotelManageInfo } from '@/api/hotel-manage'
@@ -114,10 +114,15 @@ const formatTime = (t: string) => t ? formatDateTime(t) : '-'
 const fetchDevices = async () => {
   loading.value = true
   try {
-    const res: any = await deviceApi.getDeviceList()
-    // 后端返回 { success: true, data: [...] }
+    const params: any = {}
+    if (filterHotel.value) params.hotel_id = filterHotel.value
+    if (filterStatus.value) params.audit_status = filterStatus.value === 'online' || filterStatus.value === 'offline' || filterStatus.value === 'error' ? undefined : filterStatus.value
+    const res: any = await deviceApi.getDeviceList(params)
     if (res && res.success && Array.isArray(res.data)) {
       devices.value = res.data
+      if (filterStatus.value && ['online', 'offline', 'error'].includes(filterStatus.value)) {
+        devices.value = devices.value.filter((d: any) => d.device_status === filterStatus.value)
+      }
     } else {
       devices.value = []
     }
@@ -162,6 +167,10 @@ const handleDelete = async (id: number) => {
 onMounted(() => {
   fetchDevices()
   fetchHotels()
+})
+
+watch([filterHotel, filterStatus], () => {
+  fetchDevices()
 })
 </script>
 

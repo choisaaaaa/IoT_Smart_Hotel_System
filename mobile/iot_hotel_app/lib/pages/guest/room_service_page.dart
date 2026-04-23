@@ -264,19 +264,6 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
     }
   }
 
-  Future<void> _toggleDevice(dynamic device) async {
-    final currentStatus = device['device_status'] ?? device['status'] ?? 'off';
-    final newStatus = currentStatus == 'on' ? 'off' : 'on';
-    try {
-      final result = await ref
-          .read(deviceServiceProvider)
-          .controlDevice(device['id'], commandType: 'toggle', commandValue: newStatus);
-      if (result.success) _fetchDevices();
-    } catch (e) {
-      debugPrint('切换设备错误: $e');
-    }
-  }
-
   IconData _getDeviceIcon(String? type) {
     switch (type) {
       case 'light':

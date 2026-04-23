@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
 import '../core/constants/api_constants.dart';
+import '../core/utils/type_utils.dart';
 
 class MessageService {
   final DioClient _dioClient = DioClient();
@@ -23,11 +24,11 @@ class MessageService {
         }..removeWhere((key, value) => value == null),
       );
 
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        final data = response.data['data'];
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
+        final data = response.data['data'] ?? response.data['result'];
         List<dynamic> list;
         if (data is Map) {
-          list = List<dynamic>.from(data['list'] ?? []);
+          list = List<dynamic>.from(data['list'] ?? data['items'] ?? []);
         } else if (data is List) {
           list = List<dynamic>.from(data);
         } else {
@@ -37,7 +38,7 @@ class MessageService {
       }
       return ApiResult.failure(response.data['message'] ?? '获取消息列表失败');
     } catch (e) {
-      return ApiResult.failure('网络错误：$e');
+      return ApiResult.failure('消息服务暂不可用');
     }
   }
 
@@ -46,25 +47,22 @@ class MessageService {
   }
 
   Future<ApiResult<int>> getUnreadCount() async {
-    // 后端暂未实现消息接口，直接返回0
-    return ApiResult.success(0);
-    // try {
-    //   final response = await _dioClient.get('${ApiConstants.messages}unread/count');
-    //
-    //   if (response.statusCode == 200 && response.data['code'] == 200) {
-    //     return ApiResult.success(response.data['data']['count'] as int);
-    //   }
-    //   return ApiResult.failure(response.data['message'] ?? '获取未读数失败');
-    // } catch (e) {
-    //   return ApiResult.failure('网络错误：$e');
-    // }
+    try {
+      final response = await _dioClient.get('${ApiConstants.messages}unread/count');
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
+        final data = response.data['data'];
+        return ApiResult.success(safeToInt(data is Map ? data['count'] : data));
+      }
+      return ApiResult.success(0);
+    } catch (e) {
+      return ApiResult.success(0);
+    }
   }
 
   Future<ApiResult<void>> markAsRead(int messageId) async {
     try {
       final response = await _dioClient.put('${ApiConstants.messages}/$messageId/read');
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '标记已读失败');
@@ -76,8 +74,7 @@ class MessageService {
   Future<ApiResult<void>> markAllAsRead() async {
     try {
       final response = await _dioClient.put('${ApiConstants.messages}/read-all');
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '全部标记已读失败');
@@ -89,8 +86,7 @@ class MessageService {
   Future<ApiResult<void>> deleteMessage(int messageId) async {
     try {
       final response = await _dioClient.delete('${ApiConstants.messages}/$messageId');
-
-      if (response.statusCode == 200 && response.data['code'] == 200) {
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
         return ApiResult.success(null);
       }
       return ApiResult.failure(response.data['message'] ?? '删除消息失败');
@@ -116,8 +112,12 @@ class MessageService {
           };
       final response = await _dioClient.post(ApiConstants.messages, data: payload);
 
-      if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode == 200 && isApiSuccess(response.data)) {
+        final resultData = response.data['data'] ?? response.data['result'];
+        if (resultData is Map<String, dynamic>) {
+          return ApiResult.success(resultData);
+        }
+        return ApiResult.success({});
       }
       return ApiResult.failure(response.data['message'] ?? '发送消息失败');
     } catch (e) {

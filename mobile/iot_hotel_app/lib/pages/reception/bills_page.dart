@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/utils/date_utils.dart';
+import '../../core/utils/type_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/payment_service.dart';
 
@@ -51,9 +52,9 @@ class _BillsPageState extends ConsumerState<BillsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final todayRevenue = _stats?['today_revenue'] ?? 0.0;
-    final monthRevenue = _stats?['month_revenue'] ?? 0.0;
-    final pendingBills = _stats?['pending_bills'] ?? 0;
+    final todayRevenue = safeToDouble(_stats?['today_revenue']);
+    final monthRevenue = safeToDouble(_stats?['month_revenue']);
+    final pendingBills = safeToInt(_stats?['pending_bills']);
     final revenueTrend = _stats?['revenue_trend'] as List<dynamic>? ?? [];
     final incomeBreakdown = _stats?['income_breakdown'] as Map<String, dynamic>? ?? {};
 
@@ -216,7 +217,7 @@ class _BillsPageState extends ConsumerState<BillsPage> {
               Expanded(child: Column(children: breakdown.entries.toList().asMap().entries.map((e) {
                 final index = e.key;
                 final entry = e.value;
-                return _LegendItem(color: colors[index % colors.length], label: entry.key, value: '¥${(entry.value as num).toStringAsFixed(0)}');
+                return _LegendItem(color: colors[index % colors.length], label: entry.key, value: '¥${safeToDouble(entry.value).toStringAsFixed(0)}');
               }).toList())),
             ],
           ),
@@ -302,13 +303,13 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                   Text('费用明细', style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   if (bill['items'] != null)
-                    ...(bill['items'] as List).map((item) => _detailRow(item['item'] ?? item['description'] ?? '-', '¥${(item['amount'] ?? 0).toStringAsFixed(2)}'))
+                    ...(bill['items'] as List).map((item) => _detailRow(item['item'] ?? item['description'] ?? '-', '¥${safeToDouble(item['amount']).toStringAsFixed(2)}'))
                   else
-                    _detailRow('房费', '¥${(bill['amount'] ?? 0).toStringAsFixed(2)}'),
+                    _detailRow('房费', '¥${safeToDouble(bill['amount']).toStringAsFixed(2)}'),
                   const Divider(),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     const Text('合计', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('¥${(bill['amount'] ?? bill['total_price'] ?? 0).toStringAsFixed(2)}', style: GoogleFonts.notoSansSc(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text('¥${safeToDouble(bill['amount'] ?? bill['total_price']).toStringAsFixed(2)}', style: GoogleFonts.notoSansSc(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
                   ]),
                   const SizedBox(height: 16),
                   if (bill['status'] == 'pending')
@@ -339,7 +340,7 @@ class _BillsPageState extends ConsumerState<BillsPage> {
   Future<void> _handleCollectPayment(dynamic bill) async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('确认收款'),
-      content: Text('金额：¥${(bill['amount'] ?? 0).toStringAsFixed(2)}'),
+      content: Text('金额：¥${safeToDouble(bill['amount']).toStringAsFixed(2)}'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
         FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: AppColors.success), child: const Text('确认收款')),

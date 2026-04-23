@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/api_result.dart';
+import '../../core/utils/type_utils.dart';
 import '../../services/room_type_service.dart';
 
 class RoomTypeManagePage extends ConsumerStatefulWidget {
@@ -69,13 +70,13 @@ class _RoomTypeManagePageState extends ConsumerState<RoomTypeManagePage> {
     final nameController = TextEditingController(text: roomType?['name'] ?? '');
     final codeController = TextEditingController(text: roomType?['code'] ?? '');
     final priceController = TextEditingController(
-      text: roomType?['base_price']?.toString() ?? '0',
+      text: safeToDouble(roomType?['base_price']).toString(),
     );
     final areaController = TextEditingController(
       text: roomType?['area']?.toString() ?? '',
     );
     final capacityController = TextEditingController(
-      text: roomType?['max_capacity']?.toString() ?? '2',
+      text: safeToInt(roomType?['max_capacity'], 2).toString(),
     );
     final bedTypeController = TextEditingController(
       text: roomType?['bed_type'] ?? '',
@@ -216,7 +217,7 @@ class _RoomTypeManagePageState extends ConsumerState<RoomTypeManagePage> {
                     ApiResult result;
                     if (isEdit) {
                       result = await ref.read(roomTypeServiceProvider).updateRoomType(
-                        roomType['id'],
+                        safeToInt(roomType['id']),
                         data,
                       );
                     } else {
@@ -292,7 +293,7 @@ class _RoomTypeManagePageState extends ConsumerState<RoomTypeManagePage> {
                       return _RoomTypeCard(
                         roomType: roomType,
                         onEdit: () => _showEditDialog(roomType),
-                        onDelete: () => _deleteRoomType(roomType['id']),
+                        onDelete: () => _deleteRoomType(safeToInt(roomType['id'])),
                       );
                     },
                   ),
@@ -320,9 +321,9 @@ class _RoomTypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final basePrice = roomType['base_price'] ?? 0;
+    final basePrice = safeToDouble(roomType['base_price']);
     final area = roomType['area'];
-    final maxCapacity = roomType['max_capacity'] ?? 2;
+    final maxCapacity = safeToInt(roomType['max_capacity'], 2);
     final bedType = roomType['bed_type'];
 
     return Container(

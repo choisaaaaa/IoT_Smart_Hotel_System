@@ -74,7 +74,7 @@ class DeviceController {
       let customerRoomId: number | undefined;
 
       if (isSystemAdmin(user?.role)) {
-        targetHotelId = hotel_id ? parseInt(hotel_id as string) : (user?.hotel_id || 1);
+        targetHotelId = hotel_id ? parseInt(hotel_id as string) : undefined;
       } else if (isCustomer(user?.role) || isGuest(user?.role)) {
         const [bookings]: any = await pool.query(
           `SELECT room_id FROM bookings WHERE (user_id = ? OR guest_phone = ?) AND status = 'checked_in' ORDER BY id DESC LIMIT 1`,

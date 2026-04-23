@@ -31,8 +31,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   StreamSubscription? _securityEventSub;
   StreamSubscription? _incomingCallSub;
   bool _isLoading = true;
-  bool _onDuty = true;
-  String _dutyRole = 'receptionist';
+  final _dutyRole = 'receptionist';
   final _broadcastController = TextEditingController();
 
   @override
@@ -216,7 +215,6 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
         _isOnline = false;
         _clientName = null;
         _onlineStatus = null;
-        _onDuty = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已下线')),
@@ -225,7 +223,6 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
       final userId = ref.read(authStateProvider).userId?.toString() ?? 'reception_${DateTime.now().millisecondsSinceEpoch}';
       _callService.registerClient(userId);
       ref.read(appRealtimeProvider.notifier).setDutyStatus(true, role: _dutyRole);
-      setState(() => _onDuty = true);
     }
   }
 

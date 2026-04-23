@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/utils/date_utils.dart';
+import '../../core/utils/type_utils.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/storage/local_storage.dart';
 import '../../services/review_service.dart';
@@ -40,7 +41,8 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     try {
-      final hotelId = await LocalStorage().read('hotel_id') as int?;
+      final hotelIdStr = await LocalStorage().read('hotel_id');
+      final hotelId = safeToInt(hotelIdStr);
       final results = await Future.wait([
         ref.read(reviewServiceProvider).getAllReviews(page: _reviewPage, pageSize: 20, hotelId: hotelId),
         ref.read(reviewServiceProvider).getAppeals(page: _appealPage, pageSize: 20),
@@ -248,9 +250,9 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
     }
     final memberName = review['member_name'] ?? review['member_phone'] ?? '匿名';
     final content = review['content'] ?? '';
-    final envRating = review['environment_rating'] ?? 5;
-    final facRating = review['facility_rating'] ?? 5;
-    final comRating = review['comfort_rating'] ?? 5;
+    final envRating = safeToInt(review['environment_rating'], 5);
+    final facRating = safeToInt(review['facility_rating'], 5);
+    final comRating = safeToInt(review['comfort_rating'], 5);
     final reply = review['reply'];
     final createdAt = review['created_at'] ?? '';
     final roomTypeName = review['room_type_name'] ?? '';
@@ -313,9 +315,9 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
               Text(DateUtils.formatDateDynamic(createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
               const Spacer(),
               if (reply == null || reply.toString().isEmpty)
-                _buildSmallButton(Icons.reply_rounded, '回复', () => _replyReview(review['id'])),
+                _buildSmallButton(Icons.reply_rounded, '回复', () => _replyReview(safeToInt(review['id']))),
               const SizedBox(width: 8),
-              _buildSmallButton(Icons.gavel_rounded, '申诉', () => _submitAppeal(review['id'])),
+              _buildSmallButton(Icons.gavel_rounded, '申诉', () => _submitAppeal(safeToInt(review['id']))),
             ],
           ),
         ],

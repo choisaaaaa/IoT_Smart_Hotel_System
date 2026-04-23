@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/type_utils.dart';
 import '../../services/room_type_service.dart';
 
 class PriceSettingsPage extends ConsumerStatefulWidget {
@@ -40,8 +41,8 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
         });
         // Initialize controllers for each room type
         for (final rt in _roomTypes) {
-          final id = rt['id'] as int? ?? 0;
-          final price = (rt['base_price'] ?? rt['price'] ?? 0).toString();
+          final id = safeToInt(rt['id']);
+          final price = safeToDouble(rt['base_price'] ?? rt['price']).toString();
           if (!_priceControllers.containsKey(id)) {
             _priceControllers[id] = TextEditingController(text: price);
           }
@@ -125,9 +126,9 @@ class _PriceSettingsPageState extends ConsumerState<PriceSettingsPage> {
                       itemCount: _roomTypes.length,
                       itemBuilder: (context, index) {
                         final rt = _roomTypes[index];
-                        final id = rt['id'] as int? ?? 0;
+                        final id = safeToInt(rt['id']);
                         final name = rt['name']?.toString() ?? rt['code']?.toString() ?? '未知房型';
-                        final currentPrice = (rt['base_price'] ?? rt['price'] ?? 0).toDouble();
+                        final currentPrice = safeToDouble(rt['base_price'] ?? rt['price']);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),

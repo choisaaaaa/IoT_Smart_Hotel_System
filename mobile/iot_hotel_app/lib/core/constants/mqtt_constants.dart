@@ -5,10 +5,6 @@ class MqttConstants {
       return envHost;
     }
 
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      return 'localhost';
-    }
-
     return '8.134.166.69';
   }
 
