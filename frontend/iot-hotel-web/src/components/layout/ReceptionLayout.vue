@@ -86,6 +86,15 @@
             <span>语音通话</span>
           </a-menu-item>
           
+          <a-menu-item key="/reception/room-messages">
+            <template #icon>
+              <a-badge :count="notificationStore.moduleUnreadCounts['/reception/room-messages']" :offset="[10, 0]">
+                <MessageOutlined />
+              </a-badge>
+            </template>
+            <span>客房留言</span>
+          </a-menu-item>
+          
           <a-menu-item key="/reception/environment">
             <template #icon>
               <a-badge :count="notificationStore.moduleUnreadCounts['/reception/environment']" :offset="[10, 0]">
@@ -300,7 +309,8 @@ import {
   WarningFilled,
   FireFilled,
   AlertFilled,
-  SafetyOutlined
+  SafetyOutlined,
+  MessageOutlined
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'

@@ -205,13 +205,13 @@
               <RightOutlined class="service-arrow" />
             </div>
 
-            <div class="service-item" @click="showMessagePanel">
+            <div class="service-item" @click="showMessageChat">
               <div class="service-icon message">
                 <MessageOutlined />
               </div>
               <div class="service-info">
-                <div class="service-name">在线留言</div>
-                <div class="service-desc">给工作人员留言</div>
+                <div class="service-name">客房留言</div>
+                <div class="service-desc">与前台在线沟通</div>
               </div>
               <RightOutlined class="service-arrow" />
             </div>
@@ -362,19 +362,54 @@
       </a-form>
     </a-modal>
 
-    <!-- 留言弹窗 -->
+    <!-- 客房留言聊天弹窗 -->
     <a-modal 
-      v-model:open="messageModalVisible" 
-      title="给前台留言" 
-      @ok="sendMsgToReception"
-      class="service-modal"
-      width="480px"
+      v-model:open="messageChatVisible" 
+      title="客房留言" 
+      :footer="null"
+      :width="520"
+      :bodyStyle="{ padding: 0, height: '520px', display: 'flex', flexDirection: 'column' }"
+      class="message-chat-modal"
     >
-      <a-textarea 
-        v-model:value="msgContent" 
-        :rows="5" 
-        placeholder="请输入您想对前台说的话..."
-      />
+      <div class="wechat-chat">
+        <div class="wechat-chat-body" ref="wechatChatRef">
+          <div v-if="roomMessages.length === 0" class="chat-empty">
+            <MessageOutlined style="font-size: 40px; color: #ccc;" />
+            <p>暂无消息，发送一条留言给前台吧</p>
+          </div>
+          <template v-for="(msg, idx) in roomMessages" :key="msg.id || idx">
+            <div v-if="shouldShowTimeSeparator(idx)" class="chat-time-sep">
+              {{ formatMsgTime(msg.created_at) }}
+            </div>
+            <div :class="['chat-msg-row', msg.sender_type === 'guest' ? 'is-me' : 'is-other']">
+              <div v-if="msg.sender_type !== 'guest'" class="chat-avatar other-avatar">
+                <CustomerServiceOutlined />
+              </div>
+              <div class="chat-bubble-wrap">
+                <div v-if="msg.sender_type !== 'guest' && msg.sender_name" class="chat-sender-name">{{ msg.sender_name }}</div>
+                <div :class="['chat-bubble', msg.sender_type === 'guest' ? 'bubble-me' : 'bubble-other']">
+                  {{ msg.content }}
+                </div>
+              </div>
+              <div v-if="msg.sender_type === 'guest'" class="chat-avatar me-avatar">
+                <UserOutlined />
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="wechat-chat-input">
+          <a-textarea 
+            v-model:value="msgContent" 
+            :rows="2" 
+            placeholder="输入消息..."
+            @pressEnter="handleMsgEnter"
+            class="wechat-input"
+          />
+          <a-button type="primary" @click="sendMsgToReception" :loading="msgSending" class="wechat-send-btn">
+            发送
+          </a-button>
+        </div>
+      </div>
     </a-modal>
 
     <!-- 呼叫中弹窗 -->
@@ -503,6 +538,7 @@ import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
 import { maintenanceApi } from '@/api/maintenance'
 import { callApi } from '@/api/call'
+import { messageApi, type RoomMessage } from '@/api/message'
 import { getSocket } from '@/utils/websocket'
 import request from '@/api/request'
 import { formatDotDateTime, now } from '@/utils/date'
@@ -580,8 +616,11 @@ const maintenanceColumns = [
   { title: '时间', key: 'created_at', width: 160 }
 ]
 
-const messageModalVisible = ref(false)
+const messageChatVisible = ref(false)
 const msgContent = ref('')
+const msgSending = ref(false)
+const roomMessages = ref<RoomMessage[]>([])
+const wechatChatRef = ref<HTMLDivElement>()
 
 const transferModal = ref({
   visible: false,
@@ -667,6 +706,8 @@ function initWebSocket() {
     }
     socket.on('call_answered', handleCallAnswered)
     socket.on('call_hungup', handleCallHungup)
+    socket.on('guest_new_message', handleGuestNewMessage)
+    socket.on('new_room_message', handleNewRoomMessage)
   }
 }
 
@@ -1242,12 +1283,119 @@ async function callFrontDesk() {
   }
 }
 
-function showMessagePanel() { messageModalVisible.value = true }
+async function showMessageChat() {
+  messageChatVisible.value = true
+  await loadRoomMessages()
+}
+
+async function loadRoomMessages() {
+  const roomId = appStore.userStatus?.checkin_info?.room_id
+  if (!roomId) return
+  try {
+    const res: any = await messageApi.getMessages({ room_id: Number(roomId), pageSize: 100 })
+    if (res.code === 200 && res.data) {
+      roomMessages.value = res.data.list || []
+      await nextTick()
+      scrollWechatToBottom()
+      await messageApi.markAllAsRead({ room_id: Number(roomId) })
+    }
+  } catch (e) {
+    console.error('加载留言失败:', e)
+  }
+}
+
+function handleGuestNewMessage(data: any) {
+  const msg = data.message || data
+  const roomId = appStore.userStatus?.checkin_info?.room_id
+  if (msg && msg.room_id == roomId) {
+    const exists = roomMessages.value.some(m => m.id === msg.id)
+    if (!exists) {
+      roomMessages.value.push(msg)
+      nextTick(() => scrollWechatToBottom())
+    }
+    if (msg.sender_type === 'front_desk' && msg.id) {
+      messageApi.markAsRead(msg.id)
+    }
+  }
+}
+
+function handleNewRoomMessage(data: any) {
+  const msg = data.message || data
+  const roomId = appStore.userStatus?.checkin_info?.room_id
+  if (msg && msg.room_id == roomId) {
+    const exists = roomMessages.value.some(m => m.id === msg.id)
+    if (!exists) {
+      roomMessages.value.push(msg)
+      nextTick(() => scrollWechatToBottom())
+    }
+  }
+}
+
+function scrollWechatToBottom() {
+  if (wechatChatRef.value) {
+    wechatChatRef.value.scrollTop = wechatChatRef.value.scrollHeight
+  }
+}
+
+function formatMsgTime(timeStr: string | null | undefined) {
+  if (!timeStr) return ''
+  try {
+    const dt = new Date(timeStr)
+    const now = new Date()
+    const diff = now.getTime() - dt.getTime()
+    const hours = dt.getHours().toString().padStart(2, '0')
+    const mins = dt.getMinutes().toString().padStart(2, '0')
+    if (diff < 86400000 && dt.getDate() === now.getDate()) {
+      return `${hours}:${mins}`
+    } else if (diff < 172800000) {
+      return `昨天 ${hours}:${mins}`
+    } else {
+      return `${dt.getMonth() + 1}/${dt.getDate()} ${hours}:${mins}`
+    }
+  } catch { return '' }
+}
+
+function shouldShowTimeSeparator(idx: number) {
+  if (idx === 0) return true
+  const cur = roomMessages.value[idx]?.created_at
+  const prev = roomMessages.value[idx - 1]?.created_at
+  if (!cur || !prev) return false
+  try {
+    return new Date(cur).getTime() - new Date(prev).getTime() > 300000
+  } catch { return false }
+}
+
+function handleMsgEnter(e: any) {
+  if (e.shiftKey) return
+  e.preventDefault()
+  sendMsgToReception()
+}
+
 async function sendMsgToReception() {
-  if (!msgContent.value.trim()) return $notify.warning({ title: '请输入留言内容', description: '请填写您要发送给前台的留言 📝' })
-  $notify.success({ title: '消息已发送', description: '您的留言已发送至前台 📨' })
-  msgContent.value = ''
-  messageModalVisible.value = false
+  const text = msgContent.value.trim()
+  if (!text || msgSending.value) return
+  const roomId = appStore.userStatus?.checkin_info?.room_id
+  if (!roomId) return $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能发送留言 🏨' })
+
+  msgSending.value = true
+  try {
+    const res: any = await messageApi.send({
+      room_id: Number(roomId),
+      sender_type: 'guest',
+      content: text,
+      sender_name: appStore.userInfo?.username || appStore.userInfo?.phone || '住客',
+    })
+    if (res.code === 200 && res.data) {
+      roomMessages.value.push(res.data)
+      msgContent.value = ''
+      await nextTick()
+      scrollWechatToBottom()
+    }
+  } catch (e) {
+    $notify.error({ title: '发送失败', description: '消息发送失败，请重试 📨' })
+  } finally {
+    msgSending.value = false
+  }
 }
 
 // 我的记录方法
@@ -2252,5 +2400,138 @@ function scrollToBottom() {
   .chat-input-area {
     padding: 18px;
   }
+}
+
+/* ==================== 微信风格聊天 ==================== */
+.wechat-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #EDEDED;
+}
+
+.wechat-chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  gap: 12px;
+}
+
+.chat-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.chat-time-sep {
+  text-align: center;
+  margin: 12px 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.chat-msg-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.chat-msg-row.is-me {
+  justify-content: flex-end;
+}
+
+.chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.other-avatar {
+  background: #95EC69;
+  color: #fff;
+}
+
+.me-avatar {
+  background: var(--hotel-primary);
+  color: #fff;
+}
+
+.chat-bubble-wrap {
+  max-width: 65%;
+}
+
+.chat-sender-name {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 2px;
+  padding-left: 4px;
+}
+
+.is-me .chat-sender-name {
+  text-align: right;
+  padding-right: 4px;
+}
+
+.chat-bubble {
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+  position: relative;
+}
+
+.bubble-other {
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 0 8px 8px 8px;
+}
+
+.bubble-me {
+  background: #95EC69;
+  color: #1a1a1a;
+  border-radius: 8px 0 8px 8px;
+}
+
+.wechat-chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #F7F7F7;
+  border-top: 1px solid #e0e0e0;
+}
+
+.wechat-input {
+  flex: 1;
+  resize: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: #fff !important;
+  border-radius: 4px !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+}
+
+.wechat-input:focus {
+  box-shadow: none !important;
+}
+
+.wechat-send-btn {
+  height: 36px;
+  border-radius: 4px;
 }
 </style>

@@ -20,6 +20,7 @@ import '../../services/delivery_service.dart';
 import '../../services/voice_call_service.dart';
 import '../../services/booking_service.dart';
 import '../../services/maintenance_service.dart';
+import '../../services/message_service.dart';
 import '../../models/booking.dart';
 
 class RoomServicePage extends ConsumerStatefulWidget {
@@ -869,12 +870,15 @@ class _ContactFrontDeskTab extends ConsumerStatefulWidget {
 
 class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   final _messageController = TextEditingController();
+  final _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
   final VoiceCallService _callService = VoiceCallService();
+  final MessageService _messageService = MessageService();
   bool _isOnline = false;
   String? _clientName;
   Map<String, dynamic>? _onlineStatus;
   StreamSubscription? _callEventSubscription;
+  StreamSubscription? _chatEventSubscription;
   bool _inCall = false;
   bool _isCaller = false;
   bool _isReconnecting = false;
@@ -882,11 +886,88 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   String _callDuration = '00:00';
   Timer? _callTimer;
   DateTime? _callStartTime;
+  bool _isLoading = true;
+  bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
     _initCallService();
+    _loadMessages();
+    _listenChatEvents();
+  }
+
+  void _listenChatEvents() {
+    final realtime = RealtimeService();
+    _chatEventSubscription = realtime.chatMessageEvents.listen((event) {
+      if (!mounted) return;
+      final msg = event['message'];
+      if (msg != null && msg is Map) {
+        final msgMap = Map<String, dynamic>.from(msg);
+        if (msgMap['room_id'] == widget.roomId) {
+          final exists = _messages.any((m) => m['id'] == msgMap['id']);
+          if (!exists) {
+            setState(() {
+              _messages.add(msgMap);
+            });
+            _scrollToBottom();
+            if (msgMap['sender_type'] == 'front_desk' && msgMap['id'] != null) {
+              _messageService.markAsRead(msgMap['id'] as int);
+            }
+          }
+        }
+      } else if (event['room_id'] == widget.roomId || event['content'] != null) {
+        final senderType = event['sender_type']?.toString() ?? event['message']?['sender_type']?.toString();
+        if (senderType == 'front_desk') {
+          final content = event['content']?.toString() ?? event['message']?['content']?.toString();
+          if (content != null) {
+            setState(() {
+              _messages.add({
+                'id': event['id'] ?? DateTime.now().millisecondsSinceEpoch,
+                'room_id': widget.roomId,
+                'sender_type': 'front_desk',
+                'sender_name': event['sender_name']?.toString() ?? event['message']?['sender_name']?.toString() ?? '前台',
+                'content': content,
+                'created_at': event['created_at'] ?? DateTime.now().toIso8601String(),
+                'is_read': true,
+              });
+            });
+            _scrollToBottom();
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _loadMessages() async {
+    if (widget.roomId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    final result = await _messageService.getMessages(roomId: widget.roomId is int ? widget.roomId as int : int.tryParse(widget.roomId.toString()));
+    if (!mounted) return;
+    if (result.success && result.data != null) {
+      setState(() {
+        _messages.clear();
+        for (final item in result.data!) {
+          _messages.add(Map<String, dynamic>.from(item as Map));
+        }
+        _isLoading = false;
+      });
+      _scrollToBottom();
+      _markFrontDeskMessagesAsRead();
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _markFrontDeskMessagesAsRead() {
+    for (final msg in _messages) {
+      if (msg['sender_type'] == 'front_desk' && msg['is_read'] == false && msg['id'] != null) {
+        _messageService.markAsRead(msg['id'] as int);
+      }
+    }
+    _messageService.markAllAsRead(roomId: widget.roomId is int ? widget.roomId as int : int.tryParse(widget.roomId.toString()));
   }
 
   void _initCallService() {
@@ -1004,7 +1085,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
 
   void _toggleOnlineStatus() {
     if (_isOnline) {
-      // 下线
       _callService.unregisterClient();
       setState(() {
         _isOnline = false;
@@ -1015,7 +1095,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
         const SnackBar(content: Text('已下线')),
       );
     } else {
-      // 上线
       if (widget.roomId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1032,10 +1111,93 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     }
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || widget.roomId == null || _isSending) return;
+
+    _messageController.clear();
+    setState(() => _isSending = true);
+
+    final roomId = widget.roomId is int ? widget.roomId as int : int.tryParse(widget.roomId.toString()) ?? 0;
+
+    final authState = ref.read(authStateProvider);
+    final userId = authState.userId != null ? int.tryParse(authState.userId!) : null;
+    final userName = authState.username ?? authState.phone ?? '住客';
+
+    final result = await _messageService.sendMessage(
+      roomId: roomId,
+      senderType: 'guest',
+      content: text,
+      guestId: userId,
+      senderName: userName,
+    );
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      setState(() {
+        _messages.add(Map<String, dynamic>.from(result.data!));
+        _isSending = false;
+      });
+      _scrollToBottom();
+    } else {
+      setState(() => _isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('发送失败: ${result.message ?? "未知错误"}'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  String _formatTime(dynamic timeStr) {
+    if (timeStr == null) return '';
+    try {
+      final dt = DateTime.parse(timeStr.toString()).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inDays == 0) {
+        return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } else if (diff.inDays == 1) {
+        return '昨天 ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } else {
+        return '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      }
+    } catch (_) {
+      return '';
+    }
+  }
+
+  bool _shouldShowTimeSeparator(int index) {
+    if (index == 0) return true;
+    final current = _messages[index]['created_at'];
+    final previous = _messages[index - 1]['created_at'];
+    if (current == null || previous == null) return false;
+    try {
+      final currentDt = DateTime.parse(current.toString());
+      final previousDt = DateTime.parse(previous.toString());
+      return currentDt.difference(previousDt).inMinutes > 5;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     _callEventSubscription?.cancel();
+    _chatEventSubscription?.cancel();
     _callTimer?.cancel();
     super.dispose();
   }
@@ -1051,7 +1213,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       return;
     }
 
-    // 呼叫所有前台：callee_type='front_desk', callee_id='all'
     _isCaller = true;
     _callService.startCall('all', 'front_desk');
 
@@ -1094,35 +1255,9 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     }
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _messages.add({'text': text, 'isMe': true, 'time': DateTime.now()});
-      _messageController.clear();
-    });
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _messages.add({
-            'text': '收到您的消息，前台会尽快处理。如有紧急需求请直接拨打前台电话。',
-            'isMe': false,
-            'time': DateTime.now()
-          });
-        });
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_inCall) return _buildInCallView();
-
-    final hotlines = [
-      {'name': '前台', 'number': '0', 'icon': Icons.support_agent_rounded, 'color': AppColors.primary},
-      {'name': '客房服务', 'number': '1', 'icon': Icons.room_service_rounded, 'color': AppColors.secondary},
-      {'name': '紧急电话', 'number': '911', 'icon': Icons.emergency_rounded, 'color': AppColors.error},
-    ];
 
     final onlineFrontDesk = _onlineStatus?['web']?.where((c) => c['type'] == 'front_desk')?.toList() ?? [];
     final onlineCount = onlineFrontDesk.length;
@@ -1130,148 +1265,215 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _isOnline ? Icons.circle : Icons.circle_outlined,
-                            size: 12,
-                            color: _isOnline ? AppColors.success : AppColors.textHint,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _isOnline ? '当前身份: ${_clientName ?? '已上线'}' : '当前状态: 未上线',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: _isOnline ? AppColors.success : AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: onlineCount > 0 ? AppColors.success : AppColors.textHint,
                       ),
-                      if (_isOnline && onlineCount > 0) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '在线前台: $onlineCount人',
-                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                        ),
-                      ],
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      onlineCount > 0 ? '前台在线 ($onlineCount)' : '前台离线',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: onlineCount > 0 ? AppColors.success : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: _makeCall,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.phone_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text('语音通话', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
                     ],
                   ),
-                  ElevatedButton(
-                    onPressed: _toggleOnlineStatus,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isOnline ? Colors.white : AppColors.primary,
-                      foregroundColor: _isOnline ? AppColors.error : Colors.white,
-                      side: _isOnline ? const BorderSide(color: AppColors.error) : null,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                      minimumSize: const Size(100, 36),
-                    ),
-                    child: Text(_isOnline ? '注销' : '上线'),
-                  ),
-                ],
+                ),
               ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('服务热线', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 12),
-              Row(
-                children: hotlines
-                    .map((h) => Expanded(
-                          child: GestureDetector(
-                            onTap: () => _makeCall(),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: (h['color'] as Color).withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: (h['color'] as Color).withValues(alpha: 0.2)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(h['icon'] as IconData, color: h['color'] as Color, size: 24),
-                                  const SizedBox(height: 6),
-                                  Text(h['name'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ))
-                    .toList(),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _toggleOnlineStatus,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _isOnline ? AppColors.success.withValues(alpha: 0.1) : AppColors.textHint.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_isOnline ? Icons.wifi : Icons.wifi_off_rounded, size: 16, color: _isOnline ? AppColors.success : AppColors.textHint),
+                      const SizedBox(width: 4),
+                      Text(_isOnline ? '在线' : '离线', style: TextStyle(fontSize: 12, color: _isOnline ? AppColors.success : AppColors.textHint, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _messages.length,
-            itemBuilder: (context, i) {
-              final msg = _messages[i];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisAlignment: msg['isMe'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: msg['isMe'] ? AppColors.primary : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(msg['text'],
-                            style: TextStyle(fontSize: 13, color: msg['isMe'] ? Colors.white : AppColors.textPrimary)),
-                      ),
-                    ),
-                  ],
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Container(
+                  color: const Color(0xFFEDEDED),
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, i) {
+                      final msg = _messages[i];
+                      final isMe = msg['sender_type'] == 'guest';
+                      final showTime = _shouldShowTimeSeparator(i);
+
+                      return Column(
+                        children: [
+                          if (showTime)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _formatTime(msg['created_at']),
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                              children: [
+                                if (!isMe) ...[
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    child: const Icon(Icons.support_agent_rounded, size: 20, color: AppColors.primary),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Flexible(
+                                  child: Column(
+                                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                    children: [
+                                      if (!isMe && msg['sender_name'] != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 2, left: 4),
+                                          child: Text(
+                                            msg['sender_name'].toString(),
+                                            style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                                          ),
+                                        ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: isMe ? const Color(0xFF95EC69) : Colors.white,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: isMe ? const Radius.circular(4) : const Radius.circular(0),
+                                            topRight: isMe ? const Radius.circular(0) : const Radius.circular(4),
+                                            bottomLeft: const Radius.circular(4),
+                                            bottomRight: const Radius.circular(4),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          msg['content']?.toString() ?? '',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: isMe ? const Color(0xFF1A1A1A) : AppColors.textPrimary,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isMe) ...[
+                                  const SizedBox(width: 8),
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    child: const Icon(Icons.person_rounded, size: 20, color: AppColors.primary),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              );
-            },
-          ),
         ),
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          color: Colors.white,
+          color: const Color(0xFFF7F7F7),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: '输入消息...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    isDense: true,
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  child: TextField(
+                    controller: _messageController,
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
+                    decoration: InputDecoration(
+                      hintText: '输入消息...',
+                      hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: _sendMessage,
-                icon: const Icon(Icons.send, size: 18),
-                style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: IconButton.filled(
+                  onPressed: _isSending ? null : _sendMessage,
+                  icon: _isSending
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.send, size: 18),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
+                  ),
+                ),
               ),
             ],
           ),

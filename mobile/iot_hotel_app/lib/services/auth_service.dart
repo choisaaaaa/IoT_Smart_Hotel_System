@@ -54,14 +54,38 @@ class AuthService {
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> resetPassword(String phone, String newPassword) async {
+  Future<ApiResult<Map<String, dynamic>>> sendResetCode(String phone) async {
     try {
       final response = await _dioClient.post(
+        ApiConstants.authResetPasswordSendCode,
+        data: {'phone': phone},
+      );
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data['code'] == 200) {
+          return ApiResult.success(data['data'] ?? {'message': '验证码已发送'});
+        } else {
+          return ApiResult.failure(data['message'] ?? '发送验证码失败');
+        }
+      }
+      return ApiResult.failure('服务器错误');
+    } catch (e) {
+      return ApiResult.failure('网络错误：$e');
+    }
+  }
+
+  Future<ApiResult<Map<String, dynamic>>> resetPassword(String phone, String newPassword, {String? verificationCode}) async {
+    try {
+      final data = {
+        'phone': phone,
+        'new_password': newPassword,
+      };
+      if (verificationCode != null) {
+        data['verification_code'] = verificationCode;
+      }
+      final response = await _dioClient.post(
         ApiConstants.authResetPassword,
-        data: {
-          'phone': phone,
-          'new_password': newPassword,
-        },
+        data: data,
       );
       if (response.statusCode == 200) {
         final data = response.data;

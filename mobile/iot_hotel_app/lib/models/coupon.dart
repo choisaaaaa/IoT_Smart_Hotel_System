@@ -63,7 +63,10 @@ class Coupon {
 
   String get displayValue {
     if (isDiscount) {
-      return '${(discountValue * 10).toStringAsFixed(1)}折';
+      if (discountValue == discountValue.roundToDouble()) {
+        return '${discountValue.toInt()}折';
+      }
+      return '${discountValue.toStringAsFixed(1)}折';
     }
     return '¥${discountValue.toStringAsFixed(0)}';
   }

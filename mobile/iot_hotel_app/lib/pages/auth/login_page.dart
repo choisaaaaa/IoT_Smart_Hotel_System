@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -34,78 +35,143 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   void _showResetPasswordDialog() {
     final phoneCtrl = TextEditingController();
+    final codeCtrl = TextEditingController();
     final pwdCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    int countdown = 0;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重置密码'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: phoneCtrl,
-                decoration: const InputDecoration(
-                  labelText: '手机号',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return '请输入手机号';
-                  if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '手机号格式不正确';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: pwdCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '新密码',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-                validator: (v) => v != null && v.length < 6 ? '密码长度不能少于6位' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              try {
-                final result = await ref.read(authServiceProvider).resetPassword(
-                  phoneCtrl.text.trim(),
-                  pwdCtrl.text,
-                );
-                if (result.success) {
-                  if (!ctx.mounted || !mounted) return;
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(result.success ? '密码重置成功，请重新登录' : (result.message ?? '重置失败')),
-                      backgroundColor: result.success ? AppColors.success : AppColors.error,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('重置密码'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: phoneCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '手机号',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return '请输入手机号';
+                        if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) return '手机号格式不正确';
+                        return null;
+                      },
                     ),
-                  );
-                }
-              } catch (e) {
-                if (!ctx.mounted || !mounted) return;
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('重置失败，请重试')),
-                );
-              }
-            },
-            child: const Text('确认重置'),
-          ),
-        ],
-      ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: codeCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '验证码',
+                              prefixIcon: Icon(Icons.verified_user_outlined),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return '请输入验证码';
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 110,
+                          child: TextButton(
+                            onPressed: countdown > 0
+                                ? null
+                                : () async {
+                                    final phone = phoneCtrl.text.trim();
+                                    if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('请先输入正确的手机号')),
+                                      );
+                                      return;
+                                    }
+                                    final result = await ref.read(authServiceProvider).sendResetCode(phone);
+                                    if (result.success) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('验证码已发送，默认123456'), backgroundColor: AppColors.success),
+                                      );
+                                      setDialogState(() => countdown = 60);
+                                      Timer.periodic(const Duration(seconds: 1), (timer) {
+                                        if (countdown <= 1) {
+                                          timer.cancel();
+                                          setDialogState(() => countdown = 0);
+                                        } else {
+                                          setDialogState(() => countdown--);
+                                        }
+                                      });
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(result.message ?? '发送失败'), backgroundColor: AppColors.error),
+                                      );
+                                    }
+                                  },
+                            child: Text(countdown > 0 ? '${countdown}s' : '获取验证码'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: pwdCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: '新密码',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                      validator: (v) => v != null && v.length < 6 ? '密码长度不能少于6位' : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    try {
+                      final result = await ref.read(authServiceProvider).resetPassword(
+                        phoneCtrl.text.trim(),
+                        pwdCtrl.text,
+                        verificationCode: codeCtrl.text.trim(),
+                      );
+                      if (result.success) {
+                        if (!ctx.mounted || !mounted) return;
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result.success ? '密码重置成功，请重新登录' : (result.message ?? '重置失败')),
+                            backgroundColor: result.success ? AppColors.success : AppColors.error,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (!ctx.mounted || !mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('重置失败，请重试')),
+                      );
+                    }
+                  },
+                  child: const Text('确认重置'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

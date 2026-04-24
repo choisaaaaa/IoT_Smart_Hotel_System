@@ -143,7 +143,7 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
     final discountController = TextEditingController();
     final minAmountController = TextEditingController();
     final quantityController = TextEditingController(text: '100');
-    String couponType = 'percentage';
+    String couponType = 'discount';
     DateTime? startDate;
     DateTime? endDate;
     int? selectedHotelForCreate;
@@ -215,11 +215,11 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                             ),
                             items: const [
                               DropdownMenuItem(
-                                value: 'percentage',
-                                child: Text('折扣券 (百分比折扣)'),
+                                value: 'discount',
+                                child: Text('折扣券'),
                               ),
                               DropdownMenuItem(
-                                value: 'fixed',
+                                value: 'cash',
                                 child: Text('直减券 (固定金额)'),
                               ),
                             ],
@@ -233,10 +233,10 @@ class _CouponManagePageState extends ConsumerState<CouponManagePage> {
                           TextField(
                             controller: discountController,
                             decoration: InputDecoration(
-                              labelText: couponType == 'percentage' ? '折扣率 (%) *' : '减免金额 (元) *',
-                              hintText: couponType == 'percentage' ? '如：20 表示8折' : '如：50',
+                              labelText: couponType == 'discount' ? '折扣值 *' : '减免金额 (元) *',
+                              hintText: couponType == 'discount' ? '如：8.5 表示8.5折' : '如：50',
                               border: OutlineInputBorder(),
-                              suffixText: couponType == 'percentage' ? '%' : '元',
+                              suffixText: couponType == 'discount' ? '折' : '元',
                             ),
                             keyboardType: TextInputType.number,
                           ),
@@ -806,9 +806,13 @@ class _CouponCard extends StatelessWidget {
       discountNum = 0;
     }
     if (type == 'discount') {
-      discountText = '${discountNum.toStringAsFixed(0)}% OFF';
+      if (discountNum == discountNum.roundToDouble()) {
+        discountText = '${discountNum.toInt()}折';
+      } else {
+        discountText = '${discountNum.toStringAsFixed(1)}折';
+      }
     } else {
-      discountText = '\u00a5${discountNum.toStringAsFixed(0)}';
+      discountText = '¥${discountNum.toStringAsFixed(0)}';
     }
 
     Color statusColor;

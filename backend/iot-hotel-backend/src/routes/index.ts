@@ -35,6 +35,7 @@ import favoriteRouter from './v1/favorites';
 // 已删除: import firmwareRouter from './v1/firmware';
 // 已删除: import irRemoteRouter from './v1/ir-remote';
 import rfidAccessRouter from './v1/rfid-access';
+import messageRouter from './v1/messages';
 
 /**
  * 已删除的前端未实现接口路由：
@@ -89,5 +90,6 @@ router.use('/favorites', favoriteRouter);
 // 已删除: router.use('/firmware', firmwareRouter);
 // 已删除: router.use('/ir-remote', irRemoteRouter);
 router.use('/rfid-access', rfidAccessRouter);
+router.use('/messages', messageRouter);
 
 export default router;

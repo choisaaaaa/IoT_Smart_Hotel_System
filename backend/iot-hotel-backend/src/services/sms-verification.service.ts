@@ -11,7 +11,7 @@ interface SMSVerificationConfig {
 
 class SMSVerificationService {
   private config: SMSVerificationConfig = {
-    enabled: true,
+    enabled: false,
     expireMinutes: 10,
     resendInterval: 60,
     maxAttempts: 5
@@ -19,6 +19,7 @@ class SMSVerificationService {
 
   constructor() {
     this.loadConfig();
+    logger.info(`[SMS验证] 初始化配置: enabled=${this.config.enabled}`);
   }
 
   private async loadConfig() {

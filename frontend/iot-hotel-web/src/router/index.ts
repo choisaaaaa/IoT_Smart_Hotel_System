@@ -248,6 +248,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '语音通话', icon: 'PhoneOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF] }
       },
       {
+        path: 'room-messages',
+        name: 'RoomMessages',
+        component: () => import('@/views/reception/RoomMessages.vue'),
+        meta: { title: '客房留言', icon: 'MessageOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF] }
+      },
+      {
         path: 'environment',
         name: 'ReceptionEnvironmentMonitor',
         component: () => import('@/views/reception/EnvironmentMonitor.vue'),

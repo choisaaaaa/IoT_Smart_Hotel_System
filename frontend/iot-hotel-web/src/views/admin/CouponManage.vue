@@ -63,7 +63,7 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space v-if="isStaff">
-              <a-button type="link" size="small" @click="handleRedeem(record)" :disabled="record.status !== 'active'">
+              <a-button type="link" size="small" @click="handleRedeem(record)" :disabled="isCouponExpired(record)">
                 <QrcodeOutlined /> 核销
               </a-button>
               <a-button type="link" size="small" @click="showDirectIssueModal(record)">发放</a-button>
@@ -245,6 +245,11 @@ const formState = reactive({
   scope_type: 'hotel',
   is_public: true
 })
+
+const isCouponExpired = (record: any) => {
+  if (!record.valid_to) return false
+  return new Date(record.valid_to) < new Date()
+}
 
 const fetchHotels = async () => {
   try {

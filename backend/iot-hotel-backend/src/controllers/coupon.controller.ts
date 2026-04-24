@@ -15,8 +15,11 @@ export const get = async (req: AuthRequest, res: Response) => {
     const params: any[] = [];
 
     if (status) {
-      whereClause += ' AND status = ?';
-      params.push(status);
+      if (status === 'active') {
+        whereClause += ' AND c.valid_to >= CURDATE()';
+      } else if (status === 'expired') {
+        whereClause += ' AND c.valid_to < CURDATE()';
+      }
     }
 
     if (scope_type) {

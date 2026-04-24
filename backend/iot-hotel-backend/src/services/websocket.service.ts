@@ -1358,6 +1358,17 @@ class WebSocketService {
     this.emit(event, data);
   }
 
+  broadcastToHotel(hotelId: number, event: string, data: any) {
+    if (!this.io) return;
+    this.io.to(`front_desk_hotel_${hotelId}`).emit(event, data);
+    this.io.to(`app_hotel_${hotelId}`).emit(event, data);
+  }
+
+  emitToRoom(room: string, event: string, data: any) {
+    if (!this.io) return;
+    this.io.to(room).emit(event, data);
+  }
+
   getConnectedClients(): number {
     return this.clients.size;
   }

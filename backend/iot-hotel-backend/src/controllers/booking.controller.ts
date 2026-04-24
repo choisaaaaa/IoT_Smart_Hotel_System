@@ -1386,6 +1386,16 @@ export const checkout = async (req: AuthRequest, res: Response) => {
       logger.error(`订单 ${id} 退房时失效房卡失败:`, cardError.message);
     }
 
+    // 退房时自动清理该房间的留言消息
+    try {
+      if (roomId) {
+        await connection.query('DELETE FROM room_messages WHERE room_id = ?', [roomId]);
+        logger.info(`订单 ${id} 退房，已自动清理房间 ${roomId} 的留言消息`);
+      }
+    } catch (msgError: any) {
+      logger.error(`订单 ${id} 退房时清理留言消息失败:`, msgError.message);
+    }
+
     // 更新会员成长值
     if (booking.guest_phone && booking.total_price) {
       await updateMemberExperienceAfterCheckout(connection, booking.guest_phone, booking.total_price, booking.guest_name);
@@ -1597,6 +1607,16 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         [id]
       );
       logger.info(`订单 ${id} 通过状态更新退房，已自动失效关联房卡`);
+
+      // 退房时自动清理该房间的留言消息
+      try {
+        if (roomId) {
+          await connection.query('DELETE FROM room_messages WHERE room_id = ?', [roomId]);
+          logger.info(`订单 ${id} 通过状态更新退房，已自动清理房间 ${roomId} 的留言消息`);
+        }
+      } catch (msgError: any) {
+        logger.error(`订单 ${id} 状态更新退房时清理留言消息失败:`, msgError.message);
+      }
 
       if (booking.guest_phone && booking.total_price) {
         await updateMemberExperienceAfterCheckout(connection, booking.guest_phone, booking.total_price, booking.guest_name);

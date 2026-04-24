@@ -51,6 +51,8 @@ class ApiConstants {
   static const String authRegister = 'auth/register';
   static const String authMe = 'auth/me';
   static const String authResetPassword = 'auth/reset-password';
+  static const String authResetPasswordSendCode = 'auth/reset-password/send-code';
+  static const String usersSendCode = 'users/send-code';
   static const String authRoleApplication = 'auth/role-application';
   static const String authRoleApplications = 'auth/role-applications';
   static const String authQrGenerate = 'auth/qr-generate';
