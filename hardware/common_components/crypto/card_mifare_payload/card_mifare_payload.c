@@ -94,19 +94,21 @@ static bool pkcs7_unpad(const uint8_t in16[16], uint8_t *out_plain, size_t *out_
     return true;
 }
 
-bool card_mifare_encrypt_room_payload(const char *room_id, const uint8_t key[16], uint8_t block16[16]) {
-    if (room_id == NULL || key == NULL || block16 == NULL) {
+bool card_mifare_encrypt_tag_value_payload(const char *tag, const char *value, const uint8_t key[16], uint8_t block16[16]) {
+    if (tag == NULL || value == NULL || key == NULL || block16 == NULL) {
         return false;
     }
-    if (room_id[0] == '\0') {
+    if (tag[0] == '\0' || value[0] == '\0') {
         return false;
     }
-    if (strlen(room_id) > 10) {
+    size_t tl = strlen(tag);
+    size_t vl = strlen(value);
+    if (tl + 1 + vl > 15) {
         return false;
     }
 
     char inner[20];
-    int n = snprintf(inner, sizeof(inner), "%s%s", CARD_MIFARE_ROOM_PREFIX, room_id);
+    int n = snprintf(inner, sizeof(inner), "%s:%s", tag, value);
     if (n <= 0 || n >= (int)sizeof(inner)) {
         return false;
     }
@@ -117,6 +119,19 @@ bool card_mifare_encrypt_room_payload(const char *room_id, const uint8_t key[16]
     }
 
     return aes128_ecb_block(key, padded, block16, true);
+}
+
+bool card_mifare_encrypt_room_payload(const char *room_id, const uint8_t key[16], uint8_t block16[16]) {
+    if (room_id == NULL || key == NULL || block16 == NULL) {
+        return false;
+    }
+    if (room_id[0] == '\0') {
+        return false;
+    }
+    if (strlen(room_id) > 10) {
+        return false;
+    }
+    return card_mifare_encrypt_tag_value_payload("ROOM", room_id, key, block16);
 }
 
 static bool parse_room_prefix(const char *plain, size_t len, char *room_out, size_t room_out_sz) {

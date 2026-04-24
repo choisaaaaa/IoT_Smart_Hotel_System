@@ -85,6 +85,25 @@ async function run() {
     )
   }
 
+  // 语音 Agent 桥接要求 devices.audit_status=approved；旧演示 ID 与接口测试/仿真器配置一致
+  let defaultHotelId = hotelMap['测试酒店A'] || hotelMap['测试酒店B']
+  if (!defaultHotelId) {
+    const [hrows] = await conn.query('SELECT id FROM hotels ORDER BY id LIMIT 1')
+    defaultHotelId = hrows[0]?.id
+  }
+  if (defaultHotelId) {
+    const legacyFrontDeskIds = [
+      { id: 'front_desk_02', name: '智能前台终端' },
+      { id: 'front_desk_01', name: '智能前台终端(旧)' }
+    ]
+    for (const d of legacyFrontDeskIds) {
+      await conn.query(
+        "INSERT INTO devices (device_id, device_type, device_name, device_key, device_status, firmware_version, last_seen, audit_status, room_id, area, ip_address, mac_address, hotel_id) VALUES (?, 'front_desk', ?, ?, ?, ?, ?, 'approved', NULL, 'lobby', NULL, NULL, ?) ON DUPLICATE KEY UPDATE device_type='front_desk', device_name=VALUES(device_name), audit_status='approved', hotel_id=VALUES(hotel_id), last_seen=VALUES(last_seen)",
+        [d.id, d.name, `KEY_${d.id}`, 'online', 'v1.2.0', new Date(), defaultHotelId]
+      )
+    }
+  }
+
   for (const hotelName of ['测试酒店A', '测试酒店B']) {
     const hid = hotelMap[hotelName]
     await conn.query(

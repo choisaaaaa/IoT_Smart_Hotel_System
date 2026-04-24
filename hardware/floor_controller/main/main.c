@@ -590,11 +590,9 @@ void task_floor_sensor_report(void *pvParameters) {
         }
 
         /*
-         * 楼控实际装配的传感器（以硬件清单为准，2026-04）：
-         *   - MQ2 烟雾
-         *   - LDR 光敏电阻
-         *   - DHT11 温湿度
-         * 只上报这三类。NTC / RD03 / 雨棚（canopy/雨感）均不再装配。
+         * 楼控装配 + 合并原客房传感器（见 floor_controller/CMakeLists.txt 引脚表）：
+         *   MQ2、LDR、DHT11(GPIO20)、NTC(GPIO19)、RD-03 OT2(GPIO16)；雨棚未接。
+         * 数据仍双发：floor_* 与 room_*（NVS Room_ID）主题，供后端沿用原组合判据。
          */
         if (env_data.dht_valid) {
             publish_sensor_data("temperature", env_data.temperature, "℃");
@@ -612,6 +610,14 @@ void task_floor_sensor_report(void *pvParameters) {
             publish_sensor_data("light", env_data.light_adc, "adc");
             // 模拟客房光照
             publish_room_sensor_data("light", env_data.light_adc, "adc");
+        }
+        if (env_data.ntc_valid) {
+            publish_sensor_data("ntc_temp", env_data.ntc_temp_c, "℃");
+            publish_room_sensor_data("ntc_temp", env_data.ntc_temp_c, "℃");
+        }
+        if (env_data.rd03_valid) {
+            publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
+            publish_room_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
         }
     }
 }

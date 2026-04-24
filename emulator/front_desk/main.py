@@ -25,7 +25,6 @@ from common.config import (
     TOPIC_DEVICE_COMMAND_PREFIX, TOPIC_SECURITY_EVENT
 )
 
-
 class FrontDeskEmulator(BaseDeviceEmulator):
     def __init__(self, root):
         self.rfid = RFIDCardSimulator()
@@ -38,7 +37,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         self.rooms_mapping = ["", "", "", "", "", "", "", ""]
         self._alarm_beep_thread = None  # 报警蜂鸣器线程
         self._stop_alarm_beep = threading.Event()  # 停止蜂鸣器事件
-        
+
         # 硬件组件状态
         self.button_mute_pressed = False  # 消音键
         self.button_broadcast_pressed = False  # 广播键
@@ -69,17 +68,17 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # ========== 第一部分：通信骨架 ==========
         self._create_card(self.biz_frame, "第一部分：通信骨架 (RC522 SPI + 状态灯)").pack(fill=tk.X, pady=(0, 15))
         comm_body = self.last_card_body
-        
+
         # SPI接口状态
         spi_frame = tk.Frame(comm_body, bg="white")
         spi_frame.pack(fill=tk.X, pady=5)
         tk.Label(spi_frame, text="🔌 SPI接口 (RC522):", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
-        self.spi_status_label = tk.Label(spi_frame, text="✓ 已连接", font=("Arial", 10, "bold"), 
+        self.spi_status_label = tk.Label(spi_frame, text="✓ 已连接", font=("Arial", 10, "bold"),
                                          bg="white", fg=self.colors['success'])
         self.spi_status_label.pack(side=tk.LEFT, padx=10)
-        tk.Button(spi_frame, text="模拟断开/连接", command=self._toggle_spi, 
+        tk.Button(spi_frame, text="模拟断开/连接", command=self._toggle_spi,
                   relief=tk.FLAT, font=("Arial", 9), padx=10).pack(side=tk.RIGHT)
-        
+
         # GPIO引脚状态显示
         gpio_frame = tk.Frame(comm_body, bg="#f5f5f5", padx=10, pady=8)
         gpio_frame.pack(fill=tk.X, pady=5)
@@ -125,12 +124,12 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
         self.place_card_btn = tk.Button(btn_grid, text="📥 放置卡片", bg=self.colors['primary'], fg="white", command=self._place_card, **btn_style)
         self.place_card_btn.pack(side=tk.LEFT, expand=True, padx=5)
-        
+
         self.remove_card_btn = tk.Button(btn_grid, text="📤 收回卡片", bg="#595959", fg="white", command=self._remove_card, state=tk.DISABLED, **btn_style)
         self.remove_card_btn.pack(side=tk.LEFT, expand=True, padx=5)
 
         tk.Button(btn_grid, text="🔍 读取校验", bg=self.colors['info'], fg="white", command=self._verify_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
-        
+
         # 移除冗余的写入和刷卡按钮，保持界面简洁
         # tk.Button(btn_grid, text="🆕 写入数据", bg=self.colors['success'], fg="white", command=self._issue_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
         # tk.Button(btn_grid, text="📟 模拟刷卡", bg=self.colors['warning'], fg="white", command=self._swipe_card, **btn_style).pack(side=tk.LEFT, expand=True, padx=5)
@@ -149,16 +148,16 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         for text, color in colors_legend:
             lbl = tk.Label(legend_f, text=text, font=("Arial", 9), bg="white", fg=color, padx=10)
             lbl.pack(side=tk.LEFT)
-        
+
         # 灯带控制
         led_ctrl_frame = tk.Frame(wall_body, bg="white")
         led_ctrl_frame.pack(fill=tk.X, pady=10)
         tk.Label(led_ctrl_frame, text="💡 灯带测试:", font=("Arial", 10), bg="white").pack(side=tk.LEFT)
-        tk.Button(led_ctrl_frame, text="全亮白色", command=lambda: self._set_all_leds("#ffffff"), 
+        tk.Button(led_ctrl_frame, text="全亮白色", command=lambda: self._set_all_leds("#ffffff"),
                   relief=tk.FLAT, bg="#f0f0f0", padx=10).pack(side=tk.LEFT, padx=5)
-        tk.Button(led_ctrl_frame, text="全亮红色", command=lambda: self._set_all_leds("#ff4d4f"), 
+        tk.Button(led_ctrl_frame, text="全亮红色", command=lambda: self._set_all_leds("#ff4d4f"),
                   relief=tk.FLAT, bg="#ff4d4f", fg="white", padx=10).pack(side=tk.LEFT, padx=5)
-        tk.Button(led_ctrl_frame, text="彩虹效果", command=self._rainbow_leds, 
+        tk.Button(led_ctrl_frame, text="彩虹效果", command=self._rainbow_leds,
                   relief=tk.FLAT, bg=self.colors['primary'], fg="white", padx=10).pack(side=tk.LEFT, padx=5)
 
         # ========== 第四部分：硬件交互外设 ==========
@@ -177,14 +176,14 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # 中间按键区
         btn_container = tk.Frame(hw_body, bg="white")
         btn_container.pack(side=tk.LEFT, fill=tk.Y, padx=30)
-        
+
         # 消音键
         self.mute_btn = tk.Button(btn_container, text="🔇\n消音", bg="#f0f0f0", fg="#333",
                                   font=("Arial", 11, "bold"), width=6, height=2, relief=tk.RAISED,
                                   command=self._press_mute_button)
         self.mute_btn.pack(pady=5)
         tk.Label(btn_container, text="按键1: GPIO5", font=("Arial", 8), bg="white", fg="#666").pack()
-        
+
         # 广播键
         self.broadcast_btn = tk.Button(btn_container, text="📢\n广播", bg="#f0f0f0", fg="#333",
                                        font=("Arial", 11, "bold"), width=6, height=2, relief=tk.RAISED,
@@ -197,17 +196,17 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         buzzer_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20)
 
         tk.Label(buzzer_container, text="🔊 有源蜂鸣器测试 (GPIO38):", font=("Arial", 10, "bold"), bg="white").pack(anchor=tk.W, pady=5)
-        
+
         buzzer_ctrl = tk.Frame(buzzer_container, bg="white")
         buzzer_ctrl.pack(fill=tk.X, pady=5)
-        
+
         tk.Button(buzzer_ctrl, text="短鸣(操作成功)", bg=self.colors['success'], fg="white",
                   command=lambda: self._beep(1), **btn_style).pack(side=tk.LEFT, padx=5)
         tk.Button(buzzer_ctrl, text="双鸣(异常提醒)", bg=self.colors['danger'], fg="white",
                   command=lambda: self._beep(2), **btn_style).pack(side=tk.LEFT, padx=5)
         tk.Button(buzzer_ctrl, text="长鸣(报警)", bg="#ff4d4f", fg="white",
                   command=lambda: self._beep(5), **btn_style).pack(side=tk.LEFT, padx=5)
-        
+
         # 蜂鸣器使能开关
         self.buzzer_switch_var = tk.BooleanVar(value=True)
         tk.Checkbutton(buzzer_container, text="蜂鸣器使能", variable=self.buzzer_switch_var,
@@ -235,7 +234,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # ========== 第六部分：SOS报警系统 ==========
         self._create_card(self.biz_frame, "第六部分：紧急安全警报系统 (SOS按键)").pack(fill=tk.X, pady=(0, 15))
         sos_body = self.last_card_body
-        
+
         sos_container = tk.Frame(sos_body, bg="white")
         sos_container.pack(fill=tk.X, pady=10)
 
@@ -243,7 +242,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                                 font=("Arial", 16, "bold"), width=8, height=3, relief=tk.RAISED,
                                 command=self._trigger_sos)
         self.sos_btn.pack(side=tk.LEFT, padx=20)
-        
+
         sos_info = tk.Frame(sos_container, bg="white")
         sos_info.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=20)
         tk.Label(sos_info, text="110一键报警按键", font=("Arial", 12, "bold"), bg="white", fg=self.colors['danger']).pack(anchor=tk.W)
@@ -263,13 +262,13 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
         self.uart_status = tk.Label(iface_f, text="[UART] 🚔 公安终端: 已连接 (SAM模块, 115200bps)", font=("Consolas", 9), bg="white", fg="#52c41a")
         self.uart_status.pack(anchor=tk.W, pady=(5, 0))
-        
+
         # UART控制按钮
         uart_ctrl = tk.Frame(iface_body, bg="white")
         uart_ctrl.pack(fill=tk.X, pady=10)
-        tk.Button(uart_ctrl, text="模拟UART断开", command=self._toggle_uart, 
+        tk.Button(uart_ctrl, text="模拟UART断开", command=self._toggle_uart,
                   relief=tk.FLAT, font=("Arial", 9), padx=15).pack(side=tk.LEFT, padx=5)
-        tk.Button(uart_ctrl, text="发送测试帧", command=self._send_test_frame, 
+        tk.Button(uart_ctrl, text="发送测试帧", command=self._send_test_frame,
                   relief=tk.FLAT, bg=self.colors['primary'], fg="white", font=("Arial", 9), padx=15).pack(side=tk.LEFT, padx=5)
 
         self.iface_log = scrolledtext.ScrolledText(iface_body, height=4, font=("Consolas", 8), bg="#262626", fg="#d4d4d4", bd=0)
@@ -357,11 +356,11 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             # 按钮状态不需要互斥锁定，允许用户连续点击重新“放置”以更新 UID 或重置状态
             self.place_card_btn.config(text="🔄 重新放置")
             self.remove_card_btn.config(state=tk.NORMAL)
-            
+
             self._draw_card()
             self._beep(1)
             self._log(msg)
-            
+
             # 关键：当卡片放置时，立即向云端上报卡片探测事件，以便 Web 端获取 UID
             if self.mqtt_client and self.connected:
                 self.mqtt_client.publish_card_uid_event(self.rfid.uid)
@@ -386,12 +385,12 @@ class FrontDeskEmulator(BaseDeviceEmulator):
 
             if self.rfid.uid:
                 self.card_canvas.create_text(cx+10, cy-15, text=f"UID: {self.rfid.uid}", font=("Consolas", 10, "bold"), fill="#595959")
-            
+
             if self.rfid.card_data:
                 room_id = self.rfid.card_data.get("room_id", "")
                 card_type = self.rfid.card_data.get("card_type", "guest")
                 holder_name = self.rfid.card_data.get("holder_name", "")
-                
+
                 type_map = {
                     'guest': 'GUEST CARD',
                     'master': 'MASTER CARD',
@@ -399,17 +398,17 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                     'staff': 'STAFF CARD',
                     'emergency': 'EMERGENCY CARD'
                 }
-                
+
                 type_text = type_map.get(card_type, 'SMART CARD')
                 self.card_canvas.create_text(cx+10, cy+10, text=type_text, font=("Arial", 9, "bold"), fill="#8B4513")
-                
+
                 if card_type == 'guest':
                     self.card_canvas.create_text(cx+10, cy+35, text=f"ROOM: {room_id}", font=("Consolas", 14, "bold"), fill="#333")
                 else:
                     self.card_canvas.create_text(cx+10, cy+35, text=f"HOLDER: {holder_name[:10]}", font=("Consolas", 11, "bold"), fill="#333")
             else:
                 self.card_canvas.create_text(cx+10, cy+10, text="HOTEL SMART CARD", font=("Arial", 9), fill="#8B4513")
-            
+
             status_text = "已放置: "
             if self.rfid.card_data:
                 ct = self.rfid.card_data.get('card_type', 'guest')
@@ -491,7 +490,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         room_id = self.target_room_var.get()
         if not room_id:
             return messagebox.showwarning("提示", "请输入目标房间号")
-            
+
         success, msg = self.rfid.issue_card(room_id)
         self._draw_card()
 
@@ -503,7 +502,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             if self.mqtt_client and self.connected:
                 # 模拟写卡物理事件上报
                 self.mqtt_client.publish_card_uid_event(self.rfid.uid, room_id)
-                
+
                 self.mqtt_client.publish_security_event("card_issued", level="info", event_data={
                     "room_id": room_id,
                     "action": "issue",
@@ -536,7 +535,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         if success:
             uid_hex = result['uid']
             card_data = result['data']
-            
+
             if not card_data:
                 self._log(f"刷卡无效: 卡片 {uid_hex} 尚未写入数据", "ERROR")
                 self._beep(2)
@@ -638,7 +637,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         biz_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/{self.device_id}"
         self.mqtt_client.subscribe(biz_cmd_topic)
         self._log(f"已订阅指令主题: {biz_cmd_topic}")
-        
+
         # 同时保留物理 ID 的订阅 (用于兼容性)
         phy_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/front_desk/{self.unique_device_id}"
         self.mqtt_client.subscribe(phy_cmd_topic)
@@ -652,7 +651,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # 订阅客房状态事件以更新灯墙
         self.mqtt_client.subscribe("hotel/device/event/room/+", self._on_room_event)
         self.mqtt_client.subscribe("hotel/security/event", self._on_security_event)
-        
+
         # 订阅通话信令主题（用于接收客房呼叫）
         self.mqtt_client.subscribe("hotel/call/signaling", self._on_call_signaling)
         self._log("已订阅通话信令主题: hotel/call/signaling")
@@ -690,53 +689,53 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             event_type = data.get('event_type')
             event_data = data.get('data', {})
             device_id = data.get('device_id', '')
-            
+
             # 忽略自己触发的报警
             if device_id == self.unique_device_id:
                 return
-            
+
             # 处理消防报警联动
             if event_type == "fire_alarm":
                 room_id = event_data.get('room_id')
                 floor_id = event_data.get('floor_id')
                 location = room_id or floor_id
-                
+
                 self._log(f"🔥 收到联动报警: {device_id} 触发消防报警", "ERROR")
-                
+
                 # 更新灯墙显示报警房间
                 if location and location in self.rooms_mapping:
                     idx = self.rooms_mapping.index(location)
                     self.led_wall_colors[idx] = "#ff4d4f"
                     self.root.after(0, self._update_led_wall)
-                
+
                 # 蜂鸣器响3声
                 self._beep(3)
-                
+
                 # 启动持续蜂鸣器（5秒后）
                 self._start_continuous_beep()
-                
+
                 # LED变红
                 self._update_led(255, 0, 0)
                 self.root.after(3000, lambda: self._update_led(0, 0, 255))
-                
+
                 # 更新SOS按钮状态
                 self.sos_btn.config(text="🔥 联动报警中", bg="#000000", fg="#ff4d4f")
                 self.root.after(5000, lambda: self.sos_btn.config(text="🆘\nSOS", bg="red", fg="white"))
-            
+
             # 处理SOS报警联动
             elif event_type == "sos_alarm":
                 room_id = event_data.get('room_id')
                 self._log(f"🆘 收到联动报警: {device_id} 触发SOS报警", "ERROR")
-                
+
                 if room_id and room_id in self.rooms_mapping:
                     idx = self.rooms_mapping.index(room_id)
                     self.led_wall_colors[idx] = "#ff4d4f"
                     self.root.after(0, self._update_led_wall)
-                
+
                 self._beep(3)
                 self._update_led(255, 0, 0)
                 self.root.after(3000, lambda: self._update_led(0, 0, 255))
-                
+
         except Exception as e:
             self._log(f"处理安防事件失败: {e}", "ERROR")
 
@@ -748,11 +747,11 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             call_id = data.get('call_id', '')
             caller_type = data.get('caller_type', '')
             caller_id = data.get('caller_id', '')
-            
+
             # 忽略自己发送的消息
             if data.get('device_id') == self.unique_device_id:
                 return
-            
+
             if action == 'initiate' and caller_type == 'room':
                 # 收到客房呼叫
                 self._log(f"📞 收到客房 {caller_id} 的呼叫，Call ID: {call_id}")
@@ -768,10 +767,10 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         """处理来自客房的来电"""
         caller_id = data.get('caller_id', '未知房间')
         call_id = data.get('call_id', '')
-        
+
         self._log(f"处理客房来电: {caller_id}")
         self._beep(2)
-        
+
         # 可以在这里添加接听逻辑，例如弹窗提示
         # 暂时自动接听并发送接听信令
         answer_data = {
@@ -795,7 +794,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         def continuous_beep():
             # 等待5秒
             time.sleep(5)
-            
+
             # 如果还在报警状态，开始持续蜂鸣
             while not self._stop_alarm_beep.is_set():
                 try:
@@ -804,12 +803,12 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                     time.sleep(0.2)  # 间隔200ms
                 except Exception:
                     time.sleep(1)
-        
+
         # 停止之前的蜂鸣器线程
         self._stop_alarm_beep.set()
         if self._alarm_beep_thread and self._alarm_beep_thread.is_alive():
             self._alarm_beep_thread.join(timeout=1)
-        
+
         # 重置停止事件并启动新线程
         self._stop_alarm_beep.clear()
         self._alarm_beep_thread = threading.Thread(target=continuous_beep, daemon=True)
@@ -863,7 +862,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             if isinstance(cmd_value, str):
                 import json
                 cmd_value = json.loads(cmd_value)
-            
+
             count = cmd_value.get('count', 1)
             self._log(f"[Web指令] 触发蜂鸣器: {count} 次")
             self._beep(count)
@@ -918,14 +917,14 @@ class FrontDeskEmulator(BaseDeviceEmulator):
             action = cmd_value.get('action', 'issue')
             room_number = cmd_value.get('room_number', '')
             booking_id = cmd_value.get('booking_id', '')
-            
+
             self._log(f"[Web指令] 收到房卡操作: action={action}, room={room_number}, booking={booking_id}")
-            
+
             if action == 'issue' or action == 'sync':
                 card_type = cmd_value.get('card_type', 'guest')
                 holder_name = cmd_value.get('holder_name', '')
                 card_uid = cmd_value.get('card_uid', '')
-                
+
                 # 如果是发卡操作，且后端指定了 UID，我们尝试匹配或强制更新
                 if action == 'issue' and card_uid:
                     if not self.rfid.has_card:
@@ -934,21 +933,21 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                     if self.rfid.uid != card_uid:
                         self._log(f"UID 警告: 当前卡片 {self.rfid.uid} 与后端预期 {card_uid} 不符，将强制更新...", "WARNING")
                         self.rfid.uid = card_uid # 强制同步 UID (模拟物理层面的 UID 确认)
-                
+
                 # 如果是同步指令且 UID 匹配，更新本地显示
                 if action == 'sync':
                     if card_uid != self.rfid.uid:
                         return False
                     self._log(f"[MQTT] 收到同步指令: 发现已知卡片 {card_uid} ({card_type})")
-                
+
                 # 设置目标房间 (仅针对客房卡)
                 if card_type == 'guest' and room_number:
                     self.target_room_var.set(room_number)
-                
+
                 # 执行开卡或同步信息
                 target_id = room_number if card_type == 'guest' else ''
                 success, msg = self.rfid.issue_card(target_id, card_type=card_type, holder_name=holder_name)
-                
+
                 self.root.after(0, self._draw_card)
                 self._beep(1 if success else 2)
                 if success:
@@ -956,7 +955,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                     if card_type == 'guest' and room_number:
                         self._update_room_status_on_wall(room_number, "check_in")
                     self._log(f"[Web指令] { '发卡' if action=='issue' else '同步' }成功: 类型={card_type}, UID={self.rfid.uid}")
-                    
+
                     if action == 'issue' and self.mqtt_client and self.connected:
                         self.mqtt_client.publish_security_event("card_issued", level="info", event_data={
                             "card_uid": self.rfid.uid,
@@ -967,7 +966,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                             "operator": self.device_id
                         })
                 return success
-            
+
             elif action == 'sync_clear':
                 # 收到清除同步指令 (说明是未知卡片)
                 card_uid = cmd_value.get('card_uid', '')
@@ -976,7 +975,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                     self.root.after(0, self._draw_card)
                     self._log(f"[MQTT] 收到同步反馈: UID {card_uid} 为空白卡")
                 return True
-            
+
             elif action == 'revoke' or action == 'deactivate':
                 # 执行退卡或作废
                 card_uid = self.rfid.uid
@@ -987,7 +986,7 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                 if room_number:
                     self._update_room_status_on_wall(room_number, "check_out")
                 self._log(f"[Web指令] { '退卡' if action=='revoke' else '作废' }成功: 房间 {room_number or 'N/A'}")
-                
+
                 if self.mqtt_client and self.connected:
                     self.mqtt_client.publish_security_event("card_revoked", level="info", event_data={
                         "card_uid": card_uid,
@@ -995,10 +994,10 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                         "booking_id": booking_id,
                         "action": action
                     })
-                
+
                 self.root.after(3000, lambda: self._update_led(0, 0, 255))
                 return True
-            
+
             return False
         except Exception as e:
             self._log(f"[Web指令] 处理房卡操作失败: {e}", "ERROR")
