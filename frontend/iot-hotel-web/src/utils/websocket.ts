@@ -49,7 +49,9 @@ export function initWebSocket(roomId?: string): Socket {
     return socket
   }
 
-  const socketUrl = window.location.origin
+  // 使用相对路径，让 Vite 代理处理 WebSocket 连接
+  // 开发环境通过代理连接，生产环境使用当前域名
+  const socketUrl = import.meta.env.DEV ? '' : window.location.origin
 
   socket = io(socketUrl, {
     transports: ['websocket', 'polling'],
@@ -121,6 +123,27 @@ export function initWebSocket(roomId?: string): Socket {
   socket.on('security_event', (data: any) => {
     console.log('[WS] 安防事件:', data)
     
+    // 处理消警事件 - 关闭报警弹窗和声音
+    if (data.event_type === 'fire_alarm_cleared' || data.event_type === 'alarm_reset') {
+      console.log('[WS] 收到消警事件:', data)
+      
+      // 触发消警事件，让 AlarmAlertModal 组件处理
+      window.dispatchEvent(new CustomEvent('fire-alarm-cleared', {
+        detail: {
+          deviceId: data.device_id,
+          message: data.data?.message || '火警已解除',
+          timestamp: data.timestamp || new Date().toISOString()
+        }
+      }))
+      
+      // 显示消警通知
+      appStore.addNotification('success', `🔔 ${data.data?.message || '火警已解除'} - 设备: ${data.device_id}`)
+      
+      // 刷新报警列表
+      notificationStore.fetchAlarmNotifications()
+      return
+    }
+    
     // 处理消防报警和SOS报警，触发弹窗
     if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm' || 
         data.event_type === 'fire_alarm_linked' || data.event_type === 'global_alarm') {
@@ -150,7 +173,7 @@ export function initWebSocket(roomId?: string): Socket {
       
       // 触发报警弹窗
       appStore.showAlarmModal({
-        id: data.alarm_id || data.device_id || Date.now().toString(),
+        id: data.data?.alarm_id || data.alarm_id || data.device_id || Date.now().toString(),
         type: data.event_type,
         level: data.level || 'critical',
         deviceId: data.device_id,
@@ -164,7 +187,7 @@ export function initWebSocket(roomId?: string): Socket {
       
       // 添加到通知中心
       notificationStore.addAlarm({
-        id: data.alarm_id || data.device_id || Date.now().toString(),
+        id: data.data?.alarm_id || data.alarm_id || data.device_id || Date.now().toString(),
         type: data.event_type as any,
         level: data.level || 'critical',
         title: `${location} - 报警`,

@@ -842,7 +842,7 @@ class MQTTService {
             roomId = parseInt(eventData.room_id) || null;
           }
 
-          await pool.query<ResultSetHeader>(
+          const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO device_alarms (device_id, hotel_id, room_id, alarm_type, alarm_level, alarm_content, status, created_at)
              VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())`,
             [
@@ -854,9 +854,54 @@ class MQTTService {
               eventData.message || data.description || `${data.event_type === 'fire_alarm' ? '消防报警' : 'SOS报警'}触发`
             ]
           );
-          logger.info(`[MQTT] ${data.event_type} 已同步到 device_alarms 表`);
+          logger.info(`[MQTT] ${data.event_type} 已同步到 device_alarms 表, alarm_id: ${result.insertId}`);
+          
+          // 将 alarm_id 添加到事件数据中，便于前端关联
+          data.data = { ...eventData, alarm_id: result.insertId };
         } catch (alarmError) {
           logger.error(`[MQTT] 同步 ${data.event_type} 到 device_alarms 失败:`, alarmError.message);
+        }
+      }
+      
+      // 处理火警消警事件
+      if (data.event_type === 'fire_alarm_cleared' || data.event_type === 'alarm_reset') {
+        try {
+          // 获取设备信息以确定酒店ID
+          let resolvedHotelId = hotelId;
+          if (!resolvedHotelId || resolvedHotelId === 0) {
+            const device = await this.getDeviceMetadata(data.device_id);
+            resolvedHotelId = device?.hotel_id || 0;
+          }
+          
+          // 更新该设备相关的待处理报警为已解决
+          const [updateResult] = await pool.query<ResultSetHeader>(
+            `UPDATE device_alarms 
+             SET status = 'resolved', handled_at = NOW(), handle_remark = ?
+             WHERE device_id = ? AND status = 'pending' AND alarm_type = 'fire'`,
+            [`设备自动消警: ${data.data?.message || '报警解除'}`, data.device_id]
+          );
+          
+          logger.info(`[MQTT] 火警消警处理完成, device_id: ${data.device_id}, 更新记录数: ${updateResult.affectedRows}`);
+          
+          // 发送消警事件到前端
+          if (resolvedHotelId && resolvedHotelId !== 0 && this.wsInstance) {
+            const hotelRoom = `front_desk_hotel_${resolvedHotelId}`;
+            this.wsInstance.emit('security_event', {
+              device_id: data.device_id,
+              event_type: 'fire_alarm_cleared',
+              level: 'info',
+              data: {
+                message: data.data?.message || '火警已解除',
+                cleared_at: new Date().toISOString(),
+                cleared_by: 'device'
+              },
+              timestamp: new Date().toISOString(),
+              hotel_id: resolvedHotelId
+            }, hotelRoom);
+            logger.info(`[MQTT] 消警事件已发送到: ${hotelRoom}`);
+          }
+        } catch (clearError) {
+          logger.error(`[MQTT] 处理火警消警失败:`, clearError.message);
         }
       }
 
@@ -1067,7 +1112,8 @@ class MQTTService {
       }
 
       // 关键修复：安防事件只发送给所属酒店的前台
-      if (resolvedHotelId && this.wsInstance) {
+      // 如果没有 hotelId，不再广播到所有前台（防止跨店泄露）
+      if (resolvedHotelId && resolvedHotelId !== 0 && this.wsInstance) {
         const hotelRoom = `front_desk_hotel_${resolvedHotelId}`;
         logger.info(`发送安防事件到房间: ${hotelRoom}`);
         this.wsInstance.emit('security_event', {
@@ -1075,20 +1121,12 @@ class MQTTService {
           event_type: data.event_type,
           level: data.level || 'info',
           data: data.data,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          hotel_id: resolvedHotelId
         }, hotelRoom);
       } else {
-        // 如果没有 hotelId，广播给所有连接的前台（用于测试）
-        if (this.wsInstance) {
-          logger.warn(`没有 hotelId，广播安防事件到所有前台`);
-          this.wsInstance.emit('security_event', {
-            device_id: data.device_id,
-            event_type: data.event_type,
-            level: data.level || 'info',
-            data: data.data,
-            timestamp: new Date().toISOString()
-          });
-        }
+        // 如果没有 hotelId，记录错误日志，不再广播到所有前台
+        logger.error(`安防事件无法发送：无法确定酒店ID，设备ID: ${data.device_id}`);
       }
     } catch (error) {
       logger.error('处理安防事件失败:', error.message);

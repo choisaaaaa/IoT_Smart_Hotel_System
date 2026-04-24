@@ -919,43 +919,88 @@ export class AIButlerService {
         { role: 'user', content: text }
       ];
 
-      const response = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        model: 'glm-4-flash',
-        messages: messages,
-        temperature: 0.3,
-        max_tokens: 500,
-        tools: this.tools,
-        tool_choice: 'auto'
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.zhipuApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000
-      });
+      // 模型列表：优先使用flash，如果限流则降级到air
+      const models = ['glm-4-flash', 'glm-4-air', 'glm-4'];
+      let lastError: any = null;
 
-      if (response.data && response.data.choices && response.data.choices[0]) {
-        const choice = response.data.choices[0];
+      for (const model of models) {
+        try {
+          logger.info(`[AI-Butler] 尝试使用模型: ${model}`);
 
-        // 检查是否有工具调用
-        if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
-          return {
-            content: choice.message.content || '',
-            tool_calls: choice.message.tool_calls,
-            needToolCall: true
-          };
+          const response = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+            model: model,
+            messages: messages,
+            temperature: 0.3,
+            max_tokens: 500,
+            tools: this.tools,
+            tool_choice: 'auto'
+          }, {
+            headers: {
+              'Authorization': `Bearer ${this.zhipuApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          });
+
+          if (response.data && response.data.choices && response.data.choices[0]) {
+            const choice = response.data.choices[0];
+            logger.info(`[AI-Butler] 模型 ${model} 调用成功`);
+
+            // 检查是否有工具调用
+            if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+              return {
+                content: choice.message.content || '',
+                tool_calls: choice.message.tool_calls,
+                needToolCall: true
+              };
+            }
+
+            return {
+              content: choice.message.content,
+              tool_calls: null,
+              needToolCall: false
+            };
+          }
+
+          throw new Error('LLM响应异常');
+        } catch (error: any) {
+          lastError = error;
+
+          // 如果是429限流错误，尝试下一个模型
+          if (error.response && error.response.status === 429) {
+            logger.warn(`[AI-Butler] 模型 ${model} 限流，尝试下一个模型`);
+            continue;
+          }
+
+          // 其他错误直接抛出
+          throw error;
         }
-
-        return {
-          content: choice.message.content,
-          tool_calls: null,
-          needToolCall: false
-        };
       }
 
-      throw new Error('LLM响应异常');
-    } catch (error) {
+      // 所有模型都失败了
+      logger.error('[AI-Butler] 所有模型都不可用:', lastError?.message);
+      if (lastError?.response) {
+        logger.error('[AI-Butler] API错误详情:', {
+          status: lastError.response.status,
+          statusText: lastError.response.statusText,
+          data: lastError.response.data
+        });
+      }
+
+      return {
+        content: `您好${session.guestName}，小智正在学习中，马上为您转接前台。[TRANSFER:front_desk]`,
+        tool_calls: null,
+        needToolCall: false
+      };
+    } catch (error: any) {
       logger.error('智谱GLM-4调用失败:', error.message);
+      if (error.response) {
+        logger.error('智谱API错误详情:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      }
       return {
         content: `您好${session.guestName}，小智正在学习中，马上为您转接前台。[TRANSFER:front_desk]`,
         tool_calls: null,
@@ -1793,6 +1838,9 @@ export class AIButlerService {
       // 3. 大语言模型处理（支持Function Calling）
       const llmResult = await this.chatWithLLM(userText, session);
 
+      // 模型列表（用于降级）
+      const models = ['glm-4-flash', 'glm-4-air', 'glm-4'];
+
       // 4. 如果有工具调用，执行工具并生成最终回复
       if (llmResult.needToolCall && llmResult.tool_calls) {
         const toolResults: any[] = [];
@@ -1834,20 +1882,41 @@ export class AIButlerService {
           }))
         ];
 
-        const finalResponse = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-          model: 'glm-4-flash',
-          messages: finalMessages,
-          temperature: 0.3,
-          max_tokens: 500
-        }, {
-          headers: {
-            'Authorization': `Bearer ${this.zhipuApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 15000
-        });
+        // 二次调用也使用模型降级机制
+        let finalContent = '';
+        for (const model of models) {
+          try {
+            logger.info(`[AI-Butler] 二次调用尝试使用模型: ${model}`);
+            const finalResponse = await axios.post('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+              model: model,
+              messages: finalMessages,
+              temperature: 0.3,
+              max_tokens: 500
+            }, {
+              headers: {
+                'Authorization': `Bearer ${this.zhipuApiKey}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000
+            });
 
-        const finalContent = finalResponse.data.choices[0].message.content;
+            if (finalResponse.data && finalResponse.data.choices && finalResponse.data.choices[0]) {
+              finalContent = finalResponse.data.choices[0].message.content;
+              logger.info(`[AI-Butler] 二次调用模型 ${model} 成功`);
+              break;
+            }
+          } catch (error: any) {
+            if (error.response && error.response.status === 429) {
+              logger.warn(`[AI-Butler] 二次调用模型 ${model} 限流，尝试下一个模型`);
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (!finalContent) {
+          throw new Error('所有模型二次调用均失败');
+        }
         
         // 5. 将最终文本转为语音
         let audioBase64 = '';
@@ -1910,6 +1979,7 @@ export class AIButlerService {
       };
     } catch (error: any) {
       logger.error('AI管家处理请求失败:', error.message);
+      logger.error('错误堆栈:', error.stack);
       const errText = '抱歉，服务暂时不可用，为您转接前台。';
       let audioPcmBase64: string | undefined;
       let audioUrl = '';

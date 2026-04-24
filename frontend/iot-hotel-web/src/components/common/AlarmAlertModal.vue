@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { $notify, NotifyPreset } from '@/utils/notify'
 import { Modal } from 'ant-design-vue'
 import {
@@ -169,6 +169,7 @@ const countdown = ref(5)
 const countdownTimer = ref<NodeJS.Timeout | null>(null)
 const acknowledging = ref(false)
 const globalAlarmActive = ref(false)
+const alarmAudio = ref<HTMLAudioElement | null>(null)
 
 // 监听报警事件
 watch(() => appStore.currentAlarm, (alarm) => {
@@ -177,6 +178,61 @@ watch(() => appStore.currentAlarm, (alarm) => {
     showAlarmModal(alarm)
   }
 }, { immediate: true })
+
+// 监听消警事件
+onMounted(() => {
+  window.addEventListener('fire-alarm-cleared', handleAlarmCleared as EventListener)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('fire-alarm-cleared', handleAlarmCleared as EventListener)
+  // 清除定时器
+  if (countdownTimer.value) {
+    clearInterval(countdownTimer.value)
+  }
+  // 停止报警声音
+  stopAlarmSound()
+})
+
+// 处理消警事件
+function handleAlarmCleared(event: CustomEvent) {
+  console.log('[AlarmAlertModal] 收到消警事件:', event.detail)
+  
+  const clearedDeviceId = event.detail?.deviceId
+  
+  // 如果当前显示的报警是来自同一设备，关闭弹窗
+  if (currentAlarm.value && currentAlarm.value.deviceId === clearedDeviceId) {
+    console.log('[AlarmAlertModal] 关闭当前报警弹窗')
+    
+    // 清除定时器
+    if (countdownTimer.value) {
+      clearInterval(countdownTimer.value)
+      countdownTimer.value = null
+    }
+    
+    // 关闭弹窗和遮罩
+    alarmModalVisible.value = false
+    detailDrawerVisible.value = false
+    globalAlarmActive.value = false
+    
+    // 停止报警声音
+    stopAlarmSound()
+    
+    // 标记报警已处理
+    currentAlarm.value.acknowledged = true
+    
+    $notify.success({ title: '报警已解除', description: event.detail?.message || '火警已自动解除' })
+  }
+}
+
+// 停止报警声音
+function stopAlarmSound() {
+  if (alarmAudio.value) {
+    alarmAudio.value.pause()
+    alarmAudio.value.currentTime = 0
+    alarmAudio.value = null
+  }
+}
 
 function showAlarmModal(alarm: AlarmInfo) {
   console.log('[AlarmAlertModal] showAlarmModal 被调用:', alarm)
@@ -242,9 +298,12 @@ async function sendGlobalAlarmCommand() {
 
 function playAlarmSound() {
   try {
-    const audio = new Audio('/alarm-sound.mp3')
-    audio.loop = true
-    audio.play().catch(() => {
+    // 先停止之前的声音
+    stopAlarmSound()
+    
+    alarmAudio.value = new Audio('/alarm-sound.mp3')
+    alarmAudio.value.loop = true
+    alarmAudio.value.play().catch(() => {
       // 自动播放可能被浏览器阻止
     })
   } catch (error) {
@@ -280,6 +339,9 @@ async function handleAcknowledge() {
     alarmModalVisible.value = false
     detailDrawerVisible.value = false
     globalAlarmActive.value = false
+    
+    // 停止报警声音
+    stopAlarmSound()
     
     // 标记报警已处理
     if (currentAlarm.value) {
@@ -391,12 +453,6 @@ function formatDateTime(timestamp: string): string {
   if (!timestamp) return '-'
   return formatDateTimeSec(timestamp)
 }
-
-onUnmounted(() => {
-  if (countdownTimer.value) {
-    clearInterval(countdownTimer.value)
-  }
-})
 </script>
 
 <style scoped>
