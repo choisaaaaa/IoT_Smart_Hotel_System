@@ -181,6 +181,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ReviewManagement',
         component: () => import('@/views/admin/ReviewManage.vue'),
         meta: { title: '评价管理', icon: 'StarOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
+      },
+      {
+        path: 'mqtt',
+        name: 'MQTTManagement',
+        component: () => import('@/views/system/SystemMQTTManagement.vue'),
+        meta: { title: 'MQTT通信管理', icon: 'ApiOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN] }
       }
     ]
   },

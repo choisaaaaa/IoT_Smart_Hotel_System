@@ -61,6 +61,7 @@
             <a-menu-item key="/hotel-admin/device-logs">设备日志</a-menu-item>
             <a-menu-item key="/hotel-admin/pending-devices">待审核设备</a-menu-item>
             <a-menu-item key="/hotel-admin/environment">环境监测</a-menu-item>
+            <a-menu-item key="/hotel-admin/mqtt">MQTT通信管理</a-menu-item>
           </a-sub-menu>
 
           <a-sub-menu key="service-management">
