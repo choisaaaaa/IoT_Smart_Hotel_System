@@ -45,9 +45,12 @@ static const char *TAG = "VOICE_SESSION";
 typedef struct {
     size_t nbytes;
     uint8_t *pcm;
+    uint64_t timestamp_ms;
 } voice_play_item_t;
 
 static QueueHandle_t s_play_q;
+/** 每轮从播放队列批量取出后按时间戳排序，缓解网络抖动导致的乱序到达。 */
+#define VOICE_PLAY_SORT_BATCH_MAX 24
 
 /**
  * 快速清空下行队列：单遍非阻塞出队，每出一段立即 free，无栈上指针表、无第二遍循环，清槽最省时间。
@@ -88,39 +91,59 @@ static void voice_playback_pace_delay_after_chunk(size_t samples_in_chunk)
 static void voice_playback_task(void *arg)
 {
     (void)arg;
-    voice_play_item_t it;
+    voice_play_item_t batch[VOICE_PLAY_SORT_BATCH_MAX];
     for (;;) {
-        if (xQueueReceive(s_play_q, &it, portMAX_DELAY) != pdTRUE) {
+        if (xQueueReceive(s_play_q, &batch[0], portMAX_DELAY) != pdTRUE) {
             continue;
         }
-        if (it.pcm == NULL || it.nbytes < sizeof(int16_t) || (it.nbytes % sizeof(int16_t)) != 0) {
-            free(it.pcm);
-            continue;
+        size_t cnt = 1;
+        while (cnt < VOICE_PLAY_SORT_BATCH_MAX &&
+               xQueueReceive(s_play_q, &batch[cnt], 0) == pdTRUE) {
+            cnt++;
         }
+
+        // 小批量插入排序（数据规模很小，比分配堆内存更稳）
+        for (size_t i = 1; i < cnt; i++) {
+            voice_play_item_t key = batch[i];
+            size_t j = i;
+            while (j > 0 && batch[j - 1].timestamp_ms > key.timestamp_ms) {
+                batch[j] = batch[j - 1];
+                j--;
+            }
+            batch[j] = key;
+        }
+
+        for (size_t i = 0; i < cnt; i++) {
+            voice_play_item_t it = batch[i];
+            if (it.pcm == NULL || it.nbytes < sizeof(int16_t) || (it.nbytes % sizeof(int16_t)) != 0) {
+                free(it.pcm);
+                continue;
+            }
 #if (GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS) > 0u
-        /* 仅手上一段、队里无下一段时：先睡一会再播，与后端首包微错开，抗到达抖动 */
-        if (uxQueueMessagesWaiting(s_play_q) == 0) {
-            vTaskDelay(pdMS_TO_TICKS(GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS));
-        }
+            /* 仅手上一段、队里无下一段时：先睡一会再播，与后端首包微错开，抗到达抖动 */
+            if (uxQueueMessagesWaiting(s_play_q) == 0 && i + 1 == cnt) {
+                vTaskDelay(pdMS_TO_TICKS(GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS));
+            }
 #endif
-        const int16_t *pcm = (const int16_t *)it.pcm;
-        size_t samples = it.nbytes / sizeof(int16_t);
-        size_t off = 0;
-        while (off < samples) {
-            size_t chunk = samples - off;
-            if (chunk > PCM_CHUNK_MAX_SAMPLES) {
-                chunk = PCM_CHUNK_MAX_SAMPLES;
+            const int16_t *pcm = (const int16_t *)it.pcm;
+            size_t samples = it.nbytes / sizeof(int16_t);
+            size_t off = 0;
+            while (off < samples) {
+                size_t chunk = samples - off;
+                if (chunk > PCM_CHUNK_MAX_SAMPLES) {
+                    chunk = PCM_CHUNK_MAX_SAMPLES;
+                }
+                esp_err_t e = hal_audio_play_pcm16(pcm + off, chunk);
+                if (e != ESP_OK) {
+                    ESP_LOGW(TAG, "下行播放失败 off=%u: %s", (unsigned)off, esp_err_to_name(e));
+                    break;
+                }
+                voice_playback_pace_delay_after_chunk(chunk);
+                off += chunk;
             }
-            esp_err_t e = hal_audio_play_pcm16(pcm + off, chunk);
-            if (e != ESP_OK) {
-                ESP_LOGW(TAG, "下行播放失败 off=%u: %s", (unsigned)off, esp_err_to_name(e));
-                break;
-            }
-            voice_playback_pace_delay_after_chunk(chunk);
-            off += chunk;
+            ESP_LOGD(TAG, "下行播放完成 %u samples ts=%llu", (unsigned)samples, (unsigned long long)it.timestamp_ms);
+            free(it.pcm);
         }
-        ESP_LOGD(TAG, "下行播放完成 %u samples", (unsigned)samples);
-        free(it.pcm);
     }
 }
 
@@ -348,12 +371,24 @@ void voice_downlink_mqtt_cb(const char *topic, const char *data, int data_len)
         cJSON_Delete(root);
         return;
     }
-    const char *b64str = b64item->valuestring;
-    const size_t b64_len = strlen(b64str);
+    size_t b64_len = strlen(b64item->valuestring);
+    char *b64str = (char *)malloc(b64_len + 1);
+    if (b64str == NULL) {
+        cJSON_Delete(root);
+        ESP_LOGE(TAG, "下行 OOM 无法拷贝 base64");
+        return;
+    }
+    memcpy(b64str, b64item->valuestring, b64_len + 1);
+    cJSON *tsItem = cJSON_GetObjectItem(root, "timestamp_ms");
+    uint64_t tsMs = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (cJSON_IsNumber(tsItem) && tsItem->valuedouble > 0) {
+        tsMs = (uint64_t)tsItem->valuedouble;
+    }
     const size_t alloc_bytes = (b64_len / 4) * 3 + 3;
     if (alloc_bytes > DOWNLINK_PCM_MAX_BYTES) {
         ESP_LOGW(TAG, "下行 PCM 过大: 预计 %u 字节 > 上限 %d，已丢弃",
                  (unsigned)alloc_bytes, DOWNLINK_PCM_MAX_BYTES);
+        free(b64str);
         cJSON_Delete(root);
         return;
     }
@@ -366,13 +401,14 @@ void voice_downlink_mqtt_cb(const char *topic, const char *data, int data_len)
     }
     size_t raw_len = 0;
     int dr = mbedtls_base64_decode(raw, alloc_bytes, &raw_len, (const unsigned char *)b64str, b64_len);
+    free(b64str);
     if (dr != 0 || raw_len < sizeof(int16_t) || (raw_len % sizeof(int16_t)) != 0) {
         ESP_LOGW(TAG, "下行 base64 解码失败 dr=%d len=%u", dr, (unsigned)raw_len);
         free(raw);
         return;
     }
 
-    voice_play_item_t item = {.nbytes = raw_len, .pcm = raw};
+    voice_play_item_t item = {.nbytes = raw_len, .pcm = raw, .timestamp_ms = tsMs};
     /* 等播任务吃队列、腾出槽再入队；不 pop 队头，避免未播先丢。超时只丢本网络包。 */
     if (xQueueSend(s_play_q, &item, pdMS_TO_TICKS(VOICE_DOWNLINK_ENQUEUE_WAIT_MS)) != pdTRUE) {
         ESP_LOGW(TAG, "下行队列 %ums 内仍无空槽，丢弃本包 %u bytes（已排队段保留）", (unsigned)VOICE_DOWNLINK_ENQUEUE_WAIT_MS, (unsigned)raw_len);
