@@ -359,10 +359,14 @@ class BookingService {
         ApiConstants.bookings,
         queryParameters: {'status': 'checked_in', 'pageSize': 10},
       );
+      debugPrint('getMyCurrentStay attempt 1 - status: ${response.statusCode}, code: ${response.data['code']}');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final list = extractList(response.data['data']);
+        debugPrint('getMyCurrentStay attempt 1 - list.length: ${list.length}');
         final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
+        debugPrint('getMyCurrentStay attempt 1 - checkedIn.length: ${checkedIn.length}');
         if (checkedIn.isNotEmpty) {
+          debugPrint('getMyCurrentStay attempt 1 - found booking id: ${checkedIn.first['id']}');
           return ApiResult.success(
               Booking.fromJson(Map<String, dynamic>.from(checkedIn.first)));
         }
@@ -376,10 +380,14 @@ class BookingService {
         ApiConstants.bookings,
         queryParameters: {'pageSize': 50},
       );
+      debugPrint('getMyCurrentStay attempt 2 - status: ${response.statusCode}, code: ${response.data['code']}');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final list = extractList(response.data['data']);
+        debugPrint('getMyCurrentStay attempt 2 - list.length: ${list.length}');
         final checkedIn = list.where((b) => b['status'] == 'checked_in').toList();
+        debugPrint('getMyCurrentStay attempt 2 - checkedIn.length: ${checkedIn.length}');
         if (checkedIn.isNotEmpty) {
+          debugPrint('getMyCurrentStay attempt 2 - found booking id: ${checkedIn.first['id']}');
           return ApiResult.success(
               Booking.fromJson(Map<String, dynamic>.from(checkedIn.first)));
         }
@@ -390,16 +398,20 @@ class BookingService {
 
     try {
       final meResponse = await _dioClient.get(ApiConstants.authMe);
+      debugPrint('getMyCurrentStay attempt 3 - me status: ${meResponse.statusCode}');
       if (meResponse.statusCode == 200 && meResponse.data['code'] == 200) {
         final userData = meResponse.data['data'];
         final keyword = userData['phone'] ?? userData['username'] ?? '';
+        debugPrint('getMyCurrentStay attempt 3 - keyword: $keyword');
         if (keyword.isNotEmpty) {
           final lookupResponse = await _dioClient.get(
             '${ApiConstants.bookings}/lookup',
             queryParameters: {'keyword': keyword},
           );
+          debugPrint('getMyCurrentStay attempt 3 - lookup status: ${lookupResponse.statusCode}');
           if (lookupResponse.statusCode == 200 && lookupResponse.data['code'] == 200) {
             final lookupData = lookupResponse.data['data'];
+            debugPrint('getMyCurrentStay attempt 3 - lookupData: $lookupData');
             if (lookupData != null && lookupData['status'] == 'checked_in') {
               final fullResponse = await _dioClient.get('${ApiConstants.bookings}/${lookupData['id']}');
               if (fullResponse.statusCode == 200 && fullResponse.data['code'] == 200) {
@@ -416,6 +428,7 @@ class BookingService {
       debugPrint('getMyCurrentStay attempt 3 failed: $e');
     }
 
+    debugPrint('getMyCurrentStay - returning null (no checked_in booking found)');
     return ApiResult.success(null);
   }
 }

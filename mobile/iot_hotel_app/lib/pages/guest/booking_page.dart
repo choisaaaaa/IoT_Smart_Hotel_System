@@ -161,7 +161,12 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   DateTime? _checkOutDate = DateTime.now().add(const Duration(days: 2));
   String? _roomType;
   int _guests = 1;
+  int? _selectedHotelId;
   List<dynamic> _roomTypes = [];
+
+  void _updateSelectedHotel(int? hotelId) {
+    setState(() => _selectedHotelId = hotelId);
+  }
   bool _isLoadingRoomTypes = true;
 
   final TextEditingController _nameController = TextEditingController();
@@ -182,8 +187,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           _roomTypes = result.data ?? [];
           _isLoadingRoomTypes = false;
           if (_roomTypes.isNotEmpty && _roomType == null) {
-            _roomType = _roomTypes[0]['type_code']?.toString() ??
-                _roomTypes[0]['id']?.toString();
+            _roomType = _roomTypes[0]['id']?.toString();
+            _selectedHotelId = _roomTypes[0]['hotel_id'] as int?;
           }
         });
       } else if (mounted) {
@@ -241,9 +246,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                       spacing: 8,
                       runSpacing: 8,
                       children: _roomTypes.map((rt) {
-                        final code = rt['type_code']?.toString() ?? rt['id']?.toString() ?? '';
-                        final name = rt['type_name'] ?? rt['name'] ?? '未知';
-                        return _buildChoiceChip(name, code);
+                        final id = rt['id']?.toString() ?? '';
+                        final name = rt['name'] ?? '未知房型';
+                        return _buildChoiceChip(name, id);
                       }).toList(),
                     ),
           const SizedBox(height: 24),
@@ -383,9 +388,24 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     }
 
     try {
+      final roomTypeId = int.tryParse(_roomType ?? '');
+      if (roomTypeId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('请选择有效的房型'),
+              behavior: SnackBarBehavior.floating));
+        }
+        return;
+      }
+      final selectedRoomType = _roomTypes.firstWhere(
+        (rt) => rt['id']?.toString() == _roomType,
+        orElse: () => {},
+      );
+      final hotelId = selectedRoomType['hotel_id'] ?? 1;
+
       final result = await ref.read(bookingServiceProvider).createBooking({
-        'hotel_id': 1,
-        'room_type': _roomType,
+        'hotel_id': hotelId,
+        'room_type_id': roomTypeId,
         'guest_name': _nameController.text.trim(),
         'guest_phone': _phoneController.text.trim(),
         'guest_count': _guests,
@@ -497,11 +517,11 @@ class _PopularRoomsState extends ConsumerState<_PopularRooms> {
         padding: const EdgeInsets.all(16),
         itemBuilder: (context, i) {
           final rt = _roomTypes[i];
-          final name = rt['type_name'] ?? rt['name'] ?? '未知房型';
-          final price = rt['base_price'] ?? rt['price'] ?? 0;
-          final desc = rt['description'] ?? rt['facilities'] ?? '';
-          final maxGuests = rt['max_occupancy'] ?? rt['capacity'] ?? 2;
-          final bedType = rt['bed_type'] ?? rt['bed_type_name'] ?? '';
+          final name = rt['name'] ?? '未知房型';
+          final price = rt['base_price'] ?? 0;
+          final desc = rt['description'] ?? '';
+          final maxGuests = rt['max_guests'] ?? 2;
+          final bedType = rt['bed_type'] ?? '';
           final icon = _roomIcon(name);
           return Card(
             margin: const EdgeInsets.only(bottom: 12),

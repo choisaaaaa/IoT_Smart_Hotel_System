@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/dio_client.dart';
 import '../core/network/api_result.dart';
@@ -7,6 +8,7 @@ class AiButlerService {
   final DioClient _dioClient = DioClient();
 
   Future<ApiResult<Map<String, dynamic>>> sendMessage(String message, {int? roomId, String? context}) async {
+    debugPrint('AI管家发送消息 - roomId: $roomId, context: $context, message: $message');
     try {
       final data = <String, dynamic>{
         'room_id': roomId ?? 0,
@@ -15,10 +17,12 @@ class AiButlerService {
       };
       if (context != null) data['context'] = context;
 
+      debugPrint('AI管家请求数据: $data');
       final response = await _dioClient.post(
         '${ApiConstants.aiButler}/chat',
         data: data,
       );
+      debugPrint('AI管家响应 - status: ${response.statusCode}, data: ${response.data}');
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final rawData = response.data['data'] as Map<String, dynamic>;
         final normalized = _normalizeBackendResponse(rawData);
@@ -26,6 +30,7 @@ class AiButlerService {
       }
       return ApiResult.failure(response.data['message'] ?? 'AI服务暂不可用');
     } catch (e) {
+      debugPrint('AI管家请求失败: $e');
       return _handleLocalFallback(message);
     }
   }
@@ -80,14 +85,17 @@ class AiButlerService {
   Future<ApiResult<Map<String, dynamic>>> transferToFrontDesk({String? message}) async {
     try {
       final response = await _dioClient.post(
-        '${ApiConstants.aiButler}/transfer',
+        '${ApiConstants.aiButler}/chat',
         data: {
-          'target': 'front_desk',
-          if (message != null) 'message': message,
+          'room_id': 0,
+          'text': message ?? '请转接前台',
+          'session_id': 'app_${DateTime.now().millisecondsSinceEpoch}',
         },
       );
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return ApiResult.success(response.data['data'] as Map<String, dynamic>);
+        final rawData = response.data['data'] as Map<String, dynamic>;
+        final normalized = _normalizeBackendResponse(rawData);
+        return ApiResult.success(normalized);
       }
       return ApiResult.failure(response.data['message'] ?? '转接失败');
     } catch (e) {

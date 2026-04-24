@@ -719,10 +719,10 @@ export const create = async (req: AuthRequest, res: Response) => {
       finalRoomTypeId
     );
 
-    // BUG-071/073修复：校验最终价格必须大于0
-    if (!total_price || total_price <= 0) {
+    // BUG-071/073修复：校验最终价格必须大于等于0（允许积分全额抵扣）
+    if (total_price === undefined || total_price === null || total_price < 0) {
       await connection.rollback();
-      return res.status(400).json(errorResponse('预订金额必须大于0'));
+      return res.status(400).json(errorResponse('预订金额不能为负数'));
     }
 
     // BUG-077修复：校验最终价格上限，防止异常大额
