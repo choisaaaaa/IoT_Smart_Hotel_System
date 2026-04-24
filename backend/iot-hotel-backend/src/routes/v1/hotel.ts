@@ -19,11 +19,13 @@ const router = Router();
  *   get:
  *     summary: 获取当前酒店基础信息
  *     tags: [HotelManagement]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: 成功获取
  */
-router.get('/', get as any);
+router.get('/', authenticate as any, get as any);
 
 /**
  * @swagger
