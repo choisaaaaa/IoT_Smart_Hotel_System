@@ -238,7 +238,6 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
   }
 
   Future<void> _fetchDevices() async {
-    setState(() => _isLoading = true);
     try {
       final result = await ref.read(deviceServiceProvider).getMyRoomDevices();
       if (result.success) {
@@ -246,8 +245,6 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
       }
     } catch (e) {
       debugPrint('获取设备错误: $e');
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -880,6 +877,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   StreamSubscription? _callEventSubscription;
   bool _inCall = false;
   bool _isCaller = false;
+  bool _isReconnecting = false;
   String? _activeCallId;
   String _callDuration = '00:00';
   Timer? _callTimer;
@@ -906,6 +904,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
         case 'registered':
           setState(() {
             _isOnline = true;
+            _isReconnecting = false;
             _clientName = event['data']?['clientName'];
           });
           ScaffoldMessenger.of(context).showSnackBar(
@@ -954,9 +953,18 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
             const SnackBar(content: Text('通话已结束')),
           );
           break;
+        case 'call_reconnecting':
+          setState(() => _isReconnecting = true);
+          break;
         case 'call_error':
           final message = event['data']?['message'] ?? '呼叫失败';
+          if (_isReconnecting) {
+            setState(() => _isReconnecting = false);
+          }
           Navigator.of(context).maybePop();
+          if (_inCall) {
+            _endCall();
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(message), backgroundColor: AppColors.error),
           );
@@ -982,6 +990,7 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
     setState(() {
       _inCall = false;
       _isCaller = false;
+      _isReconnecting = false;
       _activeCallId = null;
       _callDuration = '00:00';
       _callStartTime = null;
@@ -1302,14 +1311,16 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
                 child: Row(
                   mainAxisAlignment: msg['isMe'] ? MainAxisAlignment.end : MainAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: msg['isMe'] ? AppColors.primary : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: msg['isMe'] ? AppColors.primary : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(msg['text'],
+                            style: TextStyle(fontSize: 13, color: msg['isMe'] ? Colors.white : AppColors.textPrimary)),
                       ),
-                      child: Text(msg['text'],
-                          style: TextStyle(fontSize: 13, color: msg['isMe'] ? Colors.white : AppColors.textPrimary)),
                     ),
                   ],
                 ),
@@ -1369,11 +1380,21 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
             child: const Icon(Icons.phone_in_talk_rounded, size: 50, color: AppColors.primary),
           ),
           const SizedBox(height: 24),
-          const Text('通话中', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          Text(
+            _isReconnecting ? '重新连接中...' : '通话中',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: _isReconnecting ? AppColors.warning : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Text(_callDuration, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: AppColors.primary, fontFeatures: [FontFeature.tabularFigures()])),
           const SizedBox(height: 8),
-          const Text('前台', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+          Text(
+            _isReconnecting ? '网络不稳定，正在尝试恢复' : '前台',
+            style: TextStyle(fontSize: 16, color: _isReconnecting ? AppColors.warning : AppColors.textSecondary),
+          ),
           const Spacer(),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

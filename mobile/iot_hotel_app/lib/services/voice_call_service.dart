@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io;
-import '../core/constants/api_constants.dart';
+import '../core/services/realtime_service.dart';
 import 'call_api_service.dart';
 
 class VoiceCallService {
@@ -11,14 +10,18 @@ class VoiceCallService {
   VoiceCallService._internal();
 
   final CallApiService _callApi = CallApiService();
+  final RealtimeService _realtimeService = RealtimeService();
 
-  io.Socket? _socket;
   bool _isInitialized = false;
   bool _isRegistered = false;
   String? _clientId;
   String? _clientName;
   String? _clientType;
   Map<String, dynamic>? _onlineStatus;
+
+  String? _savedOriginalClientType;
+  String? _savedOriginalClientId;
+  int? _savedOriginalHotelId;
 
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
@@ -31,6 +34,12 @@ class VoiceCallService {
   Map<String, dynamic>? _pendingOffer;
   final List<Map<String, dynamic>> _pendingIceCandidates = [];
 
+  Timer? _reconnectTimer;
+  bool _isReconnecting = false;
+  bool _isInitializingCall = false;
+  bool _isCleaningUp = false;
+  String? _lastProcessedAnsweredCallId;
+
   final StreamController<Map<String, dynamic>> _callEventController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get callEvents => _callEventController.stream;
@@ -39,7 +48,7 @@ class VoiceCallService {
       StreamController<MediaStream?>.broadcast();
   Stream<MediaStream?> get remoteStream => _remoteStreamController.stream;
 
-  bool get isConnected => _socket?.connected ?? false;
+  bool get isConnected => _realtimeService.isConnected;
   bool get isRegistered => _isRegistered;
   String? get clientId => _clientId;
   String? get clientName => _clientName;
@@ -53,166 +62,139 @@ class VoiceCallService {
     ]
   };
 
+  StreamSubscription? _realtimeEventSub;
+
+  void ensureListenersSetup() {
+    if (_realtimeEventSub != null) return;
+    _setupRealtimeListeners();
+    _isInitialized = true;
+    _savedOriginalClientType = _realtimeService.clientType;
+    _savedOriginalClientId = _realtimeService.clientId;
+    _savedOriginalHotelId = _realtimeService.hotelId;
+  }
+
   void init(String userId, {String clientType = 'front_desk'}) {
     _clientId = userId;
     _clientType = clientType;
 
     if (_isInitialized) {
-      if (_socket?.connected == true) {
-        registerClient(_clientId!);
-      } else if (_socket != null && !_socket!.connected) {
-        debugPrint('[VoiceCallService] Socket未连接，尝试重新连接');
-        _socket!.connect();
-      }
+      registerClient(userId);
       return;
     }
 
-    final serverUrl = ApiConstants.serverHost;
-    final wsUrl = ApiConstants.websocketUrl;
-    debugPrint('[VoiceCallService] 正在连接WebSocket, serverHost: $serverUrl, websocketUrl: $wsUrl');
-
-    _socket = io.io(serverUrl, <String, dynamic>{
-      'transports': ['websocket', 'polling'],
-      'autoConnect': true,
-      'reconnection': true,
-      'reconnectionAttempts': 5,
-      'reconnectionDelay': 1000,
-      'timeout': 10000,
-    });
-
-    _socket!.onConnect((_) {
-      debugPrint('[VoiceCallService] WebSocket已连接');
-      if (_clientId != null) {
-        registerClient(_clientId!);
-      }
-    });
-
-    _socket!.onDisconnect((_) {
-      debugPrint('[VoiceCallService] WebSocket已断开');
-      _isRegistered = false;
-      _callEventController.add({'type': 'disconnected', 'data': null});
-    });
-
-    _socket!.on('registered', (data) {
-      debugPrint('[VoiceCallService] 注册成功: $data');
-      _isRegistered = true;
-      _clientName = data['clientName'];
-      if (data['webrtcConfig'] != null) {
-        _iceServers = data['webrtcConfig'] as Map<String, dynamic>;
-        debugPrint('[VoiceCallService] 使用服务端WebRTC配置: $_iceServers');
-      }
-      _callEventController.add({'type': 'registered', 'data': data});
-    });
-
-    _socket!.on('online_status', (data) {
-      debugPrint('[VoiceCallService] 在线状态更新');
-      _onlineStatus = data is Map<String, dynamic> ? data : {'raw': data};
-      _callEventController.add({'type': 'online_status', 'data': _onlineStatus});
-    });
-
-    _socket!.on('incoming_call', (data) {
-      debugPrint('[VoiceCallService] 收到来电: $data');
-      final callData = data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map);
-      if (callData['caller_id'] == _clientId) {
-        debugPrint('[VoiceCallService] 忽略自己发起的来电');
-        return;
-      }
-      _callEventController.add({'type': 'incoming_call', 'data': callData});
-    });
-
-    _socket!.on('call_initiated', (data) {
-      debugPrint('[VoiceCallService] 呼叫已发起: $data');
-      _callEventController.add({'type': 'call_initiated', 'data': data});
-    });
-
-    _socket!.on('webrtc_offer', (data) async {
-      debugPrint('[VoiceCallService] 收到WebRTC Offer');
-      final offerData = data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map);
-      await _handleOffer(offerData);
-    });
-
-    _socket!.on('webrtc_answer', (data) async {
-      debugPrint('[VoiceCallService] 收到WebRTC Answer');
-      final answerData = data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map);
-      await _handleAnswer(answerData);
-    });
-
-    _socket!.on('webrtc_ice_candidate', (data) async {
-      debugPrint('[VoiceCallService] 收到ICE候选');
-      final candidateData = data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map);
-      await _handleIceCandidate(candidateData);
-    });
-
-    _socket!.on('call_answered', (data) {
-      debugPrint('[VoiceCallService] 通话已接听: $data');
-      final answeredData = data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map);
-      _callEventController.add({'type': 'call_answered', 'data': answeredData});
-    });
-
-    _socket!.on('call_rejected', (data) {
-      debugPrint('[VoiceCallService] 通话被拒接: $data');
-      _callEventController.add({'type': 'call_rejected', 'data': data});
-      _cleanup();
-    });
-
-    _socket!.on('call_hungup', (data) {
-      debugPrint('[VoiceCallService] 通话已挂断: $data');
-      _callEventController.add({'type': 'call_hungup', 'data': data});
-      _cleanup();
-    });
-
-    _socket!.on('call_error', (data) {
-      debugPrint('[VoiceCallService] 呼叫错误: $data');
-      _callEventController.add({'type': 'call_error', 'data': data});
-    });
-
-    _socket!.on('error', (data) {
-      debugPrint('[VoiceCallService] 错误: $data');
-      _callEventController.add({'type': 'error', 'data': data});
-    });
-
-    _socket!.onConnectError((data) {
-      debugPrint('[VoiceCallService] 连接错误: $data');
-      _callEventController.add({'type': 'connect_error', 'data': data});
-    });
-
-    _socket!.onReconnectAttempt((attempt) {
-      debugPrint('[VoiceCallService] 重连尝试: $attempt');
-    });
-
+    _setupRealtimeListeners();
     _isInitialized = true;
+
+    _savedOriginalClientType = _realtimeService.clientType;
+    _savedOriginalClientId = _realtimeService.clientId;
+    _savedOriginalHotelId = _realtimeService.hotelId;
+
+    registerClient(userId);
+  }
+
+  void _setupRealtimeListeners() {
+    _realtimeEventSub?.cancel();
+    _realtimeEventSub = _realtimeService.events.listen((event) {
+      if (!_isInitialized) return;
+
+      switch (event.type) {
+        case 'registered':
+          _isRegistered = true;
+          _clientName = event.data?['clientName'];
+          if (event.data?['webrtcConfig'] != null) {
+            _iceServers = event.data!['webrtcConfig'] as Map<String, dynamic>;
+            debugPrint('[VoiceCallService] 使用服务端WebRTC配置: $_iceServers');
+          }
+          _callEventController.add({'type': 'registered', 'data': event.data});
+          break;
+        case 'disconnected':
+          _isRegistered = false;
+          _callEventController.add({'type': 'disconnected', 'data': null});
+          break;
+        case 'online_status':
+          _onlineStatus = event.data;
+          _callEventController.add({'type': 'online_status', 'data': _onlineStatus});
+          break;
+        case 'incoming_call':
+          final callData = event.data;
+          if (callData?['caller_id'] == _clientId) {
+            debugPrint('[VoiceCallService] 忽略自己发起的来电');
+            return;
+          }
+          _callEventController.add({'type': 'incoming_call', 'data': callData});
+          break;
+        case 'call_initiated':
+          _callEventController.add({'type': 'call_initiated', 'data': event.data});
+          break;
+        case 'webrtc_offer':
+          _handleOffer(event.data ?? {});
+          break;
+        case 'webrtc_answer':
+          _handleAnswer(event.data ?? {});
+          break;
+        case 'webrtc_ice_candidate':
+          _handleIceCandidate(event.data ?? {});
+          break;
+        case 'call_answered':
+          final answeredCallId = event.data?['call_id']?.toString();
+          if (answeredCallId != null && answeredCallId == _lastProcessedAnsweredCallId) {
+            debugPrint('[VoiceCallService] 忽略重复的call_answered事件: $answeredCallId');
+            return;
+          }
+          _lastProcessedAnsweredCallId = answeredCallId;
+          _callEventController.add({'type': 'call_answered', 'data': event.data});
+          break;
+        case 'call_rejected':
+          _lastProcessedAnsweredCallId = null;
+          _callEventController.add({'type': 'call_rejected', 'data': event.data});
+          _cleanup();
+          break;
+        case 'call_hungup':
+          _lastProcessedAnsweredCallId = null;
+          _callEventController.add({'type': 'call_hungup', 'data': event.data});
+          _cleanup();
+          break;
+        case 'call_error':
+          _callEventController.add({'type': 'call_error', 'data': event.data});
+          break;
+      }
+    });
   }
 
   void registerClient(String clientId) {
     _clientId = clientId;
-    if (_socket?.connected == true) {
+    if (_realtimeService.isConnected) {
       debugPrint('[VoiceCallService] 注册客户端: $clientId, type: ${_clientType ?? "front_desk"}');
-      _socket!.emit('register_client', {
-        'clientType': _clientType ?? 'front_desk',
-        'clientId': clientId,
-      });
+      _realtimeService.emitRegisterClient(
+        clientType: _clientType ?? 'front_desk',
+        clientId: clientId,
+      );
     } else {
-      debugPrint('[VoiceCallService] WebSocket未连接，尝试连接后注册');
-      _socket?.connect();
+      debugPrint('[VoiceCallService] WebSocket未连接，等待连接后自动注册');
     }
   }
 
   void unregisterClient() {
     _isRegistered = false;
     _clientName = null;
-    if (_socket?.connected == true) {
-      _socket!.emit('unregister_client');
+    _realtimeService.unregisterClient();
+
+    if (_savedOriginalClientId != null) {
+      debugPrint('[VoiceCallService] 恢复原始注册: $_savedOriginalClientId, type: $_savedOriginalClientType');
+      _realtimeService.emitRegisterClient(
+        clientType: _savedOriginalClientType ?? 'app',
+        clientId: _savedOriginalClientId!,
+        hotelId: _savedOriginalHotelId,
+      );
     }
   }
 
   void requestOnlineStatus() {
-    if (_socket?.connected == true) {
-      _socket!.emit('get_online_status');
-    }
+    _realtimeService.requestOnlineStatus();
   }
 
   Future<void> startCall(String calleeId, String calleeType) async {
-    if (_socket?.connected != true) {
+    if (!_realtimeService.isConnected) {
       _callEventController.add({
         'type': 'call_error',
         'data': {'message': '未连接到服务器，请先上线'}
@@ -298,63 +280,84 @@ class VoiceCallService {
     final callId = data['call_id'] ?? _currentCallId;
     if (callId == null) return;
 
+    if (_isInitializingCall) {
+      debugPrint('[VoiceCallService] 正在初始化通话，忽略重复的onCallAnswered调用');
+      return;
+    }
+
+    _isInitializingCall = true;
     _currentCallId = callId;
 
     final targetType = data['callee_type'] ?? _currentTargetType ?? 'room';
     final targetId = data['callee_id'] ?? _currentTargetId ?? '';
 
-    await _initPeerConnection(targetId, targetType, callId);
+    try {
+      await _initPeerConnection(targetId, targetType, callId);
 
-    if (_peerConnection != null) {
-      try {
-        final offer = await _peerConnection!.createOffer({
-          'offerToReceiveAudio': true,
-          'offerToReceiveVideo': false,
-        });
-        await _peerConnection!.setLocalDescription(offer);
+      if (_peerConnection != null) {
+        try {
+          final offer = await _peerConnection!.createOffer({
+            'offerToReceiveAudio': true,
+            'offerToReceiveVideo': false,
+          });
+          await _peerConnection!.setLocalDescription(offer);
 
-        _socket?.emit('webrtc_offer', {
-          'target_type': targetType,
-          'target_id': targetId,
-          'offer': {
-            'type': offer.type,
-            'sdp': offer.sdp,
-          },
-          'call_id': callId,
-        });
-        debugPrint('[VoiceCallService] 主叫方已发送Offer, call_id: $callId');
-      } catch (e) {
-        debugPrint('[VoiceCallService] 创建Offer失败: $e');
+          _realtimeService.emitWebRTCOffer(
+            targetType: targetType,
+            targetId: targetId,
+            offer: {
+              'type': offer.type,
+              'sdp': offer.sdp,
+            },
+            callId: callId,
+          );
+          debugPrint('[VoiceCallService] 主叫方已发送Offer, call_id: $callId');
+        } catch (e) {
+          debugPrint('[VoiceCallService] 创建Offer失败: $e');
+        }
       }
+    } finally {
+      _isInitializingCall = false;
     }
   }
 
   Future<void> answerCall(String callId, String callerId, String callerType) async {
-    final result = await _callApi.answer(callId);
-    if (!result.success) {
-      _callEventController.add({
-        'type': 'call_error',
-        'data': {'message': result.message ?? '接听失败'}
-      });
+    if (_isInitializingCall) {
+      debugPrint('[VoiceCallService] 正在初始化通话，忽略重复的answerCall调用');
       return;
     }
 
-    _currentCallId = callId;
-    _currentTargetId = callerId;
-    _currentTargetType = callerType;
+    _isInitializingCall = true;
 
-    await _initPeerConnection(callerId, callerType, callId);
-
-    if (_peerConnection != null) {
-      if (_pendingOffer != null) {
-        debugPrint('[VoiceCallService] 处理缓存的Offer');
-        await _processOffer(_pendingOffer!);
-        _pendingOffer = null;
-      } else {
-        debugPrint('[VoiceCallService] 等待主叫方发送Offer...');
+    try {
+      final result = await _callApi.answer(callId);
+      if (!result.success) {
+        _callEventController.add({
+          'type': 'call_error',
+          'data': {'message': result.message ?? '接听失败'}
+        });
+        return;
       }
 
-      _processPendingIceCandidates();
+      _currentCallId = callId;
+      _currentTargetId = callerId;
+      _currentTargetType = callerType;
+
+      await _initPeerConnection(callerId, callerType, callId);
+
+      if (_peerConnection != null) {
+        if (_pendingOffer != null) {
+          debugPrint('[VoiceCallService] 处理缓存的Offer');
+          await _processOffer(_pendingOffer!);
+          _pendingOffer = null;
+        } else {
+          debugPrint('[VoiceCallService] 等待主叫方发送Offer...');
+        }
+
+        _processPendingIceCandidates();
+      }
+    } finally {
+      _isInitializingCall = false;
     }
   }
 
@@ -364,8 +367,9 @@ class VoiceCallService {
   }
 
   Future<void> hangup(String callId) async {
+    _lastProcessedAnsweredCallId = null;
     await _callApi.hangup(callId);
-    _socket?.emit('hangup_call', {'call_id': callId});
+    _realtimeService.emitHangupCall(callId);
     _cleanup();
   }
 
@@ -379,7 +383,10 @@ class VoiceCallService {
   bool get isMuted => !_isAudioOn;
 
   Future<void> _initPeerConnection(String targetId, String targetType, String? callId) async {
-    await _cleanup();
+    if (_peerConnection != null) {
+      debugPrint('[VoiceCallService] PeerConnection已存在，先清理');
+      await _cleanup();
+    }
 
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
@@ -403,16 +410,16 @@ class VoiceCallService {
 
     _peerConnection?.onIceCandidate = (candidate) {
       if (candidate.candidate != null) {
-        _socket?.emit('webrtc_ice_candidate', {
-          'target_type': targetType,
-          'target_id': targetId,
-          'candidate': {
+        _realtimeService.emitWebRTCIceCandidate(
+          targetType: targetType,
+          targetId: targetId,
+          candidate: {
             'candidate': candidate.candidate,
             'sdpMid': candidate.sdpMid,
             'sdpMLineIndex': candidate.sdpMLineIndex,
           },
-          'call_id': callId ?? _currentCallId,
-        });
+          callId: callId ?? _currentCallId,
+        );
       }
     };
 
@@ -425,14 +432,24 @@ class VoiceCallService {
 
     _peerConnection?.onConnectionState = (state) {
       debugPrint('[VoiceCallService] 连接状态: $state');
-      if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+        if (_currentCallId == null) return;
         _callEventController.add({
           'type': 'call_error',
           'data': {'message': '通话连接已断开'}
         });
         _cleanup();
+      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+        if (_currentCallId == null) return;
+        _cleanup();
+      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        if (_currentCallId == null) return;
+        debugPrint('[VoiceCallService] 连接暂时断开，等待恢复...');
+        _callEventController.add({
+          'type': 'call_reconnecting',
+          'data': {'message': '通话连接不稳定，正在尝试恢复...'}
+        });
+        _attemptReconnect();
       }
     };
 
@@ -441,6 +458,33 @@ class VoiceCallService {
     if (callId != null) {
       _currentCallId = callId;
     }
+  }
+
+  void _attemptReconnect() {
+    if (_isReconnecting || _currentCallId == null) return;
+    _isReconnecting = true;
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+      _isReconnecting = false;
+      if (_peerConnection == null) return;
+
+      final state = _peerConnection?.connectionState;
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        debugPrint('[VoiceCallService] 连接未能自动恢复，执行清理');
+        _callEventController.add({
+          'type': 'call_error',
+          'data': {'message': '通话连接已断开'}
+        });
+        _cleanup();
+      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        debugPrint('[VoiceCallService] 连接已自动恢复');
+        _callEventController.add({
+          'type': 'registered',
+          'data': {'message': '通话连接已恢复'}
+        });
+      }
+    });
   }
 
   Future<void> _handleOffer(Map<String, dynamic> data) async {
@@ -471,15 +515,15 @@ class VoiceCallService {
       });
       await _peerConnection!.setLocalDescription(answer);
 
-      _socket?.emit('webrtc_answer', {
-        'target_type': data['from_type'],
-        'target_id': data['from_id'],
-        'answer': {
+      _realtimeService.emitWebRTCAnswer(
+        targetType: data['from_type'] ?? '',
+        targetId: data['from_id'] ?? '',
+        answer: {
           'type': answer.type,
           'sdp': answer.sdp,
         },
-        'call_id': data['call_id'],
-      });
+        callId: data['call_id'],
+      );
       debugPrint('[VoiceCallService] 已发送Answer');
     } catch (e) {
       debugPrint('[VoiceCallService] 处理Offer失败: $e');
@@ -546,6 +590,12 @@ class VoiceCallService {
   }
 
   Future<void> _cleanup() async {
+    if (_isCleaningUp) return;
+    _isCleaningUp = true;
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _isReconnecting = false;
     _currentCallId = null;
     _currentTargetId = null;
     _currentTargetType = null;
@@ -564,11 +614,13 @@ class VoiceCallService {
 
     _remoteStreamController.add(null);
     _isAudioOn = true;
+    _isInitializingCall = false;
+    _isCleaningUp = false;
   }
 
   void dispose() {
     _cleanup();
-    _socket?.disconnect();
+    _realtimeEventSub?.cancel();
     _callEventController.close();
   }
 }

@@ -127,13 +127,21 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
           _addToCallHistory(event['data'], 'answered');
           break;
         case 'call_rejected':
-        case 'call_hangup':
+        case 'call_hungup':
           Navigator.of(context).maybePop();
           _endCall();
           _addToCallHistory(event['data'], 'ended');
           break;
+        case 'call_reconnecting':
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('通话连接不稳定，正在尝试恢复...'), backgroundColor: AppColors.warning),
+          );
+          break;
         case 'call_error':
           final message = event['data']?['message'] ?? '呼叫失败';
+          if (_inCall) {
+            _endCall();
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(message), backgroundColor: AppColors.error),
           );

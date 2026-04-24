@@ -1012,12 +1012,15 @@ const handleCallAnswered = async (data: any) => {
   }
 
   if (appStore.currentCall?.call_id === data.call_id) {
-    // 更加鲁棒的身份识别：检查所有可能的 ID 匹配
+    if (peerConnection.value) {
+      console.log('[App] WebRTC连接已存在，跳过重复初始化')
+      return
+    }
+
     const myUsername = appStore.userInfo?.username
     const myRoomId = appStore.userStatus?.checkin_info?.room_id ? String(appStore.userStatus.checkin_info.room_id) : ''
     const myRoomNum = appStore.userStatus?.checkin_info?.room_number ? String(appStore.userStatus.checkin_info.room_number) : ''
     
-    // 主叫判定：data.caller_id 匹配我的用户名、我的房间 ID 或我的房间号
     const isCaller = String(data.caller_id) === myUsername || 
                      String(data.caller_id) === myRoomId || 
                      String(data.caller_id) === myRoomNum
@@ -1077,16 +1080,15 @@ const handleCallAnswered = async (data: any) => {
               }
             }
             
-            // 设置超时，如果一定时间内没有收到answer，则切换到音频捕获模式（硬件设备）
-            setTimeout(() => {
-              if (peerConnection.value && peerConnection.value.signalingState !== 'stable') {
+            const callerTimeoutId = setTimeout(() => {
+              if (peerConnection.value && peerConnection.value.connectionState !== 'connected' && peerConnection.value.connectionState !== 'connecting' && peerConnection.value.signalingState !== 'stable') {
                 console.log('[App] WebRTC连接超时，切换到硬件音频捕获模式')
                 cleanupWebRTC()
                 connectionState.value = 'connected'
                 appStore.setCallState({ connectionState: 'connected' })
                 startAudioCapture(data.call_id, targetType, targetId)
               }
-            }, 5000) // 5秒超时
+            }, 8000)
           } catch (e) {
             console.error('[WebRTC] 创建 Offer 失败:', e)
             // WebRTC失败，切换到音频捕获模式
@@ -1133,20 +1135,33 @@ const handleCallAnswered = async (data: any) => {
         console.log('[WebRTC] 被叫方发现待处理 offer，初始化连接')
         await initWebRTC(data.call_id, targetType, targetId)
       } else {
-        // 关键修复：被叫方主动初始化WebRTC，准备接收Offer
         console.log('[WebRTC] 被叫方主动初始化WebRTC，准备接收Offer...')
         await initWebRTC(data.call_id, targetType, targetId)
         
-        // 设置超时，如果一定时间内没有收到offer，则切换到音频捕获模式
-        setTimeout(() => {
-          if (!pendingOffer.value || pendingOffer.value.call_id !== data.call_id) {
+        const calleeTimeoutId = setTimeout(() => {
+          if ((peerConnection.value && peerConnection.value.connectionState !== 'connected' && peerConnection.value.connectionState !== 'connecting' && peerConnection.value.signalingState === 'stable') || !peerConnection.value) {
             console.log('[App] 未收到WebRTC Offer，切换到硬件音频捕获模式')
             cleanupWebRTC()
             connectionState.value = 'connected'
             appStore.setCallState({ connectionState: 'connected' })
             startAudioCapture(data.call_id, data.caller_type, data.caller_id)
           }
-        }, 5000) // 5秒超时
+        }, 8000)
+        
+        if (peerConnection.value) {
+          const origOnTrack = peerConnection.value.ontrack
+          peerConnection.value.ontrack = (event: RTCTrackEvent) => {
+            clearTimeout(calleeTimeoutId)
+            if (origOnTrack) origOnTrack.call(peerConnection.value, event)
+          }
+          const origOnIceState = peerConnection.value.oniceconnectionstatechange
+          peerConnection.value.oniceconnectionstatechange = () => {
+            if (peerConnection.value?.iceConnectionState === 'connected' || peerConnection.value?.iceConnectionState === 'completed') {
+              clearTimeout(calleeTimeoutId)
+            }
+            if (origOnIceState) origOnIceState.call(peerConnection.value)
+          }
+        }
       }
     }
   }

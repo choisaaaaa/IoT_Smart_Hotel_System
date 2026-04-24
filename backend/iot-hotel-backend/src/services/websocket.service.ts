@@ -1020,8 +1020,10 @@ class WebSocketService {
           
           const hId = callData.hotel_id || currentClient?.hotelId;
           if (hId && hId !== 0) {
-            const hotelRoom = `front_desk_hotel_${hId}`;
-            this.io?.to(hotelRoom).emit('call_answered', answerData);
+            if (!(callData.callee_type === 'front_desk' && normalizedCalleeId === 'all')) {
+              const hotelRoom = `front_desk_hotel_${hId}`;
+              this.io?.to(hotelRoom).emit('call_answered', answerData);
+            }
           }
           
           // 如果是拨给房间，通知硬件接通
@@ -1258,8 +1260,10 @@ class WebSocketService {
           }
           
           if (effectiveHotelId && effectiveHotelId !== 0) {
-            const hotelRoom = `front_desk_hotel_${effectiveHotelId}`;
-            this.io?.to(hotelRoom).emit('call_hungup', hangupData);
+            if (!(callData.callee_type === 'front_desk' && normalizedCalleeId === 'all')) {
+              const hotelRoom = `front_desk_hotel_${effectiveHotelId}`;
+              this.io?.to(hotelRoom).emit('call_hungup', hangupData);
+            }
           }
           
           logger.info(`通话挂断: ${callId}, 时长: ${durationSec}秒`);
