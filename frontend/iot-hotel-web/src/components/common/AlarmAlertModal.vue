@@ -418,6 +418,10 @@ function getAlarmColor(type: string): string {
   const colors: Record<string, string> = {
     fire_alarm: 'red',
     sos_alarm: 'orange',
+    floor_fire_suspected: 'red',
+    floor_alarm_pressed: 'gold',
+    room_sos_pressed: 'orange',
+    front_alarm_triggered: 'orange',
     smoke: 'volcano',
     temperature: 'orange',
     manual: 'gold'
@@ -429,6 +433,10 @@ function getAlarmTypeText(type: string): string {
   const texts: Record<string, string> = {
     fire_alarm: '消防报警',
     sos_alarm: 'SOS报警',
+    floor_fire_suspected: '楼控疑似火警',
+    floor_alarm_pressed: '楼道手动报警',
+    room_sos_pressed: '客房SOS',
+    front_alarm_triggered: '前台报警指令',
     smoke: '烟雾探测',
     temperature: '温度异常',
     manual: '手动报警'
@@ -439,7 +447,9 @@ function getAlarmTypeText(type: string): string {
 function getDeviceTypeText(deviceId: string | undefined): string {
   if (!deviceId) return '未知设备'
   if (deviceId.includes('FLO')) return '楼控节点'
+  if (deviceId.startsWith('floor_')) return '楼控节点'
   if (deviceId.includes('FRO')) return '前台管理'
+  if (deviceId.includes('front_desk')) return '前台终端'
   if (deviceId.includes('ROO') || deviceId.includes('room')) return '客房终端'
   return '其他设备'
 }

@@ -412,6 +412,8 @@ class EnvironmentController {
         switch (type) {
           case 'fire': return 'smoke';
           case 'intrusion': return 'manual';
+          case 'sos_alarm': return 'sos_alarm';
+          case 'manual': return 'manual';
           default: return type || 'smoke';
         }
       };

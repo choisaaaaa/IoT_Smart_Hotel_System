@@ -40,8 +40,9 @@ add_compile_definitions(
     # 禁用蜂鸣器（改用音频播放）
     GLOBAL_BUZZER_PIN=-1
     
-    # 禁用客房/楼控按键
-    GLOBAL_BTN_ROOM_1_PIN=-1
+    # 报警/SOS：占用 hal 槽位 BTN_ROOM_SOS（GLOBAL_BTN_ROOM_1_PIN）。前台不用片上 NTC，选 GPIO19 空闲。
+    # 杜邦：按键一脚 → GPIO19，另一脚 → GND；内部上拉，低有效。
+    GLOBAL_BTN_ROOM_1_PIN=19
     GLOBAL_BTN_ROOM_2_PIN=-1
     GLOBAL_BTN_FLOOR_1_PIN=-1
     

@@ -808,39 +808,142 @@ class MQTTService {
     }
   }
 
+  /** 合并客房 event_data、固件 data、以及 detail 文本，写入 data 供后续统一使用 */
+  private normalizeSecurityEventPayload(data: any): void {
+    const merged: Record<string, any> = {};
+    if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+      Object.assign(merged, data.data);
+    }
+    if (data.event_data != null) {
+      let ev = data.event_data;
+      if (typeof ev === 'string') {
+        try {
+          ev = JSON.parse(ev);
+        } catch {
+          ev = {};
+        }
+      }
+      if (ev && typeof ev === 'object' && !Array.isArray(ev)) {
+        Object.assign(merged, ev);
+      }
+    }
+    if (data.detail && typeof data.detail === 'string' && !merged.message) {
+      merged.message = data.detail;
+    }
+    data.data = merged;
+  }
+
+  /** room_id 可能是房号字符串或错误的数据库 id，按酒店归一到 rooms.id */
+  private async resolveRoomDbId(hotelId: number, raw: any): Promise<number | null> {
+    if (raw === undefined || raw === null || raw === '') {
+      return null;
+    }
+    const s = String(raw).trim();
+    if (!s) {
+      return null;
+    }
+    const n = parseInt(s, 10);
+    try {
+      if (hotelId && hotelId !== 0) {
+        const [byNum] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE hotel_id = ? AND (room_number = ? OR id = ?)',
+          [hotelId, s, Number.isNaN(n) ? -1 : n]
+        );
+        if (byNum.length > 0) {
+          return (byNum[0] as any).id as number;
+        }
+      } else {
+        const [byNum] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE room_number = ? OR id = ?',
+          [s, Number.isNaN(n) ? -1 : n]
+        );
+        if (byNum.length > 0) {
+          return (byNum[0] as any).id as number;
+        }
+      }
+    } catch (e) {
+      logger.warn('resolveRoomDbId failed:', (e as Error).message);
+    }
+    return null;
+  }
+
+  private normalizeAlarmLevelForDb(level: string | undefined): string {
+    const l = (level || 'warning').toLowerCase();
+    if (l === 'critical' || l === 'alarm') {
+      return 'emergency';
+    }
+    if (l === 'emergency') {
+      return 'emergency';
+    }
+    if (l === 'warning') {
+      return 'warning';
+    }
+    if (l === 'info') {
+      return 'info';
+    }
+    return 'warning';
+  }
+
   async handleSecurityEvent(data: any, hotelId?: number) {
     try {
+      this.normalizeSecurityEventPayload(data);
+      const merged = data.data || {};
+
       await pool.query<ResultSetHeader>(
         `INSERT INTO security_events (device_id, event_type, event_data, event_level, created_at)
          VALUES (?, ?, ?, ?, NOW())`,
         [
           data.device_id || '',
           data.event_type || 'unknown',
-          JSON.stringify(data.data || {}),
+          JSON.stringify(merged),
           data.level || 'info'
         ]
       );
 
       logger.warn(`安防事件: ${data.event_type} - 设备 ${data.device_id}, hotelId: ${hotelId}`);
 
-      // 如果是火警或SOS报警，同时插入到 device_alarms 表，以便在消防报警记录页面显示
-      if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm') {
+      const et = data.event_type || '';
+      const alarmTypesForDeviceAlarms = [
+        'fire_alarm',
+        'sos_alarm',
+        'room_sos_pressed',
+        'front_alarm_triggered',
+        'floor_fire_suspected',
+        'floor_alarm_pressed'
+      ];
+
+      if (alarmTypesForDeviceAlarms.includes(et)) {
         try {
-          // 获取设备信息以确定酒店ID和房间ID
           let resolvedHotelId = hotelId;
-          let roomId = null;
-          const eventData = data.data || {};
+          let roomId: number | null = null;
 
           if (!resolvedHotelId || resolvedHotelId === 0) {
             const device = await this.getDeviceMetadata(data.device_id);
             resolvedHotelId = device?.hotel_id || 0;
-            roomId = device?.room_id || null;
+            roomId = device?.room_id ?? null;
           }
 
-          // 如果 event_data 中有 room_id，优先使用
-          if (eventData.room_id) {
-            roomId = parseInt(eventData.room_id) || null;
+          if (merged.room_id !== undefined && merged.room_id !== null && merged.room_id !== '') {
+            const rid = await this.resolveRoomDbId(resolvedHotelId || 0, merged.room_id);
+            if (rid != null) {
+              roomId = rid;
+            }
           }
+
+          let alarmTypeDb = 'sos_alarm';
+          if (et === 'fire_alarm' || et === 'floor_fire_suspected') {
+            alarmTypeDb = 'fire';
+          } else if (et === 'floor_alarm_pressed') {
+            alarmTypeDb = 'manual';
+          }
+
+          const alarmLevelDb = this.normalizeAlarmLevelForDb(data.level);
+          const defaultMsg =
+            et === 'fire_alarm' || et === 'floor_fire_suspected'
+              ? '消防报警触发'
+              : et === 'floor_alarm_pressed'
+                ? '楼道报警按钮触发'
+                : 'SOS报警触发';
 
           const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO device_alarms (device_id, hotel_id, room_id, alarm_type, alarm_level, alarm_content, status, created_at)
@@ -849,17 +952,16 @@ class MQTTService {
               data.device_id || '',
               resolvedHotelId || 0,
               roomId,
-              'fire',
-              data.level === 'critical' ? 'emergency' : (data.level || 'warning'),
-              eventData.message || data.description || `${data.event_type === 'fire_alarm' ? '消防报警' : 'SOS报警'}触发`
+              alarmTypeDb,
+              alarmLevelDb,
+              merged.message || data.description || defaultMsg
             ]
           );
-          logger.info(`[MQTT] ${data.event_type} 已同步到 device_alarms 表, alarm_id: ${result.insertId}`);
-          
-          // 将 alarm_id 添加到事件数据中，便于前端关联
-          data.data = { ...eventData, alarm_id: result.insertId };
+          logger.info(`[MQTT] ${et} 已同步到 device_alarms 表, alarm_id: ${result.insertId}`);
+
+          data.data = { ...merged, alarm_id: result.insertId };
         } catch (alarmError) {
-          logger.error(`[MQTT] 同步 ${data.event_type} 到 device_alarms 失败:`, alarmError.message);
+          logger.error(`[MQTT] 同步 ${et} 到 device_alarms 失败:`, (alarmError as Error).message);
         }
       }
       
@@ -1116,10 +1218,14 @@ class MQTTService {
       if (resolvedHotelId && resolvedHotelId !== 0 && this.wsInstance) {
         const hotelRoom = `front_desk_hotel_${resolvedHotelId}`;
         logger.info(`发送安防事件到房间: ${hotelRoom}`);
+        let wsLevel = data.level || 'info';
+        if (wsLevel === 'alarm') {
+          wsLevel = 'critical';
+        }
         this.wsInstance.emit('security_event', {
           device_id: data.device_id,
           event_type: data.event_type,
-          level: data.level || 'info',
+          level: wsLevel,
           data: data.data,
           timestamp: new Date().toISOString(),
           hotel_id: resolvedHotelId

@@ -50,6 +50,12 @@ static char target_room_id[16] = "301";
 static char s_floor_sensor_device_id[40] = "";
 static bool s_floor_got_temp = false;
 static bool s_floor_got_hum = false;
+static float s_floor_ntc_c = 0.f;
+static float s_floor_smoke_adc = 0.f;
+static bool s_floor_human = false;
+static bool s_floor_got_ntc = false;
+static bool s_floor_got_smoke = false;
+static bool s_floor_got_human = false;
 static uint32_t s_command_seq = 1000;
 static uint32_t s_call_seq = 1;
 static const uint8_t k_default_card_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -83,6 +89,9 @@ static bool s_ptt_prev = false;
 static TickType_t s_ptt_press_tick = 0;
 static bool s_ptt_long_fired = false;
 #define FRONT_PTT_LONG_PRESS_MS   850
+
+/* BTN_ROOM_SOS（GLOBAL_BTN_ROOM_1_PIN）：与客房一致，边沿触发上报 sos_alarm */
+static bool s_sos_prev = false;
 
 /** EC11：逻辑与客房端 task_room_ec11_peripheral 对齐（长按 SW 松手切四档；松开后旋转调当前量） */
 static bool s_ec11_ready = false;
@@ -218,6 +227,44 @@ static void publish_front_event(const char *event_type, const char *detail) {
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
     free(json_str);
     cJSON_Delete(root);
+}
+
+/** 与后端 handleSecurityEvent 中 sos_alarm + device_alarms 分支对齐（含 data.room_id / message） */
+static void publish_front_sos_alarm_msg(const char *message) {
+    if (!s_network_ready || message == NULL) {
+        return;
+    }
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "event_type", "sos_alarm");
+    cJSON_AddStringToObject(root, "level", "critical");
+
+    cJSON *dat = cJSON_CreateObject();
+    cJSON_AddStringToObject(dat, "message", message);
+    cJSON_AddStringToObject(dat, "room_id", target_room_id);
+    cJSON_AddItemToObject(root, "data", dat);
+
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+    ESP_LOGW(TAG, "已上报 sos_alarm: %s (room=%s)", message, target_room_id);
+}
+
+static void publish_front_sos_alarm(void) {
+    publish_front_sos_alarm_msg("前台本地报警键触发");
 }
 
 /** 与后端 mqtt.service handleSecurityEvent(card_issued) 对齐：data.card_uid 必填 */
@@ -728,20 +775,43 @@ static void front_oled_flash_status(const char *msg, uint32_t ttl_ms) {
 
 /**
  * 与客房 room_oled_render_all 相同结构：
- * Line0: 目标房号+网态+IP 尾段+场景；Line1: 温湿度+AC；Line2: EC11 档；Line3: 继电器行或指令回显。
- * 前台 Line0 用 FT<房号> 表示「代客目标房」；Line3 仅 CH1 有效，A/C/D 固定 0。
+ * Line0: 目标房号+网态+IP 尾段+场景；Line1: 温湿度+AC（或与楼控 NTC/烟感/人感轮换）；Line2: EC11 档；Line3: 继电器行或指令回显。
+ * Line0 用 R<房号> 与客房皮肤一致（表示代客目标房）；Line3 仅 CH1 有效，A/C/D 固定 0。
  */
 static void front_oled_render_all(void) {
     char l0[48], l1[48], l2[48], l3[48];
 
-    snprintf(l0, sizeof(l0), "FT%.6s %s %.7s %s",
+    snprintf(l0, sizeof(l0), "R%.6s %s %.7s %s",
              target_room_id,
              s_oled_net_ok ? "OK" : "--",
              s_oled_ip_tail,
              front_scene_label_short(s_scene_mode));
 
-    /* 温湿度：优先楼控 DHT MQTT；仅有其一则另一半显示为 -- */
-    if (s_floor_got_temp && s_floor_got_hum) {
+    const bool floor_extra_any = s_floor_got_ntc || s_floor_got_smoke || s_floor_got_human;
+    const bool line1_alt =
+        floor_extra_any && (((xTaskGetTickCount() / pdMS_TO_TICKS(2000)) & 1u) != 0);
+
+    if (line1_alt) {
+        char nbuf[6];
+        char sbuf[6];
+        if (s_floor_got_ntc) {
+            snprintf(nbuf, sizeof(nbuf), "%.0f", (double)s_floor_ntc_c);
+        } else {
+            snprintf(nbuf, sizeof(nbuf), "--");
+        }
+        if (s_floor_got_smoke) {
+            snprintf(sbuf, sizeof(sbuf), "%.0f", (double)s_floor_smoke_adc);
+        } else {
+            snprintf(sbuf, sizeof(sbuf), "--");
+        }
+        char humark = '?';
+        if (s_floor_got_human) {
+            humark = s_floor_human ? '1' : '0';
+        }
+        snprintf(l1, sizeof(l1), "N%s S%s H%c AC%uC", nbuf, sbuf, humark, (unsigned)s_ac_target_temp);
+        s_oled_env_valid = false;
+    } else if (s_floor_got_temp && s_floor_got_hum) {
+        /* 温湿度：楼控 DHT MQTT；仅有其一则另一半显示为 -- */
         s_oled_env_valid = true;
         snprintf(l1, sizeof(l1), "T%.1fC H%.0f%% AC%uC",
                  s_oled_last_temp_c, s_oled_last_hum_pct, (unsigned)s_ac_target_temp);
@@ -919,6 +989,36 @@ static esp_err_t front_desk_run_door_pulse(void) {
     return err;
 }
 
+/** 与客房 read_int_from_cmd_payload：解析 value / command_value */
+static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
+{
+    if (root == NULL || out_value == NULL) {
+        return false;
+    }
+    cJSON *v = cJSON_GetObjectItem(root, "value");
+    if (cJSON_IsNumber(v)) {
+        *out_value = (int)v->valuedouble;
+        return true;
+    }
+    cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
+    if (cJSON_IsNumber(command_value)) {
+        *out_value = (int)command_value->valuedouble;
+        return true;
+    }
+    if (cJSON_IsString(command_value) && command_value->valuestring != NULL) {
+        *out_value = atoi(command_value->valuestring);
+        return true;
+    }
+    if (cJSON_IsObject(command_value)) {
+        cJSON *inner = cJSON_GetObjectItem(command_value, "value");
+        if (cJSON_IsNumber(inner)) {
+            *out_value = (int)inner->valuedouble;
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * 前台本地执行「代客房」单路继电器 + RGB 反馈（与 floor_controller 代客 CH1、后端 light/door 指令对齐）。
  * 返回 true 表示 cmd_type 已由本函数处理（无论成功与否）。
@@ -986,6 +1086,149 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
             return true;
         }
         return false;
+    }
+    if (strcmp(cmd_type, "set_light_brightness") == 0 || strcmp(cmd_type, "light_brightness") == 0) {
+        int b = s_brightness_pct;
+        if (!read_int_from_cmd_payload(root, &b)) {
+            *ok = false;
+            *out_msg = "缺少亮度参数(value)";
+            return true;
+        }
+        if (b < 0) {
+            b = 0;
+        }
+        if (b > 100) {
+            b = 100;
+        }
+        s_brightness_pct = b;
+        front_apply_brightness_to_light();
+        publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
+        *ok = true;
+        *out_msg = "灯光亮度已调整";
+        return true;
+    }
+    if (strcmp(cmd_type, "set_ac_temp") == 0 || strcmp(cmd_type, "ac_set_temp") == 0 || strcmp(cmd_type, "ac_temp") == 0) {
+        int t = (int)s_ac_target_temp;
+        if (!read_int_from_cmd_payload(root, &t)) {
+            *ok = false;
+            *out_msg = "缺少空调温度参数(value)";
+            return true;
+        }
+        if (t < FRONT_EC11_AC_TEMP_MIN_C) {
+            t = FRONT_EC11_AC_TEMP_MIN_C;
+        }
+        if (t > FRONT_EC11_AC_TEMP_MAX_C) {
+            t = FRONT_EC11_AC_TEMP_MAX_C;
+        }
+        s_ac_target_temp = (uint8_t)t;
+        publish_front_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
+        *ok = true;
+        *out_msg = "空调目标温度已调整";
+        return true;
+    }
+    if (strcmp(cmd_type, "set_volume") == 0 || strcmp(cmd_type, "volume_set") == 0 || strcmp(cmd_type, "volume") == 0) {
+        int vol = s_volume_pct;
+        if (!read_int_from_cmd_payload(root, &vol)) {
+            *ok = false;
+            *out_msg = "缺少音量参数(value)";
+            return true;
+        }
+        if (vol < 0) {
+            vol = 0;
+        }
+        if (vol > 100) {
+            vol = 100;
+        }
+        s_volume_pct = vol;
+        hal_audio_set_playback_volume_pct(s_volume_pct);
+        publish_front_sensor_data("volume", (double)s_volume_pct, "%");
+        *ok = true;
+        *out_msg = "音量已调整";
+        return true;
+    }
+    const char *scene_msg = "";
+    if (strcmp(cmd_type, "scene_welcome") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_WELCOME, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "scene_reading") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_READING, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "scene_night") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_NIGHT, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "scene_sleep") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_SLEEP, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "scene_next") == 0) {
+        front_scene_mode_t next_mode = (front_scene_mode_t)((((int)s_scene_mode) + 1) % 4);
+        *ok = apply_front_scene(next_mode, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "light_scene_welcome") == 0 || strcmp(cmd_type, "scene_home") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_WELCOME, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "light_scene_reading") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_READING, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "light_scene_night") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_NIGHT, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "light_scene_sleep") == 0 || strcmp(cmd_type, "scene_leave") == 0) {
+        *ok = apply_front_scene(FRONT_SCENE_SLEEP, &scene_msg);
+        *out_msg = scene_msg;
+        return true;
+    }
+    if (strcmp(cmd_type, "broadcast_alarm") == 0 || strcmp(cmd_type, "alarm_broadcast") == 0) {
+        bool alarm_ok = true;
+        for (int i = 0; i < 3; i++) {
+            if (hal_audio_beep_volume_pct(s_volume_pct) != ESP_OK) {
+                alarm_ok = false;
+            }
+        }
+        *ok = alarm_ok;
+        *out_msg = alarm_ok ? "广播警报音已播放" : "广播警报音播放失败";
+        return true;
+    }
+    if (strcmp(cmd_type, "agent_session_start") == 0) {
+        uint32_t win_ms = 120000;
+        cJSON *w = cJSON_GetObjectItem(root, "window_ms");
+        if (cJSON_IsNumber(w) && w->valuedouble > 0) {
+            win_ms = (uint32_t)w->valuedouble;
+        }
+        voice_session_arm_agent_window(win_ms);
+        *ok = true;
+        *out_msg = "Agent 语音窗口已开启（按住 PTT 上行）";
+        return true;
+    }
+    if (strcmp(cmd_type, "agent_session_end") == 0) {
+        voice_session_close_agent_window();
+        *ok = true;
+        *out_msg = "Agent 语音窗口已关闭";
+        return true;
+    }
+    if (strcmp(cmd_type, "alarm_trigger") == 0 || strcmp(cmd_type, "front_alarm") == 0) {
+        publish_front_sos_alarm_msg("云端报警指令触发");
+        for (int i = 0; i < 5; i++) {
+            (void)hal_audio_beep_volume_pct(s_volume_pct);
+        }
+        *ok = true;
+        *out_msg = "前台报警已触发";
+        return true;
     }
     return false;
 }
@@ -1262,20 +1505,6 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         return false;
     }
 
-    if (strcmp(cmd_type, "alarm_trigger") == 0 || strcmp(cmd_type, "front_alarm") == 0) {
-        publish_front_event("front_alarm_triggered", "前台报警指令触发");
-        (void)hal_audio_beep_volume_pct(s_volume_pct);
-        (void)hal_audio_beep_volume_pct(s_volume_pct);
-        (void)hal_audio_beep_volume_pct(s_volume_pct);
-        (void)hal_audio_beep_volume_pct(s_volume_pct);
-        (void)hal_audio_beep_volume_pct(s_volume_pct);
-        if (owned_command_value != NULL) {
-            cJSON_Delete(owned_command_value);
-        }
-        *out_msg = "前台报警已触发";
-        return true;
-    }
-
     if (owned_command_value != NULL) {
         cJSON_Delete(owned_command_value);
     }
@@ -1399,6 +1628,15 @@ static void front_floor_env_mqtt_cb(const char *topic, const char *data, int dat
     } else if (strcmp(stype->valuestring, "humidity") == 0) {
         s_oled_last_hum_pct = (float)val->valuedouble;
         s_floor_got_hum = true;
+    } else if (strcmp(stype->valuestring, "ntc_temp") == 0) {
+        s_floor_ntc_c = (float)val->valuedouble;
+        s_floor_got_ntc = true;
+    } else if (strcmp(stype->valuestring, "smoke") == 0) {
+        s_floor_smoke_adc = (float)val->valuedouble;
+        s_floor_got_smoke = true;
+    } else if (strcmp(stype->valuestring, "human_present") == 0) {
+        s_floor_human = (val->valuedouble >= 0.5);
+        s_floor_got_human = true;
     }
     cJSON_Delete(root);
 }
@@ -1509,8 +1747,28 @@ static void auth_and_mqtt_task(void *pvParameters) {
         if (e2 != ESP_OK) {
             ESP_LOGW(TAG, "订阅楼控湿度失败: %s", esp_err_to_name(e2));
         }
-        ESP_LOGI(TAG, "OLED 温湿度数据源: 楼控 %s (%s / %s)",
-                 s_floor_sensor_device_id, t_temp, t_hum);
+        char t_ntc[160];
+        char t_smoke[160];
+        char t_human[160];
+        snprintf(t_ntc, sizeof(t_ntc), "%s/%s/%s",
+                 GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "ntc_temp", s_floor_sensor_device_id);
+        snprintf(t_smoke, sizeof(t_smoke), "%s/%s/%s",
+                 GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "smoke", s_floor_sensor_device_id);
+        snprintf(t_human, sizeof(t_human), "%s/%s/%s",
+                 GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "human_present", s_floor_sensor_device_id);
+        e2 = service_mqtt_subscribe(t_ntc, front_floor_env_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控 NTC 失败: %s", esp_err_to_name(e2));
+        }
+        e2 = service_mqtt_subscribe(t_smoke, front_floor_env_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控 smoke 失败: %s", esp_err_to_name(e2));
+        }
+        e2 = service_mqtt_subscribe(t_human, front_floor_env_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控 human_present 失败: %s", esp_err_to_name(e2));
+        }
+        ESP_LOGI(TAG, "OLED 楼控数据源: %s (DHT+ntc+smoke+human)", s_floor_sensor_device_id);
     }
 
     vTaskDelete(NULL);
@@ -1562,7 +1820,7 @@ void task_front_health_report(void *pvParameters) {
     }
 }
 
-// 按键任务：仅 PTT 长按 → Agent（无短按、无前台广播/清除键）
+// 按键任务：PTT 长按 → Agent；BTN_ROOM_SOS → sos_alarm（需 CMake 配置 GLOBAL_BTN_ROOM_1_PIN）
 void task_front_button_events(void *pvParameters) {
     (void)pvParameters;
 
@@ -1583,6 +1841,16 @@ void task_front_button_events(void *pvParameters) {
             }
         }
         s_ptt_prev = ptt_pressed;
+
+        bool sos_pressed = hal_interactive_is_button_pressed(BTN_ROOM_SOS);
+        if (sos_pressed && !s_sos_prev) {
+            front_oled_flash_status("SOS!", 3500);
+            publish_front_sos_alarm();
+            (void)hal_audio_beep_volume_pct(s_volume_pct);
+            (void)hal_audio_beep_volume_pct(s_volume_pct);
+            (void)hal_audio_beep_volume_pct(s_volume_pct);
+        }
+        s_sos_prev = sos_pressed;
 
         vTaskDelay(FRONT_BUTTON_TASK_PERIOD);
     }
