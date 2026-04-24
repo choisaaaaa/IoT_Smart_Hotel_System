@@ -101,7 +101,18 @@
               >
                 {{ record.device_type === 'floor_controller' ? '联动控制' : (record.device_type === 'lock' ? '开锁' : '调节') }}
               </a-button>
-              <a-tag v-else color="blue">只读</a-tag>
+              <a-button
+                size="small"
+                @click="openMqttModal(record)"
+              >
+                MQTT直发
+              </a-button>
+              <a-tag
+                v-if="!['ac', 'light', 'curtain', 'lock', 'floor_controller'].includes(record.device_type)"
+                color="blue"
+              >
+                只读
+              </a-tag>
             </a-space>
           </template>
         </template>
@@ -142,14 +153,42 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="mqttModalVisible"
+      title="MQTT 直发遥控"
+      @ok="confirmSendMqtt"
+      :confirmLoading="mqttSending"
+      width="720px"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="用于紧急联调：可直接向设备下发 MQTT 指令。"
+        style="margin-bottom: 12px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="目标设备">
+          <a-input :value="currentMqttDevice?.device_id || '-'" disabled />
+        </a-form-item>
+        <a-form-item label="Topic">
+          <a-input v-model:value="mqttForm.topic" placeholder="hotel/device/command/room/xxx" />
+        </a-form-item>
+        <a-form-item label="Payload(JSON)">
+          <a-textarea v-model:value="mqttForm.payload" :rows="10" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
 import { $notify, NotifyPreset } from '@/utils/notify'
+import { message } from 'ant-design-vue'
 import { CheckCircleFilled, PlayCircleFilled, MinusCircleFilled, CloseCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type DeviceInfo } from '@/api/environment'
+import request from '@/api/request'
 
 const loading = ref(false)
 const devices = ref<DeviceInfo[]>([])
@@ -209,6 +248,13 @@ const controlAction = ref('toggle')
 const controlValue = ref(24)
 const controlNote = ref('')
 const controlling = ref(false)
+const mqttModalVisible = ref(false)
+const mqttSending = ref(false)
+const currentMqttDevice = ref<DeviceInfo | null>(null)
+const mqttForm = ref({
+  topic: '',
+  payload: ''
+})
 
 async function fetchDevices() {
   loading.value = true
@@ -278,6 +324,84 @@ async function executeControl() {
     NotifyPreset.operationFailed('发送控制指令失败')
   } finally {
     controlling.value = false
+  }
+}
+
+function buildTopicByDevice(device: DeviceInfo): string {
+  const type = device?.device_type
+  const id = device?.device_id || ''
+  if (type === 'floor_controller') return `hotel/device/command/floor/${id}`
+  if (type === 'front_desk') return `hotel/device/command/front_desk/${id}`
+  return `hotel/device/command/room/${id}`
+}
+
+function buildDefaultPayloadByDevice(device: DeviceInfo) {
+  let commandType = 'toggle'
+  let commandValue: string | number = 'on'
+  switch (device.device_type) {
+    case 'ac':
+      commandType = 'set_ac_temp'
+      commandValue = 26
+      break
+    case 'light':
+      commandType = 'set_light_brightness'
+      commandValue = 60
+      break
+    case 'curtain':
+      commandType = 'set_curtain_position'
+      commandValue = 50
+      break
+    case 'floor_controller':
+      commandType = 'broadcast_alarm'
+      commandValue = 'alarm'
+      break
+    case 'lock':
+      commandType = 'unlock'
+      commandValue = 1
+      break
+    default:
+      commandType = 'toggle'
+      commandValue = 'on'
+  }
+  return {
+    command_id: Date.now(),
+    device_id: device.device_id,
+    command_type: commandType,
+    command_value: commandValue,
+    timestamp: new Date().toISOString()
+  }
+}
+
+function openMqttModal(device: DeviceInfo) {
+  currentMqttDevice.value = device
+  mqttForm.value.topic = buildTopicByDevice(device)
+  mqttForm.value.payload = JSON.stringify(buildDefaultPayloadByDevice(device), null, 2)
+  mqttModalVisible.value = true
+}
+
+async function confirmSendMqtt() {
+  let payloadObj: any
+  try {
+    payloadObj = JSON.parse(mqttForm.value.payload)
+  } catch {
+    message.error('Payload 不是合法 JSON')
+    return
+  }
+
+  mqttSending.value = true
+  try {
+    await request.post('/mqtt/send', {
+      topic: mqttForm.value.topic,
+      payload: payloadObj,
+      qos: 0,
+      retain: false
+    })
+    message.success('MQTT 命令已发送')
+    mqttModalVisible.value = false
+  } catch (err) {
+    message.error('发送失败：请确认账号权限和 MQTT 服务状态')
+  } finally {
+    mqttSending.value = false
   }
 }
 

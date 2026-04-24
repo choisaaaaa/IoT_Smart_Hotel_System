@@ -37,6 +37,7 @@ static spi_device_handle_t s_rc522_spi = NULL;
 #define RC522_REG_T_PRESCALER   0x2B
 #define RC522_REG_T_RELOAD_H    0x2C
 #define RC522_REG_T_RELOAD_L    0x2D
+#define RC522_REG_VERSION       0x37
 
 // MFRC522 commands
 #define PCD_IDLE                0x00
@@ -46,7 +47,8 @@ static spi_device_handle_t s_rc522_spi = NULL;
 #define PCD_SOFT_RESET          0x0F
 
 // PICC commands
-#define PICC_CMD_REQA           0x26
+#define PICC_CMD_WUPA           0x52
+#define PICC_CMD_HLTA           0x50
 #define PICC_CMD_SEL_CL1        0x93
 #define PICC_CMD_MF_AUTH_KEY_A  0x60
 #define PICC_CMD_MF_READ        0x30
@@ -201,7 +203,8 @@ static esp_err_t rc522_transceive(const uint8_t *send, uint8_t send_len, uint8_t
 }
 
 static esp_err_t rc522_request_a(void) {
-    uint8_t cmd = PICC_CMD_REQA;
+    /* WUPA 可从 Idle/Halt 唤醒，连续轮询比仅 REQA 更稳 */
+    uint8_t cmd = PICC_CMD_WUPA;
     uint8_t atqa[2] = {0};
     uint8_t atqa_len = 2;
     uint8_t valid_bits = 7;
@@ -251,6 +254,23 @@ static esp_err_t rc522_select_cl1(const uint8_t *uid4) {
     err = rc522_transceive(buf, sizeof(buf), sak, &sak_len, &valid_bits);
     if (err != ESP_OK || sak_len < 1) {
         return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+static esp_err_t rc522_halt_a(void) {
+    uint8_t buf[4] = {PICC_CMD_HLTA, 0x00, 0, 0};
+    esp_err_t err = rc522_calculate_crc(buf, 2, &buf[2]);
+    if (err != ESP_OK) {
+        return err;
+    }
+    uint8_t back[8] = {0};
+    uint8_t back_len = sizeof(back);
+    uint8_t valid_bits = 0;
+    err = rc522_transceive(buf, 4, back, &back_len, &valid_bits);
+    (void)valid_bits;
+    if (err == ESP_ERR_TIMEOUT || err == ESP_OK) {
+        return ESP_OK;
     }
     return ESP_OK;
 }
@@ -396,6 +416,14 @@ esp_err_t driver_rc522_init(void) {
     rc522_write_reg(RC522_REG_RX_MODE, 0x00);
     rc522_antenna_on();
 
+    uint8_t ver = 0;
+    if (rc522_read_reg(RC522_REG_VERSION, &ver) == ESP_OK) {
+        ESP_LOGI(TAG, "RC522 VersionReg=0x%02X (MFRC522/兼容片常见 0x91/0x92)", ver);
+        if (ver == 0x00 || ver == 0xFF) {
+            ESP_LOGW(TAG, "RC522 版本寄存器异常：请检查 SPI 接线与 3.3V 供电");
+        }
+    }
+
     s_inited = true;
     ESP_LOGI(TAG, "RC522 SPI init ok (MOSI=%d MISO=%d SCLK=%d CS=%d)",
              GLOBAL_SPI_MOSI_PIN, GLOBAL_SPI_MISO_PIN, GLOBAL_SPI_SCLK_PIN, GLOBAL_SPI_CS_RC522_PIN);
@@ -426,6 +454,7 @@ esp_err_t driver_rc522_read_uid(uint8_t *uid, uint8_t *uid_len) {
     }
 
     *uid_len = 4;
+    (void)rc522_halt_a();
     return ESP_OK;
 }
 

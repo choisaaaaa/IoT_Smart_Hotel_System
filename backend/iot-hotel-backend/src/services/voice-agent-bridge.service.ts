@@ -64,6 +64,20 @@ function readTrailOutMs(): number {
   return n;
 }
 
+/** 逗号分隔：旧演示/仿真器 device_id 未入库时仍可走 Agent（生产环境勿配置）。 */
+function readExtraApprovedAgentDeviceIds(): Set<string> {
+  const raw = process.env.VOICE_AGENT_EXTRA_APPROVED_DEVICE_IDS || '';
+  if (!raw.trim()) {
+    return new Set();
+  }
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+}
+
 interface PendingUtterance {
   pcm: Buffer;
   /** 上行采样率，用于决定是否下采样到 ASR 16k */
@@ -219,6 +233,9 @@ class VoiceAgentBridgeService {
   }
 
   private async isApprovedAgentDevice(deviceId: string): Promise<boolean> {
+    if (readExtraApprovedAgentDeviceIds().has(deviceId)) {
+      return true;
+    }
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT device_id
