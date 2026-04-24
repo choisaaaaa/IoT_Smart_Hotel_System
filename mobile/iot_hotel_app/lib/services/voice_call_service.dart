@@ -280,8 +280,8 @@ class VoiceCallService {
     final callId = data['call_id'] ?? _currentCallId;
     if (callId == null) return;
 
-    if (_isInitializingCall) {
-      debugPrint('[VoiceCallService] 正在初始化通话，忽略重复的onCallAnswered调用');
+    if (_isInitializingCall || _peerConnection != null) {
+      debugPrint('[VoiceCallService] 通话正在初始化或已存在连接，忽略重复的onCallAnswered调用');
       return;
     }
 
@@ -322,8 +322,8 @@ class VoiceCallService {
   }
 
   Future<void> answerCall(String callId, String callerId, String callerType) async {
-    if (_isInitializingCall) {
-      debugPrint('[VoiceCallService] 正在初始化通话，忽略重复的answerCall调用');
+    if (_isInitializingCall || _peerConnection != null) {
+      debugPrint('[VoiceCallService] 通话正在初始化或已存在连接，忽略重复的answerCall调用');
       return;
     }
 
@@ -614,7 +614,6 @@ class VoiceCallService {
 
     _remoteStreamController.add(null);
     _isAudioOn = true;
-    _isInitializingCall = false;
     _isCleaningUp = false;
   }
 

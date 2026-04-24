@@ -528,7 +528,7 @@ class WebSocketService {
               // 1. 查找该酒店所有“在岗”且“角色匹配”的员工
               const onDutyStaff = Array.from(this.clients.values()).filter(c => 
                 c.clientType === 'front_desk' && 
-                c.hotelId === callerHotelId && 
+                String(c.hotelId) === String(callerHotelId) && 
                 c.isOnDuty === true &&
                 (callee_id === 'all' || c.dutyRole === 'reception') // 呼叫 all 则所有在岗都响，呼叫 staff 则仅前台岗位响
               );
@@ -646,20 +646,21 @@ class WebSocketService {
             logger.info(`[WebRTC] Offer通过MQTT发送给硬件房间: ${dbRoomId}`);
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
-          // 集体呼叫模式：广播给当前酒店的所有在线前台
-          const senderHotelId = this.clients.get(socket.id)?.hotelId;
-          this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
-              this.io?.to(socketId).emit('webrtc_offer', {
-                from_type: this.clients.get(socket.id)?.clientType,
-                from_id: this.clients.get(socket.id)?.clientId,
-                offer: offer,
-                call_id: call_id
-              });
-            }
-          });
+          const senderClient = this.clients.get(socket.id);
+          const senderHotelId = senderClient?.hotelId;
+          if (senderHotelId != null) {
+            const hotelRoom = `front_desk_hotel_${senderHotelId}`;
+            this.io?.to(hotelRoom).emit('webrtc_offer', {
+              from_type: senderClient?.clientType,
+              from_id: senderClient?.clientId,
+              offer: offer,
+              call_id: call_id
+            });
+            logger.info(`[WebRTC] Offer通过酒店房间广播: ${hotelRoom}, 发送者hotelId: ${senderHotelId}(${typeof senderHotelId})`);
+          } else {
+            logger.warn(`[WebRTC] 发送者没有hotelId，无法路由Offer到前台, socket: ${socket.id}`);
+          }
         } else {
-          // 否则通过 WebSocket 转发
           this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_offer', {
             from_type: this.clients.get(socket.id)?.clientType,
             from_id: this.clients.get(socket.id)?.clientId,
@@ -740,18 +741,19 @@ class WebSocketService {
             logger.info(`WebRTC Answer通过MQTT发送给硬件房间: ${dbRoomId}`);
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
-          // 集体呼叫模式：广播给当前酒店的所有在线前台
           const senderHotelId = this.clients.get(socket.id)?.hotelId;
-          this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
-              this.io?.to(socketId).emit('webrtc_answer', {
-                from_type: this.clients.get(socket.id)?.clientType,
-                from_id: this.clients.get(socket.id)?.clientId,
-                answer: answer,
-                call_id: call_id
-              });
-            }
-          });
+          if (senderHotelId != null) {
+            const hotelRoom = `front_desk_hotel_${senderHotelId}`;
+            this.io?.to(hotelRoom).emit('webrtc_answer', {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              answer: answer,
+              call_id: call_id
+            });
+            logger.info(`[WebRTC] Answer通过酒店房间广播: ${hotelRoom}, 发送者hotelId: ${senderHotelId}(${typeof senderHotelId})`);
+          } else {
+            logger.warn(`[WebRTC] 发送者没有hotelId，无法路由Answer到前台, socket: ${socket.id}`);
+          }
         } else {
           this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_answer', {
             from_type: this.clients.get(socket.id)?.clientType,
@@ -828,18 +830,19 @@ class WebSocketService {
             });
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
-          // 集体呼叫模式：广播给当前酒店的所有在线前台
           const senderHotelId = this.clients.get(socket.id)?.hotelId;
-          this.clients.forEach((client, socketId) => {
-            if (client.clientType === 'front_desk' && client.hotelId === senderHotelId) {
-              this.io?.to(socketId).emit('webrtc_ice_candidate', {
-                from_type: this.clients.get(socket.id)?.clientType,
-                from_id: this.clients.get(socket.id)?.clientId,
-                candidate: candidate,
-                call_id: call_id
-              });
-            }
-          });
+          if (senderHotelId != null) {
+            const hotelRoom = `front_desk_hotel_${senderHotelId}`;
+            this.io?.to(hotelRoom).emit('webrtc_ice_candidate', {
+              from_type: this.clients.get(socket.id)?.clientType,
+              from_id: this.clients.get(socket.id)?.clientId,
+              candidate: candidate,
+              call_id: call_id
+            });
+            logger.info(`[WebRTC] ICE候选通过酒店房间广播: ${hotelRoom}, 发送者hotelId: ${senderHotelId}(${typeof senderHotelId})`);
+          } else {
+            logger.warn(`[WebRTC] 发送者没有hotelId，无法路由ICE候选到前台, socket: ${socket.id}`);
+          }
         } else {
           this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_ice_candidate', {
             from_type: this.clients.get(socket.id)?.clientType,

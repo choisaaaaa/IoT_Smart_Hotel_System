@@ -921,12 +921,11 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           });
           break;
         case 'incoming_call':
-          if (!_inCall) {
-            _showIncomingCallDialog(event['data']);
-          }
           break;
         case 'call_answered':
-          Navigator.of(context).maybePop();
+          if (_isCaller) {
+            Navigator.of(context).maybePop();
+          }
           setState(() {
             _inCall = true;
             _activeCallId = event['data']?['call_id'] ?? _callService.currentCallId;
@@ -940,14 +939,18 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           }
           break;
         case 'call_rejected':
-          Navigator.of(context).maybePop();
+          if (_isCaller) {
+            Navigator.of(context).maybePop();
+          }
           _endCall();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('对方已拒接'), backgroundColor: AppColors.warning),
           );
           break;
         case 'call_hungup':
-          Navigator.of(context).maybePop();
+          if (_isCaller) {
+            Navigator.of(context).maybePop();
+          }
           _endCall();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('通话已结束')),
@@ -961,7 +964,9 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
           if (_isReconnecting) {
             setState(() => _isReconnecting = false);
           }
-          Navigator.of(context).maybePop();
+          if (_isCaller) {
+            Navigator.of(context).maybePop();
+          }
           if (_inCall) {
             _endCall();
           }
@@ -995,89 +1000,6 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       _callDuration = '00:00';
       _callStartTime = null;
     });
-  }
-
-  void _showIncomingCallDialog(Map<String, dynamic> callData) {
-    final callerName = callData['caller_name'] ?? callData['caller_id'] ?? '未知';
-    final callId = callData['call_id'];
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.phone_in_talk_rounded,
-                size: 40,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              callerName,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '正在呼叫您...',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _isCaller = false;
-                      _callService.answerCall(
-                        callId,
-                        callData['caller_id'],
-                        callData['caller_type'],
-                      );
-                      Navigator.pop(ctx);
-                    },
-                    icon: const Icon(Icons.call_rounded),
-                    label: const Text('接听'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _callService.rejectCall(callId);
-                      Navigator.pop(ctx);
-                    },
-                    icon: const Icon(Icons.call_end_rounded),
-                    label: const Text('拒绝'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _toggleOnlineStatus() {

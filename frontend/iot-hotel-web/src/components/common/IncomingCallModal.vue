@@ -52,6 +52,7 @@ import { useAppStore } from '@/stores/app'
 import { getSocket } from '@/utils/websocket'
 import { $notify, NotifyPreset } from '@/utils/notify'
 import { useRouter } from 'vue-router'
+import { normalizeRole, CANONICAL_ROLES } from '@/api/auth'
 
 const appStore = useAppStore()
 const router = useRouter()
@@ -66,17 +67,21 @@ function handleAnswer() {
   if (socket) {
     socket.emit('answer_call', { call_id: appStore.incomingCall.call_id })
     
-    // 设置为当前通话
     appStore.setCurrentCall({
       ...appStore.incomingCall,
       status: 'connecting'
     })
     
-    // 清除来电状态
     appStore.clearIncomingCall()
     
-    // 跳转到通话页面（如果不在的话）
-    router.push('/reception/voice-calls')
+    const userRole = normalizeRole(appStore.userInfo?.role)
+    const isStaff = [CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN].includes(userRole)
+    
+    if (isStaff) {
+      if (!window.location.pathname.startsWith('/reception/voice-calls')) {
+        router.push('/reception/voice-calls')
+      }
+    }
     
     $notify.success({ title: '通话已接通', description: '已成功接听来电 📞' })
   }
