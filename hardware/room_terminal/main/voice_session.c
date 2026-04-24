@@ -52,10 +52,16 @@ typedef struct {
 } voice_play_item_t;
 
 static QueueHandle_t s_play_q;
+static char s_last_started_playback_id[48];
+/** 新会话代际号：每次检测到新 playback_id(seq=1) 就递增，播放线程据此立即清场。 */
+static volatile uint32_t s_downlink_generation = 0;
 /** 每轮从播放队列批量取出后按时间戳排序，缓解网络抖动导致的乱序到达。 */
 #define VOICE_PLAY_SORT_BATCH_MAX 24
 #define VOICE_PLAY_PENDING_MAX 96
-#define VOICE_REORDER_WAIT_MS 160u
+#define VOICE_REORDER_WAIT_MS 600u
+#define VOICE_FINISHED_PLAYBACK_MAX 8
+/* 新会话启动前先等一小段时间攒包，降低“边到边播”导致的尾字丢失/乱序跳播 */
+#define VOICE_REORDER_PREFETCH_MS 360u
 
 /**
  * 快速清空下行队列：单遍非阻塞出队，每出一段立即 free，无栈上指针表、无第二遍循环，清槽最省时间。
@@ -101,7 +107,18 @@ static bool same_playback_id(const char *a, const char *b)
     return strncmp(a, b, sizeof(((voice_play_item_t *)0)->playback_id)) == 0;
 }
 
-static void play_one_item(const voice_play_item_t *it)
+static void clear_pending_items(voice_play_item_t *pending, size_t *pending_cnt)
+{
+    if (pending == NULL || pending_cnt == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < *pending_cnt; i++) {
+        free(pending[i].pcm);
+    }
+    *pending_cnt = 0;
+}
+
+static void play_one_item(const voice_play_item_t *it, uint32_t generation_snapshot)
 {
     if (it == NULL || it->pcm == NULL || it->nbytes < sizeof(int16_t) || (it->nbytes % sizeof(int16_t)) != 0) {
         return;
@@ -113,6 +130,11 @@ static void play_one_item(const voice_play_item_t *it)
         size_t chunk = samples - off;
         if (chunk > PCM_CHUNK_MAX_SAMPLES) {
             chunk = PCM_CHUNK_MAX_SAMPLES;
+        }
+        if (s_downlink_generation != generation_snapshot) {
+            ESP_LOGW(TAG, "播放中检测到新会话，立即中断旧分片 pb=%s seq=%u/%u",
+                     it->playback_id, (unsigned)it->seq, (unsigned)it->total_seq);
+            break;
         }
         esp_err_t e = hal_audio_play_pcm16(pcm + off, chunk);
         if (e != ESP_OK) {
@@ -135,9 +157,36 @@ static void voice_playback_task(void *arg)
     uint32_t expected_seq = 1;
     uint32_t active_total_seq = 0;
     TickType_t wait_start_tick = 0;
+    char finished_playback_ids[VOICE_FINISHED_PLAYBACK_MAX][48] = {{0}};
+    size_t finished_cnt = 0;
+    uint32_t observed_generation = s_downlink_generation;
     for (;;) {
         voice_play_item_t item;
         if (xQueueReceive(s_play_q, &item, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        if (observed_generation != s_downlink_generation) {
+            clear_pending_items(pending, &pending_cnt);
+            active_playback_id[0] = '\0';
+            expected_seq = 1;
+            active_total_seq = 0;
+            wait_start_tick = 0;
+            finished_cnt = 0;
+            observed_generation = s_downlink_generation;
+        }
+
+        // 已结束会话的迟到包直接丢弃，避免“句尾回跳到句首”
+        bool already_finished = false;
+        for (size_t i = 0; i < finished_cnt; i++) {
+            if (same_playback_id(item.playback_id, finished_playback_ids[i])) {
+                already_finished = true;
+                break;
+            }
+        }
+        if (already_finished) {
+            ESP_LOGW(TAG, "丢弃已结束会话的迟到分片 pb=%s seq=%u/%u",
+                     item.playback_id, (unsigned)item.seq, (unsigned)item.total_seq);
+            free(item.pcm);
             continue;
         }
 
@@ -151,6 +200,16 @@ static void voice_playback_task(void *arg)
 
         // 尝试尽可能严格按 playback_id + seq 输出
         for (;;) {
+            if (observed_generation != s_downlink_generation) {
+                clear_pending_items(pending, &pending_cnt);
+                active_playback_id[0] = '\0';
+                expected_seq = 1;
+                active_total_seq = 0;
+                wait_start_tick = 0;
+                finished_cnt = 0;
+                observed_generation = s_downlink_generation;
+                break;
+            }
             if (pending_cnt == 0) {
                 active_playback_id[0] = '\0';
                 expected_seq = 1;
@@ -161,6 +220,24 @@ static void voice_playback_task(void *arg)
 
             // 选择活动会话：优先最早时间戳的分片
             if (active_playback_id[0] == '\0') {
+                vTaskDelay(pdMS_TO_TICKS(VOICE_REORDER_PREFETCH_MS));
+                // 预取窗口期间继续把已到达分片拿进 pending，避免刚起播就缺片
+                while (pending_cnt < VOICE_PLAY_PENDING_MAX &&
+                       xQueueReceive(s_play_q, &item, 0) == pdTRUE) {
+                    bool already_finished2 = false;
+                    for (size_t k = 0; k < finished_cnt; k++) {
+                        if (same_playback_id(item.playback_id, finished_playback_ids[k])) {
+                            already_finished2 = true;
+                            break;
+                        }
+                    }
+                    if (already_finished2) {
+                        free(item.pcm);
+                        continue;
+                    }
+                    pending[pending_cnt++] = item;
+                }
+
                 size_t pick = 0;
                 for (size_t i = 1; i < pending_cnt; i++) {
                     if (pending[i].timestamp_ms < pending[pick].timestamp_ms) {
@@ -180,6 +257,16 @@ static void voice_playback_task(void *arg)
                 if (!same_playback_id(pending[i].playback_id, active_playback_id)) {
                     continue;
                 }
+                // 丢弃已过期分片（迟到的小 seq）
+                if (pending[i].seq > 0 && pending[i].seq < expected_seq) {
+                    ESP_LOGW(TAG, "丢弃过期分片 pb=%s seq=%u 期望>=%u",
+                             active_playback_id, (unsigned)pending[i].seq, (unsigned)expected_seq);
+                    free(pending[i].pcm);
+                    memmove(&pending[i], &pending[i + 1], (pending_cnt - i - 1) * sizeof(voice_play_item_t));
+                    pending_cnt--;
+                    i--;
+                    continue;
+                }
                 if (pending[i].seq == expected_seq) {
                     exact_idx = (int)i;
                     break;
@@ -195,11 +282,22 @@ static void voice_playback_task(void *arg)
                 voice_play_item_t out = pending[(size_t)exact_idx];
                 memmove(&pending[(size_t)exact_idx], &pending[(size_t)exact_idx + 1], (pending_cnt - (size_t)exact_idx - 1) * sizeof(voice_play_item_t));
                 pending_cnt--;
-                play_one_item(&out);
+                play_one_item(&out, observed_generation);
                 free(out.pcm);
                 expected_seq++;
                 wait_start_tick = xTaskGetTickCount();
                 if (active_total_seq > 0 && expected_seq > active_total_seq) {
+                    if (active_playback_id[0] != '\0') {
+                        if (finished_cnt < VOICE_FINISHED_PLAYBACK_MAX) {
+                            strncpy(finished_playback_ids[finished_cnt], active_playback_id, sizeof(finished_playback_ids[finished_cnt]) - 1);
+                            finished_playback_ids[finished_cnt][sizeof(finished_playback_ids[finished_cnt]) - 1] = '\0';
+                            finished_cnt++;
+                        } else {
+                            memmove(&finished_playback_ids[0], &finished_playback_ids[1], (VOICE_FINISHED_PLAYBACK_MAX - 1) * sizeof(finished_playback_ids[0]));
+                            strncpy(finished_playback_ids[VOICE_FINISHED_PLAYBACK_MAX - 1], active_playback_id, sizeof(finished_playback_ids[0]) - 1);
+                            finished_playback_ids[VOICE_FINISHED_PLAYBACK_MAX - 1][sizeof(finished_playback_ids[0]) - 1] = '\0';
+                        }
+                    }
                     active_playback_id[0] = '\0';
                     expected_seq = 1;
                     active_total_seq = 0;
@@ -221,11 +319,22 @@ static void voice_playback_task(void *arg)
                          (unsigned)out.seq, (unsigned)expected_seq, active_playback_id);
                 memmove(&pending[(size_t)next_idx], &pending[(size_t)next_idx + 1], (pending_cnt - (size_t)next_idx - 1) * sizeof(voice_play_item_t));
                 pending_cnt--;
-                play_one_item(&out);
+                play_one_item(&out, observed_generation);
                 free(out.pcm);
                 expected_seq = out.seq + 1;
                 wait_start_tick = xTaskGetTickCount();
                 if (active_total_seq > 0 && expected_seq > active_total_seq) {
+                    if (active_playback_id[0] != '\0') {
+                        if (finished_cnt < VOICE_FINISHED_PLAYBACK_MAX) {
+                            strncpy(finished_playback_ids[finished_cnt], active_playback_id, sizeof(finished_playback_ids[finished_cnt]) - 1);
+                            finished_playback_ids[finished_cnt][sizeof(finished_playback_ids[finished_cnt]) - 1] = '\0';
+                            finished_cnt++;
+                        } else {
+                            memmove(&finished_playback_ids[0], &finished_playback_ids[1], (VOICE_FINISHED_PLAYBACK_MAX - 1) * sizeof(finished_playback_ids[0]));
+                            strncpy(finished_playback_ids[VOICE_FINISHED_PLAYBACK_MAX - 1], active_playback_id, sizeof(finished_playback_ids[0]) - 1);
+                            finished_playback_ids[VOICE_FINISHED_PLAYBACK_MAX - 1][sizeof(finished_playback_ids[0]) - 1] = '\0';
+                        }
+                    }
                     active_playback_id[0] = '\0';
                     expected_seq = 1;
                     active_total_seq = 0;
@@ -396,6 +505,8 @@ void voice_session_init(const char *room_device_id,
     s_uplink_seq = 0;
     s_ptt_prev = false;
     s_agent_had_pcm_this_ptt = false;
+    memset(s_last_started_playback_id, 0, sizeof(s_last_started_playback_id));
+    s_downlink_generation = 0;
     (void)s_call_id_cap;
 
     if (s_play_q == NULL) {
@@ -495,6 +606,18 @@ void voice_downlink_mqtt_cb(const char *topic, const char *data, int data_len)
         strncpy(playbackId, playbackIdItem->valuestring, sizeof(playbackId) - 1);
     } else {
         strncpy(playbackId, "legacy", sizeof(playbackId) - 1);
+    }
+    if (seq == 1 &&
+        playbackId[0] != '\0' &&
+        strncmp(playbackId, "legacy", sizeof(playbackId)) != 0 &&
+        strncmp(playbackId, s_last_started_playback_id, sizeof(s_last_started_playback_id)) != 0) {
+        s_downlink_generation++;
+        ESP_LOGW(TAG, "检测到新对话会话，清空旧残留: old=%s new=%s",
+                 s_last_started_playback_id[0] ? s_last_started_playback_id : "(none)",
+                 playbackId);
+        voice_session_discard_downlink_buffer();
+        strncpy(s_last_started_playback_id, playbackId, sizeof(s_last_started_playback_id) - 1);
+        s_last_started_playback_id[sizeof(s_last_started_playback_id) - 1] = '\0';
     }
     const size_t alloc_bytes = (b64_len / 4) * 3 + 3;
     if (alloc_bytes > DOWNLINK_PCM_MAX_BYTES) {

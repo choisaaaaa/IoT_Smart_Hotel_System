@@ -115,6 +115,79 @@ export class AIButlerService {
     );
   }
 
+  /**
+   * 开发联调兜底：允许指定房间跳过入住校验。
+   * 仅在非 production 且 DEV_ASSUME_CHECKED_IN_ROOMS 命中时生效。
+   * 格式示例：DEV_ASSUME_CHECKED_IN_ROOMS=301,room_301,front_01
+   */
+  private isDevAssumeCheckedInEnabled(roomId: string): boolean {
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    const raw = process.env.DEV_ASSUME_CHECKED_IN_ROOMS || '';
+    if (!raw.trim()) {
+      return false;
+    }
+    const allowSet = new Set(
+      raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+    if (allowSet.has(roomId)) {
+      return true;
+    }
+    const numericId = roomId.replace(/^room_?/, '');
+    if (numericId && allowSet.has(numericId)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * DEV联调兜底：基于配置生成一个“已入住”会话，供无板/无住客数据时调通链路。
+   * 默认目标房间号 301，可通过 DEV_ASSUME_ROOM_NUMBER / DEV_ASSUME_HOTEL_ID 覆盖。
+   */
+  private async buildDevAssumeSession(roomId: string): Promise<GuestSession | null> {
+    if (!this.isDevAssumeCheckedInEnabled(roomId)) {
+      return null;
+    }
+
+    const assumeRoomNumber = (process.env.DEV_ASSUME_ROOM_NUMBER || '301').trim();
+    const assumeHotelIdRaw = (process.env.DEV_ASSUME_HOTEL_ID || '3').trim();
+    const assumeHotelId = /^\d+$/.test(assumeHotelIdRaw) ? parseInt(assumeHotelIdRaw, 10) : 3;
+
+    const [roomRows] = await pool.query<RowDataPacket[]>(
+      `SELECT r.id, r.room_number, r.hotel_id, h.hotel_name
+       FROM rooms r
+       LEFT JOIN hotels h ON r.hotel_id = h.id
+       WHERE r.room_number = ? AND r.hotel_id = ?
+       LIMIT 1`,
+      [assumeRoomNumber, assumeHotelId]
+    );
+    if (roomRows.length === 0) {
+      logger.warn(`[AI-Butler] DEV联调兜底失败：未找到房间 room_number=${assumeRoomNumber}, hotel_id=${assumeHotelId}`);
+      return null;
+    }
+
+    const roomInfo = roomRows[0];
+    const mockSession: GuestSession = {
+      roomId: roomInfo.room_number || assumeRoomNumber,
+      roomDbId: roomInfo.id,
+      hotelId: roomInfo.hotel_id || assumeHotelId,
+      hotelName: roomInfo.hotel_name || '联调酒店',
+      guestId: 0,
+      bookingId: 0,
+      guestName: '联调住客',
+      checkInDate: new Date().toISOString(),
+      checkOutDate: '',
+      isValid: true
+    };
+    this.sessions.set(roomId, mockSession);
+    logger.warn(`[AI-Butler] DEV联调兜底生效：${roomId} -> 酒店${mockSession.hotelId} 房间${mockSession.roomId}`);
+    return mockSession;
+  }
+
   // 工具定义（Function Calling）
   private tools = [
     {
@@ -301,6 +374,10 @@ export class AIButlerService {
       }
 
       if (!actualRoomDbId) {
+        const devSession = await this.buildDevAssumeSession(roomId);
+        if (devSession) {
+          return devSession;
+        }
         logger.warn(`房间 ${roomId} 无有效入住记录，无法解析到任何房间`);
         return null;
       }
@@ -319,6 +396,10 @@ export class AIButlerService {
       );
 
       if (guests.length === 0) {
+        const devSession = await this.buildDevAssumeSession(roomId);
+        if (devSession) {
+          return devSession;
+        }
         logger.warn(`房间 ${actualRoomNumber}(DB ID:${actualRoomDbId}) 无有效入住记录`);
         return null;
       }

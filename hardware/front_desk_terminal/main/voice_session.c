@@ -402,7 +402,7 @@ void voice_session_init(const char *room_device_id,
         s_play_q = xQueueCreate((UBaseType_t)GLOBAL_VOICE_PLAY_QUEUE_DEPTH, sizeof(voice_play_item_t));
         if (s_play_q == NULL) {
             ESP_LOGE(TAG, "播放队列创建失败");
-        } else if (xTaskCreate(voice_playback_task, "voice_play", 8192, NULL, 6, NULL) != pdPASS) {
+        } else if (xTaskCreate(voice_playback_task, "voice_play", 16384, NULL, 6, NULL) != pdPASS) {
             ESP_LOGE(TAG, "voice_play 任务创建失败");
         }
     }

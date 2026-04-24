@@ -34,7 +34,7 @@ static const char *TAG = "FRONT_DESK_MAIN";
 static char device_id[32] = "front_desk_" FRONT_DESK_ID_DEFAULT;
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FRONT_HEARTBEAT_TASK_PERIOD = pdMS_TO_TICKS(60000);
-static const TickType_t FRONT_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(50);
+static const TickType_t FRONT_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(60); /* 与客房 BUTTON_TASK_PERIOD 一致 */
 static const TickType_t FRONT_RC522_TASK_PERIOD = pdMS_TO_TICKS(200);
 static const TickType_t FRONT_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
 static const TickType_t FRONT_WIFI_STABILIZE_DELAY = pdMS_TO_TICKS(3000);
@@ -56,6 +56,12 @@ static bool is_on_call = false;
 static bool s_call_incoming_pending = false;
 static char current_call_id[64] = "";
 static uint8_t s_volume_pct = 60;
+
+/* PTT（GLOBAL_PTT_BTN_PIN）：仅长按唤醒 Agent，短按无动作 */
+static bool s_ptt_prev = false;
+static TickType_t s_ptt_press_tick = 0;
+static bool s_ptt_long_fired = false;
+#define FRONT_PTT_LONG_PRESS_MS   850
 
 #include "driver_ec11.h"
 
@@ -771,36 +777,28 @@ void task_front_health_report(void *pvParameters) {
     }
 }
 
-// 按键事件任务：前台按钮触发事件与下行控制
+// 按键任务：仅 PTT 长按 → Agent（无短按、无前台广播/清除键）
 void task_front_button_events(void *pvParameters) {
     (void)pvParameters;
-    bool prev_clear_pressed = false;
-    bool prev_broadcast_pressed = false;
 
     while (1) {
-        // 暂时注释掉按钮检测，因为引脚可能重新分配给 EC11 和 Agent 按钮
-        /*
-        bool clear_pressed = hal_interactive_is_button_pressed(BTN_FRONT_CLEAR);
-        bool broadcast_pressed = hal_interactive_is_button_pressed(BTN_FRONT_BROADCAST);
+        TickType_t now = xTaskGetTickCount();
+        bool ptt_pressed = hal_interactive_is_button_pressed(BTN_ROOM_PTT);
 
-        if (clear_pressed && !prev_clear_pressed) {
-            ESP_LOGI(TAG, "前台按键触发: 清除键");
-            publish_front_event("front_clear_pressed", "前台消音/解除按钮触发");
-            publish_room_command(target_room_id, "broadcast_alarm");
-            hal_audio_beep_volume_pct(s_volume_pct);
+        if (ptt_pressed && !s_ptt_prev) {
+            s_ptt_press_tick = now;
+            s_ptt_long_fired = false;
         }
-
-        if (broadcast_pressed && !prev_broadcast_pressed) {
-            ESP_LOGI(TAG, "前台按键触发: 广播键");
-            publish_front_event("front_broadcast_pressed", "前台广播按钮触发");
-            publish_room_command(target_room_id, "broadcast_alarm");
-            hal_audio_beep_volume_pct(s_volume_pct);
-            hal_audio_beep_volume_pct(s_volume_pct);
+        if (ptt_pressed && s_ptt_prev) {
+            if (!s_ptt_long_fired && (now - s_ptt_press_tick >= pdMS_TO_TICKS(FRONT_PTT_LONG_PRESS_MS))) {
+                s_ptt_long_fired = true;
+                ESP_LOGI(TAG, "GPIO%d PTT 长按: 唤醒 Agent（语音助手）", GLOBAL_PTT_BTN_PIN);
+                publish_front_event("agent_wake_requested", "长按 PTT 唤醒语音助手");
+                voice_session_arm_agent_window(120000);
+            }
         }
+        s_ptt_prev = ptt_pressed;
 
-        prev_clear_pressed = clear_pressed;
-        prev_broadcast_pressed = broadcast_pressed;
-        */
         vTaskDelay(FRONT_BUTTON_TASK_PERIOD);
     }
 }
