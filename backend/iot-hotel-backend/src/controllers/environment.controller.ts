@@ -19,6 +19,12 @@ interface EnvironmentData {
   update_time: string;
   status: 'normal' | 'warning' | 'danger';
   environment_score: number;
+  /**
+   * 本条记录中哪些物理量是"平台端从未收到任何上报"的（通常意味着该设备未配备该传感器，
+   * 或设备离线从未上线过）。前端可据此展示"未配备"而不是一个误导性的 0。
+   * 取值范围: 'temperature' | 'humidity' | 'smoke' | 'light' | 'noise' | 'pm25'
+   */
+  sensors_missing: string[];
 }
 
 interface DeviceInfo {
@@ -149,10 +155,41 @@ class EnvironmentController {
       for (const device of devices) {
         const sensors = sensorMap.get(device.device_id);
         const hasSensorData = sensors && sensors.size > 0;
+        // 仅展示真实上报过环境数据的设备，避免把未上报设备显示成 0 值。
+        if (!hasSensorData) {
+          continue;
+        }
+        const missing: string[] = [];
+
         const temperature = sensors?.has('temperature') ? parseFloat(sensors.get('temperature')!.value) || 0 : 0;
+        if (!sensors?.has('temperature')) { missing.push('temperature'); }
         const humidity = sensors?.has('humidity') ? parseFloat(sensors.get('humidity')!.value) || 0 : 0;
-        const smoke_level = sensors?.has('smoke') ? parseFloat(sensors.get('smoke')!.value) || 0 : 0;
+        if (!sensors?.has('humidity')) { missing.push('humidity'); }
+
+        // 楼控/客房硬件上报的 MQ2 原始值类型为 air_quality_adc（老固件）或 smoke（已对齐后新固件）
+        let smoke_level = 0;
+        let hasSmoke = false;
+        if (sensors?.has('air_quality_adc')) {
+          const v = parseFloat(sensors.get('air_quality_adc')!.value);
+          if (Number.isFinite(v)) {
+            smoke_level = v;
+            hasSmoke = true;
+          }
+        } else if (sensors?.has('smoke')) {
+          const v = parseFloat(sensors.get('smoke')!.value);
+          if (Number.isFinite(v)) {
+            smoke_level = v;
+            hasSmoke = true;
+          }
+        }
+        if (!hasSmoke) { missing.push('smoke'); }
+
         const light_level = sensors?.has('light') ? parseFloat(sensors.get('light')!.value) || 0 : 0;
+        if (!sensors?.has('light')) { missing.push('light'); }
+
+        /* 硬件上没有噪声和 PM2.5 传感器，这两项始终标记为 missing，
+           前端据此不再把 "0" 当成真实读数显示 */
+        missing.push('noise', 'pm25');
 
         let latestTime = '';
         if (sensors) {
@@ -165,12 +202,8 @@ class EnvironmentController {
         const roomId = device.room_id || 0;
         const roomNumber = device.room_number || device.device_id;
 
-        const envStatus = hasSensorData
-          ? this.calculateEnvStatus(temperature, humidity, smoke_level, 0)
-          : 'warning' as const;
-        const envScore = hasSensorData
-          ? this.calculateEnvScore(temperature, humidity, smoke_level, 0, 0)
-          : 50;
+        const envStatus = this.calculateEnvStatus(temperature, humidity, smoke_level, 0);
+        const envScore = this.calculateEnvScore(temperature, humidity, smoke_level, 0, 0);
 
         envList.push({
           room_id: roomId,
@@ -186,7 +219,8 @@ class EnvironmentController {
           pm25: 0,
           update_time: latestTime || new Date().toISOString(),
           status: envStatus,
-          environment_score: envScore
+          environment_score: envScore,
+          sensors_missing: missing
         });
       }
 
@@ -309,6 +343,7 @@ class EnvironmentController {
             entry.humidity = val;
             break;
           case 'smoke':
+          case 'air_quality_adc':
             entry.smoke_level = val;
             break;
         }
@@ -596,37 +631,60 @@ class EnvironmentController {
       // 这里的映射逻辑应与 emulator/common/config.py 保持一致
       switch (action) {
         case 'toggle':
-          cmdType = this.mapDeviceTypeToCmd(device.device_type);
-          cmdValue = 'toggle';
+          if (device.device_type === 'light') {
+            cmdType = 'scene_next';
+          } else {
+            cmdType = this.mapDeviceTypeToCmd(device.device_type);
+          }
           break;
         case 'turn_on':
         case 'open':
-          cmdType = this.mapDeviceTypeToCmd(device.device_type);
-          cmdValue = (device.device_type === 'curtain' || device.device_type === 'window_sensor') ? 'open' :
-                     (device.device_type === 'door_sensor' || device.device_type === 'lock') ? 'unlock' : 'on';
+          if (device.device_type === 'curtain' || device.device_type === 'window_sensor') {
+            cmdType = 'curtain_open';
+          } else if (device.device_type === 'door_sensor' || device.device_type === 'lock') {
+            cmdType = 'door_unlock';
+          } else if (device.device_type === 'ac') {
+            cmdType = 'air_on';
+          } else {
+            cmdType = 'light_on';
+          }
           break;
         case 'turn_off':
         case 'close':
-          cmdType = this.mapDeviceTypeToCmd(device.device_type);
-          cmdValue = (device.device_type === 'curtain' || device.device_type === 'window_sensor') ? 'close' :
-                     (device.device_type === 'door_sensor' || device.device_type === 'lock') ? 'lock' : 'off';
+          if (device.device_type === 'curtain' || device.device_type === 'window_sensor') {
+            cmdType = 'curtain_close';
+          } else if (device.device_type === 'door_sensor' || device.device_type === 'lock') {
+            cmdType = 'door_lock';
+          } else if (device.device_type === 'ac') {
+            cmdType = 'air_off';
+          } else {
+            cmdType = 'light_off';
+          }
           break;
         case 'set_value':
           if (device.device_type === 'ac') {
-            cmdType = 'air';
-            cmdValue = `temp:${value || 24}`;
+            cmdType = 'set_ac_temp';
+            cmdValue = String(value || 24);
           } else if (device.device_type === 'light') {
-            cmdType = 'light';
-            cmdValue = value > 0 ? 'on' : 'off'; // 简易处理，后续可支持亮度
+            cmdType = 'set_light_brightness';
+            cmdValue = String(value ?? 80);
+          } else if (device.device_type === 'room') {
+            cmdType = 'set_volume';
+            cmdValue = String(value ?? 60);
           } else {
             cmdType = this.mapDeviceTypeToCmd(device.device_type);
-            cmdValue = String(value);
+            cmdValue = String(value ?? '');
           }
           break;
+        case 'broadcast_alarm':
+          cmdType = 'broadcast_alarm';
+          break;
+        case 'floor_reset':
+          cmdType = 'floor_reset';
+          break;
         default:
-          // 支持直接透传
-          cmdType = this.mapDeviceTypeToCmd(device.device_type);
-          cmdValue = action;
+          // 支持直接透传 command_type
+          cmdType = action;
       }
 
       // 3. 发送 MQTT 指令
@@ -816,7 +874,7 @@ class EnvironmentController {
          INNER JOIN devices d ON sd.device_id = d.device_id
          WHERE sd.created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
            AND (d.hotel_id = ? OR ? = 0)
-           AND sd.sensor_type IN ('temperature', 'humidity', 'smoke')
+           AND sd.sensor_type IN ('temperature', 'humidity', 'smoke', 'air_quality_adc')
          GROUP BY sd.sensor_type`,
         [hotelId, hotelId]
       );
@@ -833,6 +891,8 @@ class EnvironmentController {
       let avgHumidity = 0;
       let avgSmoke = 0;
 
+      let smokeTypeAvg: number | null = null;
+      let adcTypeAvg: number | null = null;
       for (const row of sensorRows) {
         switch (row.sensor_type) {
           case 'temperature':
@@ -842,9 +902,17 @@ class EnvironmentController {
             avgHumidity = parseFloat(row.avg_value) || 0;
             break;
           case 'smoke':
-            avgSmoke = parseFloat(row.avg_value) || 0;
+            smokeTypeAvg = parseFloat(row.avg_value) || 0;
+            break;
+          case 'air_quality_adc':
+            adcTypeAvg = parseFloat(row.avg_value) || 0;
             break;
         }
+      }
+      if (smokeTypeAvg != null && adcTypeAvg != null) {
+        avgSmoke = (smokeTypeAvg + adcTypeAvg) / 2;
+      } else {
+        avgSmoke = smokeTypeAvg != null ? smokeTypeAvg : adcTypeAvg != null ? adcTypeAvg : 0;
       }
 
       let totalDevices = 0;

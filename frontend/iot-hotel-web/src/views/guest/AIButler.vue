@@ -769,19 +769,27 @@ function initSpeechRecognition() {
   recognition.lang = 'zh-CN'
   recognition.continuous = false
   recognition.interimResults = true  // 启用中间结果，提供更好的反馈
+  // maxAlternatives 默认为 1，足够；交给浏览器选最佳候选
 
   recognition.onstart = () => {
     isListening.value = true
     isRecognitionActive = true
     console.log('[语音识别] 开始聆听')
-    
-    // 设置最大聆听时间（10秒）
+
+    // 录音前若 AI 还在播放上一段语音，先暂停，避免回授被识别
+    if (audioPlayer.value && !audioPlayer.value.paused) {
+      audioPlayer.value.pause()
+      audioPlayer.value.currentTime = 0
+      isPlayingAudio.value = false
+    }
+
+    // 设置最大聆听时间（15 秒，覆盖较长的请求）
     recognitionTimeout = setTimeout(() => {
       if (isRecognitionActive) {
         console.log('[语音识别] 达到最大聆听时间，自动停止')
         stopListening()
       }
-    }, 10000)
+    }, 15000)
   }
 
   recognition.onend = () => {
@@ -810,20 +818,20 @@ function initSpeechRecognition() {
       }
     }
 
-    // 如果有最终结果，直接显示在聊天窗口（不调用AI处理）
+    // 有最终结果：先停止录音，再走与文字输入完全一致的 AI 链路（避免出现「识别出文字但 AI 不回应」）
     if (finalTranscript) {
-      console.log('[语音识别] 识别结果:', finalTranscript)
+      const said = finalTranscript.trim()
+      console.log('[语音识别] 识别结果:', said)
       stopListening()
+      // 清空临时显示在输入框的中间结果
+      userInput.value = ''
 
-      // 直接添加到聊天窗口作为用户消息，不调用AI
-      messages.value.push({
-        type: 'user',
-        text: finalTranscript,
-        time: now().format('HH:mm')
-      })
-      scrollToBottom()
+      if (said) {
+        // 走 handleQuickAction 同一通道：会插入用户气泡 + 加载提示 + 调用 sendToAI
+        // 这样即可保证识别完成后 AI 一定会回答并走 TTS。
+        handleQuickAction(said)
+      }
     } else if (interimTranscript) {
-      // 临时结果显示在输入框
       userInput.value = interimTranscript
       console.log('[语音识别] 临时结果:', interimTranscript)
     }
@@ -884,9 +892,10 @@ function startListening() {
 
 function doStartListening() {
   // 开始识别前，停止所有可能正在播放的AI语音，避免声音回授被识别
-  // 停止AI管家TTS音频
+  // 同时清空播放队列，避免上一段未播完的音频之后再继续播放干扰新对话
+  audioQueue.length = 0
   if (audioPlayer.value) {
-    audioPlayer.value.pause()
+    try { audioPlayer.value.pause() } catch { /* ignore */ }
     audioPlayer.value.currentTime = 0
     isPlayingAudio.value = false
   }
@@ -1186,62 +1195,101 @@ async function requestMicrophonePermission() {
 const audioPlayer = ref<HTMLAudioElement | null>(null)
 const isPlayingAudio = ref(false)
 
-function playAudio(base64Audio: string) {
+// 播放队列：保证多段 AI 回复按顺序完整播放，不会被新回复打断
+const audioQueue: string[] = []
+let isFlushingAudio = false
+
+function enqueueAudio(base64Audio: string) {
+  if (!base64Audio) {return}
+  audioQueue.push(base64Audio)
+  void flushAudioQueue()
+}
+
+async function flushAudioQueue() {
+  if (isFlushingAudio) {return}
+  isFlushingAudio = true
   try {
-    // 停止之前的音频
-    if (audioPlayer.value) {
-      audioPlayer.value.pause()
-      audioPlayer.value = null
+    while (audioQueue.length > 0) {
+      const next = audioQueue.shift()!
+      await playSingleAudio(next)
     }
-    
-    // 创建新的音频对象
-    const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`)
-    audioPlayer.value = audio
-    
-    // 设置播放状态
-    isPlayingAudio.value = true
-    
-    audio.onended = () => {
-      isPlayingAudio.value = false
-      console.log('[AIButler] 语音播放完成')
-    }
-    
-    audio.onerror = (e) => {
-      isPlayingAudio.value = false
-      console.error('[AIButler] 语音播放失败:', e)
-      $notify.warning({ title: '语音播放失败', description: 'AI语音播放失败，请检查音量设置 🔊' })
-    }
-    
-    // 尝试播放（处理自动播放策略）
-    const playPromise = audio.play()
-    
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        console.log('[AIButler] 语音开始播放')
-      }).catch((error) => {
-        isPlayingAudio.value = false
-        console.warn('[AIButler] 自动播放被阻止:', error)
-        
-        // 显示提示让用户点击启用
-        $notify.info({ title: '点击播放语音', description: '点击页面任意位置即可播放AI语音 🔊' })
-        
-        // 监听一次用户点击来播放
-        const playOnce = () => {
-          audio.play().then(() => {
-            isPlayingAudio.value = true
-            document.removeEventListener('click', playOnce)
-          })
-        }
-        
-        setTimeout(() => {
-          document.addEventListener('click', playOnce, { once: true })
-        }, 100)
-      })
-    }
-  } catch (e) {
-    isPlayingAudio.value = false
-    console.error('创建音频对象失败:', e)
+  } finally {
+    isFlushingAudio = false
   }
+}
+
+function playSingleAudio(base64Audio: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      // 旧的 audio 仍在播则先等它结束（队列保证不会并发，这里只是兜底）
+      if (audioPlayer.value && !audioPlayer.value.paused) {
+        try { audioPlayer.value.pause() } catch { /* ignore */ }
+      }
+
+      const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`)
+      audioPlayer.value = audio
+      isPlayingAudio.value = true
+
+      let resolved = false
+      const finish = () => {
+        if (resolved) {return}
+        resolved = true
+        isPlayingAudio.value = false
+        resolve()
+      }
+
+      audio.onended = () => {
+        console.log('[AIButler] 语音段播放完成')
+        finish()
+      }
+
+      audio.onerror = (e) => {
+        console.error('[AIButler] 语音播放失败:', e)
+        message.warning('语音播放失败，请检查音量设置')
+        finish()
+      }
+
+      // 兜底：1MB 的 mp3 大约 60 秒，给 90 秒最大时长，防止 onended 漏触发卡死队列
+      const safety = setTimeout(() => {
+        if (!resolved) {
+          console.warn('[AIButler] 播放安全超时，强制结束当前段')
+          try { audio.pause() } catch { /* ignore */ }
+          finish()
+        }
+      }, 90000)
+      audio.onended = () => {
+        clearTimeout(safety)
+        console.log('[AIButler] 语音段播放完成')
+        finish()
+      }
+
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log('[AIButler] 语音段开始播放')
+        }).catch((error) => {
+          console.warn('[AIButler] 自动播放被阻止:', error)
+          message.info('🔊 点击页面任意位置播放AI语音')
+          const playOnce = () => {
+            audio.play().then(() => {
+              isPlayingAudio.value = true
+            }).catch(() => finish())
+          }
+          // 一次性绑定页面点击触发播放，结束后由 onended/onerror 收尾
+          document.addEventListener('click', playOnce, { once: true })
+        })
+      }
+    } catch (e) {
+      console.error('[AIButler] 创建音频对象失败:', e)
+      isPlayingAudio.value = false
+      resolve()
+    }
+  })
+}
+
+function playAudio(base64Audio: string) {
+  // 兼容旧调用：实际走入队保证完整播放
+  enqueueAudio(base64Audio)
 }
 
 // 手动停止/播放语音

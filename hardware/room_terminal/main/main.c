@@ -25,6 +25,7 @@
 #include "driver_oled.h"
 #include "service_network.h"
 #include "global_config.h"
+#include "service_auth.h"
 
 /** 未接灯泡、窗帘电机、门锁、红外空调接收端等时置 1：仅串口日志反馈，不驱动对应 GPIO。外设接好后改为 0。 */
 #ifndef ROOM_HARDWARE_LOG_ONLY
@@ -32,6 +33,8 @@
 #endif
 
 static const char *TAG = "ROOM_TERMINAL_MAIN";
+/** 与向后台注册时的 firmware 字段一致，用于状态/健康上报。 */
+#define ROOM_FIRMWARE_VERSION "v1.2.0-smart"
 static char current_room_id[16] = "UNKNOWN";
 static char device_id[32] = "room_UNKNOWN";
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
@@ -46,12 +49,10 @@ static uint32_t s_reconnect_count = 0;
 /** 楼控 MQTT 设备号（与楼控 device_id 一致，如 floor_03）；NVS 键 Floor_Sensor_Device_Id，默认 floor_03 */
 static char s_floor_sensor_device_id[40] = "";
 static portMUX_TYPE s_floor_snap_mux = portMUX_INITIALIZER_UNLOCKED;
+/* 楼控侧只装了 MQ2 烟雾传感器（没有 NTC），客房火灾判据只需缓存 MQ2 快照即可 */
 static volatile float s_floor_mq2_adc = 0.f;
-static volatile float s_floor_ntc_c = 0.f;
 static volatile int64_t s_floor_mq2_us = 0;
-static volatile int64_t s_floor_ntc_us = 0;
 static volatile bool s_floor_got_mq2 = false;
-static volatile bool s_floor_got_ntc = false;
 static bool s_room_fire_episode_reported = false;
 static uint8_t s_last_uid[10] = {0};
 static uint8_t s_last_uid_len = 0;
@@ -134,6 +135,64 @@ static TickType_t s_ir_night_cooldown_until = 0;
 #if !CONFIG_ROOM_TERMINAL_NET_TEST_MODE
 static const TickType_t MAIN_GUARD_PERIOD = pdMS_TO_TICKS(30000);
 #endif
+/** OLED 1Hz 整屏重绘；所有业务只更新内存状态变量，不再直接写屏，避免覆盖与闪烁。 */
+static const TickType_t OLED_REFRESH_PERIOD = pdMS_TO_TICKS(1000);
+
+/* OLED 显示共享状态（sensor_task / network_cb / EC11 均只写这里，由 oled_task 统一出图） */
+static char  s_oled_ip_tail[8]   = "---";   // 例 "131"（IP 最后一段），没网显示 "---"
+static bool  s_oled_net_ok       = false;
+static float s_oled_last_temp_c  = 0.f;
+static float s_oled_last_hum_pct = 0.f;
+static bool  s_oled_env_valid    = false;
+static char  s_oled_status_line[22] = ""; // Line3 状态/结果回显；空则自动显示继电器+场景
+static TickType_t s_oled_status_until = 0; // 回显有效期
+
+/* 前向声明：MQTT 命令处理点位于文件前半，OLED 绘制函数位于文件后半 */
+static void room_oled_flash_status(const char *msg, uint32_t ttl_ms);
+static void room_apply_brightness_to_light(void);
+static void publish_sensor_data(const char *sensor_type, double value, const char *unit);
+
+static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
+{
+    if (root == NULL || out_value == NULL) {
+        return false;
+    }
+    cJSON *v = cJSON_GetObjectItem(root, "value");
+    if (cJSON_IsNumber(v)) {
+        *out_value = (int)v->valuedouble;
+        return true;
+    }
+    cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
+    if (cJSON_IsNumber(command_value)) {
+        *out_value = (int)command_value->valuedouble;
+        return true;
+    }
+    if (cJSON_IsString(command_value) && command_value->valuestring != NULL) {
+        *out_value = atoi(command_value->valuestring);
+        return true;
+    }
+    if (cJSON_IsObject(command_value)) {
+        cJSON *inner = cJSON_GetObjectItem(command_value, "value");
+        if (cJSON_IsNumber(inner)) {
+            *out_value = (int)inner->valuedouble;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool room_play_alarm_audio_file(void)
+{
+    /* 通过喇叭播放内置警报音型（短促三连 + 间隔），作为“警报音文件”内置资源实现。 */
+    bool ok = true;
+    for (int i = 0; i < 3; i++) {
+        if (hal_audio_beep_volume_pct(s_volume_pct) != ESP_OK) {
+            ok = false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(90));
+    }
+    return ok;
+}
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) {
@@ -210,13 +269,18 @@ static void publish_room_business_event(const char *event_type, const char *deta
     cJSON_AddStringToObject(root, "level", level);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
     free(json_str);
     cJSON_Delete(root);
 }
 
-/** 楼控 MQTT 上报的 air_quality_adc / ntc_temp_c，供客房三重火灾判据 */
+/** 订阅楼控 MQTT 上的 smoke（MQ2 ADC）快照，供客房火灾二重判据使用 */
 static void room_floor_sensor_mqtt_cb(const char *topic, const char *data, int data_len) {
     (void)topic;
     cJSON *root = cJSON_ParseWithLength(data, data_len);
@@ -235,24 +299,21 @@ static void room_floor_sensor_mqtt_cb(const char *topic, const char *data, int d
         cJSON_Delete(root);
         return;
     }
-    int64_t now = esp_timer_get_time();
-    portENTER_CRITICAL(&s_floor_snap_mux);
-    if (strcmp(stype->valuestring, "air_quality_adc") == 0) {
+    if (strcmp(stype->valuestring, "smoke") == 0) {
+        int64_t now = esp_timer_get_time();
+        portENTER_CRITICAL(&s_floor_snap_mux);
         s_floor_mq2_adc = (float)val->valuedouble;
         s_floor_mq2_us = now;
         s_floor_got_mq2 = true;
-    } else if (strcmp(stype->valuestring, "ntc_temp_c") == 0) {
-        s_floor_ntc_c = (float)val->valuedouble;
-        s_floor_ntc_us = now;
-        s_floor_got_ntc = true;
+        portEXIT_CRITICAL(&s_floor_snap_mux);
     }
-    portEXIT_CRITICAL(&s_floor_snap_mux);
     cJSON_Delete(root);
 }
 
 /**
- * 客房无本地 MQ2：用楼控 MQTT 的 MQ2 + 楼控 NTC + 房内 NTC 三重与判疑似火灾（非消防认证逻辑）。
- * 阈值与楼控 floor 侧可分别调 NVS/宏；楼控数据超过约 120s 未更新则本判据不成立。
+ * 客房无本地 MQ2：用「楼控 MQ2 + 房内 NTC」两重与判疑似火灾（非消防认证逻辑）。
+ * 早期设计是三重与（额外依赖楼控 NTC），但按当前硬件清单楼控不装 NTC，故退化为两重。
+ * 阈值可通过宏调整；楼控 MQ2 数据超过 120s 未更新则本判据不成立。
  */
 #define ROOM_FIRE_MQ2_ADC_THRESHOLD       400
 #define ROOM_FIRE_NTC_TEMP_C            45.0f
@@ -264,57 +325,31 @@ static void room_run_fire_suspect_policy(const sensor_data_t *env) {
     }
     int64_t now = esp_timer_get_time();
     float mq = 0.f;
-    float fn = 0.f;
     int64_t mqt = 0;
-    int64_t fnt = 0;
     bool gmq = false;
-    bool gfn = false;
     portENTER_CRITICAL(&s_floor_snap_mux);
     gmq = s_floor_got_mq2;
-    gfn = s_floor_got_ntc;
     mq = s_floor_mq2_adc;
-    fn = s_floor_ntc_c;
     mqt = s_floor_mq2_us;
-    fnt = s_floor_ntc_us;
     portEXIT_CRITICAL(&s_floor_snap_mux);
 
     const bool mq_fresh = gmq && (now - mqt) <= ROOM_FIRE_FLOOR_DATA_MAX_AGE_US;
-    const bool ntcf_fresh = gfn && (now - fnt) <= ROOM_FIRE_FLOOR_DATA_MAX_AGE_US;
     const bool smoky = mq_fresh && mq >= (float)ROOM_FIRE_MQ2_ADC_THRESHOLD;
-    const bool floor_hot = ntcf_fresh && fn >= ROOM_FIRE_NTC_TEMP_C;
     const bool room_hot = env->ntc_valid && env->ntc_temp_c >= ROOM_FIRE_NTC_TEMP_C;
 
-    if (smoky && floor_hot && room_hot) {
+    if (smoky && room_hot) {
         if (!s_room_fire_episode_reported && s_network_ready) {
             char detail[224];
             snprintf(detail, sizeof(detail),
-                     "楼控MQ2ADC=%.0f 楼控NTC=%.1f℃ 房内NTC=%.1f℃(三重与,需人工复核)",
-                     (double)mq, (double)fn, (double)env->ntc_temp_c);
+                     "楼控MQ2ADC=%.0f 房内NTC=%.1f℃(两重与,需人工复核)",
+                     (double)mq, (double)env->ntc_temp_c);
             publish_room_business_event("room_fire_suspected", detail, "warning");
-            ESP_LOGW(TAG, "客房疑似火灾(三重与): 楼控烟雾+双NTC超阈");
+            ESP_LOGW(TAG, "客房疑似火灾(两重与): 楼控烟雾+房内NTC超阈");
             s_room_fire_episode_reported = true;
         }
     } else {
         s_room_fire_episode_reported = false;
     }
-}
-
-static void room_sync_ir_ac(void) {
-    ir_ac_cmd_t cmd = {
-        .power_on = s_room_state.air_on,
-        .temperature = s_ac_target_temp,
-    };
-#if ROOM_HARDWARE_LOG_ONLY
-    ESP_LOGI(TAG, "红外空调（未接外设/仅日志）电源=%d 目标温度=%u℃",
-             (int)cmd.power_on, (unsigned)cmd.temperature);
-#else
-    esp_err_t err = hal_infrared_send_ac_command(IR_BRAND_GREE, &cmd);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "红外空调同步失败: %s", esp_err_to_name(err));
-    } else {
-        ESP_LOGI(TAG, "红外空调已同步: 电源=%d 目标温度=%u℃", (int)cmd.power_on, (unsigned)cmd.temperature);
-    }
-#endif
 }
 
 static esp_err_t room_relay_set(actuator_type_t channel, bool on, const char *label_zh) {
@@ -349,6 +384,11 @@ static void publish_command_result_ex(int cmd_id, const char *cmd_type, bool exe
     }
     cJSON_AddStringToObject(reply, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(reply, signature) == ESP_OK) {
+        cJSON_AddStringToObject(reply, "signature", signature);
+    }
+
     char *reply_str = cJSON_PrintUnformatted(reply);
     service_mqtt_publish(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, reply_str);
 
@@ -379,6 +419,10 @@ static void publish_room_runtime_status(void) {
     cJSON_AddBoolToObject(root, "call_incoming_pending", s_call_incoming_pending);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
 
@@ -402,6 +446,24 @@ static bool room_local_door_unlock_via_card(void) {
     return true;
 }
 
+/**
+ * 场景 → 氛围灯颜色映射
+ *   WELCOME : 暖橙黄（欢迎、整洁感）
+ *   READING : 冷白（偏暖的纯白，便于阅读）
+ *   NIGHT   : 暗青蓝（小夜灯，起夜不刺眼）
+ *   SLEEP   : 全熄（彻底黑）
+ * 亮度已按 330Ω 限流后的可见度微调；共阳/共阴由 hal_interactive 统一处理。
+ */
+static void room_scene_to_rgb(room_scene_mode_t mode, uint8_t *r, uint8_t *g, uint8_t *b) {
+    switch (mode) {
+        case ROOM_SCENE_WELCOME: *r = 255; *g = 180; *b =  40; break; // 暖黄
+        case ROOM_SCENE_READING: *r = 255; *g = 245; *b = 210; break; // 暖白
+        case ROOM_SCENE_NIGHT:   *r =   0; *g =  20; *b =  80; break; // 暗青蓝
+        case ROOM_SCENE_SLEEP:   *r =   0; *g =   0; *b =   0; break; // 熄灭
+        default:                 *r =   0; *g =   0; *b =   0; break;
+    }
+}
+
 static bool apply_room_scene(room_scene_mode_t mode, const char **out_result_msg) {
     esp_err_t err = ESP_OK;
     bool main_light = false;
@@ -412,28 +474,25 @@ static bool apply_room_scene(room_scene_mode_t mode, const char **out_result_msg
     switch (mode) {
         case ROOM_SCENE_WELCOME:
             main_light = true;
-            led_r = 255; led_g = 180; led_b = 120;
             *out_result_msg = "已切换到迎宾场景";
             break;
         case ROOM_SCENE_READING:
             main_light = true;
-            led_r = 255; led_g = 255; led_b = 255;
             *out_result_msg = "已切换到阅读场景";
             break;
         case ROOM_SCENE_NIGHT:
             main_light = false;
-            led_r = 16; led_g = 32; led_b = 96;
             *out_result_msg = "已切换到夜灯场景";
             break;
         case ROOM_SCENE_SLEEP:
             main_light = false;
-            led_r = 0; led_g = 0; led_b = 0;
             *out_result_msg = "已切换到睡眠场景";
             break;
         default:
             *out_result_msg = "未知场景";
             return false;
     }
+    room_scene_to_rgb(mode, &led_r, &led_g, &led_b);
 
     err = room_relay_set(ACTUATOR_RELAY_CH1, main_light, "主灯(CH1)");
     if (err != ESP_OK) {
@@ -572,11 +631,29 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
         return (err == ESP_OK);
     }
 
+    if (strcmp(cmd_type, "set_light_brightness") == 0 || strcmp(cmd_type, "light_brightness") == 0) {
+        int b = s_brightness_pct;
+        if (!read_int_from_cmd_payload(root, &b)) {
+            *out_result_msg = "缺少亮度参数(value)";
+            return false;
+        }
+        if (b < 0) {
+            b = 0;
+        }
+        if (b > 100) {
+            b = 100;
+        }
+        s_brightness_pct = b;
+        room_apply_brightness_to_light();
+        publish_sensor_data("light_brightness", (double)s_brightness_pct, "%");
+        *out_result_msg = "灯光亮度已调整";
+        return true;
+    }
+
     if (strcmp(cmd_type, "air_on") == 0) {
         esp_err_t err = room_relay_set(ACTUATOR_RELAY_CH2, true, "空调/插座(CH2)");
         if (err == ESP_OK) {
             s_room_state.air_on = true;
-            room_sync_ir_ac();
         }
         *out_result_msg = (err == ESP_OK) ? "执行成功" : "空调控制失败";
         return (err == ESP_OK);
@@ -586,10 +663,27 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
         esp_err_t err = room_relay_set(ACTUATOR_RELAY_CH2, false, "空调/插座(CH2)");
         if (err == ESP_OK) {
             s_room_state.air_on = false;
-            room_sync_ir_ac();
         }
         *out_result_msg = (err == ESP_OK) ? "执行成功" : "空调控制失败";
         return (err == ESP_OK);
+    }
+
+    if (strcmp(cmd_type, "set_ac_temp") == 0 || strcmp(cmd_type, "ac_set_temp") == 0 || strcmp(cmd_type, "ac_temp") == 0) {
+        int t = (int)s_ac_target_temp;
+        if (!read_int_from_cmd_payload(root, &t)) {
+            *out_result_msg = "缺少空调温度参数(value)";
+            return false;
+        }
+        if (t < ROOM_EC11_AC_TEMP_MIN_C) {
+            t = ROOM_EC11_AC_TEMP_MIN_C;
+        }
+        if (t > ROOM_EC11_AC_TEMP_MAX_C) {
+            t = ROOM_EC11_AC_TEMP_MAX_C;
+        }
+        s_ac_target_temp = (uint8_t)t;
+        publish_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
+        *out_result_msg = "空调目标温度已调整";
+        return true;
     }
 
     if (strcmp(cmd_type, "curtain_open") == 0) {
@@ -633,28 +727,36 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
         return (err == ESP_OK);
     }
 
-    if (strcmp(cmd_type, "incoming_call") == 0) {
-        cJSON *call_id = cJSON_GetObjectItem(root, "call_id");
-        cJSON *caller_id = cJSON_GetObjectItem(root, "caller_id");
-        if (cJSON_IsString(call_id) && cJSON_IsString(caller_id)) {
-            copy_str_safe(current_call_id, sizeof(current_call_id), call_id->valuestring);
-            copy_str_safe(remote_id, sizeof(remote_id), caller_id->valuestring);
-            is_on_call = false;
-            s_call_incoming_pending = true;
-            *out_result_msg = "来电已推送，等待本地短按接听";
-            return true;
+    if (strcmp(cmd_type, "set_volume") == 0 || strcmp(cmd_type, "volume_set") == 0 || strcmp(cmd_type, "volume") == 0) {
+        int vol = s_volume_pct;
+        if (!read_int_from_cmd_payload(root, &vol)) {
+            *out_result_msg = "缺少音量参数(value)";
+            return false;
         }
-        *out_result_msg = "通话参数缺失";
-        return false;
+        if (vol < 0) {
+            vol = 0;
+        }
+        if (vol > 100) {
+            vol = 100;
+        }
+        s_volume_pct = vol;
+        hal_audio_set_playback_volume_pct(s_volume_pct);
+        publish_sensor_data("volume", (double)s_volume_pct, "%");
+        *out_result_msg = "音量已调整";
+        return true;
     }
 
-    if (strcmp(cmd_type, "hangup_call") == 0) {
-        is_on_call = false;
-        s_call_incoming_pending = false;
-        current_call_id[0] = '\0';
-        remote_id[0] = '\0';
-        *out_result_msg = "通话已结束";
-        return true;
+    if (strcmp(cmd_type, "broadcast_alarm") == 0 || strcmp(cmd_type, "alarm_broadcast") == 0) {
+        bool ok = room_play_alarm_audio_file();
+        *out_result_msg = ok ? "广播警报音已播放" : "广播警报音播放失败";
+        return ok;
+    }
+
+    if (strcmp(cmd_type, "incoming_call") == 0 || strcmp(cmd_type, "hangup_call") == 0 ||
+        strcmp(cmd_type, "answer_call") == 0 || strcmp(cmd_type, "reject_call") == 0 ||
+        strcmp(cmd_type, "call_answered") == 0) {
+        *out_result_msg = "客房端已禁用通话功能";
+        return false;
     }
 
     if (strcmp(cmd_type, "agent_session_start") == 0) {
@@ -695,6 +797,19 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
         return apply_room_scene(next_mode, out_result_msg);
     }
 
+    if (strcmp(cmd_type, "light_scene_welcome") == 0 || strcmp(cmd_type, "scene_home") == 0) {
+        return apply_room_scene(ROOM_SCENE_WELCOME, out_result_msg);
+    }
+    if (strcmp(cmd_type, "light_scene_reading") == 0) {
+        return apply_room_scene(ROOM_SCENE_READING, out_result_msg);
+    }
+    if (strcmp(cmd_type, "light_scene_night") == 0) {
+        return apply_room_scene(ROOM_SCENE_NIGHT, out_result_msg);
+    }
+    if (strcmp(cmd_type, "light_scene_sleep") == 0 || strcmp(cmd_type, "scene_leave") == 0) {
+        return apply_room_scene(ROOM_SCENE_SLEEP, out_result_msg);
+    }
+
     *out_result_msg = "未识别的指令或设备故障";
     return false;
 }
@@ -718,9 +833,13 @@ void publish_device_online_status() {
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "room");
     cJSON_AddStringToObject(root, "status", "online");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", ROOM_FIRMWARE_VERSION);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     
@@ -729,7 +848,7 @@ void publish_device_online_status() {
 }
 
 // 辅助函数：上报单项传感器数据 (规范 4.2.2)
-void publish_sensor_data(const char *sensor_type, double value, const char *unit) {
+static void publish_sensor_data(const char *sensor_type, double value, const char *unit) {
     if (!s_network_ready) {
         return;
     }
@@ -747,6 +866,10 @@ void publish_sensor_data(const char *sensor_type, double value, const char *unit
     cJSON_AddStringToObject(root, "unit", unit);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
 
@@ -837,6 +960,10 @@ static void publish_card_uid_event(const uint8_t *uid, uint8_t uid_len) {
     cJSON_AddStringToObject(root, "card_uid", uid_hex);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
     free(json_str);
@@ -862,13 +989,17 @@ static void publish_health_report(void) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "room");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", ROOM_FIRMWARE_VERSION);
     cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
     cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "rssi", rssi);
     cJSON_AddNumberToObject(root, "reconnect_counts", (double)s_reconnect_count);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     ESP_LOGI(TAG, "健康上报已发送: topic=%s rssi=%d reconnect=%lu",
@@ -897,6 +1028,10 @@ static void publish_device_heartbeat(void) {
     cJSON_AddNumberToObject(root, "memory_usage", 100 - (esp_get_free_heap_size() * 100 / 327680));
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     free(json_str);
@@ -923,6 +1058,10 @@ static void publish_security_event(const char *event_type, const char *level) {
     cJSON_AddStringToObject(root, "level", level);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
 
@@ -986,9 +1125,9 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
         s_last_result_code = NULL;
         publish_room_runtime_status();
         
-        // 界面及声音反馈
-        driver_oled_show_text_line(2, cmd_type);
-        hal_interactive_beep(1, 100);
+        // OLED 界面反馈（客房已无独立蜂鸣模块，声音反馈由音频 DAC 承担）
+        // 临时在状态行回显命令类型，2 秒后自动恢复为默认状态
+        room_oled_flash_status(cmd_type, 2000);
     }
     if (owned_command_value != NULL) {
         cJSON_Delete(owned_command_value);
@@ -996,62 +1135,107 @@ void hotel_mqtt_callback(const char *topic, const char *data, int data_len) {
     cJSON_Delete(root);
 }
 
+static void auth_and_mqtt_task(void *pvParameters) {
+    ESP_LOGI(TAG, "开始设备注册/鉴权流程...");
+
+    /* 与 Web 管理端访问的「同一套后端」对齐：默认同 MQTT 主机 :9000；本地联调可设 NVS HTTP_API_BASE */
+    char http_api_base[128];
+    load_nvs_string_with_fallback("HTTP_API_BASE", http_api_base, sizeof(http_api_base), GLOBAL_HTTP_API_BASE_DEFAULT);
+    char register_url[192];
+    esp_err_t url_err = service_auth_resolve_register_url(
+        mqtt_broker_uri,
+        (http_api_base[0] != '\0') ? http_api_base : NULL,
+        register_url,
+        sizeof(register_url));
+    if (url_err != ESP_OK) {
+        ESP_LOGE(TAG, "解析注册 URL 失败: %s，使用云端默认", esp_err_to_name(url_err));
+        snprintf(register_url, sizeof(register_url), "http://8.134.166.69:9000/api/v1/devices/register");
+    }
+    ESP_LOGI(TAG, "设备注册 URL: %s (broker=%s)", register_url, mqtt_broker_uri);
+
+    // 如果是新设备，阻塞等待审核通过
+    service_auth_perform_registration_blocking(
+        register_url,
+        3,  // hotel_id，与后台门店账号一致（酒店 3）
+        device_id,
+        "room",
+        "智能客房终端",
+        ROOM_FIRMWARE_VERSION
+    );
+
+    ESP_LOGI(TAG, "鉴权通过，启动 MQTT 服务...");
+    if (service_network_wait_sntp_sync(20000) != ESP_OK) {
+        ESP_LOGW(TAG, "SNTP 未在 20s 内就绪，仍将启动 MQTT（请确认路由器未拦截 NTP）");
+    }
+    esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MQTT 启动失败: %s", esp_err_to_name(err));
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // 订阅房间专属控制指令 (规范 11.4)
+    char sub_topic[128];
+    snprintf(sub_topic, sizeof(sub_topic), "%s/room/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
+    err = service_mqtt_subscribe(sub_topic, hotel_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅客房指令失败: %s", esp_err_to_name(err));
+    }
+
+    err = voice_session_subscribe_downlink();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "订阅音频下行失败: %s", esp_err_to_name(err));
+    }
+
+    if (s_floor_sensor_device_id[0] != '\0') {
+        char t_mq2[160];
+        char t_ntc[160];
+        snprintf(t_mq2, sizeof(t_mq2), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "air_quality_adc",
+                 s_floor_sensor_device_id);
+        snprintf(t_ntc, sizeof(t_ntc), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "ntc_temp_c",
+                 s_floor_sensor_device_id);
+        esp_err_t e2 = service_mqtt_subscribe(t_mq2, room_floor_sensor_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控烟雾数据失败: %s", esp_err_to_name(e2));
+        }
+        e2 = service_mqtt_subscribe(t_ntc, room_floor_sensor_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控NTC数据失败: %s", esp_err_to_name(e2));
+        }
+        ESP_LOGI(TAG, "已订阅楼控环境: %s / %s", t_mq2, t_ntc);
+    }
+
+    // 延迟一小段以确保 MQTT 连接建立后再发送状态
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // 发布规范的上线状态
+    publish_device_online_status();
+    publish_health_report();
+    
+    vTaskDelete(NULL);
+}
+
 // 网络连接状态回调
 void on_network_status_changed(bool connected, const char* ip_address) {
     if (connected) {
         s_network_ready = true;
-        char msg[32];
         const char *ip_str = (ip_address != NULL) ? ip_address : "--";
-        snprintf(msg, sizeof(msg), "IP:%s", ip_str);
-        driver_oled_show_text_line(1, msg);
+        // 提取 IP 最后一段，OLED 只有 128 宽，显示末段足以定位 (同网段)
+        const char *last_dot = strrchr(ip_str, '.');
+        const char *tail = (last_dot != NULL && *(last_dot + 1) != '\0') ? last_dot + 1 : ip_str;
+        snprintf(s_oled_ip_tail, sizeof(s_oled_ip_tail), "%s", tail);
+        s_oled_net_ok = true;
         ESP_LOGI(TAG, "网络已连接，IP: %s", ip_str);
         
-        // 连上网后，使用统一的宏地址启动 MQTT
-        esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "MQTT 启动失败: %s", esp_err_to_name(err));
-            return;
+        static bool s_auth_task_started = false;
+        if (!s_auth_task_started) {
+            s_auth_task_started = true;
+            xTaskCreate(auth_and_mqtt_task, "auth_and_mqtt", 8192, NULL, 4, NULL);
         }
-        
-        // 订阅房间专属控制指令 (规范 11.4)
-        char sub_topic[128];
-        snprintf(sub_topic, sizeof(sub_topic), "%s/room/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
-        err = service_mqtt_subscribe(sub_topic, hotel_mqtt_callback);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "订阅客房指令失败: %s", esp_err_to_name(err));
-        }
-
-        err = voice_session_subscribe_downlink();
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "订阅音频下行失败: %s", esp_err_to_name(err));
-        }
-
-        if (s_floor_sensor_device_id[0] != '\0') {
-            char t_mq2[160];
-            char t_ntc[160];
-            snprintf(t_mq2, sizeof(t_mq2), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "air_quality_adc",
-                     s_floor_sensor_device_id);
-            snprintf(t_ntc, sizeof(t_ntc), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "ntc_temp_c",
-                     s_floor_sensor_device_id);
-            esp_err_t e2 = service_mqtt_subscribe(t_mq2, room_floor_sensor_mqtt_cb);
-            if (e2 != ESP_OK) {
-                ESP_LOGW(TAG, "订阅楼控烟雾数据失败: %s", esp_err_to_name(e2));
-            }
-            e2 = service_mqtt_subscribe(t_ntc, room_floor_sensor_mqtt_cb);
-            if (e2 != ESP_OK) {
-                ESP_LOGW(TAG, "订阅楼控NTC数据失败: %s", esp_err_to_name(e2));
-            }
-            ESP_LOGI(TAG, "已订阅楼控环境: %s / %s", t_mq2, t_ntc);
-        }
-
-        // 延迟一小段以确保 MQTT 连接建立后再发送状态 (Mock演示用)
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        
-        // 发布规范的上线状态
-        publish_device_online_status();
-        publish_health_report();
     } else {
         s_network_ready = false;
+        s_oled_net_ok = false;
+        snprintf(s_oled_ip_tail, sizeof(s_oled_ip_tail), "---");
         s_reconnect_count++;
         ESP_LOGW(TAG, "网络已断开，进入离线降级模式");
     }
@@ -1071,25 +1255,33 @@ void task_sensor_monitor(void *pvParameters) {
         hal_sensors_read_all(&env_data);
         room_run_fire_suspect_policy(&env_data);
 
-        char display_str[32];
-        snprintf(display_str, sizeof(display_str), "T:%.1fC H:%.1f%%", env_data.temperature, env_data.humidity);
-        driver_oled_show_text_line(3, display_str);
+        if (env_data.dht_valid) {
+            s_oled_last_temp_c = env_data.temperature;
+            s_oled_last_hum_pct = env_data.humidity;
+            s_oled_env_valid = true;
+        }
 
         if (!s_network_ready) {
             continue;
         }
 
-        publish_sensor_data("temperature", env_data.temperature, "℃");
-        publish_sensor_data("humidity", env_data.humidity, "%");
-#if GLOBAL_ADC_MQ2_PIN >= 0
-        publish_sensor_data("air_quality_adc", env_data.air_quality_adc, "adc");
-#endif
-#if GLOBAL_ADC_LDR_PIN >= 0
-        publish_sensor_data("light_adc", env_data.light_adc, "adc");
-#endif
-        publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
+        /*
+         * 客房实际装配的传感器（以硬件清单为准，2026-04）：
+         *   - DHT11 温湿度
+         *   - NTC 热敏电阻
+         *   - RD03 毫米波人体雷达
+         * 因此只上报这三类，MQ2 / LDR 在客房上不存在，HAL 即使读到浮空 ADC 也忽略，
+         * 避免 "light/smoke 永远有个飘忽值" 成为假数据。
+         */
+        if (env_data.dht_valid) {
+            publish_sensor_data("temperature", env_data.temperature, "℃");
+            publish_sensor_data("humidity", env_data.humidity, "%");
+        }
         if (env_data.ntc_valid) {
             publish_sensor_data("ntc_temp_c", (double)env_data.ntc_temp_c, "C");
+        }
+        if (env_data.rd03_valid) {
+            publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
         }
     }
 }
@@ -1138,31 +1330,13 @@ void task_room_button_events(void *pvParameters) {
                 ESP_LOGI(TAG, "GPIO%d PTT 长按: 唤醒 Agent（语音助手）", GLOBAL_PTT_BTN_PIN);
                 publish_room_business_event("agent_wake_requested", "长按 PTT 唤醒语音助手", "info");
                 voice_session_arm_agent_window(120000);
-                hal_interactive_beep(1, 120);
             }
         }
         if (!ptt_pressed && s_ptt_prev) {
             TickType_t held = now - s_ptt_press_tick;
             if (!s_ptt_long_fired && held >= pdMS_TO_TICKS(ROOM_PTT_SHORT_MIN_MS)) {
-                if (s_call_incoming_pending) {
-                    s_call_incoming_pending = false;
-                    is_on_call = true;
-                    ESP_LOGI(TAG, "GPIO%d PTT 短按: 接听电话 (call_id=%s remote=%s)",
-                             GLOBAL_PTT_BTN_PIN, current_call_id, remote_id);
-                    publish_room_business_event("room_call_answer_local", "本地接听来电", "info");
-                    publish_room_runtime_status();
-                } else if (is_on_call) {
-                    is_on_call = false;
-                    current_call_id[0] = '\0';
-                    remote_id[0] = '\0';
-                    ESP_LOGI(TAG, "GPIO%d PTT 短按: 挂断通话", GLOBAL_PTT_BTN_PIN);
-                    publish_room_business_event("room_call_hangup_local", "本地挂断", "info");
-                    publish_room_runtime_status();
-                } else {
-                    ESP_LOGI(TAG, "GPIO%d PTT 短按: 无来电可接听", GLOBAL_PTT_BTN_PIN);
-                    publish_room_business_event("room_ptt_short_idle", "无来电/未在通话", "info");
-                }
-                hal_interactive_beep(1, 60);
+                ESP_LOGI(TAG, "GPIO%d PTT 短按: 当前仅保留 Agent 长按唤醒，通话功能已禁用", GLOBAL_PTT_BTN_PIN);
+                publish_room_business_event("room_ptt_short_idle", "通话功能已禁用", "info");
             }
         }
         s_ptt_prev = ptt_pressed;
@@ -1176,12 +1350,10 @@ void task_room_button_events(void *pvParameters) {
             bool ok = apply_room_scene(next_mode, &scene_msg);
             ESP_LOGI(TAG, "本地场景按键触发: %s (ok=%d)", scene_msg, (int)ok);
             publish_room_runtime_status();
-            hal_interactive_beep(ok ? 1 : 2, 80);
         }
 
         if (sos_pressed && !prev_sos_pressed) {
             publish_security_event("room_sos_pressed", "critical");
-            hal_interactive_beep(3, 60);
         }
 
         prev_scene_pressed = scene_pressed;
@@ -1205,41 +1377,113 @@ static const char *room_ec11_mode_label_cn(room_ec11_function_mode_t m) {
     }
 }
 
+/**
+ * 场景短标签：OLED 5×7 字模只支持 ASCII，中文会显示成 "...."。
+ * 用 3 字母缩写兼顾屏幕宽度与可读性：
+ *   WEL=Welcome  RDG=Reading  NGT=Night  SLP=Sleep
+ */
 static const char *room_scene_label_short(room_scene_mode_t m) {
     switch (m) {
         case ROOM_SCENE_WELCOME:
-            return "迎宾";
+            return "WEL";
         case ROOM_SCENE_READING:
-            return "阅读";
+            return "RDG";
         case ROOM_SCENE_NIGHT:
-            return "夜灯";
+            return "NGT";
         case ROOM_SCENE_SLEEP:
-            return "睡眠";
+            return "SLP";
         default:
             return "?";
     }
 }
 
-static void room_ec11_refresh_oled_mode_line(void) {
-    char buf[24];
+/**
+ * 生成 EC11 当前档 OLED 文本（仅生成字符串，不直接写屏；写屏交给 oled_task）。
+ * buf_size 建议 >= 22。
+ */
+static void room_ec11_format_mode_line(char *buf, size_t buf_size) {
+    if (buf == NULL || buf_size == 0) {
+        return;
+    }
     switch (s_ec11_function_mode) {
         case ROOM_EC11_MODE_VOLUME:
-            snprintf(buf, sizeof(buf), "M:VOL v:%d", s_volume_pct);
+            snprintf(buf, buf_size, "M:VOL %d%%", s_volume_pct);
             break;
         case ROOM_EC11_MODE_BRIGHTNESS:
-            snprintf(buf, sizeof(buf), "M:BRT %d%%", s_brightness_pct);
+            snprintf(buf, buf_size, "M:BRT %d%%", s_brightness_pct);
             break;
         case ROOM_EC11_MODE_AC_TEMP:
-            snprintf(buf, sizeof(buf), "M:AC T:%u", (unsigned)s_ac_target_temp);
+            snprintf(buf, buf_size, "M:AC  %uC", (unsigned)s_ac_target_temp);
             break;
         case ROOM_EC11_MODE_SCENE:
-            snprintf(buf, sizeof(buf), "M:SCN %s", room_scene_label_short(s_scene_mode));
+            snprintf(buf, buf_size, "M:SCN %s", room_scene_label_short(s_scene_mode));
             break;
         default:
-            snprintf(buf, sizeof(buf), "M:?");
+            snprintf(buf, buf_size, "M:?");
             break;
     }
-    driver_oled_show_text_line(2, buf);
+}
+
+/**
+ * 在 Line3 临时显示一条状态（命令执行结果等），持续 ttl_ms；到期后由 oled_task 回退到默认继电器+场景行。
+ */
+static void room_oled_flash_status(const char *msg, uint32_t ttl_ms) {
+    if (msg == NULL) {
+        return;
+    }
+    snprintf(s_oled_status_line, sizeof(s_oled_status_line), "%s", msg);
+    s_oled_status_until = xTaskGetTickCount() + pdMS_TO_TICKS(ttl_ms);
+}
+
+/**
+ * 4 行整屏重绘（一次性 flush，避免逐行刷新闪烁）：
+ *   Line0: "R<房号> <网络> <IP 末段> <场景>" 例 "R301 OK 131 WEL"
+ *   Line1: 温湿度 + 空调目标温度              例 "T24.1C H51% AC24C"
+ *   Line2: EC11 当前档 + 数值                 例 "M:VOL 60%"
+ *   Line3: 4 路继电器 + 场景 / 或临时命令回显 例 "L1 A0 C0 D0 Sc:WEL"
+ * 由 1Hz 的 oled_task 及 EC11 即时事件调用。
+ */
+static void room_oled_render_all(void) {
+    /* 128px 宽 OLED 一约 16 字符/行，但 GCC -Wformat-truncation 会按最坏长度估算；
+     * 行缓冲略放大，避免 snprintf 被判“可能越界/截断”在 -Werror 下直接失败。 */
+    char l0[48], l1[48], l2[48], l3[48];
+
+    /* 房号最长 15 字符，但 128px OLED 一行装不下；按屏幕约束截断，避免 -Wformat-truncation */
+    snprintf(l0, sizeof(l0), "R%.6s %s %.7s %s",
+             current_room_id,
+             s_oled_net_ok ? "OK" : "--",
+             s_oled_ip_tail,
+             room_scene_label_short(s_scene_mode));
+
+    if (s_oled_env_valid) {
+        snprintf(l1, sizeof(l1), "T%.1fC H%.0f%% AC%uC",
+                 s_oled_last_temp_c, s_oled_last_hum_pct, (unsigned)s_ac_target_temp);
+    } else {
+        snprintf(l1, sizeof(l1), "T --.- H-- AC%uC", (unsigned)s_ac_target_temp);
+    }
+
+    room_ec11_format_mode_line(l2, sizeof(l2));
+
+    if (s_oled_status_line[0] != '\0' && xTaskGetTickCount() < s_oled_status_until) {
+        snprintf(l3, sizeof(l3), "%s", s_oled_status_line);
+    } else {
+        if (s_oled_status_line[0] != '\0') {
+            s_oled_status_line[0] = '\0';
+        }
+        snprintf(l3, sizeof(l3), "L%d A%d C%d D%d Sc:%s",
+                 s_room_state.light_on ? 1 : 0,
+                 s_room_state.air_on ? 1 : 0,
+                 s_room_state.curtain_open ? 1 : 0,
+                 s_room_state.door_unlocked ? 1 : 0,
+                 room_scene_label_short(s_scene_mode));
+    }
+
+    driver_oled_show_4_lines(l0, l1, l2, l3);
+}
+
+/* 兼容旧调用点：EC11 旋转/按键即时反馈时直接整屏重绘，不等 1Hz 周期 */
+static void room_ec11_refresh_oled_mode_line(void) {
+    room_oled_render_all();
 }
 
 static void room_apply_brightness_to_light(void) {
@@ -1291,7 +1535,6 @@ void task_room_ec11_peripheral(void *pvParameters) {
                     snprintf(detail, sizeof(detail), "当前:%s", room_ec11_mode_label_cn(s_ec11_function_mode));
                     publish_room_business_event("room_ec11_mode_switch", detail, "info");
                     ESP_LOGI(TAG, "EC11 长按 SW：%s", room_ec11_mode_label_cn(s_ec11_function_mode));
-                    hal_interactive_beep(2, 45);
                     room_ec11_refresh_oled_mode_line();
                 }
                 s_sw_held = false;
@@ -1354,10 +1597,7 @@ void task_room_ec11_peripheral(void *pvParameters) {
                     }
                     s_ac_target_temp = (uint8_t)t;
                     publish_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
-                    ESP_LOGI(TAG, "空调目标温度: %u℃", (unsigned)s_ac_target_temp);
-                    if (s_room_state.air_on) {
-                        room_sync_ir_ac();
-                    }
+                    ESP_LOGI(TAG, "空调目标温度: %u℃（继电器模拟，无红外真机）", (unsigned)s_ac_target_temp);
                     room_ec11_refresh_oled_mode_line();
                     break;
                 }
@@ -1372,7 +1612,6 @@ void task_room_ec11_peripheral(void *pvParameters) {
                     bool ok = apply_room_scene(next, &scene_msg);
                     ESP_LOGI(TAG, "EC11 场景: %s ok=%d", scene_msg, (int)ok);
                     publish_room_runtime_status();
-                    hal_interactive_beep(ok ? 1 : 2, 50);
                     room_ec11_refresh_oled_mode_line();
                     break;
                 }
@@ -1402,7 +1641,6 @@ void task_room_rc522_poll(void *pvParameters) {
                 s_last_uid_len = uid_len;
                 s_last_uid_valid = true;
                 publish_card_uid_event(uid, uid_len);
-                hal_interactive_beep(1, 80);
             }
         } else if (err == ESP_ERR_NOT_FOUND) {
             s_last_uid_valid = false;
@@ -1465,6 +1703,22 @@ void task_room_ir_night_wake(void *pvParameters) {
         (void)apply_room_scene(ROOM_SCENE_NIGHT, &scene_msg);
         publish_room_runtime_status();
         ESP_LOGI(TAG, "起夜灯场景: %s", scene_msg);
+    }
+}
+
+/**
+ * 1Hz 重绘 4 行 OLED：
+ *   Line0: "R<房号> <网络> <IP 末段> <场景>"    例 "R301 OK 131 WEL"
+ *   Line1: "T24.1C H51% AC24C"                环境温湿度 + 空调目标温度
+ *   Line2: "M:VOL 60%" / "M:SCN WEL" ...       EC11 当前档 + 数值
+ *   Line3: 4 路继电器 + 场景，或临时命令回显
+ */
+void task_room_oled_refresh(void *pvParameters) {
+    (void)pvParameters;
+    ESP_LOGI(TAG, "OLED 刷新任务启动（1Hz 整屏重绘）");
+    while (1) {
+        room_oled_render_all();
+        vTaskDelay(OLED_REFRESH_PERIOD);
     }
 }
 
@@ -1563,17 +1817,50 @@ void app_main(void)
     
     load_card_aes_key();
 
-    // 2. 初始化所有的底层硬件驱动模块 (极简拼装)
-    ESP_LOGI(TAG, "--- 硬件底层驱动加载 ---");
-    driver_oled_init();
-    driver_rc522_init();
-    hal_actuators_init();
-    hal_sensors_init();
-    hal_interactive_init();
-    hal_audio_init();
-    hal_audio_set_playback_volume_pct(s_volume_pct);
-    hal_infrared_init();
+    // 初始化认证组件 (读取 device_key)
+    service_auth_init();
 
+    // 2. 初始化所有的底层硬件驱动模块 (串行 + 间隔上电，避免瞬时电流峰值触发 BOD)
+    //    每个外设上电会有瞬时浪涌（音频功放/LED/SPI/I2S/GPIO 上拉等），
+    //    集中初始化时累计电流可能拉低 3.3V 触发 Brownout，
+    //    因此这里改为"一个一个启动 + 50~80ms 缓冲延迟"。
+    ESP_LOGI(TAG, "--- 硬件底层驱动加载 (顺序错峰) ---");
+
+    #define ROOM_PERIPH_GAP_MS    60   /* 普通外设间隔 */
+    #define ROOM_PERIPH_GAP_BIG   120  /* 含功放/电流尖峰外设间隔 */
+
+    ESP_LOGI(TAG, "[boot] 1/8 OLED");
+    driver_oled_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 2/8 RC522");
+    driver_rc522_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 3/8 actuators (继电器/驱动)");
+    hal_actuators_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 4/8 sensors");
+    hal_sensors_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 5/8 interactive (RGB/按键/蜂鸣)");
+    hal_interactive_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 6/8 audio (I2S/MIC/功放)");
+    hal_audio_init();
+    /* 功放上电浪涌较大，先延迟再设置音量，避免与下一个外设的初始化叠加 */
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_BIG));
+    hal_audio_set_playback_volume_pct(s_volume_pct);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 7/8 infrared");
+    hal_infrared_init();
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
+    ESP_LOGI(TAG, "[boot] 8/8 EC11");
     if (GLOBAL_EC11_A_PIN >= 0 && GLOBAL_EC11_B_PIN >= 0) {
         esp_err_t ec_err = driver_ec11_init(GLOBAL_EC11_A_PIN, GLOBAL_EC11_B_PIN, GLOBAL_EC11_SW_PIN);
         if (ec_err == ESP_OK) {
@@ -1585,9 +1872,11 @@ void app_main(void)
     } else {
         ESP_LOGW(TAG, "EC11 未配置有效 A/B 脚，跳过");
     }
-    
+    vTaskDelay(pdMS_TO_TICKS(ROOM_PERIPH_GAP_MS));
+
     driver_oled_clear_screen();
-    driver_oled_show_text_line(0, "系统启动中...");
+    // OLED 仅支持 5x7 ASCII 字模；中文会渲染为 "...."，统一用英文占位到 oled_task 接管
+    driver_oled_show_text_line(0, "Booting...");
 
     // 3. 从 NVS 读取当前房号，严格拼接规范的 Client ID
     load_nvs_string_with_fallback("Room_ID", current_room_id, sizeof(current_room_id), "301");
@@ -1600,36 +1889,69 @@ void app_main(void)
                        sizeof(current_call_id));
 
     char boot_msg[32];
-    snprintf(boot_msg, sizeof(boot_msg), "房号: %s", current_room_id);
+    snprintf(boot_msg, sizeof(boot_msg), "R%s Waiting WiFi", current_room_id);
     driver_oled_show_text_line(0, boot_msg);
     if (s_ec11_ready) {
         room_ec11_refresh_oled_mode_line();
     }
+    // 启动时给一轮初始渲染（网络未连前提示等待），之后交给 oled_task 1Hz 接管
+    room_oled_render_all();
 
     // 4. 启动网络与配网服务
+    //    Wi-Fi PA 启动瞬间是全板第二大电流尖峰（仅次于音频功放出声时）。
+    //    在硬件外设全部完成 + OLED 渲染后再起 Wi-Fi，并给 200ms 让 LDO 稳定。
     ESP_LOGI(TAG, "--- 启动网络服务 ---");
+    vTaskDelay(pdMS_TO_TICKS(150));
     service_network_provisioning_start(on_network_status_changed);
+    /* Wi-Fi 初始化和扫描会在后台拉电流，给主线 200ms 缓冲再去创建任务 */
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    // 5. 挂载持续运行的业务逻辑任务
-    ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 ---");
+    // 5. 挂载持续运行的业务逻辑任务 (错峰创建，避免大量任务同帧抢 CPU+外设)
+    ESP_LOGI(TAG, "--- 挂载 FreeRTOS 任务 (错峰创建) ---");
+    #define ROOM_TASK_GAP_MS  40
+
     // sensor_task: 只负责采集+上报
     xTaskCreatePinnedToCore(task_sensor_monitor, "sensor_task", 4096, NULL, 5, NULL, 1);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // voice_task: 电话连续上行 + Agent 窗口内按住 PTT 上行；下行见 voice_downlink_mqtt_cb
-    xTaskCreate(voice_uplink_task, "voice_task", 8192, NULL, 5, NULL);
+    /* voice_task 栈较大且会占用 I2S，单独留 80ms 让其平稳进入 idle 等待 */
+    xTaskCreate(voice_uplink_task, "voice_task", 12288, NULL, 5, NULL);
+    vTaskDelay(pdMS_TO_TICKS(80));
+
     // auto_lock_task: 门锁自动回锁守护
     xTaskCreate(task_room_auto_lock, "room_auto_lock_task", 3072, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // button_task: 客房场景/SOS 按键业务
     xTaskCreate(task_room_button_events, "room_button_task", 3072, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // ec11_task: 长按 SW 松手切四档(音量→亮度→空调温→场景)；仅松手后旋转调当前量
     xTaskCreate(task_room_ec11_peripheral, "room_ec11_task", 4096, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // rc522_task: RC522 常驻轮询，检测房卡 UID
     xTaskCreate(task_room_rc522_poll, "room_rc522_task", 4096, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // heartbeat_task: 客房状态心跳
     xTaskCreate(task_room_heartbeat, "room_heartbeat_task", 4096, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // health_task: 客房健康上报
     xTaskCreate(task_room_health_report, "room_health_task", 4096, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
     // ir_night: 红外对射遮挡判起夜，开夜灯场景
     xTaskCreate(task_room_ir_night_wake, "room_ir_night", 3072, NULL, 4, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
+    // oled_task: 1Hz 重绘 4 行固定布局；业务只写内存状态
+    xTaskCreate(task_room_oled_refresh, "room_oled_task", 3072, NULL, 3, NULL);
+    vTaskDelay(pdMS_TO_TICKS(ROOM_TASK_GAP_MS));
+
+    ESP_LOGI(TAG, "--- 所有任务已挂载完成 ---");
 
     // 6. main 仅做守护，不注入模拟业务动作，避免干扰真实联调
     while (1) {

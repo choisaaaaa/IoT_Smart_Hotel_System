@@ -16,9 +16,20 @@
 #include "driver_rc522.h"
 #include "card_mifare_payload.h"
 #include "global_config.h"
+#include "service_auth.h"
+
+/*
+ * 公网若按「设备号 / 固件版本 / 镜像版本」识别终端，换身份时请改下面两处，
+ * 并在后台登记新的 device_id（格式 front_desk_<后缀>）。也可不写死：配网后在 NVS
+ * 写入键 FrontDesk_ID 覆盖默认后缀（与 hotel 命名空间一致，由 service_network 读写）。
+ */
+#ifndef FRONT_DESK_ID_DEFAULT
+#define FRONT_DESK_ID_DEFAULT "02"
+#endif
+#define FRONT_FIRMWARE_VERSION "v1.2.0"
 
 static const char *TAG = "FRONT_DESK_MAIN";
-static char device_id[32] = "front_desk_01"; // 规范命名 (6.1.1)
+static char device_id[32] = "front_desk_" FRONT_DESK_ID_DEFAULT;
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FRONT_HEARTBEAT_TASK_PERIOD = pdMS_TO_TICKS(60000);
 static const TickType_t FRONT_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(50);
@@ -93,6 +104,12 @@ static void publish_front_status_payload(cJSON *root) {
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/front_desk/%s", GLOBAL_TOPIC_DEVICE_STATUS_PREFIX, device_id);
 
+    /* 签名：与后端 sortObject+JSON.stringify 一致（键 ASCII 排序） */
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     free(json_str);
@@ -112,6 +129,11 @@ static void publish_front_event(const char *event_type, const char *detail) {
     cJSON_AddStringToObject(root, "event_type", event_type);
     cJSON_AddStringToObject(root, "detail", detail);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
 
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
@@ -158,6 +180,11 @@ static void publish_card_uid_event(const uint8_t *uid, uint8_t uid_len) {
     cJSON_AddStringToObject(root, "card_uid", uid_hex);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
     free(json_str);
@@ -184,12 +211,17 @@ static void publish_health_report(void) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "front_desk");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", FRONT_FIRMWARE_VERSION);
     cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
     cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "rssi", rssi);
     cJSON_AddNumberToObject(root, "reconnect_counts", (double)s_reconnect_count);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
 
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
@@ -231,6 +263,11 @@ static void publish_room_command(const char *room_id, const char *command_type) 
         cJSON_AddStringToObject(root, "call_id", call_id);
     }
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     free(json_str);
@@ -251,6 +288,11 @@ static void publish_front_command_result(int cmd_id, const char *cmd_type, bool 
     cJSON_AddStringToObject(reply, "status", ok ? "success" : "failed");
     cJSON_AddStringToObject(reply, "result", result_msg);
     cJSON_AddStringToObject(reply, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(reply, signature) == ESP_OK) {
+        cJSON_AddStringToObject(reply, "signature", signature);
+    }
 
     char *reply_str = cJSON_PrintUnformatted(reply);
     service_mqtt_publish(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, reply_str);
@@ -335,6 +377,16 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         return false;
     }
 
+    if (strcmp(cmd_type, "alarm_trigger") == 0 || strcmp(cmd_type, "front_alarm") == 0) {
+        publish_front_event("front_alarm_triggered", "前台报警指令触发");
+        (void)hal_interactive_beep(5, 120);
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        *out_msg = "前台报警已触发";
+        return true;
+    }
+
     if (owned_command_value != NULL) {
         cJSON_Delete(owned_command_value);
     }
@@ -410,7 +462,7 @@ void publish_device_online_status() {
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "front_desk");
     cJSON_AddStringToObject(root, "status", "online");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", FRONT_FIRMWARE_VERSION);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
     publish_front_status_payload(root);
@@ -435,29 +487,70 @@ void publish_device_heartbeat() {
     cJSON_Delete(root);
 }
 
+static void auth_and_mqtt_task(void *pvParameters) {
+    ESP_LOGI(TAG, "开始设备注册/鉴权流程...");
+
+    char http_api_base[128];
+    load_nvs_string_with_fallback("HTTP_API_BASE", http_api_base, sizeof(http_api_base), "");
+    char register_url[192];
+    esp_err_t url_err = service_auth_resolve_register_url(
+        mqtt_broker_uri,
+        (http_api_base[0] != '\0') ? http_api_base : NULL,
+        register_url,
+        sizeof(register_url));
+    if (url_err != ESP_OK) {
+        ESP_LOGE(TAG, "解析注册 URL 失败: %s，使用云端默认", esp_err_to_name(url_err));
+        snprintf(register_url, sizeof(register_url), "http://8.134.166.69:9000/api/v1/devices/register");
+    }
+    ESP_LOGI(TAG, "设备注册 URL: %s (broker=%s)", register_url, mqtt_broker_uri);
+
+    // 前台设备注册：hotel_id 须与后台该门店一致（当前为酒店 3）
+    service_auth_perform_registration_blocking(
+        register_url,
+        3,
+        device_id,
+        "front_desk",
+        "智能前台终端",
+        FRONT_FIRMWARE_VERSION
+    );
+
+    ESP_LOGI(TAG, "鉴权通过，启动 MQTT 服务...");
+    /* 等 SNTP 校时后再发带 timestamp 的 MQTT，避免后端 ±5 分钟窗口判「已过期」 */
+    if (service_network_wait_sntp_sync(20000) != ESP_OK) {
+        ESP_LOGW(TAG, "SNTP 未在 20s 内就绪，仍将启动 MQTT（请确认路由器未拦截 NTP）");
+    }
+    // 启动 MQTT
+    service_mqtt_start(mqtt_broker_uri, device_id);
+    service_mqtt_subscribe(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, front_command_result_callback);
+    char sub_topic[128];
+    snprintf(sub_topic, sizeof(sub_topic), "%s/front_desk/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
+    service_mqtt_subscribe(sub_topic, front_desk_command_callback);
+    
+    // 延迟一小段以确保 MQTT 连接建立
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // 发布规范的上线状态
+    publish_device_online_status();
+    publish_health_report();
+    
+    // 声光提示：蓝灯常亮，短鸣2声表示上线成功
+    hal_interactive_set_led_color(0, 0, 0, 255); 
+    hal_interactive_beep(2, 100);
+
+    vTaskDelete(NULL);
+}
+
 // 网络连接状态回调
 void on_network_status_changed(bool connected, const char* ip_address) {
     if (connected) {
         s_network_ready = true;
         ESP_LOGI(TAG, "网络已连接，IP: %s", ip_address);
         
-        // 启动 MQTT
-        service_mqtt_start(mqtt_broker_uri, device_id);
-        service_mqtt_subscribe(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, front_command_result_callback);
-        char sub_topic[128];
-        snprintf(sub_topic, sizeof(sub_topic), "%s/front_desk/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
-        service_mqtt_subscribe(sub_topic, front_desk_command_callback);
-        
-        // 延迟一小段以确保 MQTT 连接建立
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        
-        // 发布规范的上线状态
-        publish_device_online_status();
-        publish_health_report();
-        
-        // 声光提示：蓝灯常亮，短鸣2声表示上线成功
-        hal_interactive_set_led_color(0, 0, 0, 255); 
-        hal_interactive_beep(2, 100);
+        static bool s_auth_task_started = false;
+        if (!s_auth_task_started) {
+            s_auth_task_started = true;
+            xTaskCreate(auth_and_mqtt_task, "auth_and_mqtt", 8192, NULL, 4, NULL);
+        }
     } else {
         s_network_ready = false;
         s_reconnect_count++;
@@ -498,14 +591,14 @@ void task_front_button_events(void *pvParameters) {
         if (clear_pressed && !prev_clear_pressed) {
             ESP_LOGI(TAG, "前台按键触发: 清除键");
             publish_front_event("front_clear_pressed", "前台消音/解除按钮触发");
-            publish_room_command(target_room_id, "hangup_call");
+            publish_room_command(target_room_id, "broadcast_alarm");
             hal_interactive_beep(1, 80);
         }
 
         if (broadcast_pressed && !prev_broadcast_pressed) {
             ESP_LOGI(TAG, "前台按键触发: 广播键");
             publish_front_event("front_broadcast_pressed", "前台广播按钮触发");
-            publish_room_command(target_room_id, "incoming_call");
+            publish_room_command(target_room_id, "broadcast_alarm");
             hal_interactive_beep(2, 80);
         }
 
@@ -555,9 +648,12 @@ void app_main(void) {
         ret = nvs_flash_init();
     }
     
+    // 初始化认证组件 (读取 device_key)
+    service_auth_init();
+    
     // 2. 从 NVS 读取配置（NVS 优先，默认值兜底）
     char front_id[16] = {0};
-    load_nvs_string_with_fallback("FrontDesk_ID", front_id, sizeof(front_id), "01");
+    load_nvs_string_with_fallback("FrontDesk_ID", front_id, sizeof(front_id), FRONT_DESK_ID_DEFAULT);
     snprintf(device_id, sizeof(device_id), "front_desk_%s", front_id);
     load_nvs_string_with_fallback("Room_ID", target_room_id, sizeof(target_room_id), "301");
     load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);

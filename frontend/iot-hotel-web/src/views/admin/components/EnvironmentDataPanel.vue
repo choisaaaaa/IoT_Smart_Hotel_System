@@ -17,7 +17,7 @@
       </a-col>
       <a-col :xs="24" :sm="12" :md="6">
         <a-card class="stat-card smoke-card" size="small">
-          <a-statistic title="烟雾浓度" :value="summary.avg_smoke_level" suffix="%" :value-style="{ color: '#faad14', fontSize: '22px' }">
+          <a-statistic title="MQ2 烟雾(ADC)" :value="summary.avg_smoke_level" suffix="" :value-style="{ color: '#faad14', fontSize: '22px' }">
             <template #prefix><AlertOutlined /></template>
           </a-statistic>
         </a-card>
@@ -54,15 +54,38 @@
           </template>
 
           <template v-if="column.key === 'temperature'">
-            <a-progress :percent="(record.temperature / 40) * 100" :stroke-color="getTempColor(record.temperature)" size="small" :format="() => `${record.temperature}°C`" />
+            <a-tooltip v-if="isMissing(record, 'temperature')" title="该设备未配备温湿度传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <a-progress v-else :percent="(record.temperature / 40) * 100" :stroke-color="getTempColor(record.temperature)" size="small" :format="() => `${record.temperature}°C`" />
           </template>
 
           <template v-if="column.key === 'humidity'">
-            <a-progress :percent="record.humidity" :stroke-color="getHumidityColor(record.humidity)" size="small" :format="() => `${record.humidity}%`" />
+            <a-tooltip v-if="isMissing(record, 'humidity')" title="该设备未配备温湿度传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <a-progress v-else :percent="record.humidity" :stroke-color="getHumidityColor(record.humidity)" size="small" :format="() => `${record.humidity}%`" />
+          </template>
+
+          <template v-if="column.key === 'smoke_level'">
+            <a-tooltip v-if="isMissing(record, 'smoke')" title="该设备未配备 MQ2 烟雾传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <span v-else>{{ record.smoke_level }}</span>
           </template>
 
           <template v-if="column.key === 'pm25'">
-            <a-tag :color="record.pm25 <= 35 ? 'green' : record.pm25 <= 75 ? 'orange' : 'red'">{{ record.pm25 }} μg/m³</a-tag>
+            <a-tooltip v-if="isMissing(record, 'pm25')" title="该设备未配备 PM2.5 传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <a-tag v-else :color="record.pm25 <= 35 ? 'green' : record.pm25 <= 75 ? 'orange' : 'red'">{{ record.pm25 }} μg/m³</a-tag>
+          </template>
+
+          <template v-if="column.key === 'noise_level'">
+            <a-tooltip v-if="isMissing(record, 'noise')" title="该设备未配备噪声传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <span v-else>{{ record.noise_level }} dB</span>
           </template>
 
           <template v-if="column.key === 'status'">
@@ -106,7 +129,7 @@ const columns = [
   { title: '房间', key: 'room_number', width: 80 },
   { title: '温度(°C)', dataIndex: 'temperature', key: 'temperature', width: 120, sorter: (a: EnvironmentData, b: EnvironmentData) => a.temperature - b.temperature },
   { title: '湿度(%)', dataIndex: 'humidity', key: 'humidity', width: 110, sorter: (a: EnvironmentData, b: EnvironmentData) => a.humidity - b.humidity },
-  { title: '烟雾(%)', dataIndex: 'smoke_level', key: 'smoke_level', width: 100 },
+  { title: 'MQ2 烟雾(ADC)', dataIndex: 'smoke_level', key: 'smoke_level', width: 120 },
   { title: 'PM2.5', dataIndex: 'pm25', key: 'pm25', width: 100 },
   { title: '噪音(dB)', dataIndex: 'noise_level', key: 'noise_level', width: 90 },
   { title: '状态', key: 'status', width: 80 },
@@ -130,6 +153,10 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+function isMissing(record: EnvironmentData, key: string): boolean {
+  return Array.isArray(record.sensors_missing) && record.sensors_missing.includes(key)
 }
 
 function getTempColor(temp: number): string {
@@ -170,4 +197,9 @@ onMounted(() => {
 .humidity-card { border-top: 3px solid #52c41a; }
 .smoke-card { border-top: 3px solid #faad14; }
 .score-card { border-top: 3px solid #722ed1; }
+.missing-sensor {
+  color: #bfbfbf;
+  font-size: 12px;
+  font-style: italic;
+}
 </style>

@@ -13,4 +13,4 @@ set(EXTRA_COMPONENT_DIRS
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(front_desk_terminal)
+project(front_desk_terminal VERSION 1.2.0)

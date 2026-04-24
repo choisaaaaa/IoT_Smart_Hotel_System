@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import pool, { RowDataPacket } from '../../config/database';
 import aiButlerService from '../../services/ai-butler.service';
-import mqttService from '../../services/mqtt.service';
 import { CallService } from '../../services/call.service';
 import websocketService from '../../services/websocket.service';
+import { getVoiceAgentBridge } from '../../services/voice-agent-bridge.service';
 import { authenticate } from '../../middleware/auth';
 import logger from '../../utils/logger';
 
@@ -432,36 +432,19 @@ router.post('/broadcast',
         });
       }
 
-      // 2. 调用 TTS 合成语音 (只合成一次)
-      const audioBase64 = await aiButlerService.textToSpeech(text);
-
-      if (!audioBase64) {
-        return res.status(500).json({
-          code: 500,
-          message: '语音合成失败',
-          data: null
-        });
-      }
-
-      // 3. 循环下发消息
+      // 2. 循环下发消息（走真实客房音频下行链路）
+      const bridge = getVoiceAgentBridge();
       const results = [];
       for (const device of devices) {
         const deviceId = device.device_id;
         const actualRoomNumber = device.room_number;
-        
-        const topic = `hotel/ai/response/room/${deviceId}`;
-        const payload = {
-          device_id: deviceId,
-          room_id: actualRoomNumber,
-          text: text,
-          audio_base64: audioBase64,
-          timestamp: Date.now(),
-          type: 'broadcast'
-        };
-
-        await mqttService.publish(topic, payload);
-        results.push({ room_id: actualRoomNumber, device_id: deviceId });
-        logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+        const sent = await bridge.broadcastTextToDevice(deviceId, text);
+        if (sent) {
+          results.push({ room_id: actualRoomNumber, device_id: deviceId });
+          logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+        } else {
+          logger.warn(`广播下发失败: room=${actualRoomNumber} device=${deviceId}`);
+        }
       }
 
       res.json({

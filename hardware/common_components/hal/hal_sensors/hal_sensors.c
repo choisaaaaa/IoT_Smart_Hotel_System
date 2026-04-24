@@ -109,6 +109,10 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
     out_data->air_quality_adc = 0;
     out_data->light_adc = 0;
     out_data->is_human_present = false;
+    out_data->dht_valid = false;
+    out_data->mq2_valid = false;
+    out_data->ldr_valid = false;
+    out_data->rd03_valid = false;
     out_data->ntc_valid = false;
     out_data->ntc_temp_c = 0.0f;
 
@@ -117,6 +121,9 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         if (driver_dht11_read(&dht) == ESP_OK) {
             out_data->temperature = dht.temperature_c;
             out_data->humidity = dht.humidity_percent;
+            out_data->dht_valid = true;
+        } else {
+            ESP_LOGW(TAG, "DHT11 读取失败，本轮不上报温湿度");
         }
     }
 
@@ -124,6 +131,7 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         int mq_raw = 0;
         if (driver_mq2_read_raw(&mq_raw) == ESP_OK && mq_raw >= 0) {
             out_data->air_quality_adc = (uint16_t)mq_raw;
+            out_data->mq2_valid = true;
         }
     }
 
@@ -131,6 +139,7 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         int ldr_raw = 0;
         if (driver_ldr_read_raw(&ldr_raw) == ESP_OK && ldr_raw >= 0) {
             out_data->light_adc = (uint16_t)ldr_raw;
+            out_data->ldr_valid = true;
         }
     }
 
@@ -138,6 +147,7 @@ esp_err_t hal_sensors_read_all(sensor_data_t *out_data) {
         bool present = false;
         if (driver_rd03_simple_read(&present) == ESP_OK) {
             out_data->is_human_present = present;
+            out_data->rd03_valid = true;
         }
     }
 

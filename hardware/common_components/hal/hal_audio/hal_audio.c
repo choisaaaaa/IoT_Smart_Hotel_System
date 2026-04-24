@@ -36,16 +36,15 @@ static esp_err_t spk_write_pcm16_unlocked(const int16_t *samples, size_t sample_
 }
 
 /**
- * 音频采样率 32 kHz：
- *   - MIC 侧为 PDM：IDF 驱动 CIC 抽取，PDM CLK ≈ fs×64 = 2.048 MHz，
- *     落在 LMD2718T 规格 1.024~3.072 MHz 的中段，工作最稳
- *   - 16 kHz 虽是 agent/电话事实标准，但 PDM CLK 正好压在 1.024 MHz 下边界
- *     容易出现调制器收敛不良 → 噪声。此处先用 32 kHz，业务层如需对接 16 kHz
- *     云端再做 32k→16k 降采样
- *   - SPK 侧为 I2S STD 16-bit mono，BCLK = fs×32 = 1.024 MHz，NS4168 兼容
+ * 采样率由 global_config 的 GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ 提供（通常 16k 对齐 ASR；可改 32k 换 PDM 余量）。
+ * PDM CLK ≈ fs×64，见 LMD2718T 规格书。
  */
 #ifndef HAL_AUDIO_SAMPLE_RATE_HZ
+#ifdef GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ
+#define HAL_AUDIO_SAMPLE_RATE_HZ GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ
+#else
 #define HAL_AUDIO_SAMPLE_RATE_HZ 32000u
+#endif
 #endif
 
 esp_err_t hal_audio_init(void) {
@@ -172,6 +171,15 @@ esp_err_t hal_audio_play_chunk(const uint8_t *data, size_t len) {
     return err;
 }
 
+/**
+ * MIC 软件增益（线性倍数）。LMD2718T PDM MEMS 在 64×CIC 抽取后输出的 s16 通常 peak ≈ 2k~4k，
+ * Fun-ASR 在 peak < 5000 时识别准确率会明显下降。这里默认 6× 把正常说话拉到 ~12k~24k 区间，
+ * 仍留一倍安全裕度避免削顶；若用户 PDM 板已自带高增益 mic，可改为 1。
+ */
+#ifndef HAL_AUDIO_MIC_GAIN_X
+#define HAL_AUDIO_MIC_GAIN_X 6
+#endif
+
 esp_err_t hal_audio_record_pcm16(int16_t *samples, size_t max_samples, size_t *out_sample_count)
 {
     if (samples == NULL || out_sample_count == NULL || max_samples == 0) {
@@ -181,7 +189,23 @@ esp_err_t hal_audio_record_pcm16(int16_t *samples, size_t max_samples, size_t *o
         return ESP_ERR_INVALID_STATE;
     }
     size_t cap = max_samples > 512 ? 512 : max_samples;
-    return driver_lmd2718_mic_read_pcm(samples, cap, out_sample_count);
+    esp_err_t err = driver_lmd2718_mic_read_pcm(samples, cap, out_sample_count);
+    if (err != ESP_OK) {
+        return err;
+    }
+#if HAL_AUDIO_MIC_GAIN_X > 1
+    const size_t n = *out_sample_count;
+    for (size_t i = 0; i < n; i++) {
+        int32_t v = (int32_t)samples[i] * HAL_AUDIO_MIC_GAIN_X;
+        if (v > 32767) {
+            v = 32767;
+        } else if (v < -32768) {
+            v = -32768;
+        }
+        samples[i] = (int16_t)v;
+    }
+#endif
+    return ESP_OK;
 }
 
 esp_err_t hal_audio_play_pcm16(const int16_t *samples, size_t sample_count)

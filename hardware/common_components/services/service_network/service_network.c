@@ -26,6 +26,21 @@ static const char *TAG = "service_network";
 static network_status_cb_t s_net_cb;
 static bool s_got_ip;
 static char s_ip_str[20];
+static bool s_sntp_started;
+
+static void service_network_sntp_start_once(void)
+{
+    if (s_sntp_started) {
+        return;
+    }
+    s_sntp_started = true;
+
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "cn.pool.ntp.org");
+    esp_sntp_setservername(1, "pool.ntp.org");
+    esp_sntp_init();
+    ESP_LOGI(TAG, "SNTP 已启动，同步后 MQTT 时间戳将与公网一致");
+}
 
 #if CONFIG_SERVICE_NETWORK_SOFTAP_PROVISIONING
 
@@ -170,6 +185,7 @@ static void wifi_event_handler_prov(void *arg, esp_event_base_t event_base, int3
         ip_event_got_ip_t *e = (ip_event_got_ip_t *)event_data;
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&e->ip_info.ip));
         ESP_LOGI(TAG, "STA got IP: %s", s_ip_str);
+        service_network_sntp_start_once();
         s_got_ip = true;
         if (s_net_cb != NULL) {
             s_net_cb(true, s_ip_str);
@@ -279,6 +295,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         ip_event_got_ip_t *e = (ip_event_got_ip_t *)event_data;
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&e->ip_info.ip));
         ESP_LOGI(TAG, "STA got IP: %s", s_ip_str);
+        service_network_sntp_start_once();
         s_got_ip = true;
         if (s_net_cb != NULL) {
             s_net_cb(true, s_ip_str);
@@ -331,7 +348,37 @@ static esp_err_t provisioning_start_sta_menuconfig(network_status_cb_t cb)
 
 #endif /* CONFIG_SERVICE_NETWORK_SOFTAP_PROVISIONING */
 
+esp_err_t service_network_wait_sntp_sync(uint32_t timeout_ms)
+{
+    if (!s_sntp_started) {
+        ESP_LOGW(TAG, "SNTP 未启动，无法等待同步");
+        return ESP_ERR_INVALID_STATE;
+    }
+    const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    while (xTaskGetTickCount() < deadline) {
+        if (esp_sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+            time_t now = 0;
+            time(&now);
+            if (now > (time_t)1700000000) {
+                ESP_LOGI(TAG, "SNTP 已同步，Unix 时间=%lld", (long long)now);
+                return ESP_OK;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+    ESP_LOGW(TAG, "SNTP 在 %u ms 内未完成同步，MQTT 时间戳可能与后端偏差", (unsigned)timeout_ms);
+    return ESP_ERR_TIMEOUT;
+}
+
 #endif /* !CONFIG_SERVICE_NETWORK_USE_MOCK */
+
+#if CONFIG_SERVICE_NETWORK_USE_MOCK
+esp_err_t service_network_wait_sntp_sync(uint32_t timeout_ms)
+{
+    (void)timeout_ms;
+    return ESP_OK;
+}
+#endif
 
 esp_err_t service_network_provisioning_start(network_status_cb_t cb)
 {
@@ -416,12 +463,14 @@ void service_network_get_iso8601_timestamp(char *out_buffer, size_t max_len)
     struct tm timeinfo;
     time(&now);
 
-    if (now < 100000) {
-        snprintf(out_buffer, max_len, "2026-04-07T00:00:00.000Z");
+    /* 未校时时 time 常接近 0：勿再写死旧日期，否则公网按「当前时间±窗口」校验会判「已过期」 */
+    if (now < 1700000000) {
+        snprintf(out_buffer, max_len, "1970-01-01T00:00:01.000Z");
         return;
     }
 
-    localtime_r(&now, &timeinfo);
+    /* 后缀为 Z 表示 UTC，须用 gmtime_r；本地时区已 setenv TZ，但 Z 与 localtime 混用会偏差 */
+    gmtime_r(&now, &timeinfo);
     snprintf(out_buffer, max_len, "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
              timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
              timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);

@@ -41,11 +41,15 @@ interface AIRequest {
   audioData?: string; // base64音频
   text?: string;
   sessionId: string;
+  /** 客房硬件：TTS 输出 16kHz s16le PCM（base64），经 MQTT 下发前再上采样为 32k */
+  hardwarePcmTts?: boolean;
 }
 
 interface AIResponse {
   text: string;
   audioUrl?: string;
+  /** 16kHz s16le mono PCM 的 base64，仅 hardwarePcmTts 时有效 */
+  audioPcmBase64?: string;
   action?: string;
   target?: string;
   response?: string;
@@ -104,9 +108,11 @@ export class AIButlerService {
    * 重新加载环境变量（用于调试）
    */
   public reloadEnv(): void {
-    this.aliyunAccessKey = process.env.ALIYUN_ACCESS_KEY || '';
+    this.aliyunAccessKey = process.env.DASHSCOPE_API_KEY || process.env.ALIYUN_ACCESS_KEY || '';
     logger.info('[AI-Butler] 重新加载环境变量:');
-    logger.info(`  ALIYUN_ACCESS_KEY: ${this.aliyunAccessKey ? this.aliyunAccessKey.substring(0, 10) + '...' : '未设置'}`);
+    logger.info(
+      `  百炼 Key: ${this.aliyunAccessKey ? this.aliyunAccessKey.substring(0, 10) + '...' : '未设置'}`
+    );
   }
 
   // 工具定义（Function Calling）
@@ -383,7 +389,7 @@ export class AIButlerService {
   async speechToText(audioBase64: string): Promise<string> {
     try {
       // 关键修复：在方法调用时重新读取环境变量，确保获取最新值
-      const currentApiKey = process.env.ALIYUN_ACCESS_KEY || '';
+      const currentApiKey = process.env.DASHSCOPE_API_KEY || process.env.ALIYUN_ACCESS_KEY || '';
       
       // 调试：检查API Key
       logger.info(`[speechToText] this.aliyunAccessKey: "${this.aliyunAccessKey}"`);
@@ -564,13 +570,56 @@ export class AIButlerService {
   }
 
   /**
+   * 从百炼 Fun-ASR WebSocket result-generated 的 payload 抽取识别文本（字段因版本可能略有差异）
+   */
+  private extractFunAsrResultText(message: any): string {
+    const out = message?.payload?.output;
+    if (!out) {
+      return '';
+    }
+    const st = out.sentence;
+    if (st && typeof st.text === 'string' && st.text.trim()) {
+      return st.text.trim();
+    }
+    const tr = out.transcription;
+    if (tr && typeof tr.text === 'string' && tr.text.trim()) {
+      return tr.text.trim();
+    }
+    if (typeof out.text === 'string' && out.text.trim()) {
+      return out.text.trim();
+    }
+    if (out.stash && typeof out.stash.text === 'string' && out.stash.text.trim()) {
+      return out.stash.text.trim();
+    }
+    return '';
+  }
+
+  /**
    * 使用WebSocket连接阿里云百炼Fun-ASR实时语音识别
    * 参考文档: https://help.aliyun.com/zh/model-studio/real-time-speech-recognition
    * 认证方式: 通过URL参数传递token
    */
   private recognizeWithFunASR(audioBuffer: Buffer): Promise<string> {
     return new Promise((resolve, reject) => {
-      const fullText: string[] = [];
+      /**
+       * 流式 ASR 官方示例对麦克风流使用 format=pcm 发 s16le 原始帧；本处若用 wav 分片发送，
+       * 服务端对 RIFF 边界的解析易异常，转写会飘或为空 —— 与「肯定是转文字问题」强相关。
+       */
+      let pcmToSend = audioBuffer;
+      if (this.isWavFormat(audioBuffer)) {
+        pcmToSend = this.extractPcmFromWav(audioBuffer);
+      }
+      if (pcmToSend.length < 2 || pcmToSend.length % 2 !== 0) {
+        reject(new Error('Fun-ASR: 无效 16k PCM 长度（需偶数字节）'));
+        return;
+      }
+      const approxMs = Math.round((pcmToSend.length / 2 / 16000) * 1000);
+      logger.info(
+        `[Fun-ASR] 流式输入: PCM s16le mono, ${pcmToSend.length} bytes ≈${approxMs}ms @16k, format=pcm`
+      );
+
+      /** 每轮 result-generated 多为整句当前最佳假设，应取最后一次，避免多段 append 成重复/乱字 */
+      let latestText = '';
       let ws: WebSocket | null = null;
       let isResolved = false;
       let taskStarted = false;
@@ -617,7 +666,7 @@ export class AIButlerService {
               model: 'fun-asr-realtime',
               parameters: {
                 sample_rate: 16000,
-                format: 'wav'
+                format: 'pcm'
               },
               input: {}
             }
@@ -651,28 +700,27 @@ export class AIButlerService {
               case 'task-started':
                 logger.info('Fun-ASR任务已启动，开始发送音频流');
                 taskStarted = true;
-                this.sendAudioStream(ws!, audioBuffer, taskId);
+                this.sendAudioStream(ws!, pcmToSend, taskId);
                 break;
 
-              case 'result-generated':
-                // 打印完整payload以便调试
+              case 'result-generated': {
+                const text = this.extractFunAsrResultText(message);
                 logger.info(`result-generated payload: ${JSON.stringify(message.payload)}`);
-                const text = message.payload?.output?.sentence?.text || '';
                 if (text) {
-                  fullText.push(text);
-                  logger.info(`Fun-ASR识别片段: "${text}"`);
+                  latestText = text;
+                  logger.info(`Fun-ASR识别(当前最佳): "${text}"`);
                 } else {
-                  logger.warn('Fun-ASR result-generated 但 text 为空');
+                  logger.warn('Fun-ASR result-generated 但未能解析出 text，请对照 payload 结构');
                 }
                 break;
+              }
 
               case 'task-finished':
                 logger.info('Fun-ASR任务完成');
                 if (!isResolved) {
                   isResolved = true;
-                  const result = fullText.join('');
-                  logger.info(`百炼Fun-ASR识别成功: "${result}"`);
-                  resolve(result);
+                  logger.info(`百炼Fun-ASR识别成功: "${latestText}"`);
+                  resolve(latestText);
                   ws!.close();
                 }
                 break;
@@ -707,24 +755,27 @@ export class AIButlerService {
         ws.on('close', (code: number, reason: Buffer) => {
           const reasonStr = reason.toString() || '无原因';
           logger.info(`百炼Fun-ASR WebSocket连接已关闭 - 代码: ${code}, 原因: ${reasonStr}`);
-          logger.info(`[DEBUG] close事件触发时 - taskStarted: ${taskStarted}, fullText: [${fullText.join(', ')}]`);
-          
+          logger.info(
+            `[DEBUG] close事件 taskStarted: ${taskStarted} latestText: "${latestText}"`
+          );
+
           if (!isResolved) {
             isResolved = true;
-            
+
             // 1000 = 正常关闭, 1005 = 无状态码, 其他为异常
             if (code === 1007) {
-              reject(new Error(`连接被关闭(1007 Invalid payload data): 请检查音频数据格式或API Key是否正确`));
+              reject(
+                new Error(
+                  `连接被关闭(1007 Invalid payload data): 请检查音频数据格式(建议PCM)或API Key是否正确`
+                )
+              );
             } else if (!taskStarted) {
               reject(new Error(`任务未启动连接已关闭(代码:${code})，未收到任何响应消息`));
+            } else if (latestText) {
+              logger.info(`百炼Fun-ASR识别完成: "${latestText}"`);
+              resolve(latestText);
             } else {
-              const result = fullText.join('');
-              if (result) {
-                logger.info(`百炼Fun-ASR识别完成: "${result}"`);
-                resolve(result);
-              } else {
-                reject(new Error(`WebSocket连接关闭(代码:${code})，未获取到识别结果`));
-              }
+              reject(new Error(`WebSocket连接关闭(代码:${code})，未获取到识别结果`));
             }
           }
         });
@@ -733,10 +784,9 @@ export class AIButlerService {
         const timeoutId = setTimeout(() => {
           if (!isResolved) {
             isResolved = true;
-            const result = fullText.join('');
-            if (result) {
-              logger.info(`百炼Fun-ASR超时但返回结果: "${result}"`);
-              resolve(result);
+            if (latestText) {
+              logger.info(`百炼Fun-ASR超时但返回结果: "${latestText}"`);
+              resolve(latestText);
             } else {
               reject(new Error('百炼Fun-ASR识别超时(60秒)'));
             }
@@ -756,74 +806,88 @@ export class AIButlerService {
   }
 
   /**
-   * 发送音频流
+   * 发送音频流到 Fun-ASR
+   *
+   * 调优：
+   *   - 块大小 3200B = 100ms @16k s16le，与官方推荐一致；
+   *   - 节奏 60ms < 100ms，让服务端总是有「下一块已到」的预读，避免它把短停顿当句末提前出结果；
+   *   - 失败时退避 30ms 再试，连失 3 次直接结束；
+   *   - 全部块发送完毕后立即发 finish-task，不等待 setTimeout，避免最后 100ms 字尾被吞。
    */
   private sendAudioStream(ws: WebSocket, audioBuffer: Buffer, taskId: string): void {
     if (!audioBuffer || audioBuffer.length === 0) {
       logger.error('音频数据为空，无法发送');
       return;
     }
-    
-    const chunkSize = 3200; // 100ms @ 16kHz, 16bit, mono
+
+    const chunkSize = 3200; // 100ms @ 16kHz mono s16le
+    /** 比 100ms 略快，让 Fun-ASR 始终有 backpressure，识别更稳 */
+    const sendIntervalMs = 60;
     let offset = 0;
     let chunkCount = 0;
-    
-    logger.info(`[音频发送] 总大小: ${audioBuffer.length} bytes, chunkSize: ${chunkSize}`);
+    let consecutiveErrors = 0;
 
-    const sendNextChunk = () => {
-      if (ws.readyState !== WebSocket.OPEN) {
-        logger.warn(`WebSocket连接已关闭，停止发送音频`);
-        return;
-      }
+    logger.info(`[Fun-ASR 上行] 总大小: ${audioBuffer.length} bytes, chunkSize=${chunkSize}, 间隔=${sendIntervalMs}ms`);
 
-      if (offset < audioBuffer.length) {
-        const endOffset = Math.min(offset + chunkSize, audioBuffer.length);
-        const chunk = audioBuffer.slice(offset, endOffset);
-        
-        if (chunk.length === 0) {
-          logger.warn('音频块为空，跳过');
-          offset += chunkSize;
-          setTimeout(sendNextChunk, 100);
-          return;
-        }
-        
-        try {
-          ws.send(chunk);
-          chunkCount++;
-          offset += chunk.length;
-          
-          // 每5个块记录一次
-          if (chunkCount % 5 === 0) {
-            logger.debug(`已发送 ${chunkCount} 块, 进度: ${offset}/${audioBuffer.length}`);
-          }
-          
-          setTimeout(sendNextChunk, 100);
-        } catch (error) {
-          logger.error('发送音频块失败:', error);
-        }
-      } else {
-        logger.info(`音频流发送完成，共 ${chunkCount} 个块，发送finish-task`);
-        try {
-          const finishTaskMessage = {
-            header: {
-              action: 'finish-task',
-              task_id: taskId,
-              streaming: 'duplex'
-            },
-            payload: {
-              input: {}
-            }
-          };
-          ws.send(JSON.stringify(finishTaskMessage));
-          logger.debug('finish-task已发送');
-        } catch (error) {
-          logger.error('发送finish-task失败:', error);
-        }
+    const sendFinish = () => {
+      try {
+        const finishTaskMessage = {
+          header: {
+            action: 'finish-task',
+            task_id: taskId,
+            streaming: 'duplex'
+          },
+          payload: { input: {} }
+        };
+        ws.send(JSON.stringify(finishTaskMessage));
+        logger.info(`[Fun-ASR 上行] 已发完 ${chunkCount} 块，已发送 finish-task`);
+      } catch (error) {
+        logger.error('发送 finish-task 失败:', error);
       }
     };
 
-    // 开始发送音频
-    logger.info(`开始发送音频流，总大小: ${audioBuffer.length} 字节`);
+    const sendNextChunk = () => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        logger.warn('WebSocket 已关闭，停止发送音频');
+        return;
+      }
+
+      if (offset >= audioBuffer.length) {
+        sendFinish();
+        return;
+      }
+
+      const endOffset = Math.min(offset + chunkSize, audioBuffer.length);
+      const chunk = audioBuffer.subarray(offset, endOffset);
+
+      try {
+        ws.send(chunk);
+        chunkCount++;
+        offset += chunk.length;
+        consecutiveErrors = 0;
+
+        if (chunkCount % 10 === 0) {
+          logger.debug(`[Fun-ASR 上行] 已发送 ${chunkCount} 块, 进度: ${offset}/${audioBuffer.length}`);
+        }
+
+        // 最后一块直接立刻发 finish-task，不再 setTimeout 60ms 等
+        if (offset >= audioBuffer.length) {
+          sendFinish();
+        } else {
+          setTimeout(sendNextChunk, sendIntervalMs);
+        }
+      } catch (error) {
+        consecutiveErrors++;
+        logger.error(`发送音频块失败 (${consecutiveErrors}/3):`, error);
+        if (consecutiveErrors >= 3) {
+          logger.error('Fun-ASR 上行连续失败 3 次，放弃本次会话');
+          try { ws.close(); } catch { /* ignore */ }
+          return;
+        }
+        setTimeout(sendNextChunk, 30);
+      }
+    };
+
     sendNextChunk();
   }
 
@@ -1227,6 +1291,33 @@ export class AIButlerService {
   }
 
   /**
+   * 硬件播放用：16kHz s16le mono PCM（Buffer），优先超拟人 raw，失败则 TTS v2 raw
+   */
+  async textToSpeechPcmS16k(text: string): Promise<Buffer> {
+    const cleanText = this.cleanTextForTTS(text);
+    if (!cleanText.trim()) {
+      return Buffer.alloc(0);
+    }
+    try {
+      const buf = await this.superHumanTTSPcm(cleanText);
+      if (buf && buf.length > 0) {
+        return buf;
+      }
+    } catch (e: any) {
+      logger.warn('⚠️ 超拟人 PCM TTS 失败，降级 TTS v2:', e.message);
+    }
+    try {
+      const buf = await this.ttsV2Pcm(cleanText);
+      if (buf && buf.length > 0) {
+        return buf;
+      }
+    } catch (e: any) {
+      logger.error('❌ TTS v2 PCM 也失败:', e.message);
+    }
+    return Buffer.alloc(0);
+  }
+
+  /**
    * 超拟人语音合成
    */
   private async superHumanTTS(text: string): Promise<string> {
@@ -1427,19 +1518,237 @@ export class AIButlerService {
   }
 
   /**
+   * 超拟人：输出 raw PCM 16kHz s16le mono
+   */
+  private async superHumanTTSPcm(text: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const url = 'wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6';
+        const host = 'cbm01.cn-huabei-1.xf-yun.com';
+        const path = '/v1/private/mcd9m97e6';
+        const date = new Date().toUTCString();
+
+        const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
+        const signatureSha = crypto
+          .createHmac('sha256', this.xfyunApiSecret)
+          .update(signatureOrigin)
+          .digest('base64');
+        const authorizationOrigin = `api_key="${this.xfyunApiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
+        const authorization = Buffer.from(authorizationOrigin).toString('base64');
+
+        const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
+
+        const ws = new WebSocket(wsUrl);
+        const audioChunks: Buffer[] = [];
+        let isResolved = false;
+
+        ws.on('open', () => {
+          const request = {
+            header: { app_id: this.xfyunAppId, status: 2 },
+            parameter: {
+              oral: { oral_level: 'mid', spark_assist: 0, stop_split: 1, remain: 1 },
+              tts: {
+                vcn: 'x5_lingyuzhao_flow',
+                speed: 50, volume: 50, pitch: 50, bgs: 0, reg: 0, rdn: 0,
+                audio: { encoding: 'raw', sample_rate: 16000, channels: 1, bit_depth: 16 }
+              }
+            },
+            payload: {
+              text: { encoding: 'utf8', compress: 'raw', format: 'plain', status: 2, seq: 0, text: Buffer.from(text).toString('base64') }
+            }
+          };
+          ws.send(JSON.stringify(request));
+        });
+
+        ws.on('message', (data: WebSocket.Data) => {
+          try {
+            const response = JSON.parse(data.toString());
+
+            if (response.header && response.header.code !== undefined && response.header.code !== 0) {
+              if (!isResolved) {
+                isResolved = true;
+                reject(new Error(`${response.header.code}`));
+              }
+              return;
+            }
+
+            if (response.payload && response.payload.audio && response.payload.audio.audio) {
+              audioChunks.push(Buffer.from(response.payload.audio.audio, 'base64'));
+            }
+
+            if (response.header && response.header.status === 2) {
+              if (!isResolved) {
+                isResolved = true;
+                if (audioChunks.length > 0) {
+                  resolve(Buffer.concat(audioChunks as Uint8Array[]));
+                } else {
+                  reject(new Error('无音频数据'));
+                }
+              }
+              ws.close();
+            }
+          } catch (e) { /* ignore */ }
+        });
+
+        ws.on('error', (error) => {
+          if (!isResolved) {
+            isResolved = true;
+            reject(error);
+          }
+        });
+
+        ws.on('close', () => {
+          if (!isResolved) {
+            isResolved = true;
+            if (audioChunks.length > 0) {
+              resolve(Buffer.concat(audioChunks as Uint8Array[]));
+            } else {
+              reject(new Error('连接关闭无数据'));
+            }
+          }
+        });
+
+        setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            ws.close();
+            reject(new Error('超时'));
+          }
+        }, 20000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * TTS v2：输出 raw PCM 16kHz
+   */
+  private async ttsV2Pcm(text: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const url = 'wss://tts-api.xfyun.cn/v2/tts';
+        const host = 'tts-api.xfyun.cn';
+        const tpath = '/v2/tts';
+        const date = new Date().toUTCString();
+
+        const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${tpath} HTTP/1.1`;
+        const signatureSha = crypto
+          .createHmac('sha256', this.xfyunApiSecret)
+          .update(signatureOrigin)
+          .digest('base64');
+        const authorizationOrigin = `api_key="${this.xfyunApiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
+        const authorization = Buffer.from(authorizationOrigin).toString('base64');
+
+        const wsUrl = `${url}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${host}`;
+
+        const ws = new WebSocket(wsUrl);
+        const audioChunks: Buffer[] = [];
+        let isResolved = false;
+
+        ws.on('open', () => {
+          const request = {
+            common: { app_id: this.xfyunAppId },
+            business: {
+              aue: 'raw',
+              auf: 'audio/L16;rate=16000',
+              vcn: 'xiaoyan',
+              speed: 50, volume: 50, pitch: 50,
+              bgs: 0,
+              tte: 'UTF8',
+              reg: '2',
+              rdn: '0'
+            },
+            data: { text: Buffer.from(text).toString('base64'), status: 2 }
+          };
+          ws.send(JSON.stringify(request));
+        });
+
+        ws.on('message', (data: WebSocket.Data) => {
+          try {
+            const response = JSON.parse(data.toString());
+
+            if (response.code !== undefined && response.code !== 0) {
+              if (!isResolved) {
+                isResolved = true;
+                reject(new Error(`${response.code}`));
+              }
+              return;
+            }
+
+            if (response.data && response.data.audio) {
+              audioChunks.push(Buffer.from(response.data.audio, 'base64'));
+            }
+
+            if (response.data && response.data.status === 2) {
+              if (!isResolved) {
+                isResolved = true;
+                if (audioChunks.length > 0) {
+                  resolve(Buffer.concat(audioChunks as Uint8Array[]));
+                } else {
+                  reject(new Error('无音频数据'));
+                }
+              }
+              ws.close();
+            }
+          } catch (e) { /* ignore */ }
+        });
+
+        ws.on('error', (error) => {
+          if (!isResolved) {
+            isResolved = true;
+            reject(error);
+          }
+        });
+
+        ws.on('close', () => {
+          if (!isResolved) {
+            isResolved = true;
+            if (audioChunks.length > 0) {
+              resolve(Buffer.concat(audioChunks as Uint8Array[]));
+            } else {
+              reject(new Error('连接关闭无数据'));
+            }
+          }
+        });
+
+        setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            ws.close();
+            reject(new Error('超时'));
+          }
+        }, 20000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * 处理AI管家请求（完整流程，支持Function Calling）
    */
   async processRequest(request: AIRequest): Promise<AIResponse> {
-    const { roomId, audioData, text, sessionId } = request;
+    const { roomId, audioData, text, sessionId, hardwarePcmTts = false } = request;
 
     // 1. 验证入住状态
     let session = this.sessions.get(roomId);
     if (!session) {
       session = await this.verifyGuestAccess(roomId);
       if (!session) {
+        const denyText = '抱歉，该房间暂无入住记录，无法使用AI管家服务。如需帮助，请直接联系前台。';
+        let audioPcmBase64: string | undefined;
+        if (hardwarePcmTts) {
+          const b = await this.textToSpeechPcmS16k(denyText);
+          if (b.length) {
+            audioPcmBase64 = b.toString('base64');
+          }
+        }
         return {
-          text: '抱歉，该房间暂无入住记录，无法使用AI管家服务。如需帮助，请直接联系前台。',
-          action: 'unauthorized'
+          text: denyText,
+          action: 'unauthorized',
+          audioUrl: '',
+          audioPcmBase64
         };
       }
     }
@@ -1454,10 +1763,36 @@ export class AIButlerService {
       }
 
       if (!userText.trim()) {
+        let approxMs: number | undefined;
+        if (audioData) {
+          try {
+            const pcmBytes = Buffer.from(audioData, 'base64').length;
+            approxMs = Math.round((pcmBytes / 2 / 16000) * 1000);
+          } catch {
+            /* ignore */
+          }
+        }
+        logger.warn(
+          `[AI管家] ASR 无有效文本（未走知识库/大模型，仅因识别结果为空）roomId=${roomId} raw=${JSON.stringify(
+            recognizedText
+          )}${approxMs != null ? ` ~${approxMs}ms@16k` : ''}`
+        );
+        const emptyHint = '抱歉，我没有听清楚，请再说一遍。';
+        let audioUrl = '';
+        let audioPcmBase64: string | undefined;
+        if (hardwarePcmTts) {
+          const b = await this.textToSpeechPcmS16k(emptyHint);
+          if (b.length) {
+            audioPcmBase64 = b.toString('base64');
+          }
+        } else {
+          audioUrl = (await this.textToSpeech(emptyHint)) || '';
+        }
         return {
-          text: '抱歉，我没有听清楚，请再说一遍。',
-          audioUrl: '',
-          recognizedText: recognizedText // 返回原始识别结果供前端显示
+          text: emptyHint,
+          audioUrl,
+          audioPcmBase64,
+          recognizedText: recognizedText
         };
       }
 
@@ -1524,15 +1859,24 @@ export class AIButlerService {
         
         // 5. 将最终文本转为语音
         let audioBase64 = '';
+        let audioPcmBase64: string | undefined;
         try {
-          audioBase64 = await this.textToSpeech(finalContent);
-        } catch (ttsError) {
+          if (hardwarePcmTts) {
+            const b = await this.textToSpeechPcmS16k(finalContent);
+            if (b.length) {
+              audioPcmBase64 = b.toString('base64');
+            }
+          } else {
+            audioBase64 = await this.textToSpeech(finalContent);
+          }
+        } catch (ttsError: any) {
           logger.warn('TTS合成失败:', ttsError.message);
         }
 
         return {
           text: finalContent,
           audioUrl: audioBase64,
+          audioPcmBase64,
           action: llmResult.tool_calls[0].function.name,
           ticketData: ticketData,
           hotelName: session.hotelName,
@@ -1544,9 +1888,17 @@ export class AIButlerService {
       
       // 5. 将回复文本转为语音
       let audioBase64 = '';
+      let audioPcmBase64: string | undefined;
       try {
-        audioBase64 = await this.textToSpeech(aiReply);
-      } catch (ttsError) {
+        if (hardwarePcmTts) {
+          const b = await this.textToSpeechPcmS16k(aiReply);
+          if (b.length) {
+            audioPcmBase64 = b.toString('base64');
+          }
+        } else {
+          audioBase64 = await this.textToSpeech(aiReply);
+        }
+      } catch (ttsError: any) {
         logger.warn('TTS合成失败:', ttsError.message);
       }
 
@@ -1558,18 +1910,36 @@ export class AIButlerService {
       return {
         text: cleanText,
         audioUrl: audioBase64,
+        audioPcmBase64,
         action,
         target,
         hotelName: session.hotelName,
         recognizedText: recognizedText
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('AI管家处理请求失败:', error.message);
+      const errText = '抱歉，服务暂时不可用，为您转接前台。';
+      let audioPcmBase64: string | undefined;
+      let audioUrl = '';
+      try {
+        if (hardwarePcmTts) {
+          const b = await this.textToSpeechPcmS16k(errText);
+          if (b.length) {
+            audioPcmBase64 = b.toString('base64');
+          }
+        } else {
+          audioUrl = (await this.textToSpeech(errText)) || '';
+        }
+      } catch (e) {
+        /* 忽略 TTS 失败 */
+      }
       return {
-        text: '抱歉，服务暂时不可用，为您转接前台。',
+        text: errText,
         action: 'transfer',
         target: 'front_desk',
-        recognizedText: recognizedText
+        recognizedText: recognizedText,
+        audioUrl: audioUrl || undefined,
+        audioPcmBase64
       };
     }
   }

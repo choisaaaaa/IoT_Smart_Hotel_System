@@ -10,6 +10,7 @@
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
+    "seed:ai-guest": "node scripts/ensure-room-301-ai-guest.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

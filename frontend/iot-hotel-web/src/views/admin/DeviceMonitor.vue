@@ -278,7 +278,7 @@
 
           <a-divider>模拟指令下发</a-divider>
           <div class="simulation-tools">
-            <a-button-group vertical block>
+            <div class="simulation-command-list">
               <a-button v-for="sim in simulationCommands" :key="sim.label" @click="sendSimulationCommand(sim)">
                 {{ sim.label }}
               </a-button>
@@ -297,6 +297,22 @@
 
         <!-- Main: Message Logs -->
         <div class="terminal-main">
+          <div class="runtime-status-panel">
+            <div class="status-title">客房实时状态</div>
+            <div class="status-grid">
+              <div class="status-item"><span>设备ID</span><b>{{ currentDebug.deviceId || '--' }}</b></div>
+              <div class="status-item"><span>在线状态</span><b>{{ debugRuntime.online ? '在线' : '离线' }}</b></div>
+              <div class="status-item"><span>最近上报</span><b>{{ debugRuntime.lastUpdateText }}</b></div>
+              <div class="status-item"><span>命令回执</span><b>{{ debugRuntime.lastCommandResult }}</b></div>
+              <div class="status-item"><span>温度</span><b>{{ debugRuntime.temperature }}</b></div>
+              <div class="status-item"><span>湿度</span><b>{{ debugRuntime.humidity }}</b></div>
+              <div class="status-item"><span>烟雾</span><b>{{ debugRuntime.smoke }}</b></div>
+              <div class="status-item"><span>光照</span><b>{{ debugRuntime.light }}</b></div>
+              <div class="status-item"><span>空调设定</span><b>{{ debugRuntime.acTarget }}</b></div>
+              <div class="status-item"><span>灯光亮度</span><b>{{ debugRuntime.brightness }}</b></div>
+              <div class="status-item"><span>音量</span><b>{{ debugRuntime.volume }}</b></div>
+            </div>
+          </div>
           <div class="terminal-header">
             <span class="title"><HistoryOutlined /> 通信日志流水</span>
             <a-space>
@@ -541,9 +557,17 @@ const currentDebug = reactive({
   deviceName: '',
   deviceType: ''
 })
-const customMqtt = reactive({
-  topic: '',
-  payload: ''
+const debugRuntime = reactive({
+  online: false,
+  lastUpdateText: '--',
+  lastCommandResult: '--',
+  temperature: '--',
+  humidity: '--',
+  smoke: '--',
+  light: '--',
+  acTarget: '--',
+  brightness: '--',
+  volume: '--'
 })
 
 const simulationCommands = computed(() => {
@@ -555,23 +579,23 @@ const simulationCommands = computed(() => {
     
   if (type === 'room') {
     return [
-      { label: '💡 开灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light', command_value: 'on' } },
-      { label: '💡 关灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light', command_value: 'off' } },
-      { label: '🚪 开锁', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'door', command_value: 'unlock' } },
-      { label: '🚪 上锁', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'door', command_value: 'lock' } },
-      { label: '🌙 睡眠模式', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'sleep', device_id: `room_${roomId}` } },
-      { label: '👋 欢迎模式', topic: `hotel/room/${roomId}/scene`, payload: { scene: 'welcome', device_id: `room_${roomId}` } },
-      { label: '📞 模拟来电', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'incoming_call', call_id: `call_${Date.now()}`, broadcast_text: '前台呼叫' } }
+      { label: '💡 开灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light_on' } },
+      { label: '💡 关灯', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'light_off' } },
+      { label: '🎚️ 亮度调大', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_light_brightness', command_delta: 10, command_direction: 'up' } },
+      { label: '🎚️ 亮度调小', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_light_brightness', command_delta: 10, command_direction: 'down' } },
+      { label: '🌡️ 空调温度调大', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_ac_temp', command_delta: 1, command_direction: 'up' } },
+      { label: '🌡️ 空调温度调小', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_ac_temp', command_delta: 1, command_direction: 'down' } },
+      { label: '🔊 音量调大', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_volume', command_delta: 5, command_direction: 'up' } },
+      { label: '🔊 音量调小', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'set_volume', command_delta: 5, command_direction: 'down' } },
+      { label: '🚨 广播警报', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'broadcast_alarm' } },
+      { label: '🌙 睡眠场景', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'scene_sleep' } },
+      { label: '👋 欢迎场景', topic: `hotel/device/command/room/room_${roomId}`, payload: { device_id: `room_${roomId}`, command_type: 'scene_welcome' } }
     ]
   } else if (type === 'floor') {
     return [
-      { label: '💡 走廊照明-开', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light', command_value: 'on' } },
-      { label: '💡 走廊照明-关', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light', command_value: 'off' } },
-      { label: '📢 开始广播', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'broadcast_start' } },
-      { label: '🔇 停止广播', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'broadcast_stop' } },
-      { label: '🚨 触发消防报警', topic: `hotel/security/event`, payload: { device_id: deviceId, event_type: 'fire_alarm', level: 'critical', data: { floor_id: roomId, message: '消防报警测试' } } },
-      { label: '✅ 确认报警', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_ack' } },
-      { label: '🔄 复位报警', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_reset' } },
+      { label: '💡 走廊照明-开', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light_on' } },
+      { label: '💡 走廊照明-关', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'light_off' } },
+      { label: '🚨 广播警报', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'broadcast_alarm' } },
       { label: '🔄 系统复位', topic: `hotel/device/command/floor/${deviceId}`, payload: { device_id: deviceId, command_type: 'floor_reset' } }
     ]
   } else if (type === 'front_desk') {
@@ -581,8 +605,8 @@ const simulationCommands = computed(() => {
       { label: '🔍 验卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
       { label: '📟 刷卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'swipe_card' } },
       { label: '🗑️ 退卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'revoke', room_number: '301' } } },
-      { label: '📞 广播呼叫301', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'incoming_call', call_id: `call_${Date.now()}`, broadcast_text: '前台呼叫房间301' } },
-      { label: '🔇 挂断通话', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'hangup_call', call_id: 'call_latest' } }
+      { label: '🚨 前台报警', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_trigger' } },
+      { label: '🚨 301 广播警报', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'broadcast_alarm' } }
     ]
   }
   return []
@@ -597,6 +621,7 @@ function openDebugTerminal(device: any) {
   })
   debugTerminalVisible.value = true
   fetchMqttLogs()
+  fetchDebugRuntimeStatus()
   logTimer.value = setInterval(() => fetchMqttLogs(), 3000)
 }
 
@@ -612,6 +637,8 @@ async function fetchMqttLogs(isManual = false) {
     })
     if (res.success) {
       mqttLogs.value = res.data
+      hydrateLastCommandResult()
+      hydrateRuntimeFromLogs()
       if (autoScroll.value && logContainerRef.value) {
         setTimeout(() => {
           logContainerRef.value!.scrollTop = logContainerRef.value!.scrollHeight
@@ -633,12 +660,7 @@ function formatPayload(p: any) {
 
 async function sendSimulationCommand(sim: any) {
   try {
-    // 添加时间戳和命令ID
-    const payload = {
-      ...sim.payload,
-      timestamp: new Date().toISOString(),
-      command_id: Date.now()
-    }
+    const payload = buildRealSimulationPayload(sim)
     
     await request.post('/mqtt/send', {
       topic: sim.topic,
@@ -852,12 +874,37 @@ function viewData(device: any) {
   fetchSensorData(device.id)
 }
 
+// 实时数据弹窗：只展示"近期还在更新"的 sensor_type。超过该阈值未更新的
+// 字段视为旧固件遗留（如楼控换掉雨棚后，数据库里仍残留的 canopy_angle_deg /
+// rain_detected / human_present / light_adc 等），直接从卡片里隐藏，
+// 不会污染界面。硬件正常上报周期一般在分钟级以内，10 分钟阈值足够宽松。
+const STALE_SENSOR_THRESHOLD_MS = 10 * 60 * 1000
+
+// 明确废弃的 sensor_type（对应硬件上已经砍掉、不再做的功能），
+// 无视更新时间一律不展示；避免 10 分钟阈值内还显示残留数据的尴尬。
+const DEPRECATED_SENSOR_TYPES: ReadonlySet<string> = new Set([
+  'canopy_angle_deg',  // 楼控雨棚角度（已砍掉雨棚功能）
+  'rain_detected',     // 楼控雨感（已砍掉雨棚功能）
+  'light_adc',         // 旧命名，统一改为 light
+  'air_quality_adc',   // 旧命名，统一改为 smoke
+  'noise_level',       // 硬件未装噪音传感器
+  'pm25'               // 硬件未装 PM2.5 传感器
+])
+
 async function fetchSensorData(deviceId: number) {
   sensorLoading.value = true
   try {
     const res: any = await request.get(`/devices/${deviceId}/sensor-data/latest`)
     if (res && res.success && Array.isArray(res.data)) {
-      sensorData.value = res.data
+      const now = Date.now()
+      sensorData.value = res.data.filter((s: any) => {
+        if (!s?.sensor_type) return false
+        if (DEPRECATED_SENSOR_TYPES.has(s.sensor_type)) return false
+        if (!s.created_at) return false
+        const t = new Date(s.created_at).getTime()
+        if (Number.isNaN(t)) return false
+        return now - t <= STALE_SENSOR_THRESHOLD_MS
+      })
     } else {
       sensorData.value = []
     }
@@ -872,6 +919,11 @@ function getSensorTypeName(type: string): string {
   const map: Record<string, string> = {
     temperature: '温度',
     humidity: '湿度',
+    smoke: '烟雾(ADC)',
+    light: '光照(ADC)',
+    ntc_temp_c: '热敏温度',
+    human_present: '人体感应',
+    air_quality_adc: 'MQ2 烟雾(ADC)',
     smoke_level: '烟雾浓度',
     light_level: '光照强度',
     noise_level: '噪音',
@@ -1078,12 +1130,52 @@ onMounted(() => {
 .mini-info .name { font-weight: 600; font-size: 13px; }
 
 .simulation-tools { flex: 1; overflow-y: auto; }
+.simulation-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 .small-label { font-size: 12px; color: #8c8c8c; margin-bottom: 8px; }
 
 .terminal-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+.runtime-status-panel {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafcff;
+}
+
+.status-title {
+  font-weight: 600;
+  color: #2f54eb;
+  margin-bottom: 8px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.status-item {
+  background: #fff;
+  border: 1px solid #eef2ff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.status-item span {
+  color: #8c8c8c;
 }
 
 .terminal-header {
