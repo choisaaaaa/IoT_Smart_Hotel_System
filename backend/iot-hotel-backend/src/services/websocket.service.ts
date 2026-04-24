@@ -552,25 +552,35 @@ class WebSocketService {
       }) => {
         let { target_type, target_id, offer, call_id } = data;
         
+        // 关键修复：保存原始的target_id（房号），用于WebSocket房间名
+        const originalTargetId = target_id;
+        let dbRoomId = target_id; // 数据库ID，用于硬件设备
+        let roomNumber = ''; // 房号，用于WebSocket房间名
+        
         if (target_type === 'room') {
           const [roomRows] = await pool.query<RowDataPacket[]>(
-            'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+            'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
             [target_id, target_id]
           );
           if (roomRows.length > 0) {
-            target_id = String(roomRows[0].id);
+            dbRoomId = String(roomRows[0].id);
+            roomNumber = roomRows[0].room_number; // 获取房号
           }
         }
         
-        logger.info(`[WebRTC] 收到Offer: ${socket.id} -> ${target_type}_${target_id}, call_id: ${call_id}`);
+        // 对于房间类型，优先使用房号进行WebSocket通信（与前端注册保持一致）
+        const wsTargetId = target_type === 'room' && roomNumber ? roomNumber : target_id;
+        
+        logger.info(`[WebRTC] 收到Offer: ${socket.id} -> ${target_type}_${originalTargetId}, call_id: ${call_id}, 房号: ${roomNumber}, DB_ID: ${dbRoomId}`);
         
         if (target_type === 'room') {
-          // 检查房间是否有WebSocket客户端在线
+          // 关键修复：使用房号检查房间是否有WebSocket客户端在线（与前端注册保持一致）
           const roomClients = Array.from(this.clients.entries()).filter(
-            ([_, client]) => client.clientType === 'room' && client.clientId === target_id
+            ([_, client]) => client.clientType === 'room' && 
+              (client.clientId === roomNumber || client.clientId === dbRoomId || client.clientId === originalTargetId)
           );
           
-          logger.info(`[WebRTC] 房间${target_id}的WebSocket客户端数量: ${roomClients.length}`);
+          logger.info(`[WebRTC] 房间${roomNumber || dbRoomId}的WebSocket客户端数量: ${roomClients.length}`);
           
           // 打印所有已注册的客户端，用于调试
           const allClients = Array.from(this.clients.entries()).map(([id, client]) => ({
@@ -582,8 +592,8 @@ class WebSocketService {
           logger.info(`[WebRTC] 所有已注册客户端: ${JSON.stringify(allClients)}`);
           
           if (roomClients.length > 0) {
-            // 通过WebSocket转发给房间的Web端
-            const targetRoom = `room_${target_id}`;
+            // 关键修复：使用房号构建WebSocket房间名（与前端注册保持一致）
+            const targetRoom = `room_${roomNumber || dbRoomId}`;
             this.io?.to(targetRoom).emit('webrtc_offer', {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
@@ -591,17 +601,29 @@ class WebSocketService {
               call_id: call_id
             });
             logger.info(`[WebRTC] Offer通过WebSocket发送给房间: ${targetRoom}`);
+            
+            // 同时发送到数据库ID格式的房间（兼容使用ID注册的设备）
+            if (roomNumber && roomNumber !== dbRoomId) {
+              const dbTargetRoom = `room_${dbRoomId}`;
+              this.io?.to(dbTargetRoom).emit('webrtc_offer', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                offer: offer,
+                call_id: call_id
+              });
+              logger.info(`[WebRTC] Offer同时发送到数据库ID房间: ${dbTargetRoom}`);
+            }
           } else {
-            // 通过MQTT转发给硬件
+            // 通过MQTT转发给硬件（使用数据库ID）
             mqttService.publish(`hotel/call/signaling/${call_id}`, {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
               type: 'offer',
               offer: offer,
               target_type: 'room',
-              target_id: target_id
+              target_id: dbRoomId
             });
-            logger.info(`[WebRTC] Offer通过MQTT发送给硬件房间: ${target_id}`);
+            logger.info(`[WebRTC] Offer通过MQTT发送给硬件房间: ${dbRoomId}`);
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
           // 集体呼叫模式：广播给当前酒店的所有在线前台
@@ -618,7 +640,7 @@ class WebSocketService {
           });
         } else {
           // 否则通过 WebSocket 转发
-          this.io?.to(`${target_type}_${target_id}`).emit('webrtc_offer', {
+          this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_offer', {
             from_type: this.clients.get(socket.id)?.clientType,
             from_id: this.clients.get(socket.id)?.clientId,
             offer: offer,
@@ -635,44 +657,67 @@ class WebSocketService {
       }) => {
         let { target_type, target_id, answer, call_id } = data;
 
+        // 关键修复：保存原始的target_id（房号），用于WebSocket房间名
+        const originalTargetId = target_id;
+        let dbRoomId = target_id; // 数据库ID，用于硬件设备
+        let roomNumber = ''; // 房号，用于WebSocket房间名
+
         if (target_type === 'room') {
           const [roomRows] = await pool.query<RowDataPacket[]>(
-            'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+            'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
             [target_id, target_id]
           );
           if (roomRows.length > 0) {
-            target_id = String(roomRows[0].id);
+            dbRoomId = String(roomRows[0].id);
+            roomNumber = roomRows[0].room_number; // 获取房号
           }
         }
 
-        logger.info(`转发 WebRTC Answer: ${socket.id} -> ${target_type}_${target_id}`);
+        // 对于房间类型，优先使用房号进行WebSocket通信（与前端注册保持一致）
+        const wsTargetId = target_type === 'room' && roomNumber ? roomNumber : target_id;
+
+        logger.info(`转发 WebRTC Answer: ${socket.id} -> ${target_type}_${originalTargetId}, 房号: ${roomNumber}, DB_ID: ${dbRoomId}`);
         
         if (target_type === 'room') {
-          // 检查房间是否有WebSocket客户端在线
+          // 关键修复：使用房号检查房间是否有WebSocket客户端在线（与前端注册保持一致）
           const roomClients = Array.from(this.clients.entries()).filter(
-            ([_, client]) => client.clientType === 'room' && client.clientId === target_id
+            ([_, client]) => client.clientType === 'room' && 
+              (client.clientId === roomNumber || client.clientId === dbRoomId || client.clientId === originalTargetId)
           );
           
           if (roomClients.length > 0) {
-            // 通过WebSocket转发给房间的Web端
-            this.io?.to(`room_${target_id}`).emit('webrtc_answer', {
+            // 关键修复：使用房号构建WebSocket房间名（与前端注册保持一致）
+            const targetRoom = `room_${roomNumber || dbRoomId}`;
+            this.io?.to(targetRoom).emit('webrtc_answer', {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
               answer: answer,
               call_id: call_id
             });
-            logger.info(`WebRTC Answer通过WebSocket发送给房间: room_${target_id}`);
+            logger.info(`WebRTC Answer通过WebSocket发送给房间: ${targetRoom}`);
+            
+            // 同时发送到数据库ID格式的房间（兼容使用ID注册的设备）
+            if (roomNumber && roomNumber !== dbRoomId) {
+              const dbTargetRoom = `room_${dbRoomId}`;
+              this.io?.to(dbTargetRoom).emit('webrtc_answer', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                answer: answer,
+                call_id: call_id
+              });
+              logger.info(`WebRTC Answer同时发送到数据库ID房间: ${dbTargetRoom}`);
+            }
           } else {
-            // 通过MQTT转发给硬件
+            // 通过MQTT转发给硬件（使用数据库ID）
             mqttService.publish(`hotel/call/signaling/${call_id}`, {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
               type: 'answer',
               answer: answer,
               target_type: 'room',
-              target_id: target_id
+              target_id: dbRoomId
             });
-            logger.info(`WebRTC Answer通过MQTT发送给硬件房间: ${target_id}`);
+            logger.info(`WebRTC Answer通过MQTT发送给硬件房间: ${dbRoomId}`);
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
           // 集体呼叫模式：广播给当前酒店的所有在线前台
@@ -688,7 +733,7 @@ class WebSocketService {
             }
           });
         } else {
-          this.io?.to(`${target_type}_${target_id}`).emit('webrtc_answer', {
+          this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_answer', {
             from_type: this.clients.get(socket.id)?.clientType,
             from_id: this.clients.get(socket.id)?.clientId,
             answer: answer,
@@ -705,39 +750,61 @@ class WebSocketService {
       }) => {
         let { target_type, target_id, candidate, call_id } = data;
 
+        // 关键修复：保存原始的target_id（房号），用于WebSocket房间名
+        const originalTargetId = target_id;
+        let dbRoomId = target_id; // 数据库ID，用于硬件设备
+        let roomNumber = ''; // 房号，用于WebSocket房间名
+
         if (target_type === 'room') {
           const [roomRows] = await pool.query<RowDataPacket[]>(
-            'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+            'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
             [target_id, target_id]
           );
           if (roomRows.length > 0) {
-            target_id = String(roomRows[0].id);
+            dbRoomId = String(roomRows[0].id);
+            roomNumber = roomRows[0].room_number; // 获取房号
           }
         }
 
+        // 对于房间类型，优先使用房号进行WebSocket通信（与前端注册保持一致）
+        const wsTargetId = target_type === 'room' && roomNumber ? roomNumber : target_id;
+
         if (target_type === 'room') {
-          // 检查房间是否有WebSocket客户端在线
+          // 关键修复：使用房号检查房间是否有WebSocket客户端在线（与前端注册保持一致）
           const roomClients = Array.from(this.clients.entries()).filter(
-            ([_, client]) => client.clientType === 'room' && client.clientId === target_id
+            ([_, client]) => client.clientType === 'room' && 
+              (client.clientId === roomNumber || client.clientId === dbRoomId || client.clientId === originalTargetId)
           );
           
           if (roomClients.length > 0) {
-            // 通过WebSocket转发给房间的Web端
-            this.io?.to(`room_${target_id}`).emit('webrtc_ice_candidate', {
+            // 关键修复：使用房号构建WebSocket房间名（与前端注册保持一致）
+            const targetRoom = `room_${roomNumber || dbRoomId}`;
+            this.io?.to(targetRoom).emit('webrtc_ice_candidate', {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
               candidate: candidate,
               call_id: call_id
             });
+            
+            // 同时发送到数据库ID格式的房间（兼容使用ID注册的设备）
+            if (roomNumber && roomNumber !== dbRoomId) {
+              const dbTargetRoom = `room_${dbRoomId}`;
+              this.io?.to(dbTargetRoom).emit('webrtc_ice_candidate', {
+                from_type: this.clients.get(socket.id)?.clientType,
+                from_id: this.clients.get(socket.id)?.clientId,
+                candidate: candidate,
+                call_id: call_id
+              });
+            }
           } else {
-            // 通过MQTT转发给硬件
+            // 通过MQTT转发给硬件（使用数据库ID）
             mqttService.publish(`hotel/call/signaling/${call_id}`, {
               from_type: this.clients.get(socket.id)?.clientType,
               from_id: this.clients.get(socket.id)?.clientId,
               type: 'ice_candidate',
               candidate: candidate,
               target_type: 'room',
-              target_id: target_id
+              target_id: dbRoomId
             });
           }
         } else if (target_type === 'front_desk' && target_id === 'all') {
@@ -754,7 +821,7 @@ class WebSocketService {
             }
           });
         } else {
-          this.io?.to(`${target_type}_${target_id}`).emit('webrtc_ice_candidate', {
+          this.io?.to(`${target_type}_${wsTargetId}`).emit('webrtc_ice_candidate', {
             from_type: this.clients.get(socket.id)?.clientType,
             from_id: this.clients.get(socket.id)?.clientId,
             candidate: candidate,
@@ -808,26 +875,32 @@ class WebSocketService {
             return;
           }
 
+          // 关键修复：对于房间类型，使用房号而非数据库ID来构建房间名
+          // 这样与前端注册时使用的clientId保持一致
           let normalizedCallerId = String(callData.caller_id);
           let normalizedCalleeId = String(callData.callee_id);
+          let callerRoomNumber = '';
+          let calleeRoomNumber = '';
 
           if (callData.caller_type === 'room') {
             const [roomRows] = await pool.query<RowDataPacket[]>(
-              'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+              'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
               [callData.caller_id, callData.caller_id]
             );
             if (roomRows.length > 0) {
               normalizedCallerId = String(roomRows[0].id);
+              callerRoomNumber = roomRows[0].room_number; // 保存房号用于WebSocket房间名
             }
           }
 
           if (callData.callee_type === 'room') {
             const [roomRows] = await pool.query<RowDataPacket[]>(
-              'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+              'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
               [callData.callee_id, callData.callee_id]
             );
             if (roomRows.length > 0) {
               normalizedCalleeId = String(roomRows[0].id);
+              calleeRoomNumber = roomRows[0].room_number; // 保存房号用于WebSocket房间名
             }
           }
 
@@ -870,9 +943,20 @@ class WebSocketService {
             callee_id: answerCalleeId
           };
           
-          const callerRoom = `${callData.caller_type}_${normalizedCallerId}`;
-          logger.info(`发送 call_answered 到主叫房间: ${callerRoom} (原始caller_id: ${callData.caller_id})`);
+          // 关键修复：对于房间类型，使用房号构建WebSocket房间名，与前端注册保持一致
+          const callerRoomId = callData.caller_type === 'room' && callerRoomNumber 
+            ? callerRoomNumber 
+            : normalizedCallerId;
+          const callerRoom = `${callData.caller_type}_${callerRoomId}`;
+          logger.info(`发送 call_answered 到主叫房间: ${callerRoom} (原始caller_id: ${callData.caller_id}, 房号: ${callerRoomNumber})`);
           this.io?.to(callerRoom).emit('call_answered', answerData);
+          
+          // 同时发送到数据库ID格式的房间（兼容硬件设备）
+          if (callData.caller_type === 'room' && callerRoomNumber && callerRoomNumber !== normalizedCallerId) {
+            const dbCallerRoom = `${callData.caller_type}_${normalizedCallerId}`;
+            logger.info(`同时发送 call_answered 到数据库ID房间: ${dbCallerRoom}`);
+            this.io?.to(dbCallerRoom).emit('call_answered', answerData);
+          }
 
           // 如果主叫方是房间（硬件发起），通过 MQTT 通知硬件接通
           if (callData.caller_type === 'room') {
@@ -898,9 +982,20 @@ class WebSocketService {
               this.io?.to('front_desk').emit('call_answered', answerData);
             }
           } else {
-            const calleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
-            logger.info(`发送 call_answered 到被叫方房间: ${calleeRoom} (原始callee_id: ${callData.callee_id})`);
+            // 关键修复：对于房间类型，使用房号构建WebSocket房间名
+            const calleeRoomId = callData.callee_type === 'room' && calleeRoomNumber
+              ? calleeRoomNumber
+              : normalizedCalleeId;
+            const calleeRoom = `${callData.callee_type}_${calleeRoomId}`;
+            logger.info(`发送 call_answered 到被叫方房间: ${calleeRoom} (原始callee_id: ${callData.callee_id}, 房号: ${calleeRoomNumber})`);
             this.io?.to(calleeRoom).emit('call_answered', answerData);
+            
+            // 同时发送到数据库ID格式的房间（兼容硬件设备）
+            if (callData.callee_type === 'room' && calleeRoomNumber && calleeRoomNumber !== normalizedCalleeId) {
+              const dbCalleeRoom = `${callData.callee_type}_${normalizedCalleeId}`;
+              logger.info(`同时发送 call_answered 到数据库ID房间: ${dbCalleeRoom}`);
+              this.io?.to(dbCalleeRoom).emit('call_answered', answerData);
+            }
           }
           
           const hId = callData.hotel_id || currentClient?.hotelId;

@@ -94,6 +94,18 @@ router.post('/chat',
               isTransfer: true,
               transferReason: text
             });
+            
+            // 关键修复：同时通知房间客户端通话已发起，这样房间客户端可以正确跟踪callId
+            websocketService.emitToClient('room', room_id, 'call_initiated', {
+              call_id: call.call_id,
+              caller_type: 'room',
+              caller_id: room_id,
+              callee_type: 'front_desk',
+              callee_id: 'all',
+              status: 'calling',
+              isTransfer: true
+            });
+            logger.info(`[AI-Butler] 已通知房间 ${room_id} 通话已发起: ${call.call_id}`);
 
             (result as any).callId = call.call_id;
             (result as any).frontDeskCount = onlineStaff.length;

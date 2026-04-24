@@ -157,13 +157,18 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // 关键修复：保存原始的callee_id（房号），用于WebSocket房间名
+    const originalCalleeId = callee_id;
+    let calleeRoomNumber = '';
+    
     if (callee_type === 'room') {
       const [roomRows] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM rooms WHERE id = ? OR room_number = ?',
+        'SELECT id, room_number FROM rooms WHERE id = ? OR room_number = ?',
         [callee_id, callee_id]
       );
       if (roomRows.length > 0) {
         callee_id = String(roomRows[0].id);
+        calleeRoomNumber = roomRows[0].room_number; // 保存房号用于WebSocket
       }
     }
 
@@ -326,10 +331,18 @@ export const outboundCall = async (req: AuthRequest, res: Response) => {
         io.to(targetRoom).emit('incoming_call', callData);
       }
     } else {
-        // 只发送到定向房间
-        const targetRoom = `${callee_type}_${callee_id}`;
-        logger.info(`[HTTP API] 发送 incoming_call 到房间: ${targetRoom}`);
+        // 关键修复：对于房间类型，使用房号构建WebSocket房间名（与前端注册保持一致）
+        const wsTargetId = callee_type === 'room' && calleeRoomNumber ? calleeRoomNumber : callee_id;
+        const targetRoom = `${callee_type}_${wsTargetId}`;
+        logger.info(`[HTTP API] 发送 incoming_call 到房间: ${targetRoom} (原始ID: ${originalCalleeId}, 房号: ${calleeRoomNumber}, DB_ID: ${callee_id})`);
         io.to(targetRoom).emit('incoming_call', callData);
+        
+        // 同时发送到数据库ID格式的房间（兼容使用ID注册的设备）
+        if (callee_type === 'room' && calleeRoomNumber && calleeRoomNumber !== callee_id) {
+          const dbTargetRoom = `${callee_type}_${callee_id}`;
+          io.to(dbTargetRoom).emit('incoming_call', callData);
+          logger.info(`[HTTP API] 同时发送 incoming_call 到数据库ID房间: ${dbTargetRoom}`);
+        }
       }
     }
 
