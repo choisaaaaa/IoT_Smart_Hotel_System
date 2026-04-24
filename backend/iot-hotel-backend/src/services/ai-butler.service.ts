@@ -132,8 +132,8 @@ export class AIButlerService {
             },
             action: {
               type: 'string',
-              enum: ['on', 'off', 'toggle', 'set_temperature', 'set_brightness', 'open', 'close'],
-              description: '操作：on=开, off=关, toggle=切换, set_temperature=设置温度, set_brightness=设置亮度, open=打开, close=关闭'
+              enum: ['on', 'off', 'toggle', 'set_temperature', 'set_brightness', 'set_volume', 'open', 'close'],
+              description: '操作：on=开, off=关, toggle=切换, set_temperature=设置温度, set_brightness=设置亮度, set_volume=设置音量, open=打开, close=关闭'
             },
             value: {
               type: 'number',
@@ -1025,32 +1025,37 @@ export class AIButlerService {
    * 构建设备控制指令
    */
   private buildDeviceCommand(deviceType: string, action: string, value?: number): any {
-    const cmdTypeMap: Record<string, string> = {
-      'light': 'light',
-      'ac': 'air',
-      'curtain': 'curtain',
-      'tv': 'tv',
-      'lock': 'door',
-      'all': 'scene'
-    };
-
-    const cmdType = cmdTypeMap[deviceType] || deviceType;
-
+    const v = Number.isFinite(Number(value)) ? Number(value) : undefined;
     switch (action) {
       case 'on':
       case 'open':
-        return { command_type: cmdType, command_value: 'on' };
+        if (deviceType === 'light') {return { command_type: 'light_on', command_value: 'on' };}
+        if (deviceType === 'ac') {return { command_type: 'air_on', command_value: 'on' };}
+        if (deviceType === 'curtain') {return { command_type: 'curtain_open', command_value: 'open' };}
+        if (deviceType === 'lock') {return { command_type: 'door_unlock', command_value: 'unlock' };}
+        if (deviceType === 'all') {return { command_type: 'scene_welcome', command_value: 'welcome' };}
+        return { command_type: `${deviceType}_on`, command_value: 'on' };
       case 'off':
       case 'close':
-        return { command_type: cmdType, command_value: 'off' };
+        if (deviceType === 'light') {return { command_type: 'light_off', command_value: 'off' };}
+        if (deviceType === 'ac') {return { command_type: 'air_off', command_value: 'off' };}
+        if (deviceType === 'curtain') {return { command_type: 'curtain_close', command_value: 'close' };}
+        if (deviceType === 'lock') {return { command_type: 'door_lock', command_value: 'lock' };}
+        if (deviceType === 'all') {return { command_type: 'scene_sleep', command_value: 'sleep' };}
+        return { command_type: `${deviceType}_off`, command_value: 'off' };
       case 'toggle':
-        return { command_type: cmdType, command_value: cmdType === 'light' ? 'on' : 'toggle' };
+        if (deviceType === 'light') {return { command_type: 'scene_next', command_value: 'next' };}
+        if (deviceType === 'all') {return { command_type: 'scene_next', command_value: 'next' };}
+        return { command_type: `${deviceType}_toggle`, command_value: 'toggle' };
       case 'set_temperature':
-        return { command_type: 'air', command_value: `temp:${value || 24}` };
+        return { command_type: 'set_ac_temp', command_value: String(Math.round(v ?? 24)) };
       case 'set_brightness':
-        return { command_type: 'light', command_value: 'on' };
+        return { command_type: 'set_light_brightness', command_value: String(Math.round(v ?? 80)) };
+      case 'set_volume':
+        return { command_type: 'set_volume', command_value: String(Math.round(v ?? 60)) };
       default:
-        return { command_type: cmdType, command_value: action };
+        // 兜底：允许模型直接给出硬件 command_type（例如 light_on / set_ac_temp）
+        return { command_type: action, command_value: v !== undefined ? String(Math.round(v)) : action };
     }
   }
 
@@ -1071,6 +1076,8 @@ export class AIButlerService {
         return `已设置为${value || 24}度`;
       case 'set_brightness':
         return `已调整至${value || 100}%亮度`;
+      case 'set_volume':
+        return `已调整至${value || 60}%音量`;
       default:
         return '已执行操作';
     }
