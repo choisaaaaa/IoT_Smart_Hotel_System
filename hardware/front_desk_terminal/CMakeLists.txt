@@ -40,7 +40,7 @@ add_compile_definitions(
     GLOBAL_BTN_FRONT_1_PIN=-1
     GLOBAL_BTN_FRONT_2_PIN=-1
     
-    # 开启 PTT (Agent) 按钮，使用 GPIO1
+    # PTT（Agent）：GPIO1，按键一脚接 GPIO1、一脚接 GND，内部上拉（与客房端逻辑一致）
     GLOBAL_PTT_BTN_PIN=1
     
     # 配置 EC11 旋钮引脚 (A=2, B=38, SW=4)
