@@ -45,10 +45,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 **特色菜品**：
 {{special_dishes}}
 
-**预订电话**：{{reservation_phone}}
-
----
-⚠️ **请门店经理根据实际情况编辑此内容**`,
+**预订电话**：{{reservation_phone}}`,
     completionTips: [
       '请确认早餐的具体时间和地点',
       '如有特色菜品，建议列出3-5个招牌菜',
@@ -78,10 +75,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{usage_rules}}
 {{#if has_pool}}
 • 泳池水温：{{pool_temp}}
-{{/if}}
-
----
-⚠️ **请门店经理根据实际情况编辑此内容**`,
+{{/if}}`,
     completionTips: [
       '请确认健身房的具体开放时间',
       '列出所有可用的健身设施',
@@ -114,10 +108,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 **常见问题**：
 - 连接失败请重启设备后重试
 - 密码区分大小写
-- 如仍无法连接，可致电{{support_phone}}报修
-
----
-⚠️ **请门店经理修改为实际的WiFi名称和密码**`,
+- 如仍无法连接，可致电{{support_phone}}报修`,
     completionTips: [
       '请务必填写正确的WiFi名称和密码',
       '建议同时提供2.4G和5G网络名称',
@@ -157,10 +148,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{hospital}}
 
 **景点推荐**：
-{{attractions}}
-
----
-⚠️ **请门店经理补充实际的周边信息**`,
+{{attractions}}`,
     completionTips: [
       '建议提供至少一种交通方式（地铁/公交/出租车）',
       '列出周边便利设施（便利店、药店、餐厅）',
@@ -197,10 +185,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{/if}}
 {{#if deposit_refund}}
 - 押金退还：{{deposit_refund}}
-{{/if}}
-
----
-⚠️ **请门店经理确认实际退房政策**`,
+{{/if}}`,
     completionTips: [
       '请确认标准退房时间',
       '明确延迟退房的收费标准',
@@ -239,10 +224,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{/if}}
 
 **特殊需求**：
-{{special_needs}}
-
----
-⚠️ **请门店经理完善早餐详细信息**`,
+{{special_needs}}`,
     completionTips: [
       '请确认早餐的具体时间和地点',
       '列出主要的早餐品类',
@@ -282,10 +264,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{/if}}
 
 **紧急联系电话**：
-- 客房服务中心：{{service_hotline}}
-
----
-⚠️ **请门店经理补充完整的客房服务列表**`,
+- 客房服务中心：{{service_hotline}}`,
     completionTips: [
       '请确认保洁服务的时间',
       '列出所有可免费借用的物品',
@@ -324,10 +303,7 @@ export const KNOWLEDGE_BASE_CONFIG: KnowledgeCategoryConfig[] = [
 {{#if parking}}
 **停车信息**：
 {{parking}}
-{{/if}}
-
----
-⚠️ **请门店经理更新为实际酒店政策**`,
+{{/if}}`,
     completionTips: [
       '请确认入住时间和证件要求',
       '明确押金金额和支付方式',

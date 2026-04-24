@@ -283,8 +283,19 @@ const completionStats = computed(() => {
   for (const cat of allCategories) {
     const knowledge = knowledgeList.value.find(k => k.category === cat)
     if (knowledge) {
-      const status = checkCompletion(knowledge.content, cat)
-      if (status.isComplete) {
+      // 检查是否还有未填充的占位符
+      const config = getCategoryConfig(cat)
+      let hasEmptyPlaceholders = false
+      if (config) {
+        for (const field of config.fields) {
+          const placeholder = `{{${field.key}}}`
+          if (knowledge.content.includes(placeholder)) {
+            hasEmptyPlaceholders = true
+            break
+          }
+        }
+      }
+      if (!hasEmptyPlaceholders) {
         completed++
       } else {
         incompleteCategories.push(cat)
@@ -374,27 +385,33 @@ const getCompletionStatus = (record: KnowledgeBase) => {
   const config = getCategoryConfig(record.category)
   if (!config) return { isDefault: false, percent: 100, text: '-' }
 
-  // 检查是否包含"请门店经理"等默认提示语
-  const isDefault = record.content.includes('请门店经理') || 
-                    record.content.includes('请根据实际情况') ||
-                    record.content.includes('请确认') ||
-                    record.content.includes('请补充')
-
-  // 计算完成度
-  const completion = checkCompletion(record.content, record.category)
+  // 计算所有字段的完成度（包括可选字段）
   const totalFields = config.fields.length
-  const requiredFields = config.fields.filter(f => f.required).length
-  const missingFields = completion.missingFields.length
+  let filledFields = 0
+  let hasEmptyPlaceholders = false
   
-  let percent = 100
-  if (isDefault) {
-    percent = Math.max(0, 100 - (missingFields * 20))
+  for (const field of config.fields) {
+    const placeholder = `{{${field.key}}}`
+    // 如果不包含该字段的占位符，说明已填充
+    if (!record.content.includes(placeholder)) {
+      filledFields++
+    } else {
+      // 包含占位符，检查是否为空值（即{{}}之间没有内容或只有空白）
+      const emptyPlaceholderPattern = new RegExp(`\\{\\{${field.key}\\}\\}`, 'g')
+      const matches = record.content.match(emptyPlaceholderPattern)
+      if (matches && matches.length > 0) {
+        hasEmptyPlaceholders = true
+      }
+    }
   }
+  
+  // 计算完成百分比
+  const percent = Math.round((filledFields / totalFields) * 100)
 
   return {
-    isDefault,
+    isDefault: hasEmptyPlaceholders,
     percent,
-    text: isDefault ? `待完善` : '已完成'
+    text: hasEmptyPlaceholders ? `待完善` : '已完成'
   }
 }
 

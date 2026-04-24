@@ -16,7 +16,7 @@ export interface FrequentGuest {
 class GuestService {
   async list() {
     const res = await request.get<ApiResponse<{ guests: FrequentGuest[] }>>('/frequent-guests')
-    return res.data
+    return res
   }
 
   async create(data: FrequentGuest) {

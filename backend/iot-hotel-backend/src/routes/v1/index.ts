@@ -29,13 +29,12 @@ import frequentGuests from './frequent-guests';
 import health from './health';
 import systemConfig from './system-config';
 import deviceGroups from './device-groups';
+import mqtt from './mqtt';
 
 /**
  * 已删除的前端未实现接口路由：
- * - mqtt.ts (MQTT管理)
  * - scenes.ts (场景模式管理)
  * - ir-remote.ts (红外遥控管理)
- * - device-groups.ts (设备分组管理)
  * - device-alarms.ts (设备报警管理)
  * - firmware.ts (固件管理)
  * - guests.ts (访客管理 - 前端无对应页面)
@@ -70,7 +69,7 @@ router.use('/upload', upload);
 router.use('/ai-butler', aiButler);
 router.use('/environment', environment);
 router.use('/knowledge-base', knowledgeBase);
-// 已删除: router.use('/mqtt', mqtt);
+router.use('/mqtt', mqtt);
 router.use('/rfid', rfid);
 router.use('/rfid-access', rfidAccess);
 router.use('/floors', floors);

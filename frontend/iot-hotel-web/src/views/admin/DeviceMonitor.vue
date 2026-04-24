@@ -282,7 +282,7 @@
               <a-button v-for="sim in simulationCommands" :key="sim.label" @click="sendSimulationCommand(sim)">
                 {{ sim.label }}
               </a-button>
-            </a-button-group>
+            </div>
             
             <div class="custom-send mt-4">
               <p class="small-label">自定义 MQTT 消息</p>

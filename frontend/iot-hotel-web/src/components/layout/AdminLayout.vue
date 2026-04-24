@@ -70,11 +70,6 @@
             <a-menu-item key="/hotel-admin/knowledge-base">AI知识库</a-menu-item>
           </a-sub-menu>
 
-          <a-sub-menu key="system-settings">
-            <template #icon><ToolOutlined /></template>
-            <template #title>系统设置</template>
-            <a-menu-item key="/hotel-admin/mqtt">MQTT通信管理</a-menu-item>
-          </a-sub-menu>
 
           <a-menu-item key="/hotel-admin/reports">
             <template #icon><BarChartOutlined /></template>

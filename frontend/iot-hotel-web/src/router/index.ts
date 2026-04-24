@@ -74,12 +74,6 @@ const routes: RouteRecordRaw[] = [
         name: 'HotelAccess',
         component: () => import('@/views/system/HotelAccess.vue'),
         meta: { title: '分店快速进入', icon: 'EnterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
-      },
-      {
-        path: 'mqtt',
-        name: 'SystemMQTTManagement',
-        component: () => import('@/views/system/SystemMQTTManagement.vue'),
-        meta: { title: 'MQTT 服务管理', icon: 'ClusterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.SYSTEM_ADMIN] }
       }
     ]
   },
@@ -187,12 +181,6 @@ const routes: RouteRecordRaw[] = [
         name: 'ReviewManagement',
         component: () => import('@/views/admin/ReviewManage.vue'),
         meta: { title: '评价管理', icon: 'StarOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
-      },
-      {
-        path: 'mqtt',
-        name: 'AdminMQTTManagement',
-        component: () => import('@/views/system/SystemMQTTManagement.vue'),
-        meta: { title: 'MQTT 通信管理', icon: 'ClusterOutlined', requiresAuth: true, roles: [CANONICAL_ROLES.HOTEL_ADMIN] }
       }
     ]
   },

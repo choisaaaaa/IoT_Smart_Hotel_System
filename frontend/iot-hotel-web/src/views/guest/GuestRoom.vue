@@ -730,6 +730,8 @@ async function sendToAI(text: string) {
       room_id: String(roomId),
       text: text,
       session_id: `${roomId}_${Date.now()}`
+    }, {
+      timeout: 60000
     })
 
     if (res.code === 200) {

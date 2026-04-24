@@ -328,27 +328,32 @@ export function getAllCategories(): { category: string; title: string; icon: str
 }
 
 // 检查内容完成度
-export function checkCompletion(content: string, category: string): { isComplete: boolean; missingFields: string[] } {
+export function checkCompletion(content: string, category: string): { isComplete: boolean; missingFields: string[]; filledCount: number; totalCount: number } {
   const config = getCategoryConfig(category)
-  if (!config) return { isComplete: false, missingFields: [] }
+  if (!config) return { isComplete: false, missingFields: [], filledCount: 0, totalCount: 0 }
 
   const missingFields: string[] = []
+  let filledCount = 0
   
   for (const field of config.fields) {
-    if (field.required) {
-      // 检查内容中是否包含该字段的占位符或实际内容
-      const placeholder = `{{${field.key}}}`
-      const hasPlaceholder = content.includes(placeholder)
-      const hasContent = !hasPlaceholder && content.includes(field.label)
-      
-      if (hasPlaceholder || !hasContent) {
+    const placeholder = `{{${field.key}}}`
+    const hasPlaceholder = content.includes(placeholder)
+    
+    if (hasPlaceholder) {
+      // 有占位符，说明未填充
+      if (field.required) {
         missingFields.push(field.label)
       }
+    } else {
+      // 没有占位符，说明已填充
+      filledCount++
     }
   }
 
   return {
     isComplete: missingFields.length === 0,
-    missingFields
+    missingFields,
+    filledCount,
+    totalCount: config.fields.length
   }
 }
