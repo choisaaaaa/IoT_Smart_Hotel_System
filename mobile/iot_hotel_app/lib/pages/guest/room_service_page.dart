@@ -298,6 +298,13 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           title: Text('客房服务', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _checkCheckinStatus,
+              tooltip: '刷新',
+            ),
+          ],
         ),
         body: Center(
           child: Padding(
