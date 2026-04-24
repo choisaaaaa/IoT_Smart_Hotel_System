@@ -499,6 +499,7 @@ onUnmounted(() => {
     socket.off('connect', handleConnect)
     socket.off('disconnect', handleDisconnect)
     socket.off('incoming_call', handleIncomingCall)
+    socket.off('call_initiated', handleCallInitiated)
     socket.off('call_answered', handleCallAnswered)
     socket.off('call_rejected', handleCallRejected)
     socket.off('call_hungup', handleCallHungup)
@@ -543,6 +544,7 @@ function initWebSocket() {
   socket.on('disconnect', handleDisconnect)
   socket.on('online_status', handleOnlineStatus)
   socket.on('incoming_call', handleIncomingCall)
+  socket.on('call_initiated', handleCallInitiated)
   socket.on('call_answered', handleCallAnswered)
   socket.on('webrtc_offer', handleWebRTCOffer)
   socket.on('webrtc_answer', handleWebRTCAnswer)
@@ -581,6 +583,16 @@ function handleIncomingCall(data: any) {
   if (!data.isTransfer) {
     transferModal.value.statusText = '来电...'
     transferModal.value.statusDesc = `来自${data.caller_type === 'front_desk' ? '前台' : data.caller_id}的呼叫`
+  }
+}
+
+function handleCallInitiated(data: any) {
+  console.log('[AIButler] 收到call_initiated:', data)
+  // 关键修复：当AI转接发起通话时，后端会发送此事件
+  // 我们需要保存callId以便后续匹配call_answered事件
+  if (data.call_id) {
+    transferModal.value.callId = data.call_id
+    console.log('[AIButler] 已保存callId:', data.call_id)
   }
 }
 
