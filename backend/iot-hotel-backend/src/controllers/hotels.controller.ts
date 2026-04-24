@@ -72,7 +72,7 @@ export async function search(req: AuthRequest, res: Response) {
         rating: h.rating || 4.5,
         reviewCount: h.review_count || 0,
         price: h.min_price || 299,
-        image: h.logo || h.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+        image: h.image_url || h.logo || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
         availableRooms: h.available_rooms
       }))
     });

@@ -14,6 +14,7 @@ export interface Hotel extends RowDataPacket {
   occupied_rooms: number;
   occupancy_rate: number;
   logo: string;
+  image_url: string;
   description: string;
   created_at: Date;
   updated_at: Date;
@@ -89,12 +90,13 @@ export class HotelService {
         hotel_phone = existing.hotel_phone,
         hotel_star = existing.hotel_star,
         logo = existing.logo,
+        image_url = existing.image_url,
         description = existing.description
       } = data;
 
       await pool.query<ResultSetHeader>(
-        'UPDATE hotels SET hotel_name = ?, hotel_code = ?, hotel_address = ?, city = ?, hotel_phone = ?, hotel_star = ?, logo = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [hotel_name, hotel_code, hotel_address, city, hotel_phone, hotel_star, logo, description, id]
+        'UPDATE hotels SET hotel_name = ?, hotel_code = ?, hotel_address = ?, city = ?, hotel_phone = ?, hotel_star = ?, logo = ?, image_url = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [hotel_name, hotel_code, hotel_address, city, hotel_phone, hotel_star, logo, image_url, description, id]
       );
 
       // 清除相关缓存
