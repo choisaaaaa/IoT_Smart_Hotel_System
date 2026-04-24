@@ -57,8 +57,8 @@ export const create = async (req: AuthRequest, res: Response) => {
     if (!finalOrderId) {
       return res.status(400).json(errorResponse('缺少订单ID(order_id或booking_id)'));
     }
-    if (!amount || Number(amount) <= 0) {
-      return res.status(400).json(errorResponse('支付金额必须大于0'));
+    if (amount === undefined || amount === null || Number(amount) < 0) {
+      return res.status(400).json(errorResponse('支付金额不能为负数'));
     }
     if (!payment_method) {
       return res.status(400).json(errorResponse('缺少支付方式(payment_method)'));

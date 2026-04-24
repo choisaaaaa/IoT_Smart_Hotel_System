@@ -298,6 +298,13 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
           title: Text('客房服务', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _checkCheckinStatus,
+              tooltip: '刷新',
+            ),
+          ],
         ),
         body: Center(
           child: Padding(
@@ -885,12 +892,16 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
   }
 
   void _initCallService() {
-    if (widget.roomId == null) return;
+    if (widget.roomId == null) {
+      debugPrint('[联系前台] roomId为空，跳过初始化');
+      return;
+    }
     final clientId = '${widget.roomId}';
+    debugPrint('[联系前台] 初始化呼叫服务, clientId: $clientId');
     _callService.init(clientId, clientType: 'room');
     _callEventSubscription = _callService.callEvents.listen((event) {
       if (!mounted) return;
-      
+
       switch (event['type']) {
         case 'registered':
           setState(() {
@@ -1074,7 +1085,18 @@ class _ContactFrontDeskTabState extends ConsumerState<_ContactFrontDeskTab> {
       );
     } else {
       // 上线
-      final clientId = widget.roomId != null ? '${widget.roomId}' : 'guest_app';
+      if (widget.roomId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('未检测到房间信息，无法上线'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+      final clientId = '${widget.roomId}';
+      debugPrint('[联系前台] 尝试上线, clientId: $clientId');
+      _callService.init(clientId, clientType: 'room');
       _callService.registerClient(clientId);
     }
   }

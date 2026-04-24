@@ -29,7 +29,18 @@ class ApiConstants {
   static String get serverHost {
     final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : baseUrl;
     final uri = Uri.parse(url);
-    return '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+    // Socket.io 连接需要基础URL，不带 /api/v1/ 路径
+    final host = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+    return host;
+  }
+
+  /// 获取WebSocket连接URL（用于语音通话服务）
+  static String get websocketUrl {
+    final url = _baseUrlOverride.isNotEmpty ? _baseUrlOverride : baseUrl;
+    final uri = Uri.parse(url);
+    // 将 http 转换为 ws，https 转换为 wss
+    final wsScheme = uri.scheme == 'https' ? 'wss' : 'ws';
+    return '$wsScheme://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
   }
 
   static const int connectTimeout = 15000;

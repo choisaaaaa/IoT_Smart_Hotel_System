@@ -42,6 +42,7 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlayingAudio = false;
+  bool _isMuted = false; // 静音状态
   StreamSubscription? _audioStateSubscription;
 
   @override
@@ -239,6 +240,12 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
         final file = File('${dir.path}/tts_${DateTime.now().millisecondsSinceEpoch}.mp3');
         await file.writeAsBytes(bytes);
         audioPath = file.path;
+      }
+
+      // 静音状态下不播放音频
+      if (_isMuted) {
+        debugPrint('[TTS] 静音模式，跳过音频播放');
+        return;
       }
 
       setState(() => _isPlayingAudio = true);
@@ -533,7 +540,7 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
           ],
         ),
         actions: [
-          if (_isPlayingAudio)
+          if (_isPlayingAudio && !_isMuted)
             IconButton(
               icon: const Icon(Icons.volume_up, color: AppColors.primary),
               onPressed: () {
@@ -541,6 +548,17 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
                 setState(() => _isPlayingAudio = false);
               },
             ),
+          IconButton(
+            icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, color: _isMuted ? AppColors.textHint : AppColors.textPrimary),
+            onPressed: () {
+              setState(() => _isMuted = !_isMuted);
+              if (_isMuted && _isPlayingAudio) {
+                _audioPlayer.stop();
+                _isPlayingAudio = false;
+              }
+            },
+            tooltip: _isMuted ? '已静音' : '点击静音',
+          ),
           IconButton(
             icon: const Icon(Icons.history_outlined, color: AppColors.textPrimary),
             onPressed: () {},

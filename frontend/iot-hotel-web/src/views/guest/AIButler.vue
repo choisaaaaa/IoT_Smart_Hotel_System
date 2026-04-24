@@ -32,85 +32,141 @@
       </div>
     </div>
 
-    <!-- 主内容区 -->
+    <!-- 主内容区 - 左右布局 -->
     <div class="main-content">
-      <!-- AI形象 -->
-      <div class="ai-avatar-container" :class="{ listening: isListening, speaking: isSpeaking, thinking: isLoading }">
-        <div class="ai-avatar">
-          <LoadingOutlined v-if="isLoading" spin />
-          <RobotOutlined v-else />
+      <!-- 左侧聊天区域 -->
+      <div class="chat-section">
+        <!-- AI形象 -->
+        <div class="ai-avatar-container" :class="{ listening: isListening, speaking: isSpeaking, thinking: isLoading }">
+          <div class="ai-avatar">
+            <LoadingOutlined v-if="isLoading" spin />
+            <RobotOutlined v-else />
+          </div>
+          <div class="voice-waves" v-if="isListening || isSpeaking">
+            <span v-for="i in 5" :key="i" :style="{ animationDelay: `${i * 0.1}s` }"></span>
+          </div>
+          <!-- 思考中的脉冲动画 -->
+          <div class="thinking-pulse" v-if="isLoading"></div>
         </div>
-        <div class="voice-waves" v-if="isListening || isSpeaking">
-          <span v-for="i in 5" :key="i" :style="{ animationDelay: `${i * 0.1}s` }"></span>
-        </div>
-        <!-- 思考中的脉冲动画 -->
-        <div class="thinking-pulse" v-if="isLoading"></div>
-      </div>
 
-      <!-- 对话内容 -->
-      <div class="chat-container" ref="chatContainer">
-        <div v-if="messages.length === 0" class="welcome-message">
-          <h2>您好，我是AI管家小智</h2>
-          <p>我可以帮您控制房间设备、查询信息、安排服务</p>
-          <p class="example-text">试试问我："打开灯光"、"需要保洁"、"WiFi密码是多少"</p>
-        </div>
-        
-        <div v-else class="messages">
-          <div 
-            v-for="(msg, index) in messages" 
-            :key="index"
-            class="message"
-            :class="msg.type"
-          >
-            <div class="message-content">
-              <span class="avatar">
-                <UserOutlined v-if="msg.type === 'user'" />
-                <RobotOutlined v-else />
-              </span>
-              <div class="bubble-wrapper">
-                <!-- 打字机效果：显示已打出的文字 + 光标 -->
-                <div 
-                  class="bubble" 
-                  :class="{ 
-                    'with-audio': msg.type === 'ai',
-                    'typing': msg.typing && isTyping && index === messages.length - 1
-                  }"
-                >
-                  <template v-if="msg.typing && isTyping && index === messages.length - 1">
-                    {{ displayedText }}<span class="cursor">|</span>
-                  </template>
-                  <template v-else>
-                    {{ msg.text }}
-                  </template>
-                </div>
-                
-                <!-- AI消息的语音控制按钮 -->
-                <div v-if="msg.type === 'ai' && index === messages.length - 1 && isPlayingAudio" class="audio-indicator">
-                  <SoundOutlined :spin="isPlayingAudio" />
-                  <span>正在播放...</span>
-                  <a-button type="link" size="small" @click="toggleAudio">
-                    {{ isPlayingAudio ? '暂停' : '播放' }}
-                  </a-button>
-                </div>
-              </div>
-            </div>
-            <div class="message-time">{{ msg.time }}</div>
+        <!-- 对话内容 -->
+        <div class="chat-container" ref="chatContainer">
+          <div v-if="messages.length === 0" class="welcome-message">
+            <h2>您好，我是AI管家小智</h2>
+            <p>我可以帮您控制房间设备、查询信息、安排服务</p>
+            <p class="example-text">试试问我："打开灯光"、"需要保洁"、"WiFi密码是多少"</p>
           </div>
           
-          <!-- 智能建议（最后一条AI消息后显示） -->
-          <div v-if="suggestions.length > 0 && !isLoading && !isTyping" class="suggestions">
-            <span class="suggestion-label">💡 您可能还想问：</span>
-            <div class="suggestion-chips">
-              <span 
-                v-for="(suggestion, sIdx) in suggestions.slice(0, 3)" 
-                :key="sIdx"
-                class="suggestion-chip"
-                @click="handleQuickAction(suggestion)"
-              >
-                {{ suggestion }}
-              </span>
+          <div v-else class="messages">
+            <div 
+              v-for="(msg, index) in messages" 
+              :key="index"
+              class="message"
+              :class="msg.type"
+            >
+              <div class="message-content">
+                <span class="avatar">
+                  <UserOutlined v-if="msg.type === 'user'" />
+                  <RobotOutlined v-else />
+                </span>
+                <div class="bubble-wrapper">
+                  <!-- 打字机效果：显示已打出的文字 + 光标 -->
+                  <div 
+                    class="bubble" 
+                    :class="{ 
+                      'with-audio': msg.type === 'ai',
+                      'typing': msg.typing && isTyping && index === messages.length - 1
+                    }"
+                  >
+                    <template v-if="msg.typing && isTyping && index === messages.length - 1">
+                      {{ displayedText }}<span class="cursor">|</span>
+                    </template>
+                    <template v-else>
+                      {{ msg.text }}
+                    </template>
+                  </div>
+                  
+                  <!-- AI消息的语音控制按钮 -->
+                  <div v-if="msg.type === 'ai' && index === messages.length - 1 && isPlayingAudio" class="audio-indicator">
+                    <SoundOutlined :spin="isPlayingAudio" />
+                    <span>正在播放...</span>
+                    <a-button type="link" size="small" @click="toggleAudio">
+                      {{ isPlayingAudio ? '暂停' : '播放' }}
+                    </a-button>
+                  </div>
+                </div>
+              </div>
+              <div class="message-time">{{ msg.time }}</div>
+            </div>
+            
+            <!-- 智能建议（最后一条AI消息后显示） -->
+            <div v-if="suggestions.length > 0 && !isLoading && !isTyping" class="suggestions">
+              <span class="suggestion-label">💡 您可能还想问：</span>
+              <div class="suggestion-chips">
+                <span 
+                  v-for="(suggestion, sIdx) in suggestions.slice(0, 3)" 
+                  :key="sIdx"
+                  class="suggestion-chip"
+                  @click="handleQuickAction(suggestion)"
+                >
+                  {{ suggestion }}
+                </span>
+              </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- 右侧功能侧边栏 -->
+      <div class="side-menu">
+        <div class="side-menu-header">
+          <h3>快捷服务</h3>
+        </div>
+        <div class="side-menu-content">
+          <div class="menu-item" @click="handleQuickAction('转接人工')">
+            <div class="menu-icon" style="background: #e6f7ff; color: #1890ff;">
+              <CustomerServiceOutlined />
+            </div>
+            <span class="menu-label">呼叫前台</span>
+          </div>
+          <div class="menu-item" @click="handleQuickAction('在线留言')">
+            <div class="menu-icon" style="background: #f6ffed; color: #52c41a;">
+              <MessageOutlined />
+            </div>
+            <span class="menu-label">在线留言</span>
+          </div>
+          <div class="menu-item" @click="handleQuickAction('设备报修')">
+            <div class="menu-icon" style="background: #fff7e6; color: #fa8c16;">
+              <ToolOutlined />
+            </div>
+            <span class="menu-label">设备报修</span>
+          </div>
+          <div class="menu-item" @click="handleQuickAction('查询记录')">
+            <div class="menu-icon" style="background: #f9f0ff; color: #722ed1;">
+              <HistoryOutlined />
+            </div>
+            <span class="menu-label">我的记录</span>
+          </div>
+          <div class="menu-item" @click="handleQuickAction('使用帮助')">
+            <div class="menu-icon" style="background: #e6fffb; color: #13c2c2;">
+              <QuestionCircleOutlined />
+            </div>
+            <span class="menu-label">使用帮助</span>
+          </div>
+        </div>
+        <div class="side-menu-divider"></div>
+        <div class="side-menu-header">
+          <h3>常用指令</h3>
+        </div>
+        <div class="side-menu-commands">
+          <span class="command-chip" @click="handleQuickAction('打开灯光')">💡 开灯</span>
+          <span class="command-chip" @click="handleQuickAction('关闭灯光')">💡 关灯</span>
+          <span class="command-chip" @click="handleQuickAction('空调26度')">🌡️ 26°C</span>
+          <span class="command-chip" @click="handleQuickAction('欢迎模式')">🏠 欢迎</span>
+          <span class="command-chip" @click="handleQuickAction('睡眠模式')">🌙 睡眠</span>
+          <span class="command-chip" @click="handleQuickAction('需要保洁')">🧹 保洁</span>
+          <span class="command-chip" @click="handleQuickAction('需要送餐')">🍽️ 送餐</span>
+          <span class="command-chip" @click="handleQuickAction('WiFi密码')">📶 WiFi</span>
         </div>
       </div>
     </div>
@@ -380,7 +436,10 @@ import {
   CoffeeOutlined,
   SendOutlined,
   EditOutlined,
-  SoundOutlined
+  SoundOutlined,
+  MessageOutlined,
+  HistoryOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSocket, initWebSocket as initWebSocketFromUtil } from '@/utils/websocket'
@@ -1616,9 +1675,109 @@ function scrollToBottom() {
 .main-content {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   padding: 20px;
   overflow: hidden;
+  gap: 20px;
+}
+
+/* 左侧聊天区域 */
+.chat-section {
+  width: 220px
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 右侧功能侧边栏 */
+.side-menu {
+  width: 220px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.side-menu-header {
+  margin-bottom: 16px;
+}
+
+.side-menu-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.side-menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #fafafa;
+}
+
+.menu-item:hover {
+  background: #f0f0f0;
+  transform: translateX(4px);
+}
+
+.menu-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.menu-label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.side-menu-divider {
+  height: 1px;
+  background: #e8e8e8;
+  margin: 20px 0;
+}
+
+.side-menu-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.command-chip {
+  padding: 8px 12px;
+  background: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #2f54eb;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.command-chip:hover {
+  background: #d6e4ff;
+  transform: translateX(4px);
 }
 
 .ai-avatar-container {

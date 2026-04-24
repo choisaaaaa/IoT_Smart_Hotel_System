@@ -321,31 +321,33 @@ export class AIButlerService {
   /**
    * 验证客人入住状态
    */
-  async verifyGuestAccess(roomId: string): Promise<GuestSession | null> {
+  async verifyGuestAccess(roomId: string | number): Promise<GuestSession | null> {
     try {
       let actualRoomDbId: number | null = null;
       let actualRoomNumber: string | null = null;
       let deviceFoundId: string | null = null;
 
-      logger.debug(`验证入住状态 - 原始roomId: ${roomId}`);
+      // 确保roomId是字符串类型
+      const roomIdStr = String(roomId);
+      logger.debug(`验证入住状态 - 原始roomId: ${roomId}, 转换后: ${roomIdStr}`);
 
       // 策略1: 直接作为 device_id 查找
       const [deviceRows] = await pool.query<RowDataPacket[]>(
         `SELECT d.device_id, d.room_id, r.room_number FROM devices d
          LEFT JOIN rooms r ON d.room_id = r.id
          WHERE d.device_id = ? AND d.room_id IS NOT NULL`,
-        [roomId]
+        [roomIdStr]
       );
       if (deviceRows.length > 0) {
         actualRoomDbId = deviceRows[0].room_id;
         actualRoomNumber = deviceRows[0].room_number;
         deviceFoundId = deviceRows[0].device_id;
-        logger.info(`通过设备ID ${roomId} 解析到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+        logger.info(`通过设备ID ${roomIdStr} 解析到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
       }
 
       // 策略2: 如果策略1失败，尝试从 roomId 中提取数字作为 room_id
       if (!actualRoomDbId) {
-        const numericId = roomId.replace(/^room_?/, '');
+        const numericId = roomIdStr.replace(/^room_?/, '');
         if (numericId && /^\d+$/.test(numericId)) {
           const numId = parseInt(numericId);
           const [roomRows] = await pool.query<RowDataPacket[]>(
@@ -364,21 +366,21 @@ export class AIButlerService {
       if (!actualRoomDbId) {
         const [roomRows] = await pool.query<RowDataPacket[]>(
           `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ?`,
-          [roomId]
+          [roomIdStr]
         );
         if (roomRows.length > 0) {
           actualRoomDbId = roomRows[0].id;
           actualRoomNumber = roomRows[0].room_number;
-          logger.info(`通过房号 ${roomId} 找到房间DB ID ${actualRoomDbId}`);
+          logger.info(`通过房号 ${roomIdStr} 找到房间DB ID ${actualRoomDbId}`);
         }
       }
 
       if (!actualRoomDbId) {
-        const devSession = await this.buildDevAssumeSession(roomId);
+        const devSession = await this.buildDevAssumeSession(roomIdStr);
         if (devSession) {
           return devSession;
         }
-        logger.warn(`房间 ${roomId} 无有效入住记录，无法解析到任何房间`);
+        logger.warn(`房间 ${roomIdStr} 无有效入住记录，无法解析到任何房间`);
         return null;
       }
 
@@ -396,7 +398,7 @@ export class AIButlerService {
       );
 
       if (guests.length === 0) {
-        const devSession = await this.buildDevAssumeSession(roomId);
+        const devSession = await this.buildDevAssumeSession(roomIdStr);
         if (devSession) {
           return devSession;
         }
@@ -418,7 +420,7 @@ export class AIButlerService {
         isValid: true
       };
 
-      this.sessions.set(roomId, session);
+      this.sessions.set(roomIdStr, session);
       return session;
     } catch (error) {
       logger.error('验证客人入住状态失败:', error.message);
