@@ -490,6 +490,7 @@ export const get = async (req: AuthRequest, res: Response) => {
 export const getById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const currentUser = req.user as any;
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT b.*, r.room_number, r.room_type, r.room_name, rt.name as room_type_name,
@@ -510,7 +511,20 @@ export const getById = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    res.json(successResponse(rows[0], '获取预订详情成功'));
+    const booking = rows[0];
+
+    // BUG-034修复：权限验证 - 顾客只能查看自己的预订
+    if (isCustomer(currentUser.role) || isGuest(currentUser.role)) {
+      const isOwner = String(booking.user_id) === String(currentUser.id) ||
+                      booking.guest_phone === currentUser.phone ||
+                      booking.guest_name === currentUser.username;
+      if (!isOwner) {
+        res.status(403).json(errorResponse('无权查看此预订详情'));
+        return;
+      }
+    }
+
+    res.json(successResponse(booking, '获取预订详情成功'));
   } catch (error) {
     logger.error('获取预订详情失败:', error.message);
     res.status(500).json(errorResponse('获取预订详情失败'));
@@ -537,6 +551,35 @@ export const create = async (req: AuthRequest, res: Response) => {
     if (!check_in_date || !check_out_date) {
       await connection.rollback();
       return res.status(400).json(errorResponse('请选择入住和退房日期'));
+    }
+
+    // BUG-075修复：必填字段非空校验
+    if (!guest_name || !guest_name.trim()) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('客人姓名不能为空'));
+    }
+    if (!guest_phone || !guest_phone.trim()) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('手机号不能为空'));
+    }
+
+    // BUG-074修复：手机号格式校验
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (guest_phone && !phoneRegex.test(guest_phone)) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('手机号格式不正确，应为11位手机号'));
+    }
+
+    // BUG-078修复：顾客角色只能用自己的手机号创建预订，防止越权
+    if (isCustomer(req.user?.role) || isGuest(req.user?.role)) {
+      const currentUserPhone = req.user?.phone || req.user?.username;
+      if (currentUserPhone && guest_phone && String(guest_phone) !== String(currentUserPhone)) {
+        await connection.rollback();
+        return res.status(403).json(errorResponse('只能使用本人手机号创建预订'));
+      }
+      if (!guest_phone && currentUserPhone) {
+        req.body.guest_phone = currentUserPhone;
+      }
     }
 
     const checkInDate = dayjs(check_in_date);
@@ -601,9 +644,19 @@ export const create = async (req: AuthRequest, res: Response) => {
       const [rtRows] = await connection.query<RowDataPacket[]>('SELECT hotel_id FROM room_types WHERE id = ?', [room_type_id]);
       if (rtRows.length === 0) {
         await connection.rollback();
-        return res.status(404).json(errorResponse('房型不存在'));
+        // BUG-069修复：提供更详细的错误信息
+        return res.status(404).json(errorResponse(`房型(ID:${room_type_id})不存在，请检查room_type_id是否正确`));
       }
       hotelId = rtRows[0].hotel_id;
+    }
+
+    // BUG-076修复：校验酒店ID是否存在
+    if (hotelId) {
+      const [hotelRows] = await connection.query<RowDataPacket[]>('SELECT id FROM hotels WHERE id = ?', [hotelId]);
+      if (hotelRows.length === 0) {
+        await connection.rollback();
+        return res.status(400).json(errorResponse(`酒店(ID:${hotelId})不存在`));
+      }
     }
 
     // 检查房型余量 (解耦逻辑)
@@ -617,11 +670,12 @@ export const create = async (req: AuthRequest, res: Response) => {
       let currentSold = 0;
 
       if (rate_plan_id) {
+        // BUG-037修复：使用FOR UPDATE行锁防止超售
         const [inventoryRows] = await connection.query<RowDataPacket[]>(
           `SELECT p.inventory_count, p.sold_count, rp.default_inventory 
            FROM rate_plans rp
            LEFT JOIN room_prices p ON rp.id = p.rate_plan_id AND p.room_type_id = rp.room_type_id AND p.price_date = ?
-           WHERE rp.id = ?`,
+           WHERE rp.id = ? FOR UPDATE`,
           [dateStr, rate_plan_id]
         );
         if (inventoryRows.length > 0) {
@@ -633,9 +687,9 @@ export const create = async (req: AuthRequest, res: Response) => {
           return res.status(409).json(errorResponse(`日期 ${dateStr} 的房价方案已不存在`));
         }
       } else {
-        // 标准价方案
+        // BUG-037修复：使用FOR UPDATE行锁防止超售
         const [pRows] = await connection.query<RowDataPacket[]>(
-          'SELECT inventory_count, sold_count FROM room_prices WHERE room_type_id = ? AND price_date = ? AND rate_plan_id IS NULL',
+          'SELECT inventory_count, sold_count FROM room_prices WHERE room_type_id = ? AND price_date = ? AND rate_plan_id IS NULL FOR UPDATE',
           [finalRoomTypeId, dateStr]
         );
         currentInventory = pRows.length > 0 ? pRows[0].inventory_count : 10;
@@ -664,6 +718,19 @@ export const create = async (req: AuthRequest, res: Response) => {
       manual_reduce,
       finalRoomTypeId
     );
+
+    // BUG-071/073修复：校验最终价格必须大于0
+    if (!total_price || total_price <= 0) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('预订金额必须大于0'));
+    }
+
+    // BUG-077修复：校验最终价格上限，防止异常大额
+    const MAX_BOOKING_PRICE = 1000000;
+    if (total_price > MAX_BOOKING_PRICE) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse(`预订金额不能超过${MAX_BOOKING_PRICE}元`));
+    }
 
     const bookingNumber = `BK${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     const checkInTime = bookingStatus === 'checked_in' ? new Date() : null;
@@ -1107,7 +1174,13 @@ export const checkin = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (!['pending', 'confirmed', 'pre_checked_in'].includes(booking.status)) {
+    // BUG-041修复：移除pending，要求预订必须先确认才能入住
+    if (!['confirmed', 'pre_checked_in'].includes(booking.status)) {
+      if (booking.status === 'pending') {
+        await connection.rollback();
+        res.status(400).json(errorResponse('预订尚未确认，请先确认预订后再办理入住'));
+        return;
+      }
       await connection.rollback();
       res.status(400).json(errorResponse('当前预订状态不允许办理入住'));
       return;

@@ -40,50 +40,13 @@ const router = Router();
  *         description: 通话已发起
  */
 router.post('/initiate', authenticate as any, callController.initiateCall);
-
-/**
- * @swagger
- * /calls/outbound:
- *   post:
- *     summary: 发起外呼通话
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 外呼已发起
- */
 router.post('/outbound', authenticate as any, callController.outboundCall);
 
-/**
- * @swagger
- * /calls/active:
- *   get:
- *     summary: 获取当前活跃通话列表
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 成功获取
- */
-/**
- * @swagger
- * /calls/{call_id}/answer:
- *   get:
- *     summary: 获取通话应答状态
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: call_id
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: 成功获取
- */
+// BUG-067修复：固定路径必须放在动态路径/:call_id之前，否则/active会被当作call_id匹配
+router.get('/active', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getActiveCalls);
+router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallHistory);
+router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallStats);
+
 router.get('/:call_id/answer', authenticate as any, callController.answerCall);
 
 /**
@@ -123,90 +86,10 @@ router.post('/:call_id/answer', authenticate as any, callController.answerCall);
  *         description: 拒接成功
  */
 router.post('/:call_id/reject', authenticate as any, callController.rejectCall);
-
-/**
- * @swagger
- * /calls/{call_id}/hangup:
- *   post:
- *     summary: 挂断通话
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: call_id
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: 挂断成功
- */
 router.post('/:call_id/hangup', authenticate as any, callController.hangupCall);
-
-/**
- * @swagger
- * /calls/{call_id}/status:
- *   get:
- *     summary: 获取通话状态
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: call_id
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: 成功获取状态
- */
 router.get('/:call_id/status', authenticate as any, callController.getCallStatus);
 
-/**
- * @swagger
- * /calls/active:
- *   get:
- *     summary: 获取活跃通话列表
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 成功获取
- */
-router.get('/active', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getActiveCalls);
-
-/**
- * @swagger
- * /calls/history:
- *   get:
- *     summary: 获取通话历史记录
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 成功获取
- */
-router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallHistory);
-
-/**
- * @swagger
- * /calls/stats:
- *   get:
- *     summary: 获取通话统计数据
- *     tags: [Calls]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 成功获取
- */
-router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallStats);
-
-// ============================================
-// WebRTC 语音网关路由（双通道兼容）
-// ============================================
+// WebRTC 语音网关路由
 
 /**
  * POST /api/v1/calls/webrtc/session

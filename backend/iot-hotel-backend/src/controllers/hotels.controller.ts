@@ -60,11 +60,24 @@ export async function search(req: AuthRequest, res: Response) {
       WHERE (h.hotel_name LIKE ? OR h.hotel_address LIKE ? OR h.location LIKE ?)
     `;
 
-    const keyword = `%${destination || ''}%`;
+    // BUG-054修复：当有搜索关键词时才过滤，空关键词返回所有
+    const dest = (destination as string) || '';
+    const keyword = `%${dest}%`;
     const [hotels]: any = await db.execute(sql, [keyword, keyword, keyword]);
 
+    // BUG-054修复：当有搜索关键词时，过滤掉不匹配的结果
+    let filteredHotels = hotels;
+    if (dest.trim()) {
+      const lowerDest = dest.toLowerCase().trim();
+      filteredHotels = hotels.filter((h: any) => {
+        const name = (h.hotel_name || h.name || '').toLowerCase();
+        const addr = (h.hotel_address || h.location || '').toLowerCase();
+        return name.includes(lowerDest) || addr.includes(lowerDest);
+      });
+    }
+
     sendSuccess(res, {
-      hotels: hotels.map((h: any) => ({
+      hotels: filteredHotels.map((h: any) => ({
         id: h.id,
         name: h.hotel_name || h.name || '智联酒店',
         location: h.hotel_address || h.location || '酒店地址',

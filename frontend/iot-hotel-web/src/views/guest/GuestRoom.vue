@@ -634,6 +634,8 @@ onUnmounted(() => {
     socket.off('call_answered', handleCallAnswered)
     socket.off('call_hungup', handleCallHungup)
     socket.off('connect', registerAsRoom)
+    // BUG-056修复：主动断开WebSocket连接，防止内存泄漏和重复连接
+    socket.disconnect()
   }
 })
 

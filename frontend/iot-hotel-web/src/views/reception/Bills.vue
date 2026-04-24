@@ -66,6 +66,13 @@
             <a-button type="link" size="small" v-if="record.status === 'pending'" @click="collectPayment(record)">
               收款
             </a-button>
+            <a-popconfirm
+              v-if="record.payment_id && ['checked_in', 'confirmed', 'checked_out'].includes(record.status)"
+              title="确定要退款吗？退款后预订将被取消且不可恢复"
+              @confirm="handleRefund(record)"
+            >
+              <a-button type="link" size="small" danger>退款</a-button>
+            </a-popconfirm>
           </a-space>
         </template>
       </template>
@@ -101,6 +108,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { $notify, NotifyPreset } from '@/utils/notify'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
 import { bookingApi } from '@/api/booking'
+import { paymentApi } from '@/api/payment'
 import { formatDate, formatTimeHHmm } from '@/utils/date'
 
 const payMethodFilter = ref<string | undefined>()
@@ -185,11 +193,28 @@ function printBill() {
 async function fetchBills() {
   loading.value = true
   try {
-    const res: any = await bookingApi.getBookingList({ pageSize: 100 })
-    const list = res.data?.list || []
+    const [bookingRes, paymentRes]: any[] = await Promise.all([
+      bookingApi.getBookingList({ pageSize: 100 }),
+      paymentApi.getPaymentHistory({ pageSize: 100 })
+    ])
+    const list = bookingRes.data?.list || []
+    const payments = paymentRes?.list || []
     
-    // 过滤出有价值的账单状态
-    bills.value = list.filter((b: any) => ['checked_in', 'checked_out', 'confirmed'].includes(b.status))
+    // 构建payment_id映射：通过order_id找到对应的已支付payment
+    const paymentMap = new Map<number, number>()
+    for (const p of payments) {
+      if (p.order_type === 'booking' && p.status === 'paid') {
+        paymentMap.set(p.order_id, p.id)
+      }
+    }
+    
+    // 过滤出有价值的账单状态，并关联payment_id
+    bills.value = list
+      .filter((b: any) => ['checked_in', 'checked_out', 'confirmed', 'pending'].includes(b.status))
+      .map((b: any) => ({
+        ...b,
+        payment_id: b.payment_id || paymentMap.get(b.id) || null
+      }))
     
     // 简单统计逻辑
     stats.pendingCount = list.filter((b: any) => b.status === 'checked_in').length
@@ -215,6 +240,17 @@ function viewBillDetail(bill: any) {
 
 function collectPayment(bill: any) { 
   NotifyPreset.paymentSuccess(Number(bill.total_price)) 
+}
+
+async function handleRefund(record: any) {
+  if (!record.payment_id) return
+  try {
+    await paymentApi.refundPayment(record.payment_id, '前台手动退款')
+    $message.success('退款成功')
+    fetchBills()
+  } catch (e: any) {
+    $message.error(e?.response?.data?.message || '退款失败')
+  }
 }
 
 onMounted(fetchBills)

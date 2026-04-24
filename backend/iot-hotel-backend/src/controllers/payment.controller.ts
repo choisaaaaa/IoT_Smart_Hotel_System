@@ -60,6 +60,24 @@ export const create = async (req: AuthRequest, res: Response) => {
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json(errorResponse('支付金额必须大于0'));
     }
+    if (!payment_method) {
+      return res.status(400).json(errorResponse('缺少支付方式(payment_method)'));
+    }
+    if (!finalOrderType) {
+      return res.status(400).json(errorResponse('缺少订单类型(order_type)'));
+    }
+
+    // BUG-045修复：校验order_id是否存在
+    const validOrderTypes = ['booking', 'delivery', 'maintenance'];
+    if (!validOrderTypes.includes(finalOrderType)) {
+      return res.status(400).json(errorResponse(`无效的订单类型: ${finalOrderType}`));
+    }
+
+    const orderTableMap: Record<string, string> = { booking: 'bookings', delivery: 'delivery_orders', maintenance: 'maintenance_tickets' };
+    const [orderRows] = await pool.query(`SELECT id, hotel_id FROM ${orderTableMap[finalOrderType]} WHERE id = ?`, [Number(finalOrderId)]);
+    if (!Array.isArray(orderRows) || orderRows.length === 0) {
+      return res.status(404).json(errorResponse(`订单(ID:${finalOrderId})不存在`));
+    }
 
     if (finalOrderType === 'booking' && finalOrderId) {
       const numericOrderId = Number(finalOrderId);
@@ -136,6 +154,45 @@ export const pay = async (req: AuthRequest, res: Response) => {
     } else {
       res.status(500).json(errorResponse('支付失败'));
     }
+  }
+};
+
+export const refund = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { refund_reason } = req.body || {};
+    const numericId = Number(id);
+
+    const [paymentRows] = await pool.query('SELECT id, status, amount, order_id, order_type, hotel_id FROM payments WHERE id = ?', [numericId]);
+    if (!Array.isArray(paymentRows) || paymentRows.length === 0) {
+      return res.status(404).json(errorResponse('支付记录不存在'));
+    }
+
+    const payment = paymentRows[0] as any;
+    if (payment.status !== 'paid') {
+      return res.status(400).json(errorResponse('只能对已支付的订单执行退款'));
+    }
+
+    await pool.query(
+      `UPDATE payments SET status = 'refunded', refund_reason = ?, refunded_at = NOW() WHERE id = ?`,
+      [refund_reason || '管理员手动退款', numericId]
+    );
+
+    if (payment.order_type === 'booking' && payment.order_id) {
+      const [bookingRows] = await pool.query('SELECT status FROM bookings WHERE id = ?', [payment.order_id]);
+      if (Array.isArray(bookingRows) && bookingRows.length > 0) {
+        const bookingStatus = (bookingRows[0] as any).status;
+        if (['pending', 'confirmed', 'pre_checked_in'].includes(bookingStatus)) {
+          await pool.query("UPDATE bookings SET status = 'cancelled' WHERE id = ?", [payment.order_id]);
+        }
+      }
+    }
+
+    logger.info(`[Payment Refund] Payment ${numericId} refunded, amount: ${payment.amount}, reason: ${refund_reason}`);
+    res.json(successResponse({ payment_id: numericId, status: 'refunded', amount: payment.amount }, '退款成功'));
+  } catch (error) {
+    logger.error('退款失败:', error.message);
+    res.status(500).json(errorResponse('退款失败'));
   }
 };
 

@@ -365,7 +365,8 @@ export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
 
     const pool = (await import('../config/database')).default;
     
-    // 查询用户当前有效的入住记录（优先通过user_id，其次通过guest_phone）
+    // BUG-036修复：统一与getGuestRoom的入住状态判断逻辑
+    // 只检查 status = 'checked_in'，不额外检查日期范围
     let bookings: any[] = [];
     
     if (userId) {
@@ -373,8 +374,7 @@ export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
         `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
          FROM bookings b
          JOIN rooms r ON b.room_id = r.id
-         WHERE b.user_id = ? AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.user_id = ? AND b.status = 'checked_in'
          ORDER BY b.check_in_date DESC
          LIMIT 1`,
         [userId]
@@ -387,8 +387,7 @@ export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
         `SELECT b.id as booking_id, b.room_id, b.hotel_id, r.room_number, r.room_type, r.room_name, r.floor
          FROM bookings b
          JOIN rooms r ON b.room_id = r.id
-         WHERE b.guest_phone = ? AND b.status IN ('checked_in', 'confirmed')
-         AND b.check_in_date <= NOW() AND b.check_out_date >= NOW()
+         WHERE b.guest_phone = ? AND b.status = 'checked_in'
          ORDER BY b.check_in_date DESC
          LIMIT 1`,
         [userPhone]
@@ -397,7 +396,7 @@ export const getMyRoomDevices = async (req: AuthRequest, res: Response) => {
     }
 
     if (bookings.length === 0) {
-      return res.status(404).json(errorResponse('当前没有入住记录'));
+      return res.json(successResponse(null, '当前没有入住记录'));
     }
 
     const roomId = bookings[0].room_id;

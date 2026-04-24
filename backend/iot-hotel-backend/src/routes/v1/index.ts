@@ -28,6 +28,7 @@ import floors from './floors';
 import frequentGuests from './frequent-guests';
 import health from './health';
 import systemConfig from './system-config';
+import deviceGroups from './device-groups';
 
 /**
  * 已删除的前端未实现接口路由：
@@ -59,7 +60,7 @@ router.use('/maintenance', maintenance);
 router.use('/reviews', reviews);
 router.use('/calls', calls);
 router.use('/devices', devices);
-// 已删除: router.use('/device-groups', deviceGroups);
+router.use('/device-groups', deviceGroups);
 // 已删除: router.use('/device-alarms', deviceAlarms);
 // 已删除: router.use('/ir-remote', irRemote);
 // 已删除: router.use('/scenes', scenes);

@@ -192,8 +192,8 @@ const router = useRouter()
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
 
-const getLogoUrl = (url?: string) => {
-  return appStore.resolveImageUrl(url) || '/logo-small.png'
+const getLogoUrl = (url?: string | null) => {
+  return appStore.resolveImageUrl(url || undefined) || '/logo-small.png'
 }
 
 appStore.initUserInfo()

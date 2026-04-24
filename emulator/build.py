@@ -16,10 +16,10 @@ def clean_build():
             try:
                 shutil.rmtree(dir_name)
             except PermissionError as e:
-                print(f"⚠️ 无法清理 {dir_name}: {e}")
+                print(f"[警告] 无法清理 {dir_name}: {e}")
                 print(f"   请确保没有程序正在使用这些文件，然后手动删除")
             except Exception as e:
-                print(f"⚠️ 清理 {dir_name} 时出错: {e}")
+                print(f"[警告] 清理 {dir_name} 时出错: {e}")
 
     # 清理spec文件
     for file in os.listdir('.'):
@@ -28,7 +28,7 @@ def clean_build():
                 os.remove(file)
                 print(f"删除 {file}")
             except Exception as e:
-                print(f"⚠️ 无法删除 {file}: {e}")
+                print(f"[警告] 无法删除 {file}: {e}")
 
 
 def build_executable(script_path, name, icon=None):
@@ -52,10 +52,10 @@ def build_executable(script_path, name, icon=None):
 
     try:
         result = subprocess.run(cmd, check=True, capture_output=False)
-        print(f"✅ {name} 打包成功!")
+        print(f"[成功] {name} 打包成功!")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ {name} 打包失败!")
+        print(f"[失败] {name} 打包失败!")
         print(f"错误: {e}")
         return False
 
@@ -68,11 +68,11 @@ def main():
     # 检查pyinstaller
     try:
         import PyInstaller
-        print("✅ PyInstaller已安装")
+        print("[OK] PyInstaller已安装")
     except ImportError:
-        print("❌ PyInstaller未安装，正在安装...")
+        print("[需要安装] PyInstaller未安装，正在安装...")
         subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyinstaller'], check=True)
-        print("✅ PyInstaller安装完成")
+        print("[OK] PyInstaller安装完成")
 
     # 清理旧构建
     clean_build()
@@ -90,7 +90,7 @@ def main():
             if build_executable(script, name):
                 success_count += 1
         else:
-            print(f"❌ 找不到文件: {script}")
+            print(f"[失败] 找不到文件: {script}")
 
     # 输出结果
     print(f"\n{'='*50}")

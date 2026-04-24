@@ -652,6 +652,10 @@ class FrontDeskEmulator(BaseDeviceEmulator):
         # 订阅客房状态事件以更新灯墙
         self.mqtt_client.subscribe("hotel/device/event/room/+", self._on_room_event)
         self.mqtt_client.subscribe("hotel/security/event", self._on_security_event)
+        
+        # 订阅通话信令主题（用于接收客房呼叫）
+        self.mqtt_client.subscribe("hotel/call/signaling", self._on_call_signaling)
+        self._log("已订阅通话信令主题: hotel/call/signaling")
 
         self._register_command_handlers()
         self._update_led(0, 0, 255)
@@ -735,6 +739,56 @@ class FrontDeskEmulator(BaseDeviceEmulator):
                 
         except Exception as e:
             self._log(f"处理安防事件失败: {e}", "ERROR")
+
+    def _on_call_signaling(self, topic, payload):
+        """处理通话信令（接收客房呼叫）"""
+        try:
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            action = data.get('action', '')
+            call_id = data.get('call_id', '')
+            caller_type = data.get('caller_type', '')
+            caller_id = data.get('caller_id', '')
+            
+            # 忽略自己发送的消息
+            if data.get('device_id') == self.unique_device_id:
+                return
+            
+            if action == 'initiate' and caller_type == 'room':
+                # 收到客房呼叫
+                self._log(f"📞 收到客房 {caller_id} 的呼叫，Call ID: {call_id}")
+                self._handle_incoming_call_from_room(data)
+            elif action == 'hangup' and caller_type == 'room':
+                # 客房挂断
+                self._log(f"📞 客房 {caller_id} 挂断通话")
+                self._handle_call_hangup(data)
+        except Exception as e:
+            self._log(f"处理通话信令失败: {e}", "ERROR")
+
+    def _handle_incoming_call_from_room(self, data):
+        """处理来自客房的来电"""
+        caller_id = data.get('caller_id', '未知房间')
+        call_id = data.get('call_id', '')
+        
+        self._log(f"处理客房来电: {caller_id}")
+        self._beep(2)
+        
+        # 可以在这里添加接听逻辑，例如弹窗提示
+        # 暂时自动接听并发送接听信令
+        answer_data = {
+            "action": "answer",
+            "call_id": call_id,
+            "caller_type": "front_desk",
+            "device_id": self.unique_device_id,
+            "callee_id": caller_id
+        }
+        self.mqtt_client.publish("hotel/call/signaling", answer_data)
+        self.mqtt_client.publish(f"hotel/call/signaling/{call_id}", answer_data)
+        self._log(f"已接听客房 {caller_id} 的呼叫")
+
+    def _handle_call_hangup(self, data):
+        """处理通话挂断"""
+        self._beep(1)
+        self._log("通话已结束")
 
     def _start_continuous_beep(self):
         """启动持续蜂鸣器（5秒后开始持续响）"""

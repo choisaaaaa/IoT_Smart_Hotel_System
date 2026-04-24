@@ -214,6 +214,21 @@ export const assign = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { repairer } = req.body;
+
+    // BUG-046修复：校验工单当前状态，只有pending状态可分配
+    const [ticketRows] = await pool.query<RowDataPacket[]>(
+      'SELECT status FROM maintenance_tickets WHERE id = ?', [id]
+    );
+    if (ticketRows.length === 0) {
+      return res.status(404).json(errorResponse('报修工单不存在'));
+    }
+    const currentStatus = (ticketRows[0] as any).status;
+    if (currentStatus !== 'pending') {
+      return res.status(400).json(errorResponse(`当前工单状态为"${currentStatus}"，只有"pending"状态可分配维修人员`));
+    }
+    if (!repairer) {
+      return res.status(400).json(errorResponse('缺少维修人员参数(repairer)'));
+    }
     
     const [result] = await pool.query<ResultSetHeader>(
       'UPDATE maintenance_tickets SET status = ?, repairer = ?, assigned_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -241,6 +256,25 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (!['pending', 'assigned', 'processing', 'completed'].includes(status)) {
       res.status(400).json(errorResponse('无效的工单状态'));
       return;
+    }
+
+    // BUG-046修复：校验工单状态转换合法性
+    const validTransitions: Record<string, string[]> = {
+      pending: ['assigned', 'processing', 'completed'],
+      assigned: ['processing', 'completed'],
+      processing: ['completed'],
+      completed: []
+    };
+    const [currentTicketRows] = await pool.query<RowDataPacket[]>(
+      'SELECT status FROM maintenance_tickets WHERE id = ?', [id]
+    );
+    if (currentTicketRows.length === 0) {
+      return res.status(404).json(errorResponse('报修工单不存在'));
+    }
+    const currentStatus = (currentTicketRows[0] as any).status;
+    const allowed = validTransitions[currentStatus] || [];
+    if (!allowed.includes(status)) {
+      return res.status(400).json(errorResponse(`不允许从"${currentStatus}"状态转换到"${status}"状态`));
     }
 
     // 权限检查
@@ -326,6 +360,12 @@ export const complete = async (req: AuthRequest, res: Response) => {
     if (ticketRows.length === 0) {
       res.status(404).json(errorResponse('报修工单不存在或无权访问'));
       return;
+    }
+
+    // BUG-046修复：校验工单状态，只有assigned/processing状态可完成
+    const currentStatus = (ticketRows[0] as any).status;
+    if (!['assigned', 'processing'].includes(currentStatus)) {
+      return res.status(400).json(errorResponse(`当前工单状态为"${currentStatus}"，只有"assigned"或"processing"状态可标记完成`));
     }
 
     const roomId = (ticketRows[0] as any).room_id;

@@ -1,18 +1,29 @@
 import { Request, Response } from 'express';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
-import { isSystemAdmin } from '../utils/role';
+import { isSystemAdmin, isCustomer, isGuest } from '../utils/role';
 
 class SceneController {
-  /**
-   * 获取场景列表
-   */
   async getAll(req: Request, res: Response) {
     try {
       const user = (req as any).user;
       let hotelId = user?.hotel_id;
       if (isSystemAdmin(user?.role)) {
         hotelId = req.query.hotel_id ? parseInt(req.query.hotel_id as string) : undefined;
+      }
+      // BUG-051修复：顾客hotel_id=0时，通过入住记录获取hotel_id
+      if ((!hotelId || hotelId === 0) && (isCustomer(user?.role) || isGuest(user?.role))) {
+        const [bookingRows] = await pool.query<RowDataPacket[]>(
+          "SELECT hotel_id FROM bookings WHERE (user_id = ? OR guest_phone = ?) AND status = 'checked_in' ORDER BY check_in_date DESC LIMIT 1",
+          [user?.id, user?.phone]
+        );
+        if (bookingRows.length > 0) {
+          hotelId = bookingRows[0].hotel_id;
+        }
+        // 也可以从query参数获取
+        if (!hotelId && req.query.hotel_id) {
+          hotelId = parseInt(req.query.hotel_id as string);
+        }
       }
       if (!hotelId) {
         if (isSystemAdmin(user?.role)) {

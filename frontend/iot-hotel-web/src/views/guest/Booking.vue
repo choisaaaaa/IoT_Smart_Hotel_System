@@ -1246,7 +1246,7 @@ const fetchHotelImages = async () => {
 // 打开图片画廊
 const openImageGallery = (index: number = 0) => {
   if (hotelImages.value.length === 0) {
-    message.info('暂无更多图片')
+    $notify.info({ title: '提示', description: '暂无更多图片' })
     return
   }
   currentImageIndex.value = index
@@ -1292,8 +1292,8 @@ const selectPlan = async (type: any, plan: any) => {
 const fetchFrequentGuests = async () => {
   try {
     const res = await guestService.list()
-    if (res && res.guests) {
-      frequentGuests.value = res.guests
+    if (res && res.data && res.data.guests) {
+      frequentGuests.value = res.data.guests
     }
   } catch (error) {
     console.error('获取常用联系人失败:', error)

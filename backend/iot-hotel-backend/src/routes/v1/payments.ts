@@ -106,6 +106,30 @@ router.post('/', authenticate as any, authorize(allRoles), paymentController.cre
  */
 router.put('/:id/pay', authenticate as any, paymentController.pay);
 
-
+/**
+ * @swagger
+ * /payments/{id}/refund:
+ *   put:
+ *     summary: 执行退款
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refund_reason: { type: string }
+ *     responses:
+ *       200:
+ *         description: 退款成功
+ */
+router.put('/:id/refund', authenticate as any, authorize(staffRoles), paymentController.refund);
 
 export default router;

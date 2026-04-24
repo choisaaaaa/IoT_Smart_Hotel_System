@@ -507,6 +507,8 @@ onUnmounted(() => {
     socket.off('webrtc_answer', handleWebRTCAnswer)
     socket.off('webrtc_ice_candidate', handleWebRTCIceCandidate)
     socket.off('online_status', handleOnlineStatus)
+    // BUG-056修复：断开WebSocket连接
+    socket.disconnect()
   }
 })
 

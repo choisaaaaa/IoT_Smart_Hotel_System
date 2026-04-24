@@ -387,6 +387,25 @@ router.beforeEach((to, from, next) => {
     return
   }
 
+  // BUG-057修复：验证Token是否过期
+  try {
+    const tokenParts = token.split('.')
+    if (tokenParts.length === 3) {
+      const payload = JSON.parse(atob(tokenParts[1]))
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_info')
+        next({
+          path: '/guest/booking',
+          query: { login: '1', redirect: to.fullPath, reason: 'expired' }
+        })
+        return
+      }
+    }
+  } catch (e) {
+    // Token解析失败，忽略
+  }
+
   let allowedRoles: string[] = []
   to.matched.forEach(record => {
     if (record.meta.roles) {

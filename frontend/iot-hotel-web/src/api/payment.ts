@@ -47,6 +47,13 @@ class PaymentApi {
     const response: any = await request.get<ApiResponse<{ list: PaymentInfo[]; total: number }>>('/payments', { params })
     return response?.data || { list: [], total: 0 }
   }
+
+  async refundPayment(paymentId: number, refundReason?: string): Promise<PaymentInfo> {
+    const response: any = await request.put<ApiResponse<PaymentInfo>>(`/payments/${paymentId}/refund`, {
+      refund_reason: refundReason || '管理员手动退款'
+    })
+    return response?.data
+  }
 }
 
 export const paymentApi = new PaymentApi()

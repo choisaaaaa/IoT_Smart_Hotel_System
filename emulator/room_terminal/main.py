@@ -1055,12 +1055,27 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         # 订阅全局安防事件主题，实现联动报警
         self.mqtt_client.subscribe("hotel/security/event", self._on_security_event_from_others)
         self._log("已订阅全局安防事件主题: hotel/security/event")
+        
+        # 订阅通话信令主题（用于接收前台呼叫和接听响应）
+        self.mqtt_client.subscribe("hotel/call/signaling", self._on_call_signaling_topic)
+        self._log("已订阅通话信令主题: hotel/call/signaling")
 
         self._register_command_handlers()
 
         self._stop_sensors.clear()
         threading.Thread(target=self._sensor_loop, daemon=True).start()
         self._log("传感器数据上报已启动(15秒间隔)")
+        
+    def _on_call_signaling_topic(self, topic, payload):
+        """处理通话信令主题消息"""
+        try:
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            # 忽略自己发送的消息
+            if data.get('device_id') == self.unique_device_id:
+                return
+            self._handle_call_signaling(data)
+        except Exception as e:
+            self._log(f"处理通话信令主题消息失败: {e}", "ERROR")
 
     def _register_command_handlers(self):
         self.mqtt_client.register_command_handler(f"{CMD_LIGHT}:{CMD_VAL_ON}", self._handle_light_on)
@@ -1339,15 +1354,21 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
         
         if self.mqtt_client and self.connected:
             # 协议：硬件主动发起呼叫信令
-            self.mqtt_client.publish(f"hotel/call/signaling/{call_id}", {
+            # 同时发布到全局信令主题和特定call_id主题
+            signaling_data = {
                 "caller_type": "room",
                 "caller_id": self.room_id,
                 "device_id": self.unique_device_id,
                 "callee_type": "front_desk",
                 "callee_id": "all",
                 "type": "voice",
-                "action": "initiate"
-            })
+                "action": "initiate",
+                "call_id": call_id
+            }
+            # 发布到全局信令主题（前台会订阅此主题）
+            self.mqtt_client.publish("hotel/call/signaling", signaling_data)
+            # 同时发布到特定call_id主题
+            self.mqtt_client.publish(f"hotel/call/signaling/{call_id}", signaling_data)
             self._add_chat("assistant", "正在为您接通前台，请稍候...")
         else:
             self._log("MQTT未连接，呼叫失败", "ERROR")
@@ -1359,11 +1380,16 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             
         self._log("正在挂断通话...")
         if self.mqtt_client and self.connected:
-            self.mqtt_client.publish(f"hotel/call/signaling/{self.current_call_id}", {
+            hangup_data = {
                 "action": "hangup",
                 "call_id": self.current_call_id,
-                "device_id": self.unique_device_id
-            })
+                "device_id": self.unique_device_id,
+                "caller_type": "room"
+            }
+            # 发布到全局信令主题
+            self.mqtt_client.publish("hotel/call/signaling", hangup_data)
+            # 同时发布到特定call_id主题
+            self.mqtt_client.publish(f"hotel/call/signaling/{self.current_call_id}", hangup_data)
         
         self._handle_hangup_call({})
         self._reset_call_ui()
@@ -1535,6 +1561,8 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             return
 
         # 2. 处理 JSON 业务指令与配置
+        # 注意：指令处理已经在 mqtt_client._handle_command 中完成
+        # 这里只处理特定的主题消息（如AI响应），避免重复处理指令
         try:
             # 兼容 bytes 和 str
             if isinstance(payload, bytes):
@@ -1545,23 +1573,38 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             data = json.loads(payload) if isinstance(payload, str) else payload
             if not data: return
 
-            # 通用指令路由 (Cloud -> Hardware)
-            cmd_type = data.get('command_type', '')
-            if not cmd_type and 'action' in data: # 兼容信令格式
-                cmd_type = data.get('action')
-
-            if cmd_type:
-                handler = self.mqtt_client.command_handlers.get(cmd_type)
-                if handler:
-                    self._log(f"收到云端指令: {cmd_type}")
-                    # 确保在主线程执行 UI 相关操作
-                    self.root.after(0, lambda: handler(data))
-                else:
-                    self._log(f"收到未注册指令: {cmd_type or topic}")
+            # 只处理AI响应主题，指令处理已在 mqtt_client 中完成
+            if "hotel/ai/response/room/" in topic:
+                # AI响应已在 mqtt_client._on_message 中通过 on_ai_response 回调处理
+                # 这里不需要额外处理
+                pass
+            elif "hotel/call/signaling/" in topic:
+                # 处理通话信令消息
+                self._handle_call_signaling(data)
         except Exception as e:
             # 如果是二进制音频流但不符合主题过滤，忽略解析错误
             if not isinstance(payload, bytes):
                 self._log(f"消息解析异常: {e}", "ERROR")
+
+    def _handle_call_signaling(self, data):
+        """处理通话信令消息"""
+        action = data.get('action', '')
+        call_id = data.get('call_id', '')
+        caller_type = data.get('caller_type', '')
+        
+        if action == 'initiate' and caller_type == 'front_desk':
+            # 前台发起呼叫
+            self._log(f"收到前台来电，Call ID: {call_id}")
+            self._handle_incoming_call(data)
+        elif action == 'answer' and call_id == self.current_call_id:
+            # 对方接听
+            self._log(f"通话已接听，Call ID: {call_id}")
+            self._answer_call(data)
+        elif action == 'hangup':
+            # 对方挂断
+            self._log(f"对方挂断通话，Call ID: {call_id}")
+            self._handle_hangup_call(data)
+            self._reset_call_ui()
 
     def _update_audit_status_display(self):
         super()._update_audit_status_display()
