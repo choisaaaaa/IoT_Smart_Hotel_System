@@ -1272,20 +1272,13 @@ export class AIButlerService {
   }
 
   /**
-   * 语音合成 - 优先超拟人，自动降级TTS v2
+   * 语音合成：统一使用 TTS v2（单一路径）
    */
   async textToSpeech(text: string): Promise<string> {
     const cleanText = this.cleanTextForTTS(text);
     if (!cleanText.trim()) {return '';}
 
-    logger.debug(`🎙️ [TTS] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
-
-    try {
-      const audio = await this.superHumanTTS(cleanText);
-      if (audio) {return audio;}
-    } catch (e) {
-      logger.warn('⚠️ 超拟人TTS失败，降级到TTS v2');
-    }
+    logger.debug(`🎙️ [TTS v2] 待合成文本: "${cleanText.substring(0, 50)}${cleanText.length > 50 ? '...' : ''}" (${cleanText.length}字)`);
 
     try {
       const audio = await this.ttsV2(cleanText);
@@ -1298,20 +1291,12 @@ export class AIButlerService {
   }
 
   /**
-   * 硬件播放用：16kHz s16le mono PCM（Buffer），优先超拟人 raw，失败则 TTS v2 raw
+   * 硬件播放用：16kHz s16le mono PCM（Buffer），统一使用 TTS v2 raw
    */
   async textToSpeechPcmS16k(text: string): Promise<Buffer> {
     const cleanText = this.cleanTextForTTS(text);
     if (!cleanText.trim()) {
       return Buffer.alloc(0);
-    }
-    try {
-      const buf = await this.superHumanTTSPcm(cleanText);
-      if (buf && buf.length > 0) {
-        return buf;
-      }
-    } catch (e: any) {
-      logger.warn('⚠️ 超拟人 PCM TTS 失败，降级 TTS v2:', e.message);
     }
     try {
       const buf = await this.ttsV2Pcm(cleanText);

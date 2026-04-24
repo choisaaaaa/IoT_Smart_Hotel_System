@@ -402,25 +402,20 @@ class VoiceAgentBridgeService {
   ): Promise<void> {
     const topic = `${DOWNLINK_TOPIC_PREFIX}/${deviceId}`;
     const pacingRatio = readDownlinkPacingRatio();
-    // 以目标块大小估算块数，然后反推实际块大小，得到尽量均等的分片。
-    // 同时做 16bit 对齐，确保每片都是完整 PCM 采样。
-    const estimatedChunks = Math.max(1, Math.ceil(pcm.length / DOWNLINK_CHUNK_BYTES));
-    let actualChunkBytes = Math.ceil(pcm.length / estimatedChunks);
-    if (actualChunkBytes % 2 !== 0) {
-      actualChunkBytes += 1;
-    }
-    const totalChunks = Math.max(1, Math.ceil(pcm.length / actualChunkBytes));
+    const totalChunks = Math.max(1, Math.ceil(pcm.length / DOWNLINK_CHUNK_BYTES));
     const playbackId = `${deviceId}_${Date.now()}`;
     const playbackStartMs = Date.now();
     let accumulatedMs = 0;
+    let off = 0;
+    let seq = 0;
 
-    for (let seq = 1; seq <= totalChunks; seq += 1) {
-      const start = (seq - 1) * actualChunkBytes;
-      const end = Math.min(start + actualChunkBytes, pcm.length);
-      const chunk = pcm.subarray(start, end);
+    while (off < pcm.length) {
+      const end = Math.min(off + DOWNLINK_CHUNK_BYTES, pcm.length);
+      const chunk = pcm.subarray(off, end);
       if (chunk.length === 0) {
-        continue;
+        break;
       }
+      seq += 1;
 
       // 流式音频务必使用 QoS 0：QoS 1 的逐包 ACK 会让大段 TTS 退化成几秒的卡顿。
       // 单次回复中每个分片按顺序仅下发一次，不做重发。
@@ -438,7 +433,8 @@ class VoiceAgentBridgeService {
         0
       );
 
-      if (seq >= totalChunks) {
+      off = end;
+      if (off >= pcm.length) {
         break;
       }
       const chunkMs = (chunk.length / 2 / outSampleRate) * 1000;
@@ -447,7 +443,7 @@ class VoiceAgentBridgeService {
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
     logger.info(
-      `[VoiceAgentBridge] TTS 已匀速等分下发(QoS 0, once) pacing=${pacingRatio} device=${deviceId} playback_id=${playbackId} 块数=${totalChunks} chunk=${actualChunkBytes}B 总=${pcm.length}B @${outSampleRate}Hz`
+      `[VoiceAgentBridge] TTS 已匀速默认分片下发(QoS 0, once) pacing=${pacingRatio} device=${deviceId} playback_id=${playbackId} 块数=${totalChunks} chunk=${DOWNLINK_CHUNK_BYTES}B 总=${pcm.length}B @${outSampleRate}Hz`
     );
   }
 }
