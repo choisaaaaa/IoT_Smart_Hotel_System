@@ -1,25 +1,18 @@
 import { Response } from 'express';
 import { AuthRequest, sendSuccess, sendError, serverError, badRequest } from '../types';
 import mqttService from '../services/mqtt.service';
-import config from '../config';
 import logger from '../utils/logger';
-import { isSystemAdmin } from '../utils/role';
 
 export class MQTTController {
+  /**
+   * 获取MQTT通信日志
+   */
   static async getLogs(req: AuthRequest, res: Response) {
     try {
-      const user = req.user;
+      const hotelId = req.user?.hotel_id || 0;
       const deviceId = req.query.device_id as string;
-      const hotelIdQuery = req.query.hotel_id ? parseInt(req.query.hotel_id as string) : undefined;
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-
-      let hotelId: number | undefined;
-      if (isSystemAdmin(user?.role)) {
-        hotelId = hotelIdQuery;
-      } else {
-        hotelId = user?.hotel_id || 0;
-      }
 
       const logs = await mqttService.getCommunicationLogs(hotelId, deviceId, limit, offset);
       return sendSuccess(res, logs);
@@ -29,6 +22,9 @@ export class MQTTController {
     }
   }
 
+  /**
+   * 手动发送MQTT消息
+   */
   static async sendMessage(req: AuthRequest, res: Response) {
     try {
       const { topic, payload, qos, retain } = req.body;
@@ -50,10 +46,13 @@ export class MQTTController {
     }
   }
 
+  /**
+   * 获取MQTT服务状态
+   */
   static async getStatus(req: AuthRequest, res: Response) {
     return sendSuccess(res, {
       connected: mqttService.isConnected(),
-      broker: config.mqtt.host
+      broker: process.env.MQTT_HOST || 'localhost'
     });
   }
 }
