@@ -671,6 +671,8 @@ class BaseDeviceEmulator:
                     effective_status = server_data.get('audit_status') or server_data.get('status')
 
                 # 2. 初始化MQTT客户端
+                # 获取 room_id（客房终端使用 self.room_id）
+                room_id = getattr(self, 'room_id', None)
                 self.mqtt_client = MQTTClient(
                     self.unique_device_id,
                     self.device_type,
@@ -678,7 +680,8 @@ class BaseDeviceEmulator:
                     port,
                     self.device_key_var.get(), # 使用最新的 key
                     hotel_id=int(self.hotel_id_var.get()) if self.hotel_id_var.get() else 1,
-                    audit_status=effective_status
+                    audit_status=effective_status,
+                    room_id=room_id
                 )
 
                 if self.mqtt_client.connect():

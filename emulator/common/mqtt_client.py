@@ -25,7 +25,7 @@ from .config import (
 
 
 class MQTTClient:
-    def __init__(self, device_id, device_type, broker="8.134.166.69", port=1883, device_key="", username="root", password="IotHotel2026", hotel_id=None, audit_status=None):
+    def __init__(self, device_id, device_type, broker="8.134.166.69", port=1883, device_key="", username="root", password="IotHotel2026", hotel_id=None, audit_status=None, room_id=None):
         self.device_id = device_id
         self.device_type = device_type
         self.broker = broker
@@ -34,6 +34,7 @@ class MQTTClient:
         self.username = username
         self.password = password
         self.hotel_id = hotel_id
+        self.room_id = room_id
 
         self.client = mqtt.Client(client_id=device_id)
         if self.username:
@@ -168,9 +169,17 @@ class MQTTClient:
             cmd_id = data.get('command_id', 0)
             device_id_in_cmd = data.get('device_id', '')
 
+            # 检查指令是否针对本设备
+            # 支持多种 device_id 格式: device_id, room_id, room_{room_id}
             if device_id_in_cmd and device_id_in_cmd != self.device_id:
-                self.logger.warning(f"忽略非本机指令: target={device_id_in_cmd} self={self.device_id}")
-                return
+                # 检查是否是 room_id 格式
+                if self.room_id and device_id_in_cmd == self.room_id:
+                    pass  # 匹配 room_id
+                elif self.room_id and device_id_in_cmd == f"room_{self.room_id}":
+                    pass  # 匹配 room_{room_id} 格式
+                else:
+                    self.logger.warning(f"忽略非本机指令: target={device_id_in_cmd} self={self.device_id}, room={self.room_id}")
+                    return
 
             composite_key = f"{cmd_type}:{cmd_value}" if cmd_value else cmd_type
 
