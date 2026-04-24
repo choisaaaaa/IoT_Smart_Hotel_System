@@ -57,12 +57,11 @@ static bool s_call_incoming_pending = false;
 static char current_call_id[64] = "";
 static uint8_t s_volume_pct = 60;
 
-/* PTT（GLOBAL_PTT_BTN_PIN，与客房端一致）：长按唤醒 Agent；短按仅上报事件（客房端曾关闭通话短按） */
+/* PTT（GLOBAL_PTT_BTN_PIN）：仅长按唤醒 Agent，短按无动作 */
 static bool s_ptt_prev = false;
 static TickType_t s_ptt_press_tick = 0;
 static bool s_ptt_long_fired = false;
 #define FRONT_PTT_LONG_PRESS_MS   850
-#define FRONT_PTT_SHORT_MIN_MS    50
 
 #include "driver_ec11.h"
 
@@ -778,7 +777,7 @@ void task_front_health_report(void *pvParameters) {
     }
 }
 
-// 按键事件任务：PTT（复用客房端 Agent 唤醒语义）；原前台清除/广播键已禁用（引脚 -1）
+// 按键任务：仅 PTT 长按 → Agent（无短按、无前台广播/清除键）
 void task_front_button_events(void *pvParameters) {
     (void)pvParameters;
 
@@ -796,13 +795,6 @@ void task_front_button_events(void *pvParameters) {
                 ESP_LOGI(TAG, "GPIO%d PTT 长按: 唤醒 Agent（语音助手）", GLOBAL_PTT_BTN_PIN);
                 publish_front_event("agent_wake_requested", "长按 PTT 唤醒语音助手");
                 voice_session_arm_agent_window(120000);
-            }
-        }
-        if (!ptt_pressed && s_ptt_prev) {
-            TickType_t held = now - s_ptt_press_tick;
-            if (!s_ptt_long_fired && held >= pdMS_TO_TICKS(FRONT_PTT_SHORT_MIN_MS)) {
-                ESP_LOGI(TAG, "GPIO%d PTT 短按: 当前仅保留 Agent 长按唤醒，通话功能已禁用", GLOBAL_PTT_BTN_PIN);
-                publish_front_event("room_ptt_short_idle", "通话功能已禁用");
             }
         }
         s_ptt_prev = ptt_pressed;

@@ -12,11 +12,16 @@ const DOWNLINK_CHUNK_BYTES = 6144;
  * 匀速：每发一片后，等待 = 本段 PCM 时长的 pacingRatio 倍。默认 1 与实时等长，与固件
  * `GLOBAL_VOICE_PLAY_PACE_PERMILLE=1000` 时喇叭侧「按样本率消费」一致。见 VOICE_DOWNLINK_PACING_RATIO（0.25～2）。
  */
-const DOWNLINK_PACING_RATIO_DEFAULT = 1;
+const DOWNLINK_PACING_RATIO_DEFAULT = 0.4;
+
+function readDownlinkQos(): 0 | 1 {
+  const n = parseInt(process.env.VOICE_DOWNLINK_QOS || '1', 10);
+  return n === 0 ? 0 : 1;
+}
 
 function readDownlinkPacingRatio(): number {
   const n = parseFloat(process.env.VOICE_DOWNLINK_PACING_RATIO || String(DOWNLINK_PACING_RATIO_DEFAULT));
-  if (isNaN(n) || n < 0.25) {
+  if (isNaN(n) || n < 0.1) {
     return DOWNLINK_PACING_RATIO_DEFAULT;
   }
   if (n > 2) {
@@ -93,9 +98,9 @@ class VoiceAgentBridgeService {
     if (!deviceId || !t) {
       return false;
     }
-    const ok = await this.isApprovedRoomDevice(deviceId);
+    const ok = await this.isApprovedAgentDevice(deviceId);
     if (!ok) {
-      logger.warn(`[VoiceAgentBridge] 广播跳过，设备未审核或非客房: ${deviceId}`);
+      logger.warn(`[VoiceAgentBridge] 广播跳过，设备未审核或类型不支持(room/front_desk): ${deviceId}`);
       return false;
     }
     const pcm16 = await aiButlerService.textToSpeechPcmS16k(t).catch(() => Buffer.alloc(0));
@@ -127,9 +132,9 @@ class VoiceAgentBridgeService {
       return;
     }
 
-    const ok = await this.isApprovedRoomDevice(deviceId);
+    const ok = await this.isApprovedAgentDevice(deviceId);
     if (!ok) {
-      logger.warn(`[VoiceAgentBridge] 设备未审核或非客房: ${deviceId}`);
+      logger.warn(`[VoiceAgentBridge] 设备未审核或类型不支持(room/front_desk): ${deviceId}`);
       return;
     }
 
@@ -213,11 +218,15 @@ class VoiceAgentBridgeService {
     }
   }
 
-  private async isApprovedRoomDevice(deviceId: string): Promise<boolean> {
+  private async isApprovedAgentDevice(deviceId: string): Promise<boolean> {
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
-        'SELECT device_id FROM devices WHERE device_id = ? AND device_type = ? AND audit_status = ?',
-        [deviceId, 'room', 'approved']
+        `SELECT device_id
+         FROM devices
+         WHERE device_id = ?
+           AND device_type IN ('room', 'front_desk')
+           AND audit_status = ?`,
+        [deviceId, 'approved']
       );
       return rows.length > 0;
     } catch (e: any) {
@@ -402,6 +411,7 @@ class VoiceAgentBridgeService {
   ): Promise<void> {
     const topic = `${DOWNLINK_TOPIC_PREFIX}/${deviceId}`;
     const pacingRatio = readDownlinkPacingRatio();
+    const qos = readDownlinkQos();
     const totalChunks = Math.max(1, Math.ceil(pcm.length / DOWNLINK_CHUNK_BYTES));
     const playbackId = `${deviceId}_${Date.now()}`;
     const playbackStartMs = Date.now();
@@ -417,8 +427,8 @@ class VoiceAgentBridgeService {
       }
       seq += 1;
 
-      // 流式音频务必使用 QoS 0：QoS 1 的逐包 ACK 会让大段 TTS 退化成几秒的卡顿。
-      // 单次回复中每个分片按顺序仅下发一次，不做重发。
+      // 单次回复中每个分片按顺序仅下发一次，不做应用层重发。
+      // 为了减少长句尾字丢失，默认使用 QoS1（可通过 VOICE_DOWNLINK_QOS=0 切回低延迟模式）。
       await mqttService.publish(
         topic,
         {
@@ -430,7 +440,7 @@ class VoiceAgentBridgeService {
           timestamp_ms: playbackStartMs + accumulatedMs,
           pcm_base64: chunk.toString('base64')
         },
-        0
+        qos
       );
 
       off = end;
@@ -439,11 +449,11 @@ class VoiceAgentBridgeService {
       }
       const chunkMs = (chunk.length / 2 / outSampleRate) * 1000;
       accumulatedMs += Math.max(1, Math.floor(chunkMs));
-      const waitMs = Math.max(1, Math.floor(chunkMs * pacingRatio));
+      const waitMs = Math.max(0, Math.floor(chunkMs * pacingRatio));
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
     logger.info(
-      `[VoiceAgentBridge] TTS 已匀速默认分片下发(QoS 0, once) pacing=${pacingRatio} device=${deviceId} playback_id=${playbackId} 块数=${totalChunks} chunk=${DOWNLINK_CHUNK_BYTES}B 总=${pcm.length}B @${outSampleRate}Hz`
+      `[VoiceAgentBridge] TTS 已匀速默认分片下发(QoS ${qos}, once) pacing=${pacingRatio} device=${deviceId} playback_id=${playbackId} 块数=${totalChunks} chunk=${DOWNLINK_CHUNK_BYTES}B 总=${pcm.length}B @${outSampleRate}Hz`
     );
   }
 }

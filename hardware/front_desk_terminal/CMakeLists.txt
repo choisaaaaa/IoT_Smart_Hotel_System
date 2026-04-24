@@ -36,7 +36,7 @@ add_compile_definitions(
     GLOBAL_BTN_ROOM_2_PIN=-1
     GLOBAL_BTN_FLOOR_1_PIN=-1
     
-    # 前台按键（已在代码中注释掉，这里也置为 -1 释放引脚）
+    # 前台清除/广播物理键已移除，不占 GPIO
     GLOBAL_BTN_FRONT_1_PIN=-1
     GLOBAL_BTN_FRONT_2_PIN=-1
     
