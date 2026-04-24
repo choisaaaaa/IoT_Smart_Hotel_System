@@ -21,6 +21,7 @@
 #include "service_auth.h"
 #include "voice_session.h"
 #include "driver_ec11.h"
+#include "driver_oled.h"
 
 /*
  * 公网若按「设备号 / 固件版本 / 镜像版本」识别终端，换身份时请改下面两处，
@@ -45,6 +46,10 @@ static volatile bool s_peripherals_ready = false;
 static volatile bool s_auth_task_started = false;
 static uint32_t s_reconnect_count = 0;
 static char target_room_id[16] = "301";
+/** 与客房一致：楼控 device_id（如 floor_03），用于订阅走廊温湿度 hotel/device/data/{temp|humidity}/... */
+static char s_floor_sensor_device_id[40] = "";
+static bool s_floor_got_temp = false;
+static bool s_floor_got_hum = false;
 static uint32_t s_command_seq = 1000;
 static uint32_t s_call_seq = 1;
 static const uint8_t k_default_card_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -98,6 +103,16 @@ static front_ec11_function_mode_t s_ec11_function_mode = FRONT_EC11_MODE_VOLUME;
 #define FRONT_EC11_MODE_SWITCH_HOLD_MS 650
 static const TickType_t EC11_TASK_PERIOD = pdMS_TO_TICKS(10);
 
+/** OLED：与客房 room_oled_* 相同 4 行布局；前台无 DHT 时 Line1 为温湿度占位 */
+static const TickType_t FRONT_OLED_REFRESH_PERIOD = pdMS_TO_TICKS(1000);
+static char  s_oled_ip_tail[8]   = "---";
+static bool  s_oled_net_ok       = false;
+static float s_oled_last_temp_c  = 0.f;
+static float s_oled_last_hum_pct = 0.f;
+static bool  s_oled_env_valid    = false;
+static char  s_oled_status_line[22] = "";
+static TickType_t s_oled_status_until = 0;
+
 static void publish_room_command(const char *room_id, const char *command_type);
 static bool handle_voice_control_command(const char *cmd_type, cJSON *root, const char **result_msg);
 static void publish_front_sensor_data(const char *sensor_type, double value, const char *unit);
@@ -105,6 +120,11 @@ static void front_apply_brightness_to_light(void);
 static bool apply_front_scene(front_scene_mode_t mode, const char **out_result_msg);
 void task_front_ec11_peripheral(void *pvParameters);
 void publish_device_heartbeat(void);
+static void front_oled_flash_status(const char *msg, uint32_t ttl_ms);
+static void front_oled_render_all(void);
+static void front_ec11_refresh_oled_mode_line(void);
+void task_front_oled_refresh(void *pvParameters);
+static void front_floor_env_mqtt_cb(const char *topic, const char *data, int data_len);
 
 static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
 {
@@ -659,6 +679,112 @@ static const char *front_ec11_mode_label_cn(front_ec11_function_mode_t m) {
     }
 }
 
+/** 与客房 room_scene_label_short 一致（OLED 仅 5×7 ASCII） */
+static const char *front_scene_label_short(front_scene_mode_t m) {
+    switch (m) {
+        case FRONT_SCENE_WELCOME:
+            return "WEL";
+        case FRONT_SCENE_READING:
+            return "RDG";
+        case FRONT_SCENE_NIGHT:
+            return "NGT";
+        case FRONT_SCENE_SLEEP:
+            return "SLP";
+        default:
+            return "?";
+    }
+}
+
+static void front_ec11_format_mode_line(char *buf, size_t buf_size) {
+    if (buf == NULL || buf_size == 0) {
+        return;
+    }
+    switch (s_ec11_function_mode) {
+        case FRONT_EC11_MODE_VOLUME:
+            snprintf(buf, buf_size, "M:VOL %d%%", s_volume_pct);
+            break;
+        case FRONT_EC11_MODE_BRIGHTNESS:
+            snprintf(buf, buf_size, "M:BRT %d%%", s_brightness_pct);
+            break;
+        case FRONT_EC11_MODE_AC_TEMP:
+            snprintf(buf, buf_size, "M:AC  %uC", (unsigned)s_ac_target_temp);
+            break;
+        case FRONT_EC11_MODE_SCENE:
+            snprintf(buf, buf_size, "M:SCN %s", front_scene_label_short(s_scene_mode));
+            break;
+        default:
+            snprintf(buf, buf_size, "M:?");
+            break;
+    }
+}
+
+static void front_oled_flash_status(const char *msg, uint32_t ttl_ms) {
+    if (msg == NULL) {
+        return;
+    }
+    snprintf(s_oled_status_line, sizeof(s_oled_status_line), "%s", msg);
+    s_oled_status_until = xTaskGetTickCount() + pdMS_TO_TICKS(ttl_ms);
+}
+
+/**
+ * 与客房 room_oled_render_all 相同结构：
+ * Line0: 目标房号+网态+IP 尾段+场景；Line1: 温湿度+AC；Line2: EC11 档；Line3: 继电器行或指令回显。
+ * 前台 Line0 用 FT<房号> 表示「代客目标房」；Line3 仅 CH1 有效，A/C/D 固定 0。
+ */
+static void front_oled_render_all(void) {
+    char l0[48], l1[48], l2[48], l3[48];
+
+    snprintf(l0, sizeof(l0), "FT%.6s %s %.7s %s",
+             target_room_id,
+             s_oled_net_ok ? "OK" : "--",
+             s_oled_ip_tail,
+             front_scene_label_short(s_scene_mode));
+
+    /* 温湿度：优先楼控 DHT MQTT；仅有其一则另一半显示为 -- */
+    if (s_floor_got_temp && s_floor_got_hum) {
+        s_oled_env_valid = true;
+        snprintf(l1, sizeof(l1), "T%.1fC H%.0f%% AC%uC",
+                 s_oled_last_temp_c, s_oled_last_hum_pct, (unsigned)s_ac_target_temp);
+    } else if (s_floor_got_temp) {
+        s_oled_env_valid = false;
+        snprintf(l1, sizeof(l1), "T%.1fC H-- AC%uC", s_oled_last_temp_c, (unsigned)s_ac_target_temp);
+    } else if (s_floor_got_hum) {
+        s_oled_env_valid = false;
+        snprintf(l1, sizeof(l1), "T-- H%.0f%% AC%uC", s_oled_last_hum_pct, (unsigned)s_ac_target_temp);
+    } else {
+        s_oled_env_valid = false;
+        snprintf(l1, sizeof(l1), "T --.- H-- AC%uC", (unsigned)s_ac_target_temp);
+    }
+
+    front_ec11_format_mode_line(l2, sizeof(l2));
+
+    if (s_oled_status_line[0] != '\0' && xTaskGetTickCount() < s_oled_status_until) {
+        snprintf(l3, sizeof(l3), "%s", s_oled_status_line);
+    } else {
+        if (s_oled_status_line[0] != '\0') {
+            s_oled_status_line[0] = '\0';
+        }
+        snprintf(l3, sizeof(l3), "L%d A0 C0 D0 Sc:%s",
+                 s_front_relay_latched_on ? 1 : 0,
+                 front_scene_label_short(s_scene_mode));
+    }
+
+    driver_oled_show_4_lines(l0, l1, l2, l3);
+}
+
+static void front_ec11_refresh_oled_mode_line(void) {
+    front_oled_render_all();
+}
+
+void task_front_oled_refresh(void *pvParameters) {
+    (void)pvParameters;
+    ESP_LOGI(TAG, "OLED 刷新任务启动（1Hz，与客房相同布局）");
+    while (1) {
+        front_oled_render_all();
+        vTaskDelay(FRONT_OLED_REFRESH_PERIOD);
+    }
+}
+
 void task_front_ec11_peripheral(void *pvParameters) {
     (void)pvParameters;
     static bool s_sw_prev_stable = false;
@@ -695,6 +821,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     snprintf(detail, sizeof(detail), "当前:%s", front_ec11_mode_label_cn(s_ec11_function_mode));
                     publish_front_event("front_ec11_mode_switch", detail);
                     ESP_LOGI(TAG, "EC11 长按 SW：%s", front_ec11_mode_label_cn(s_ec11_function_mode));
+                    front_ec11_refresh_oled_mode_line();
                 }
                 s_sw_held = false;
             }
@@ -722,6 +849,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     driver_ec11_clear_rotation_accumulator();
                     publish_front_sensor_data("volume", (double)s_volume_pct, "%");
                     ESP_LOGI(TAG, "前台音量：%d%%", s_volume_pct);
+                    front_ec11_refresh_oled_mode_line();
                     break;
                 }
                 case FRONT_EC11_MODE_BRIGHTNESS: {
@@ -737,6 +865,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     front_apply_brightness_to_light();
                     publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
                     ESP_LOGI(TAG, "EC11 灯光亮度: %d%%", s_brightness_pct);
+                    front_ec11_refresh_oled_mode_line();
                     break;
                 }
                 case FRONT_EC11_MODE_AC_TEMP: {
@@ -752,6 +881,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     s_ac_target_temp = (uint8_t)t;
                     publish_front_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
                     ESP_LOGI(TAG, "空调目标温度: %u℃（演示上报，无红外真机）", (unsigned)s_ac_target_temp);
+                    front_ec11_refresh_oled_mode_line();
                     break;
                 }
                 case FRONT_EC11_MODE_SCENE: {
@@ -765,6 +895,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     bool ok = apply_front_scene(next, &scene_msg);
                     ESP_LOGI(TAG, "EC11 场景: %s ok=%d", scene_msg, (int)ok);
                     publish_device_heartbeat();
+                    front_ec11_refresh_oled_mode_line();
                     break;
                 }
                 default:
@@ -1184,6 +1315,8 @@ static void front_desk_command_callback(const char *topic, const char *data, int
 
         bool ok = handle_voice_control_command(cmd_type, root, &result_msg);
         publish_front_command_result(cmd_id_item->valueint, cmd_type, ok, result_msg);
+        front_oled_flash_status(cmd_type, 2000);
+        front_oled_render_all();
         cJSON_Delete(root);
         return;
     }
@@ -1197,6 +1330,8 @@ static void front_desk_command_callback(const char *topic, const char *data, int
             hal_audio_beep_volume_pct(s_volume_pct);
             hal_audio_beep_volume_pct(s_volume_pct);
         }
+        front_oled_flash_status(cmd_type, 2000);
+        front_oled_render_all();
         cJSON_Delete(root);
         return;
     }
@@ -1216,6 +1351,8 @@ static void front_desk_command_callback(const char *topic, const char *data, int
         hal_audio_beep_volume_pct(s_volume_pct);
         hal_audio_beep_volume_pct(s_volume_pct);
     }
+    front_oled_flash_status(cmd_type, 2000);
+    front_oled_render_all();
     cJSON_Delete(root);
 }
 
@@ -1233,6 +1370,35 @@ static void front_command_result_callback(const char *topic, const char *data, i
     if (cJSON_IsString(device_item) && cJSON_IsString(cmd_item) && cJSON_IsString(status_item)) {
         ESP_LOGI(TAG, "回执: dev=%s cmd=%s status=%s",
                  device_item->valuestring, cmd_item->valuestring, status_item->valuestring);
+    }
+    cJSON_Delete(root);
+}
+
+/** 订阅楼控上报的 DHT 温湿度（与 floor_controller publish_sensor_data topic 一致） */
+static void front_floor_env_mqtt_cb(const char *topic, const char *data, int data_len) {
+    (void)topic;
+    cJSON *root = cJSON_ParseWithLength(data, data_len);
+    if (root == NULL) {
+        return;
+    }
+    cJSON *did = cJSON_GetObjectItem(root, "device_id");
+    cJSON *stype = cJSON_GetObjectItem(root, "sensor_type");
+    cJSON *val = cJSON_GetObjectItem(root, "value");
+    if (!cJSON_IsString(did) || did->valuestring == NULL ||
+        strcmp(did->valuestring, s_floor_sensor_device_id) != 0) {
+        cJSON_Delete(root);
+        return;
+    }
+    if (!cJSON_IsString(stype) || stype->valuestring == NULL || !cJSON_IsNumber(val)) {
+        cJSON_Delete(root);
+        return;
+    }
+    if (strcmp(stype->valuestring, "temperature") == 0) {
+        s_oled_last_temp_c = (float)val->valuedouble;
+        s_floor_got_temp = true;
+    } else if (strcmp(stype->valuestring, "humidity") == 0) {
+        s_oled_last_hum_pct = (float)val->valuedouble;
+        s_floor_got_hum = true;
     }
     cJSON_Delete(root);
 }
@@ -1328,6 +1494,25 @@ static void auth_and_mqtt_task(void *pvParameters) {
     // 订阅音频下行主题
     voice_session_subscribe_downlink();
 
+    if (s_floor_sensor_device_id[0] != '\0') {
+        char t_temp[160];
+        char t_hum[160];
+        snprintf(t_temp, sizeof(t_temp), "%s/%s/%s",
+                 GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "temperature", s_floor_sensor_device_id);
+        snprintf(t_hum, sizeof(t_hum), "%s/%s/%s",
+                 GLOBAL_TOPIC_DEVICE_DATA_PREFIX, "humidity", s_floor_sensor_device_id);
+        esp_err_t e2 = service_mqtt_subscribe(t_temp, front_floor_env_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控温度失败: %s", esp_err_to_name(e2));
+        }
+        e2 = service_mqtt_subscribe(t_hum, front_floor_env_mqtt_cb);
+        if (e2 != ESP_OK) {
+            ESP_LOGW(TAG, "订阅楼控湿度失败: %s", esp_err_to_name(e2));
+        }
+        ESP_LOGI(TAG, "OLED 温湿度数据源: 楼控 %s (%s / %s)",
+                 s_floor_sensor_device_id, t_temp, t_hum);
+    }
+
     vTaskDelete(NULL);
 }
 
@@ -1335,7 +1520,12 @@ static void auth_and_mqtt_task(void *pvParameters) {
 void on_network_status_changed(bool connected, const char* ip_address) {
     if (connected) {
         s_network_ready = true;
-        ESP_LOGI(TAG, "网络已连接，IP: %s", ip_address);
+        const char *ip_str = (ip_address != NULL) ? ip_address : "--";
+        const char *last_dot = strrchr(ip_str, '.');
+        const char *tail = (last_dot != NULL && *(last_dot + 1) != '\0') ? last_dot + 1 : ip_str;
+        snprintf(s_oled_ip_tail, sizeof(s_oled_ip_tail), "%s", tail);
+        s_oled_net_ok = true;
+        ESP_LOGI(TAG, "网络已连接，IP: %s", ip_str);
 
         if (s_peripherals_ready && !s_auth_task_started) {
             s_auth_task_started = true;
@@ -1345,6 +1535,8 @@ void on_network_status_changed(bool connected, const char* ip_address) {
         }
     } else {
         s_network_ready = false;
+        s_oled_net_ok = false;
+        snprintf(s_oled_ip_tail, sizeof(s_oled_ip_tail), "---");
         s_reconnect_count++;
         ESP_LOGW(TAG, "网络已断开，前台进入离线降级模式");
     }
@@ -1455,6 +1647,8 @@ void app_main(void) {
     load_nvs_string_with_fallback("FrontDesk_ID", front_id, sizeof(front_id), FRONT_DESK_ID_DEFAULT);
     snprintf(device_id, sizeof(device_id), "front_desk_%s", front_id);
     load_nvs_string_with_fallback("Room_ID", target_room_id, sizeof(target_room_id), "301");
+    load_nvs_string_with_fallback("Floor_Sensor_Device_Id", s_floor_sensor_device_id,
+                                  sizeof(s_floor_sensor_device_id), "floor_03");
     load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);
     load_card_aes_key();
 
@@ -1463,7 +1657,10 @@ void app_main(void) {
     service_network_provisioning_start(on_network_status_changed);
     vTaskDelay(FRONT_WIFI_STABILIZE_DELAY);
 
-    // 4. Wi-Fi 稳定后再初始化底层硬件驱动
+    // 4. Wi-Fi 稳定后再初始化底层硬件驱动（OLED I2C 与客房相同 driver_oled）
+    driver_oled_init();
+    driver_oled_clear_screen();
+    driver_oled_show_text_line(0, "Booting...");
     driver_rc522_init();
     if (hal_actuators_init() != ESP_OK) {
         ESP_LOGW(TAG, "继电器初始化失败，请检查 GLOBAL_RELAY_CH1_PIN");
@@ -1485,6 +1682,12 @@ void app_main(void) {
     voice_session_init(device_id, (bool*)&s_network_ready, (bool*)&is_on_call, (bool*)&s_call_incoming_pending, current_call_id,
                        sizeof(current_call_id));
 
+    if (s_ec11_ready) {
+        front_ec11_refresh_oled_mode_line();
+    } else {
+        front_oled_render_all();
+    }
+
     s_peripherals_ready = true;
     if (s_network_ready && !s_auth_task_started) {
         s_auth_task_started = true;
@@ -1498,6 +1701,7 @@ void app_main(void) {
     xTaskCreate(task_front_rc522_poll, "front_rc522_task", 4096, NULL, 4, NULL);
     xTaskCreate(voice_uplink_task, "voice_task", 12288, NULL, 5, NULL);
     xTaskCreate(task_front_ec11_peripheral, "front_ec11_task", 4096, NULL, 4, NULL);
+    xTaskCreate(task_front_oled_refresh, "front_oled_task", 3072, NULL, 3, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

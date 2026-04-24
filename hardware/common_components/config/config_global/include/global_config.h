@@ -77,12 +77,25 @@ extern "C" {
 //     PDM_DATA←MCU DIN(GPIO39)。
 //   重要：MIC CLK 必须独立于 NS4168 BCLK，因为 PDM CLK 典型 2.048MHz 而 I2S BCLK 在 16-bit mono
 //   slot 下是 fs×32=512kHz~1MHz，两者频率不同，共线会互相顶导致两边都出乱码。
+// 各终端工程可在 CMake 中 add_compile_definitions 覆盖，须用 #ifndef 避免与 -D 宏重定义（-Werror）
+#ifndef GLOBAL_I2S_BCLK_PIN
 #define GLOBAL_I2S_BCLK_PIN        41
+#endif
+#ifndef GLOBAL_I2S_WS_PIN
 #define GLOBAL_I2S_WS_PIN          42
+#endif
+#ifndef GLOBAL_I2S_DIN_PIN
 #define GLOBAL_I2S_DIN_PIN         39  /* 兼容旧配置名：实际作为 MIC PDM DATA */
+#endif
+#ifndef GLOBAL_I2S_DOUT_PIN
 #define GLOBAL_I2S_DOUT_PIN        40
+#endif
+#ifndef GLOBAL_I2S_MIC_PDM_CLK_PIN
 #define GLOBAL_I2S_MIC_PDM_CLK_PIN 7   /* MIC PDM CLK 独立脚（与 BCLK 频率不同，必须独占） */
+#endif
+#ifndef GLOBAL_PTT_BTN_PIN
 #define GLOBAL_PTT_BTN_PIN         1  // 客房：接听/唤醒 Agent（杜邦线开发板，见 docs/22）
+#endif
 
 /** 麦 + 喇叭 I2S 统一采样率。16000 与百炼 ASR 原生 16k 一致；若 PDM 底噪大改 32000u 并设后端 VOICE_DOWNLINK_SAMPLE_RATE=32000 */
 #ifndef GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ
@@ -120,12 +133,26 @@ extern "C" {
 #define GLOBAL_SPI_CS_W25Q64_PIN   9
 
 // I2C 总线 (OLED)
+// SCL 默认 GPIO8（与 docs/22、客房杜邦表一致）。若某工程将 RGB 等外设占用 GPIO8（如前台 GLOBAL_RGB_B_PIN=8），
+// 请在该终端 CMake 中覆盖 GLOBAL_OLED_PIN_SCL（前台示例用 GPIO18：CH2 继电器在本工程为 -1 时空闲），勿与 SDA/I2S/SPI 冲突。
+#ifndef GLOBAL_OLED_I2C_PORT_NUM
 #define GLOBAL_OLED_I2C_PORT_NUM   0
+#endif
+#ifndef GLOBAL_OLED_PIN_SDA
 #define GLOBAL_OLED_PIN_SDA        21
+#endif
+#ifndef GLOBAL_OLED_PIN_SCL
 #define GLOBAL_OLED_PIN_SCL        8
+#endif
+#ifndef GLOBAL_OLED_I2C_ADDR
 #define GLOBAL_OLED_I2C_ADDR       0x3C
+#endif
+#ifndef GLOBAL_OLED_HEIGHT
 #define GLOBAL_OLED_HEIGHT         64
+#endif
+#ifndef GLOBAL_OLED_RST_GPIO
 #define GLOBAL_OLED_RST_GPIO       (-1)
+#endif
 
 // 毫米波雷达：安信可 S3KM1110 等焊盘为 3V3/GND/OT1/RX/OT2（常见无模组侧 TX），
 // 杜邦线基准为 OT2 数字输出接 MCU，与 driver_rd03_simple 一致。

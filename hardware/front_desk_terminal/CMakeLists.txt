@@ -14,6 +14,7 @@ set(EXTRA_COMPONENT_DIRS
 
 # 前台端：音频（I2S）、EC11、PTT、RC522；并接入「代客房」单路继电器 + 三线 RGB（与客房杜邦方案一致类）。
 # 继电器 CH1=GPIO17；RGB 共阳 R=5 G=6 B=8（勿与 SPI10–13、I2S39–42、PDM7、EC11 2/4/38、PTT1 冲突）。
+# OLED I2C：SDA 仍用全局 GPIO21；SCL 不可与 RGB B(GPIO8) 共用。本工程无 CH2 继电器(GPIO18 空闲)，SCL 用 GPIO18。
 add_compile_definitions(
     # 禁用传感器
     GLOBAL_ADC_MQ2_PIN=-1
@@ -33,6 +34,8 @@ add_compile_definitions(
     GLOBAL_RGB_G_PIN=6
     GLOBAL_RGB_B_PIN=8
     GLOBAL_RGB_COMMON_ANODE=1
+
+    GLOBAL_OLED_PIN_SCL=18
     
     # 禁用蜂鸣器（改用音频播放）
     GLOBAL_BUZZER_PIN=-1
