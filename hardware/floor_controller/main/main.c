@@ -28,6 +28,8 @@
 static const char *TAG = "FLOOR_CONTROLLER_MAIN";
 #define FLOOR_FIRMWARE_VERSION "v1.1.0"
 static char current_floor_id[16] = "UNKNOWN";
+static char target_room_id[16] = "301";
+static char room_device_id[32] = "room_301";
 static char device_id[32] = "floor_UNKNOWN";
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
@@ -102,6 +104,32 @@ static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_s
 
     cJSON *reply = cJSON_CreateObject();
     cJSON_AddStringToObject(reply, "device_id", device_id);
+    cJSON_AddNumberToObject(reply, "command_id", cmd_id);
+    cJSON_AddStringToObject(reply, "command_type", cmd_type);
+    cJSON_AddStringToObject(reply, "status", exec_success ? "success" : "failed");
+    cJSON_AddStringToObject(reply, "result", result_msg);
+    cJSON_AddStringToObject(reply, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(reply, signature) == ESP_OK) {
+        cJSON_AddStringToObject(reply, "signature", signature);
+    }
+    char *reply_str = cJSON_PrintUnformatted(reply);
+    service_mqtt_publish(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, reply_str);
+    free(reply_str);
+    cJSON_Delete(reply);
+}
+
+static void publish_room_command_result(int cmd_id, const char *cmd_type, bool exec_success, const char *result_msg) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *reply = cJSON_CreateObject();
+    cJSON_AddStringToObject(reply, "device_id", room_device_id);
     cJSON_AddNumberToObject(reply, "command_id", cmd_id);
     cJSON_AddStringToObject(reply, "command_type", cmd_type);
     cJSON_AddStringToObject(reply, "status", exec_success ? "success" : "failed");
@@ -207,6 +235,44 @@ static void publish_health_report(void) {
              topic, rssi, (unsigned long)s_reconnect_count);
     free(json_str);
     cJSON_Delete(root);
+}
+
+static bool execute_room_command_on_floor(const char *cmd_type, const char **out_result_msg) {
+    if (strcmp(cmd_type, "light_on") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "客房灯控失败";
+        return (err == ESP_OK);
+    }
+    if (strcmp(cmd_type, "light_off") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "客房灯控失败";
+        return (err == ESP_OK);
+    }
+    if (strcmp(cmd_type, "air_on") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "空调控制失败";
+        return (err == ESP_OK);
+    }
+    if (strcmp(cmd_type, "air_off") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "空调控制失败";
+        return (err == ESP_OK);
+    }
+    if (strcmp(cmd_type, "door_unlock") == 0) {
+        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        if (err == ESP_OK) {
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        }
+        *out_result_msg = (err == ESP_OK) ? "执行成功" : "门锁控制失败";
+        return (err == ESP_OK);
+    }
+    if (strcmp(cmd_type, "curtain_open") == 0 || strcmp(cmd_type, "curtain_close") == 0) {
+        *out_result_msg = "执行成功(模拟)";
+        return true;
+    }
+    *out_result_msg = "未识别的客房指令(由楼控代为处理)";
+    return false;
 }
 
 static bool execute_floor_command(const char *cmd_type, const char **out_result_msg) {
@@ -345,10 +411,39 @@ void publish_sensor_data(const char *sensor_type, double value, const char *unit
     cJSON_Delete(root);
 }
 
+void publish_room_sensor_data(const char *sensor_type, double value, const char *unit) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_DATA_PREFIX, sensor_type, room_device_id);
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", room_device_id);
+    cJSON_AddStringToObject(root, "sensor_type", sensor_type);
+    cJSON_AddNumberToObject(root, "value", value);
+    cJSON_AddStringToObject(root, "unit", unit);
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(topic, json_str);
+
+    free(json_str);
+    cJSON_Delete(root);
+}
+
 // MQTT 消息接收回调 (群控解析)
 void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     (void)topic;
-    ESP_LOGI(TAG, "==== 收到云端 MQTT 楼控群控指令 ====");
+    ESP_LOGI(TAG, "==== 收到云端 MQTT 楼控/客房指令 ====");
     
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
@@ -371,8 +466,11 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
         return;
     }
 
-    if (strcmp(device_id_item->valuestring, device_id) != 0) {
-        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s", device_id_item->valuestring, device_id);
+    bool is_floor_cmd = (strcmp(device_id_item->valuestring, device_id) == 0);
+    bool is_room_cmd = (strcmp(device_id_item->valuestring, room_device_id) == 0);
+
+    if (!is_floor_cmd && !is_room_cmd) {
+        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s/%s", device_id_item->valuestring, device_id, room_device_id);
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
@@ -383,10 +481,17 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     if (cJSON_IsNumber(cmd_id_item) && cJSON_IsString(cmd_type_item)) {
         int cmd_id = cmd_id_item->valueint;
         const char *cmd_type = cmd_type_item->valuestring;
-        const char *result_msg = "未识别的楼控指令";
-        bool exec_success = execute_floor_command(cmd_type, &result_msg);
-        publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
-        publish_floor_runtime_status();
+        const char *result_msg = "未识别的指令";
+        bool exec_success = false;
+
+        if (is_floor_cmd) {
+            exec_success = execute_floor_command(cmd_type, &result_msg);
+            publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
+            publish_floor_runtime_status();
+        } else if (is_room_cmd) {
+            exec_success = execute_room_command_on_floor(cmd_type, &result_msg);
+            publish_room_command_result(cmd_id, cmd_type, exec_success, result_msg);
+        }
     }
     if (owned_command_value != NULL) {
         cJSON_Delete(owned_command_value);
@@ -439,6 +544,13 @@ static void auth_and_mqtt_task(void *pvParameters) {
         ESP_LOGE(TAG, "订阅楼控指令失败: %s", esp_err_to_name(err));
     }
 
+    char room_sub_topic[128];
+    snprintf(room_sub_topic, sizeof(room_sub_topic), "%s/room/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, room_device_id);
+    err = service_mqtt_subscribe(room_sub_topic, floor_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅客房指令失败: %s", esp_err_to_name(err));
+    }
+
     vTaskDelay(pdMS_TO_TICKS(1000));
     publish_device_online_status();
     publish_health_report();
@@ -487,12 +599,19 @@ void task_floor_sensor_report(void *pvParameters) {
         if (env_data.dht_valid) {
             publish_sensor_data("temperature", env_data.temperature, "℃");
             publish_sensor_data("humidity", env_data.humidity, "%");
+            // 模拟客房温湿度
+            publish_room_sensor_data("temperature", env_data.temperature, "℃");
+            publish_room_sensor_data("humidity", env_data.humidity, "%");
         }
         if (env_data.mq2_valid) {
             publish_sensor_data("smoke", env_data.air_quality_adc, "adc");
+            // 模拟客房烟雾
+            publish_room_sensor_data("smoke", env_data.air_quality_adc, "adc");
         }
         if (env_data.ldr_valid) {
             publish_sensor_data("light", env_data.light_adc, "adc");
+            // 模拟客房光照
+            publish_room_sensor_data("light", env_data.light_adc, "adc");
         }
     }
 }
@@ -621,8 +740,10 @@ void app_main(void) {
 
     // 3. 读取并拼接规范的 Client ID
     load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
+    load_nvs_string_with_fallback("Room_ID", target_room_id, sizeof(target_room_id), "301");
     load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);
     snprintf(device_id, sizeof(device_id), "floor_%s", current_floor_id);
+    snprintf(room_device_id, sizeof(room_device_id), "room_%s", target_room_id);
     
     // 4. 启动网络与配网服务
     service_network_provisioning_start(on_network_status_changed);
