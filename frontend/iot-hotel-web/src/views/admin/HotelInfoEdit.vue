@@ -92,19 +92,20 @@
             <a-tab-pane key="gallery" tab="门店相册">
               <div class="gallery-section">
                 <div class="gallery-header">
-                  <a-upload
-                    name="image"
-                    :show-upload-list="false"
-                    :action="uploadUrl"
-                    :headers="uploadHeaders"
-                    @change="(info: { file: { status: string; response?: { data: { url: string } } } }) => handleGalleryUpload(info)"
-                  >
-                    <a-button type="primary">
-                      <PlusOutlined /> 添加照片
-                    </a-button>
-                  </a-upload>
-                  <span class="upload-tip">支持上传多张门店照片，展示酒店环境</span>
-                </div>
+                <a-upload
+                  name="image"
+                  :show-upload-list="false"
+                  :action="uploadUrl"
+                  :headers="uploadHeaders"
+                  :multiple="true"
+                  @change="(info: { file: { status: string; response?: { data: { url: string } } } }) => handleGalleryUpload(info)"
+                >
+                  <a-button type="primary">
+                    <PlusOutlined /> 添加照片
+                  </a-button>
+                </a-upload>
+                <span class="upload-tip">支持上传多张门店照片，展示酒店环境</span>
+              </div>
                 <a-divider />
                 <div v-if="hotelImages.length === 0" class="empty-gallery">
                   <a-empty description="暂无门店照片，请点击上方按钮添加" />

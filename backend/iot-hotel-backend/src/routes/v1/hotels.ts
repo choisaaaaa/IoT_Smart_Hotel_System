@@ -42,24 +42,6 @@ router.get('/search', search);
 
 /**
  * @swagger
- * /hotels/{id}:
- *   get:
- *     summary: 获取酒店基础详情
- *     tags: [Hotels]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: 成功获取酒店详情
- */
-router.get('/:id', detail);
-
-/**
- * @swagger
  * /hotels/{hotelId}/detail:
  *   get:
  *     summary: 获取酒店详情（包含图片）
@@ -110,6 +92,24 @@ router.get('/:hotelId/images', getHotelImages);
  */
 // 房型可用性查询 - 游客也可访问
 router.get('/:hotelId/rooms/availability', getRoomAvailability);
+
+/**
+ * @swagger
+ * /hotels/{id}:
+ *   get:
+ *     summary: 获取酒店基础详情
+ *     tags: [Hotels]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 成功获取酒店详情
+ */
+router.get('/:id', detail);
 
 /**
  * @swagger
