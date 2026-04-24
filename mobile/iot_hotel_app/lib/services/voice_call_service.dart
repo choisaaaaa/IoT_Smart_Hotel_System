@@ -60,16 +60,24 @@ class VoiceCallService {
     if (_isInitialized) {
       if (_socket?.connected == true) {
         registerClient(_clientId!);
+      } else if (_socket != null && !_socket!.connected) {
+        debugPrint('[VoiceCallService] Socket未连接，尝试重新连接');
+        _socket!.connect();
       }
       return;
     }
 
-    _socket = io.io(ApiConstants.serverHost, <String, dynamic>{
+    final serverUrl = ApiConstants.serverHost;
+    final wsUrl = ApiConstants.websocketUrl;
+    debugPrint('[VoiceCallService] 正在连接WebSocket, serverHost: $serverUrl, websocketUrl: $wsUrl');
+
+    _socket = io.io(serverUrl, <String, dynamic>{
       'transports': ['websocket', 'polling'],
       'autoConnect': true,
       'reconnection': true,
       'reconnectionAttempts': 5,
       'reconnectionDelay': 1000,
+      'timeout': 10000,
     });
 
     _socket!.onConnect((_) {
@@ -163,6 +171,15 @@ class VoiceCallService {
       _callEventController.add({'type': 'error', 'data': data});
     });
 
+    _socket!.onConnectError((data) {
+      debugPrint('[VoiceCallService] 连接错误: $data');
+      _callEventController.add({'type': 'connect_error', 'data': data});
+    });
+
+    _socket!.onReconnectAttempt((attempt) {
+      debugPrint('[VoiceCallService] 重连尝试: $attempt');
+    });
+
     _isInitialized = true;
   }
 
@@ -175,7 +192,8 @@ class VoiceCallService {
         'clientId': clientId,
       });
     } else {
-      debugPrint('[VoiceCallService] WebSocket未连接，等待连接后自动注册');
+      debugPrint('[VoiceCallService] WebSocket未连接，尝试连接后注册');
+      _socket?.connect();
     }
   }
 

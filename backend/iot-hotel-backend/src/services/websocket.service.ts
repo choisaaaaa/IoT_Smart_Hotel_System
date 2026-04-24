@@ -38,9 +38,29 @@ class WebSocketService {
       'http://127.0.0.1:5173'
     ];
 
+    // 移动端App的origin可能是null或file://，需要允许
+    const corsOrigin = isProduction ? allowedOrigins : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // 允许没有origin的请求（如移动端App、Postman等）
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      // 检查是否在允许列表中
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      // 开发环境下允许本地IP
+      if (!isProduction && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    };
+
     this.io = new Server(httpServer, {
       cors: {
-        origin: isProduction ? allowedOrigins : true, // 生产环境严格限制，开发环境允许所有
+        origin: corsOrigin,
         methods: ['GET', 'POST'],
         credentials: true
       },
