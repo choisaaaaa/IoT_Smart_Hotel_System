@@ -200,7 +200,9 @@ extern "C" {
 #endif
 
 // 独立按键 (低有效)；各终端可在 CMake 中用 add_compile_definitions(...=-1) 关闭未接线槽位
+#ifndef GLOBAL_BTN_ROOM_1_PIN
 #define GLOBAL_BTN_ROOM_1_PIN      14 // 客房: 报警/SOS（GPIO7 让位给 MIC PDM CLK）
+#endif
 #ifndef GLOBAL_BTN_ROOM_2_PIN
 #define GLOBAL_BTN_ROOM_2_PIN      20 // 客房: 场景（可选；《03》PCB 为 GPIO28）
 #endif

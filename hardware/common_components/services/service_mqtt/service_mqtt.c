@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "esp_event.h"
+#include "global_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdbool.h>
@@ -85,6 +86,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             }
             break;
 
+        case MQTT_EVENT_ERROR:
+            if (event->error_handle != NULL) {
+                ESP_LOGW(TAG,
+                         "MQTT_EVENT_ERROR type=%d esp_tls_last_esp_err=0x%x transport_sock_errno=%d",
+                         (int)event->error_handle->error_type,
+                         (unsigned)event->error_handle->esp_tls_last_esp_err,
+                         (int)event->error_handle->esp_transport_sock_errno);
+            } else {
+                ESP_LOGW(TAG, "MQTT_EVENT_ERROR (无 error_handle)");
+            }
+            break;
+
         case MQTT_EVENT_DATA:
             for (int i = 0; i < MQTT_MAX_SUBSCRIPTIONS; ++i) {
                 if (s_subscriptions[i].used &&
@@ -114,7 +127,11 @@ esp_err_t service_mqtt_start(const char *broker_uri, const char *client_id) {
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = broker_uri,
-        .credentials.client_id = client_id,
+        .credentials = {
+            .client_id = client_id,
+            .username = GLOBAL_MQTT_USERNAME,
+            .authentication.password = GLOBAL_MQTT_PASSWORD,
+        },
         .network.disable_auto_reconnect = true,
         .buffer.size = 20480,       // 下行：每包分段 PCM JSON + base64
         .buffer.out_size = 8192,    // 上行：分段 PCM
