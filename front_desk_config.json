@@ -1,0 +1,1 @@
+{"hotel_id": 3, "room_id": null, "room_number": null, "area": null, "backend_url": "http://127.0.0.1:9000", "mqtt_broker": "8.134.166.69", "mqtt_port": "1883", "device_id": "FRO_61CCADF48BDC", "device_type": "front_desk", "device_key": ""}

@@ -16,6 +16,8 @@ export interface EnvironmentData {
   update_time: string
   status: 'normal' | 'warning' | 'danger'
   environment_score: number
+  /** 该设备未配备/未上报的物理量列表：'temperature'|'humidity'|'smoke'|'light'|'noise'|'pm25' */
+  sensors_missing?: string[]
 }
 
 export interface EnvironmentSummary {

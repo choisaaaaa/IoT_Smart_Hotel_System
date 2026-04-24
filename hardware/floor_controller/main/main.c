@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
@@ -20,18 +21,18 @@
 #include "hal_actuators.h"
 #include "hal_sensors.h"
 #include "hal_interactive.h"
-#include "hal_canopy.h"
 #include "service_network.h"
 #include "global_config.h"
+#include "service_auth.h"
 
 static const char *TAG = "FLOOR_CONTROLLER_MAIN";
+#define FLOOR_FIRMWARE_VERSION "v1.1.0"
 static char current_floor_id[16] = "UNKNOWN";
 static char device_id[32] = "floor_UNKNOWN";
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FLOOR_SENSOR_TASK_PERIOD = pdMS_TO_TICKS(30000);
 static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
 static const TickType_t FLOOR_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
-static const TickType_t FLOOR_CANOPY_POLL_PERIOD = pdMS_TO_TICKS(100);
 static volatile bool s_network_ready = false;
 static bool s_corridor_light_on = false;
 static uint32_t s_reconnect_count = 0;
@@ -52,7 +53,7 @@ static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
 }
 
 static void load_nvs_string_with_fallback(const char *key, char *out, size_t out_size, const char *fallback) {
-    if (service_network_read_nvs_string(key, out, out_size) != ESP_OK) {
+    if (service_network_read_nvs_string(key, out, out_size) != ESP_OK || out[0] == '\0') {
         copy_str_safe(out, out_size, fallback);
     } else {
         out[out_size - 1] = '\0';
@@ -107,6 +108,10 @@ static void publish_command_result(int cmd_id, const char *cmd_type, bool exec_s
     cJSON_AddStringToObject(reply, "result", result_msg);
     cJSON_AddStringToObject(reply, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(reply, signature) == ESP_OK) {
+        cJSON_AddStringToObject(reply, "signature", signature);
+    }
     char *reply_str = cJSON_PrintUnformatted(reply);
     service_mqtt_publish(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, reply_str);
     free(reply_str);
@@ -129,11 +134,12 @@ static void publish_floor_runtime_status(void) {
     cJSON_AddStringToObject(root, "device_type", "floor");
     cJSON_AddStringToObject(root, "status", "online");
     cJSON_AddBoolToObject(root, "corridor_light_on", s_corridor_light_on);
-    cJSON_AddBoolToObject(root, "rain_detected", hal_canopy_is_raining());
-    cJSON_AddNumberToObject(root, "canopy_angle_deg", (double)hal_canopy_get_angle());
-    cJSON_AddBoolToObject(root, "canopy_auto", hal_canopy_get_auto());
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     free(json_str);
@@ -155,6 +161,10 @@ static void publish_floor_event(const char *event_type, const char *detail, cons
     cJSON_AddStringToObject(root, "level", (level != NULL && level[0] != '\0') ? level : "info");
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
     free(json_str);
@@ -180,13 +190,17 @@ static void publish_health_report(void) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "floor");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", FLOOR_FIRMWARE_VERSION);
     cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
     cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "rssi", rssi);
     cJSON_AddNumberToObject(root, "reconnect_counts", (double)s_reconnect_count);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     ESP_LOGI(TAG, "健康上报已发送: topic=%s rssi=%d reconnect=%lu",
@@ -214,42 +228,24 @@ static bool execute_floor_command(const char *cmd_type, const char **out_result_
         return (err == ESP_OK);
     }
 
-    if (strcmp(cmd_type, "broadcast_start") == 0) {
-        *out_result_msg = "广播启动占位执行成功";
+    if (strcmp(cmd_type, "broadcast_alarm") == 0 || strcmp(cmd_type, "broadcast_start") == 0) {
+        (void)hal_interactive_beep(4, 120);
+        *out_result_msg = "广播警报已触发（蜂鸣器鸣叫）";
         return true;
     }
 
     if (strcmp(cmd_type, "broadcast_stop") == 0) {
-        *out_result_msg = "广播停止占位执行成功";
+        *out_result_msg = "广播警报停止（无需持续动作）";
         return true;
     }
 
     if (strcmp(cmd_type, "floor_reset") == 0) {
-        *out_result_msg = "楼控复位占位执行成功";
-        return true;
-    }
-
-    if (strcmp(cmd_type, "canopy_extend") == 0) {
-        esp_err_t err = hal_canopy_manual_extend();
-        *out_result_msg = (err == ESP_OK) ? "雨棚已手动伸出" : "舵机伸出失败";
-        return (err == ESP_OK);
-    }
-
-    if (strcmp(cmd_type, "canopy_retract") == 0) {
-        esp_err_t err = hal_canopy_manual_retract();
-        *out_result_msg = (err == ESP_OK) ? "雨棚已手动收回" : "舵机收回失败";
-        return (err == ESP_OK);
-    }
-
-    if (strcmp(cmd_type, "canopy_auto_on") == 0) {
-        hal_canopy_set_auto(true);
-        *out_result_msg = "雨棚已恢复雨量自动控制";
-        return true;
-    }
-
-    if (strcmp(cmd_type, "canopy_auto_off") == 0) {
-        hal_canopy_set_auto(false);
-        *out_result_msg = "已关闭雨量自动控制(需手动伸收)";
+        (void)hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        vTaskDelay(pdMS_TO_TICKS(120));
+        (void)hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        s_corridor_light_on = false;
+        (void)hal_interactive_beep(3, 90);
+        *out_result_msg = "楼控复位完成（继电器弹一次+蜂鸣三声）";
         return true;
     }
 
@@ -305,9 +301,13 @@ void publish_device_online_status() {
     cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "device_type", "floor");
     cJSON_AddStringToObject(root, "status", "online");
-    cJSON_AddStringToObject(root, "firmware_version", "v1.1.0");
+    cJSON_AddStringToObject(root, "firmware_version", FLOOR_FIRMWARE_VERSION);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
     
@@ -334,6 +334,10 @@ void publish_sensor_data(const char *sensor_type, double value, const char *unit
     cJSON_AddStringToObject(root, "unit", unit);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
 
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
     char *json_str = cJSON_PrintUnformatted(root);
     service_mqtt_publish(topic, json_str);
 
@@ -390,23 +394,68 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     cJSON_Delete(root);
 }
 
+static void auth_and_mqtt_task(void *pvParameters) {
+    (void)pvParameters;
+    ESP_LOGI(TAG, "开始设备注册/鉴权流程...");
+
+    char http_api_base[128];
+    load_nvs_string_with_fallback("HTTP_API_BASE", http_api_base, sizeof(http_api_base), GLOBAL_HTTP_API_BASE_DEFAULT);
+    char register_url[192];
+    esp_err_t url_err = service_auth_resolve_register_url(
+        mqtt_broker_uri,
+        (http_api_base[0] != '\0') ? http_api_base : NULL,
+        register_url,
+        sizeof(register_url));
+    if (url_err != ESP_OK) {
+        ESP_LOGE(TAG, "解析注册 URL 失败: %s，使用云端默认", esp_err_to_name(url_err));
+        snprintf(register_url, sizeof(register_url), "http://8.134.166.69:9000/api/v1/devices/register");
+    }
+    ESP_LOGI(TAG, "设备注册 URL: %s (broker=%s)", register_url, mqtt_broker_uri);
+
+    service_auth_perform_registration_blocking(
+        register_url,
+        3,
+        device_id,
+        "floor",
+        "智慧走廊楼控",
+        FLOOR_FIRMWARE_VERSION
+    );
+
+    ESP_LOGI(TAG, "鉴权通过，启动 MQTT 服务...");
+    if (service_network_wait_sntp_sync(20000) != ESP_OK) {
+        ESP_LOGW(TAG, "SNTP 未在 20s 内就绪，仍将启动 MQTT（请确认路由器未拦截 NTP）");
+    }
+    esp_err_t err = service_mqtt_start(mqtt_broker_uri, device_id);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MQTT 启动失败: %s", esp_err_to_name(err));
+        vTaskDelete(NULL);
+        return;
+    }
+
+    char sub_topic[128];
+    snprintf(sub_topic, sizeof(sub_topic), "%s/floor/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
+    err = service_mqtt_subscribe(sub_topic, floor_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅楼控指令失败: %s", esp_err_to_name(err));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    publish_device_online_status();
+    publish_health_report();
+
+    vTaskDelete(NULL);
+}
+
 // 网络连接状态回调
 void on_network_status_changed(bool connected, const char* ip_address) {
     if (connected) {
         s_network_ready = true;
         ESP_LOGI(TAG, "网络已连接，IP: %s", ip_address);
-        
-        // 启动 MQTT
-        service_mqtt_start(mqtt_broker_uri, device_id);
-        
-        // 订阅本楼层的公共指令
-        char sub_topic[128];
-        snprintf(sub_topic, sizeof(sub_topic), "%s/floor/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
-        service_mqtt_subscribe(sub_topic, floor_mqtt_callback);
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        publish_device_online_status();
-        publish_health_report();
+        static bool s_auth_task_started = false;
+        if (!s_auth_task_started) {
+            s_auth_task_started = true;
+            xTaskCreate(auth_and_mqtt_task, "auth_and_mqtt", 8192, NULL, 4, NULL);
+        }
     } else {
         s_network_ready = false;
         s_reconnect_count++;
@@ -428,25 +477,23 @@ void task_floor_sensor_report(void *pvParameters) {
             continue;
         }
 
-        publish_sensor_data("temperature", env_data.temperature, "℃");
-        publish_sensor_data("humidity", env_data.humidity, "%");
-        publish_sensor_data("air_quality_adc", env_data.air_quality_adc, "adc");
-        publish_sensor_data("light_adc", env_data.light_adc, "adc");
-        publish_sensor_data("human_present", env_data.is_human_present ? 1.0 : 0.0, "bool");
-        if (env_data.ntc_valid) {
-            publish_sensor_data("ntc_temp_c", (double)env_data.ntc_temp_c, "C");
+        /*
+         * 楼控实际装配的传感器（以硬件清单为准，2026-04）：
+         *   - MQ2 烟雾
+         *   - LDR 光敏电阻
+         *   - DHT11 温湿度
+         * 只上报这三类。NTC / RD03 / 雨棚（canopy/雨感）均不再装配。
+         */
+        if (env_data.dht_valid) {
+            publish_sensor_data("temperature", env_data.temperature, "℃");
+            publish_sensor_data("humidity", env_data.humidity, "%");
         }
-        publish_sensor_data("rain_detected", hal_canopy_is_raining() ? 1.0 : 0.0, "bool");
-        publish_sensor_data("canopy_angle_deg", (double)hal_canopy_get_angle(), "deg");
-    }
-}
-
-static void task_floor_canopy_poll(void *pvParameters)
-{
-    (void)pvParameters;
-    while (1) {
-        vTaskDelay(FLOOR_CANOPY_POLL_PERIOD);
-        hal_canopy_poll();
+        if (env_data.mq2_valid) {
+            publish_sensor_data("smoke", env_data.air_quality_adc, "adc");
+        }
+        if (env_data.ldr_valid) {
+            publish_sensor_data("light", env_data.light_adc, "adc");
+        }
     }
 }
 
@@ -564,14 +611,13 @@ void app_main(void) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    
+    ESP_ERROR_CHECK(ret);
+    service_auth_init();
+
     // 2. 初始化底层硬件驱动
     hal_actuators_init();
     hal_sensors_init();
     hal_interactive_init();
-    if (hal_canopy_init() != ESP_OK) {
-        ESP_LOGW(TAG, "雨棚模块初始化未完全成功，请检查舵机/雨量接线");
-    }
 
     // 3. 读取并拼接规范的 Client ID
     load_nvs_string_with_fallback("Floor_ID", current_floor_id, sizeof(current_floor_id), "03");
@@ -585,7 +631,6 @@ void app_main(void) {
     xTaskCreate(task_floor_sensor_report, "floor_sensor_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_health_report, "floor_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_floor_button_events, "floor_button_task", 3072, NULL, 4, NULL);
-    xTaskCreate(task_floor_canopy_poll, "floor_canopy_task", 3072, NULL, 4, NULL);
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

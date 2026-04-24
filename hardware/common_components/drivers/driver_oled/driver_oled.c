@@ -178,14 +178,8 @@ esp_err_t driver_oled_clear_screen(void)
     return flush_fb();
 }
 
-esp_err_t driver_oled_show_text_line(uint8_t line, const char *text)
+static void draw_text_line_fb(uint8_t line, const char *text)
 {
-    if (!s_ready) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (text == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
     if (line > 3) {
         line = 3;
     }
@@ -204,6 +198,28 @@ esp_err_t driver_oled_show_text_line(uint8_t line, const char *text)
         draw_char_5x7(pen_x, pen_y, (char)c);
         pen_x += 6;
     }
+}
 
+esp_err_t driver_oled_show_text_line(uint8_t line, const char *text)
+{
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (text == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    draw_text_line_fb(line, text);
+    return flush_fb();
+}
+
+esp_err_t driver_oled_show_4_lines(const char *l0, const char *l1, const char *l2, const char *l3)
+{
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (l0 != NULL) draw_text_line_fb(0, l0);
+    if (l1 != NULL) draw_text_line_fb(1, l1);
+    if (l2 != NULL) draw_text_line_fb(2, l2);
+    if (l3 != NULL) draw_text_line_fb(3, l3);
     return flush_fb();
 }

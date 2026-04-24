@@ -239,6 +239,22 @@ class MQTTService {
           return;
         }
 
+        // 客房语音 Agent 上行：JSON+PCM，无签名（固件用 publish_silent）→ 语音助手桥
+        if (topic.startsWith('hotel/device/audio/uplink/')) {
+          const msgStr = message.toString();
+          this.logCommunication(topic, msgStr, 'in', packet.qos, packet.retain).catch(() => {});
+          try {
+            const data = JSON.parse(msgStr);
+            // 动态 import 避免 mqtt.service ↔ voice-agent-bridge 循环依赖
+            void import('./voice-agent-bridge.service')
+              .then((m) => m.getVoiceAgentBridge().handleUplinkMessage(topic, data))
+              .catch((err) => logger.error(`[VoiceAgentBridge] 处理失败: ${(err as Error).message}`));
+          } catch (e) {
+            logger.warn(`[VoiceAgentBridge] JSON 解析失败: ${topic}`);
+          }
+          return;
+        }
+
         const processMessage = async () => {
           const msgStr = message.toString();
           logger.debug(`收到MQTT消息 [${topic}]: ${msgStr}`);
@@ -290,11 +306,12 @@ class MQTTService {
     const topics = [
       // 统一主题格式: hotel/device/{category}/{type}/{id}
       'hotel/device/status/+/+',           // 设备状态上报
-      'hotel/device/data/+',               // 传感器数据上报
+      'hotel/device/data/+/+',             // 传感器数据上报：hotel/device/data/{sensor_type}/{device_id}
       'hotel/device/command/result',       // 指令执行结果
       'hotel/device/security/event',       // 安防事件
       'hotel/device/call/+/up',            // 通话信令/音频上行（统一格式）
       'hotel/device/call/+/down',          // 通话下行
+      'hotel/device/audio/uplink/+',        // 客房语音上行（Agent/通话 JSON+PCM，见 voice_session.c）
       'hotel/device/ai/request/+',         // AI语音请求
       'hotel/device/service/delivery/+',   // 送物服务请求
       'hotel/device/service/maintenance/+',// 维修服务请求

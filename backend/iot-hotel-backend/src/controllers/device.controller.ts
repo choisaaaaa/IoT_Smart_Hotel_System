@@ -523,13 +523,17 @@ class DeviceController {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
 
-      // 获取每种类型的最新数据
+      /* 只返回最近 24 小时内有更新过的 sensor_type。这样历史上由老固件遗留、
+         但当前硬件已不再上报的类型（如客房的 smoke/light、楼控的 human_present/ntc_temp_c、
+         或旧命名 light_adc/air_quality_adc）不会再污染"实时数据"弹窗，
+         实际硬件一停发自然就会消失，不需要手动清库。 */
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT s1.* FROM sensor_data s1
          INNER JOIN (
            SELECT sensor_type, MAX(created_at) as max_created_at
            FROM sensor_data
            WHERE device_id = ?
+             AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
            GROUP BY sensor_type
          ) s2 ON s1.sensor_type = s2.sensor_type AND s1.created_at = s2.max_created_at
          WHERE s1.device_id = ?`,

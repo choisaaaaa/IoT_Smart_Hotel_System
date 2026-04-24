@@ -36,6 +36,18 @@ add_compile_definitions(
     GLOBAL_BTN_FRONT_1_PIN=-1
     GLOBAL_BTN_FRONT_2_PIN=-1
     GLOBAL_BTN_FLOOR_1_PIN=-1
+    # 共阳三线 RGB 氛围灯（每路串 330Ω）
+    # 接线：VCC→3V3；R→GPIO9；G→GPIO15；B→GPIO3
+    #
+    # 引脚可用性说明（对 N16R8 双 USB-C 板）：
+    # - 本工程 NTC=GPIO19、DHT11=GPIO20 已占用原生 USB D−/D+，内部 USB-Serial-JTAG 失效，
+    #   烧录与串口 log 统一走 CH343 UART 桥那个 Type-C 口（GPIO43/44），不依赖 GPIO19/20。
+    # - GPIO3 是 strapping 脚（仅复位瞬间采样 JTAG_SEL），复位后作普通 GPIO 输出安全。
+    # - GPIO9/15 纯 GPIO，纯输出场景最稳。
+    GLOBAL_RGB_R_PIN=9
+    GLOBAL_RGB_G_PIN=15
+    GLOBAL_RGB_B_PIN=3
+    GLOBAL_RGB_COMMON_ANODE=1
 )
 
 # Include the main ESP-IDF build system script

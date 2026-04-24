@@ -32,9 +32,9 @@
       <a-col :xs="24" :sm="12" :md="6">
         <a-card class="stat-card smoke-card">
           <a-statistic
-            title="烟雾浓度"
+            title="MQ2 烟雾(ADC)"
             :value="summary.avg_smoke_level"
-            suffix="%"
+            suffix=""
             :value-style="{ color: '#faad14', fontSize: '24px' }"
           >
             <template #prefix>
@@ -126,25 +126,43 @@
           </template>
 
           <template v-if="column.key === 'temperature'">
-            <span :style="{ color: getTemperatureColor(record.temperature), fontWeight: 'bold' }">
+            <a-tooltip v-if="isMissing(record, 'temperature')" title="该设备未配备温湿度传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <span v-else :style="{ color: getTemperatureColor(record.temperature), fontWeight: 'bold' }">
               {{ record.temperature }}°C
             </span>
           </template>
 
           <template v-if="column.key === 'humidity'">
-            <span :style="{ color: getHumidityColor(record.humidity), fontWeight: 'bold' }">
+            <a-tooltip v-if="isMissing(record, 'humidity')" title="该设备未配备温湿度传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <span v-else :style="{ color: getHumidityColor(record.humidity), fontWeight: 'bold' }">
               {{ record.humidity }}%
             </span>
           </template>
 
           <template v-if="column.key === 'smoke_level'">
+            <a-tooltip v-if="isMissing(record, 'smoke')" title="该设备未配备 MQ2 烟雾传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
             <a-progress
-              :percent="record.smoke_level"
+              v-else
+              :percent="Math.min(100, (record.smoke_level / 4095) * 100)"
+              :format="() => record.smoke_level"
               :status="record.smoke_alarm ? 'exception' : 'active'"
               :stroke-color="getSmokeColor(record.smoke_level)"
               size="small"
               style="width: 80px;"
             />
+          </template>
+
+          <template v-if="column.key === 'light_level'">
+            <a-tooltip v-if="isMissing(record, 'light')" title="该设备未配备光敏传感器">
+              <span class="missing-sensor">未配备</span>
+            </a-tooltip>
+            <span v-else>{{ record.light_level }}</span>
           </template>
 
           <template v-if="column.key === 'status'">
@@ -242,7 +260,7 @@ const columns = [
     sorter: (a: EnvironmentData, b: EnvironmentData) => a.humidity - b.humidity
   },
   {
-    title: '烟雾浓度',
+    title: 'MQ2 烟雾(ADC)',
     dataIndex: 'smoke_level',
     key: 'smoke_level',
     width: 140
@@ -301,6 +319,10 @@ const displayList = computed(() => {
 
   return result
 })
+
+function isMissing(record: EnvironmentData, key: string): boolean {
+  return Array.isArray(record.sensors_missing) && record.sensors_missing.includes(key)
+}
 
 function getTemperatureColor(temp: number): string {
   if (temp > 30 || temp < 18) return '#ff4d4f'
@@ -382,6 +404,11 @@ onUnmounted(() => {
 
 .temp-card { border-top: 4px solid #1890ff; }
 .humidity-card { border-top: 4px solid #52c41a; }
+.missing-sensor {
+  color: #bfbfbf;
+  font-size: 12px;
+  font-style: italic;
+}
 .smoke-card { border-top: 4px solid #faad14; }
 .status-card { border-top: 4px solid #722ed1; }
 

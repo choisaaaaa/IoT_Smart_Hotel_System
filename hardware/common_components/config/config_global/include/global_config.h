@@ -28,6 +28,11 @@ extern "C" {
 // 默认配网 AP 热点名称前缀
 #define GLOBAL_WIFI_DEFAULT_SSID "SmartHotel_AP"
 
+/** NVS 未写 HTTP_API_BASE 时的默认 HTTP 根（如 http://192.168.1.100:9000）。空字符串表示从 MQTT URI 推导同机 :9000。 */
+#ifndef GLOBAL_HTTP_API_BASE_DEFAULT
+#define GLOBAL_HTTP_API_BASE_DEFAULT ""
+#endif
+
 // ==========================================
 // 统一主题模板与预开发开关
 // ==========================================
@@ -78,6 +83,34 @@ extern "C" {
 #define GLOBAL_I2S_DOUT_PIN        40
 #define GLOBAL_I2S_MIC_PDM_CLK_PIN 7   /* MIC PDM CLK 独立脚（与 BCLK 频率不同，必须独占） */
 #define GLOBAL_PTT_BTN_PIN         1  // 客房：接听/唤醒 Agent（杜邦线开发板，见 docs/22）
+
+/** 麦 + 喇叭 I2S 统一采样率。16000 与百炼 ASR 原生 16k 一致；若 PDM 底噪大改 32000u 并设后端 VOICE_DOWNLINK_SAMPLE_RATE=32000 */
+#ifndef GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ
+#define GLOBAL_HAL_AUDIO_SAMPLE_RATE_HZ 16000u
+#endif
+
+/**
+ * Agent TTS 下行（MQTT→播放任务）FreeRTOS 队列槽位深度（默认 128；仅指针，PCM 在堆上）。
+ * 再加大（如 256）在工程 CMake 加 -DGLOBAL_VOICE_PLAY_QUEUE_DEPTH=256，注意堆余量（清槽为单遍出队即 free，无固定栈表上限问题）。
+ */
+#ifndef GLOBAL_VOICE_PLAY_QUEUE_DEPTH
+#define GLOBAL_VOICE_PLAY_QUEUE_DEPTH 128u
+#endif
+
+/**
+ * 下行 TTS 播放相对实时的千分比：1000=按采样率实播、与后端 VOICE_DOWNLINK_PACING_RATIO=1 一致；
+ * 大于 1000 时每段 hal 写后多睡 (pace-1000)/1000×本块时长。网络差时可调 1020～1040 换缓冲。
+ */
+#ifndef GLOBAL_VOICE_PLAY_PACE_PERMILLE
+#define GLOBAL_VOICE_PLAY_PACE_PERMILLE 1000u
+#endif
+
+/**
+ * 取到一段且队中无下一段时，先等的 ms 再 I2S（抗抖动）。0=不额外等，与后端 1:1 发包时延最低；弱网可设 80～200。
+ */
+#ifndef GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS
+#define GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS 0u
+#endif
 
 // SPI 总线 (RC522, W25Q64)
 #define GLOBAL_SPI_MOSI_PIN        11
@@ -185,7 +218,25 @@ extern "C" {
 #ifndef GLOBAL_BUZZER_PIN
 #define GLOBAL_BUZZER_PIN          38 // 蜂鸣器 (高有效)
 #endif
-#define GLOBAL_RGB_LED_PIN         21 // RGB 灯带(可选)
+#define GLOBAL_RGB_LED_PIN         21 // WS2812 单线灯带(可选，旧规划)
+
+/*
+ * 共阳 / 共阴三线 RGB 模块（VCC + R/G/B，每路 330Ω 限流电阻）。
+ * 三个 PIN 任一 <0 视为未接；各工程通过 add_compile_definitions 覆盖默认值。
+ * 共阳模块驱动方式：GPIO 输出低电平 / PWM duty 反相后点亮。
+ */
+#ifndef GLOBAL_RGB_R_PIN
+#define GLOBAL_RGB_R_PIN           (-1)
+#endif
+#ifndef GLOBAL_RGB_G_PIN
+#define GLOBAL_RGB_G_PIN           (-1)
+#endif
+#ifndef GLOBAL_RGB_B_PIN
+#define GLOBAL_RGB_B_PIN           (-1)
+#endif
+#ifndef GLOBAL_RGB_COMMON_ANODE
+#define GLOBAL_RGB_COMMON_ANODE    1  // 1=共阳(默认), 0=共阴
+#endif
 
 #ifdef __cplusplus
 }

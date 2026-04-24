@@ -22,6 +22,12 @@ void voice_session_arm_agent_window(uint32_t window_ms);
 
 void voice_session_close_agent_window(void);
 
+/**
+ * 快速清空下行 TTS 队列中尚未播放的分段（单遍出队并 free，无栈表二遍释）。仅用于主动打断/取消未播完语音；
+ * 正常入队会阻塞等待空槽，不会为腾槽而清掉未播段。
+ */
+void voice_session_discard_downlink_buffer(void);
+
 void voice_uplink_task(void *pvParameters);
 
 void voice_downlink_mqtt_cb(const char *topic, const char *data, int data_len);

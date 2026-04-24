@@ -17,6 +17,17 @@ typedef struct {
     uint16_t air_quality_adc;  // 空气质量/烟雾浓度 (MQ-135/MQ-2 ADC采集值)
     uint16_t light_adc;        // 环境光照强度 (光敏电阻 ADC采集值)
     bool is_human_present;     // 是否有人 (毫米波雷达检测, true=有人)
+
+    /** DHT11 本轮读数是否有效：false 表示要么没装、要么本轮读失败，此时
+     *  temperature/humidity 为 0 是占位而不是真实读数，调用方应跳过上报。 */
+    bool dht_valid;
+    /** MQ2 本轮读数是否有效（ADC 原始值） */
+    bool mq2_valid;
+    /** LDR 本轮读数是否有效（ADC 原始值） */
+    bool ldr_valid;
+    /** 毫米波 OT2 是否有效采样 */
+    bool rd03_valid;
+
     /** NTC 分压温度（GLOBAL_ADC_NTC_PIN>=0 且初始化成功时有效，与 DHT 可并存） */
     bool ntc_valid;
     float ntc_temp_c;

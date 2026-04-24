@@ -33,6 +33,13 @@ esp_err_t service_network_read_nvs_string(const char* key, char* out_value, size
  */
 void service_network_get_iso8601_timestamp(char* out_buffer, size_t max_len);
 
+/**
+ * @brief 等待 SNTP 完成校时（拿到 IP 且已 esp_sntp_init 之后调用）
+ * @param timeout_ms 最长等待毫秒数
+ * @return ESP_OK 已同步；ESP_ERR_TIMEOUT 超时仍继续运行；MOCK 下恒为 ESP_OK
+ */
+esp_err_t service_network_wait_sntp_sync(uint32_t timeout_ms);
+
 #ifdef __cplusplus
 }
 #endif

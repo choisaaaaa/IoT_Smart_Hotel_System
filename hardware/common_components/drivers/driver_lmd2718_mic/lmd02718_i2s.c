@@ -29,6 +29,11 @@ esp_err_t lmd02718_i2s_init_pdm_rx(int i2s_port, int pin_pdm_clk, int pin_pdm_di
 
     int port_id = map_i2s_port_id(i2s_port);
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(port_id, I2S_ROLE_MASTER);
+    /* DMA 缓冲扩容：默认 6 描述符 × 240 帧 ≈ 90ms@16k；
+     * 我们语音上行任务可能因 MQTT 发包/网络抖动暂停 100~200ms，缓冲不够会立刻丢采样。
+     * 这里给到 8 描述符 × 480 帧 ≈ 240ms，足够 cover 常见网络毛刺。 */
+    chan_cfg.dma_desc_num = 8;
+    chan_cfg.dma_frame_num = 480;
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &s_rx);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "i2s_new_channel PDM RX failed: %s", esp_err_to_name(err));
@@ -78,6 +83,9 @@ esp_err_t lmd02718_i2s_init_tx(int i2s_port, int pin_bclk, int pin_ws, int pin_d
     int port_id = map_i2s_port_id(i2s_port);
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(port_id, I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true; /* 发送结束后 DMA 描述符自动清零，避免欠载时重播尾音 */
+    /* TX DMA 同步扩容：≈240ms 缓冲，配合后端 1.5s 预缓冲就能彻底消除「字头/字尾断片」。 */
+    chan_cfg.dma_desc_num = 8;
+    chan_cfg.dma_frame_num = 480;
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_tx, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "i2s_new_channel TX failed: %s", esp_err_to_name(err));

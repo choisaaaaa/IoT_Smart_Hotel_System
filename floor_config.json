@@ -1,0 +1,1 @@
+{"hotel_id": 3, "room_id": null, "room_number": null, "area": null, "backend_url": "http://localhost:9000", "mqtt_broker": "8.134.166.69", "mqtt_port": "1883", "device_id": "FLO_5815D79C1389", "device_type": "floor", "device_key": ""}
