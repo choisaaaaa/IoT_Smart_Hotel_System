@@ -263,7 +263,7 @@ static void publish_room_business_event(const char *event_type, const char *deta
     }
 
     cJSON *event_data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(event_data, "room_id", atoi(current_room_id));
+    cJSON_AddStringToObject(event_data, "room_id", current_room_id);
     cJSON_AddItemToObject(root, "event_data", event_data);
 
     cJSON_AddStringToObject(root, "level", level);
@@ -1052,7 +1052,7 @@ static void publish_security_event(const char *event_type, const char *level) {
     cJSON_AddStringToObject(root, "event_type", event_type);
     
     cJSON *event_data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(event_data, "room_id", atoi(current_room_id));
+    cJSON_AddStringToObject(event_data, "room_id", current_room_id);
     cJSON_AddItemToObject(root, "event_data", event_data);
 
     cJSON_AddStringToObject(root, "level", level);

@@ -932,8 +932,10 @@ const handleSecurityEvent = (data: any) => {
   console.log('[App] 收到 security_event 事件:', data)
   
   // 处理消防报警和SOS报警，触发弹窗
-  if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm' || 
-      data.event_type === 'fire_alarm_linked' || data.event_type === 'global_alarm') {
+  if (data.event_type === 'fire_alarm' || data.event_type === 'sos_alarm' ||
+      data.event_type === 'fire_alarm_linked' || data.event_type === 'global_alarm' ||
+      data.event_type === 'floor_fire_suspected' || data.event_type === 'floor_alarm_pressed' ||
+      data.event_type === 'room_sos_pressed' || data.event_type === 'front_alarm_triggered') {
     
     // 提取位置信息
     const eventData = data.data || {}
@@ -950,10 +952,12 @@ const handleSecurityEvent = (data: any) => {
     
     // 根据设备ID判断设备类型
     const deviceId = data.device_id || ''
-    if (deviceId.includes('FLO') && eventData.floor_id) {
+    if ((deviceId.includes('FLO') || deviceId.startsWith('floor_')) && eventData.floor_id) {
       location = `第${eventData.floor_id}层(楼控)`
-    } else if (deviceId.includes('FRO')) {
-      location = '前台'
+    } else if (deviceId.startsWith('floor_')) {
+      location = `楼控 ${deviceId}`
+    } else if (deviceId.includes('FRO') || deviceId.includes('front_desk')) {
+      location = eventData.room_id ? `前台(代客${eventData.room_id})` : '前台'
     } else if (deviceId.includes('ROO') && eventData.room_number) {
       location = `${eventData.room_number}房间`
     }
