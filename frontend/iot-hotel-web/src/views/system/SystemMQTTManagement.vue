@@ -143,7 +143,7 @@
                     <a-tag color="green" style="margin-left: 8px">开灯+开空调+关窗帘</a-tag>
                   </a-button>
                   <a-button @click="sendQuickCommand('scene', 'sleep')">
-                    <SunOutlined /> 睡眠模式
+                    <MoonFilled /> 睡眠模式
                     <a-tag color="purple" style="margin-left: 8px">关灯+关窗帘+空调26°C</a-tag>
                   </a-button>
                   <a-button @click="sendQuickCommand('scene', 'leave')">
@@ -312,7 +312,7 @@ import {
   SoundOutlined,
   SafetyOutlined,
   NotificationOutlined,
-  SunOutlined
+  MoonFilled
 } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import dayjs from 'dayjs'

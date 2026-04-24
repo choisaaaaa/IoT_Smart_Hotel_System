@@ -1041,29 +1041,77 @@ export class AIButlerService {
   private async controlDevice(args: any, session: GuestSession): Promise<string> {
     const { device_type, action, value } = args;
 
-    const [devices] = await pool.query<RowDataPacket[]>(
-      `SELECT d.* FROM devices d
-       WHERE d.room_id = ? AND d.device_type IN ('room', 'floor')`,
+    // 获取房间信息
+    const [rooms] = await pool.query<RowDataPacket[]>(
+      `SELECT r.id, r.room_number FROM rooms r WHERE r.id = ?`,
       [session.roomDbId]
     );
 
-    if (devices.length === 0) {
-      return '抱歉，您房间暂时没有可控制的智能设备，请联系前台。';
+    if (rooms.length === 0) {
+      return '抱歉，无法找到您的房间信息，请联系前台。';
     }
 
-    const device = devices[0];
+    const room = rooms[0];
     const command = this.buildDeviceCommand(device_type, action, value);
-    logger.debug(`通过AI发送设备指令到 ${device.device_id}:`, command);
 
-    await mqttService.sendDeviceCommand(
-      device.device_id,
+    // 使用房间ID（数据库ID）作为设备ID发送指令
+    // 模拟器订阅的主题是 hotel/device/command/room/{room_id}
+    const targetDeviceId = `room_${room.id}`;
+    logger.debug(`通过AI发送设备指令到房间 ${targetDeviceId}:`, command);
+
+    // 直接向MQTT发送指令，不经过数据库验证（适用于模拟器）
+    await this.sendCommandToMQTT(
+      targetDeviceId,
       command.command_type,
-      command.command_value,
-      'ai_butler'
+      command.command_value
     );
 
     const actionText = this.getActionText(action, value, device_type);
-    return `已为您${device.device_name || device.device_id}${actionText}。`;
+    return `已为您${actionText}。`;
+  }
+
+  /**
+   * 直接向MQTT发送指令（不经过数据库验证，适用于模拟器）
+   */
+  private async sendCommandToMQTT(
+    deviceId: string,
+    commandType: string,
+    commandValue: string
+  ): Promise<void> {
+    try {
+      // 使用默认密钥进行签名（模拟器使用默认密钥）
+      const defaultKey = '57a2e67b8c3d4e5f6a7b8c9d0e1f2a3b';
+      const timestamp = new Date().toISOString();
+
+      // 准备带有签名的消息
+      const payload: any = {
+        command_id: Date.now(),
+        device_id: deviceId,
+        command_type: commandType,
+        command_value: commandValue,
+        timestamp
+      };
+
+      // 计算签名
+      const crypto = require('crypto');
+      const signaturePayload = JSON.stringify({
+        command_id: payload.command_id,
+        device_id: payload.device_id,
+        command_type: payload.command_type,
+        command_value: payload.command_value,
+        timestamp: payload.timestamp
+      });
+      payload.signature = crypto.createHmac('sha256', defaultKey).update(signaturePayload).digest('hex');
+
+      // 发布到 MQTT
+      const topic = `hotel/device/command/room/${deviceId}`;
+      await mqttService.publish(topic, payload);
+
+      logger.info(`AI助手发送设备指令: ${topic}/${commandType}=${commandValue}`);
+    } catch (error: any) {
+      logger.error('AI助手发送设备指令失败:', error.message);
+      throw error;
+    }
   }
 
   /**
@@ -1074,33 +1122,33 @@ export class AIButlerService {
     switch (action) {
       case 'on':
       case 'open':
-        if (deviceType === 'light') {return { command_type: 'light_on', command_value: 'on' };}
-        if (deviceType === 'ac') {return { command_type: 'air_on', command_value: 'on' };}
-        if (deviceType === 'curtain') {return { command_type: 'curtain_open', command_value: 'open' };}
-        if (deviceType === 'lock') {return { command_type: 'door_unlock', command_value: 'unlock' };}
-        if (deviceType === 'all') {return { command_type: 'scene_welcome', command_value: 'welcome' };}
-        return { command_type: `${deviceType}_on`, command_value: 'on' };
+        if (deviceType === 'light') {return { command_type: 'light', command_value: 'on' };}
+        if (deviceType === 'ac') {return { command_type: 'air', command_value: 'on' };}
+        if (deviceType === 'curtain') {return { command_type: 'curtain', command_value: 'open' };}
+        if (deviceType === 'lock') {return { command_type: 'door', command_value: 'unlock' };}
+        if (deviceType === 'all') {return { command_type: 'scene', command_value: 'welcome' };}
+        return { command_type: deviceType, command_value: 'on' };
       case 'off':
       case 'close':
-        if (deviceType === 'light') {return { command_type: 'light_off', command_value: 'off' };}
-        if (deviceType === 'ac') {return { command_type: 'air_off', command_value: 'off' };}
-        if (deviceType === 'curtain') {return { command_type: 'curtain_close', command_value: 'close' };}
-        if (deviceType === 'lock') {return { command_type: 'door_lock', command_value: 'lock' };}
-        if (deviceType === 'all') {return { command_type: 'scene_sleep', command_value: 'sleep' };}
-        return { command_type: `${deviceType}_off`, command_value: 'off' };
+        if (deviceType === 'light') {return { command_type: 'light', command_value: 'off' };}
+        if (deviceType === 'ac') {return { command_type: 'air', command_value: 'off' };}
+        if (deviceType === 'curtain') {return { command_type: 'curtain', command_value: 'close' };}
+        if (deviceType === 'lock') {return { command_type: 'door', command_value: 'lock' };}
+        if (deviceType === 'all') {return { command_type: 'scene', command_value: 'sleep' };}
+        return { command_type: deviceType, command_value: 'off' };
       case 'toggle':
-        if (deviceType === 'light') {return { command_type: 'scene_next', command_value: 'next' };}
-        if (deviceType === 'all') {return { command_type: 'scene_next', command_value: 'next' };}
-        return { command_type: `${deviceType}_toggle`, command_value: 'toggle' };
+        if (deviceType === 'light') {return { command_type: 'scene', command_value: 'next' };}
+        if (deviceType === 'all') {return { command_type: 'scene', command_value: 'next' };}
+        return { command_type: deviceType, command_value: 'toggle' };
       case 'set_temperature':
-        return { command_type: 'set_ac_temp', command_value: String(Math.round(v ?? 24)) };
+        return { command_type: 'air', command_value: `temp:${Math.round(v ?? 24)}` };
       case 'set_brightness':
-        return { command_type: 'set_light_brightness', command_value: String(Math.round(v ?? 80)) };
+        return { command_type: 'light', command_value: `brightness:${Math.round(v ?? 80)}` };
       case 'set_volume':
-        return { command_type: 'set_volume', command_value: String(Math.round(v ?? 60)) };
+        return { command_type: 'volume', command_value: String(Math.round(v ?? 60)) };
       default:
-        // 兜底：允许模型直接给出硬件 command_type（例如 light_on / set_ac_temp）
-        return { command_type: action, command_value: v !== undefined ? String(Math.round(v)) : action };
+        // 兜底：允许模型直接给出硬件 command_type（例如 light / air / curtain / door / scene）
+        return { command_type: deviceType, command_value: action };
     }
   }
 

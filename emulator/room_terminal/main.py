@@ -1046,6 +1046,11 @@ class RoomTerminalEmulator(BaseDeviceEmulator):
             room_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/{self.room_id}"
             self.mqtt_client.subscribe(room_cmd_topic)
             self._log(f"已订阅客房指令主题 (room_id): {room_cmd_topic}")
+            
+            # 同时订阅 room_{room_id} 格式（后端使用此格式）
+            room_cmd_topic2 = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/room_{self.room_id}"
+            self.mqtt_client.subscribe(room_cmd_topic2)
+            self._log(f"已订阅客房指令主题 (room_id2): {room_cmd_topic2}")
 
         # 订阅全局客房指令主题（用于接收全局消警等指令）
         all_cmd_topic = f"{TOPIC_DEVICE_COMMAND_PREFIX}/room/all"
