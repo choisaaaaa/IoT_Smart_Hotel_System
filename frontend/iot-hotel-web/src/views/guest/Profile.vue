@@ -537,7 +537,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import {
   PlusOutlined,
   PhoneOutlined,
@@ -599,11 +599,11 @@ const confirmRecharge = async () => {
     const res = await request.post('/members/recharge', {
       amount: selectedRechargeAmount.value
     })
-    message.success(`充值成功！实际到账 ¥${res.data.credit_amount}`)
+    NotifyPreset.rechargeSuccess(selectedRechargeAmount.value, res.data.credit_amount)
     rechargeModalVisible.value = false
     fetchData() // 刷新余额
   } catch (error) {
-    message.error('充值失败，请稍后重试')
+    NotifyPreset.paymentFailed('充值失败，请稍后重试')
   } finally {
     rechargeLoading.value = false
   }
@@ -621,10 +621,10 @@ const onAvatarChange = async (e: Event) => {
 
   // 校验文件类型和大小
   if (!file.type.startsWith('image/')) {
-    return message.error('请选择图片文件')
+    return $notify.error({ title: '文件格式错误', description: '请选择图片文件（JPG/PNG/GIF）' })
   }
   if (file.size > 2 * 1024 * 1024) {
-    return message.error('图片大小不能超过 2MB')
+    return $notify.error({ title: '文件过大', description: '图片大小不能超过 2MB，请压缩后重试' })
   }
 
   const formData = new FormData()
@@ -647,10 +647,10 @@ const onAvatarChange = async (e: Event) => {
       avatar: imageUrl
     })
 
-    message.success('头像更新成功')
+    NotifyPreset.avatarUpdated()
   } catch (error) {
     console.error('更新头像失败:', error)
-    message.error('头像更新失败')
+    NotifyPreset.operationFailed('头像更新失败')
   } finally {
     loading.value = false
     // 重置 input，允许再次选择同一张图片
@@ -706,12 +706,12 @@ const couponCodeInput = ref('')
 const importLoading = ref(false)
 
 const handleImportCoupon = async () => {
-  if (!couponCodeInput.value.trim()) return message.warning('请输入券码')
+  if (!couponCodeInput.value.trim()) return $notify.warning({ title: '请输入券码', description: '请输入优惠券兑换码' })
 
   try {
     importLoading.value = true
     await request.post('/coupons/import', { coupon_code: couponCodeInput.value.trim() })
-    message.success('优惠券导入成功！')
+    NotifyPreset.couponImported()
     couponCodeInput.value = ''
     fetchData() // 刷新列表
   } catch (error: any) {
@@ -733,9 +733,9 @@ const handleCheckin = async () => {
     checkinLoading.value = true
     const res = await request.post('/members/checkin')
     if (res.data.already_checked_in) {
-      message.info('今日已签到')
+      NotifyPreset.alreadyCheckedIn()
     } else {
-      message.success(`签到成功！获得 ${res.data.experience} 成长值`)
+      NotifyPreset.checkinDaily(res.data.experience)
       // 刷新数据
       fetchData()
     }
@@ -785,12 +785,12 @@ const isPhoneChanged = computed(() => {
 
 const handleSendCode = async () => {
   if (!/^1[3-9]\d{9}$/.test(profileForm.phone)) {
-    return message.warning('请输入正确的手机号')
+    return $notify.warning({ title: '格式错误', description: '请输入正确的手机号' })
   }
 
   try {
     await userApi.sendCode(profileForm.phone)
-    message.success('验证码已发送 (模拟)')
+    $notify.success({ title: '验证码已发送', description: '验证码已发送至您的手机（模拟）📱', duration: 3 })
     countdown.value = 60
     const timer = setInterval(() => {
       countdown.value--
@@ -835,7 +835,7 @@ const getIdTypeLabel = (type: string) => {
 // 初始化数据
 const fetchData = async () => {
   if (!appStore.userInfo) {
-    message.warning('请先登录')
+    $notify.warning({ title: '请先登录', description: '请先登录后再进行操作' })
     appStore.showLoginModal = true
     router.push('/guest/booking')
     return
@@ -908,18 +908,18 @@ const fetchFavorites = async () => {
 const handleRemoveFavorite = async (hotelId: number) => {
   try {
     await favoritesApi.removeFavorite(hotelId)
-    message.success('已取消收藏')
+    NotifyPreset.favoriteRemoved()
     fetchFavorites()
   } catch (error) {
-    message.error('取消收藏失败')
+    NotifyPreset.operationFailed('取消收藏失败')
   }
 }
 
 // 更新个人资料
 const handleUpdateProfile = async () => {
-  if (editingField.value === 'username' && !profileForm.username) return message.warning('昵称不能为空')
+  if (editingField.value === 'username' && !profileForm.username) return $notify.warning({ title: '信息不完整', description: '昵称不能为空' })
   if (editingField.value === 'phone' && (!profileForm.phone || !profileForm.code)) {
-    return message.warning('请填写新手机号和验证码')
+    return $notify.warning({ title: '信息不完整', description: '请填写新手机号和验证码' })
   }
 
   try {
@@ -939,7 +939,7 @@ const handleUpdateProfile = async () => {
         ...appStore.userInfo,
         ...res.data.user
       })
-      message.success('更新成功')
+      NotifyPreset.profileUpdated()
       editingField.value = null
       profileForm.code = ''
     }
@@ -951,9 +951,9 @@ const handleUpdateProfile = async () => {
 }
 
 const handleUpdatePassword = async () => {
-  if (!profileForm.oldPassword || !profileForm.newPassword) return message.warning('请输入完整密码信息')
-  if (profileForm.newPassword !== profileForm.confirmPassword) return message.warning('两次输入的新密码不一致')
-  if (profileForm.newPassword.length < 6) return message.warning('新密码长度不能少于6位')
+  if (!profileForm.oldPassword || !profileForm.newPassword) return $notify.warning({ title: '信息不完整', description: '请输入完整密码信息' })
+  if (profileForm.newPassword !== profileForm.confirmPassword) return $notify.warning({ title: '密码不一致', description: '两次输入的新密码不一致，请重新确认' })
+  if (profileForm.newPassword.length < 6) return $notify.warning({ title: '密码过短', description: '新密码长度不能少于6位' })
 
   try {
     saving.value = true
@@ -961,7 +961,7 @@ const handleUpdatePassword = async () => {
       oldPassword: profileForm.oldPassword,
       newPassword: profileForm.newPassword
     })
-    message.success('密码修改成功，请下次使用新密码登录')
+    NotifyPreset.passwordChanged()
     editingField.value = null
   } catch (error) {
     console.error('修改密码失败:', error)
@@ -989,30 +989,30 @@ const handleEditFrequentGuest = (guest: FrequentGuest) => {
 
 const handleSaveFrequentGuest = async () => {
   if (!guestEditForm.name || !guestEditForm.phone || !guestEditForm.id_number) {
-    return message.warning('请填写完整信息')
+    return $notify.warning({ title: '信息不完整', description: '请填写完整信息' })
   }
   if (guestEditForm.id_type === 'idcard') {
     const idNumber = guestEditForm.id_number.trim()
     if (idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(idNumber)) {
-      return message.warning('请填写正确的18位身份证号码')
+      return $notify.warning({ title: '证件格式错误', description: '请填写正确的18位身份证号码' })
     }
   } else if (guestEditForm.id_number.trim().length < 5) {
-    return message.warning('证件号码至少5位')
+    return $notify.warning({ title: '证件格式错误', description: '证件号码至少5位' })
   }
 
   try {
     guestSaveLoading.value = true
     if (guestEditForm.id) {
       await guestService.update(guestEditForm.id, guestEditForm)
-      message.success('更新成功')
+      NotifyPreset.profileUpdated('常客信息')
     } else {
       await guestService.create(guestEditForm)
-      message.success('添加成功')
+      NotifyPreset.profileUpdated('常客信息')
     }
     showGuestEditModal.value = false
     fetchFrequentGuests()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   } finally {
     guestSaveLoading.value = false
   }
@@ -1021,10 +1021,10 @@ const handleSaveFrequentGuest = async () => {
 const handleDeleteFrequentGuest = async (id: number) => {
   try {
     await guestService.remove(id)
-    message.success('已删除')
+    NotifyPreset.profileUpdated('常客信息')
     fetchFrequentGuests()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除失败')
   }
 }
 

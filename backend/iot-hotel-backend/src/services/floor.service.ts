@@ -51,10 +51,12 @@ export class FloorService {
 
   static async createFloor(data: Partial<Floor>): Promise<number> {
     try {
-      const { floor_number, floor_name, floor_plan_image, description } = data;
+      const floorNumber = data.floor_number || data.floor_id || 0;
+      const floorName = data.floor_name || data.name || `${floorNumber}F`;
+      const { floor_plan_image, description } = data;
       const [result] = await pool.query<ResultSetHeader>(
         'INSERT INTO floors (floor_number, floor_name, floor_plan_image, description) VALUES (?, ?, ?, ?)',
-        [floor_number, floor_name, floor_plan_image, description]
+        [floorNumber, floorName, floor_plan_image, description]
       );
       return result.insertId;
     } catch (error: any) {

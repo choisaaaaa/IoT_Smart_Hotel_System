@@ -359,7 +359,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import {
   RobotOutlined,
   HomeOutlined,
@@ -598,7 +598,7 @@ function handleCallAnswered(data: any) {
     transferModal.value.step = 'connecting'
     transferModal.value.statusText = '前台已接听'
     transferModal.value.statusDesc = '正在建立语音连接...'
-    message.success('前台已接听，正在连接...')
+    $notify.success({ title: '前台已接听', description: '正在建立语音连接，请稍候 📞' })
     
     setTimeout(() => {
       transferModal.value.visible = false
@@ -681,7 +681,7 @@ function handleCallRejected(data: any) {
   if (data.call_id === transferModal.value.callId) {
     transferModal.value.statusText = '呼叫被拒绝'
     transferModal.value.statusDesc = '前台暂时无法接听，请稍后再试'
-    message.warning('前台暂时无法接听')
+    $notify.warning({ title: '前台暂时无法接听', description: '请稍后再试或使用文字留言' })
     setTimeout(() => {
       transferModal.value.visible = false
       resetTransferModal()
@@ -691,7 +691,7 @@ function handleCallRejected(data: any) {
 
 function handleCallHungup(data: any) {
   if (data.call_id === callModal.value.callId) {
-    message.info('通话已结束')
+    $notify.info({ title: '通话已结束', description: '与前台通话已结束' })
     closeCallModal()
   }
 }
@@ -704,9 +704,9 @@ async function verifyAccess() {
     })
     
     if (res.data?.code === 403) {
-        message.error('该房间暂无入住记录，无法使用AI管家')
+        $notify.error({ title: '无法使用AI管家', description: '该房间暂无入住记录，请先办理入住 🏨' })
       } else if (res.data?.data?.accessible) {
-        message.success(`欢迎${res.data.data.guestName}，我是您的AI管家小智`)
+        $notify.success({ title: '欢迎', description: `${res.data.data.guestName}，我是您的AI管家小智 🤖` })
         // 更新酒店名称
         if (res.data.data.hotelName) {
           currentHotelName.value = res.data.data.hotelName
@@ -739,7 +739,7 @@ function handleRoomChange(newRoomId: string) {
   }
   // 清空当前对话（可选，这里选择清空以防混淆）
   messages.value = []
-  message.success(`已切换到房间 ${newRoomId}`)
+  $notify.success({ title: '已切换房间', description: `已切换到房间 ${newRoomId} 🏠` })
   // 重新验证权限并加载新房间状态
   verifyAccess()
 }
@@ -749,7 +749,7 @@ function initSpeechRecognition() {
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   
   if (!SpeechRecognition) {
-    message.warning('您的浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器')
+    $notify.warning({ title: '浏览器不支持', description: '您的浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器 🌐' })
     return
   }
 
@@ -831,20 +831,20 @@ function initSpeechRecognition() {
     // 根据错误类型显示不同提示
     switch (event.error) {
       case 'no-speech':
-        message.info('没有检测到语音，请再试一次')
+        $notify.info({ title: '未检测到语音', description: '没有检测到语音输入，请再试一次 🎤' })
         break
       case 'audio-capture':
-        message.error('无法访问麦克风，请检查设备')
+        $notify.error({ title: '麦克风访问失败', description: '无法访问麦克风，请检查设备连接 🎤' })
         break
       case 'not-allowed':
-        message.error('麦克风权限被拒绝')
+        $notify.error({ title: '权限被拒绝', description: '麦克风权限被拒绝，请在浏览器设置中允许 🔒' })
         microphonePermission.value = false
         break
       case 'network':
-        message.error('网络错误，语音识别失败')
+        NotifyPreset.networkError()
         break
       default:
-        message.error('语音识别失败，请重试')
+        NotifyPreset.operationFailed('语音识别失败，请重试')
     }
   }
 }
@@ -852,7 +852,7 @@ function initSpeechRecognition() {
 // 开始监听
 function startListening() {
   if (!recognition) {
-    message.warning('语音识别未初始化，请刷新页面重试')
+    $notify.warning({ title: '语音识别未初始化', description: '请刷新页面后重试 🔄' })
     return
   }
   
@@ -884,10 +884,10 @@ function doStartListening() {
   } catch (e: any) {
     console.error('[语音识别] 启动失败:', e)
     if (e.name === 'NotAllowedError') {
-      message.error('麦克风权限被拒绝，请在浏览器设置中允许访问')
+      $notify.error({ title: '权限被拒绝', description: '麦克风权限被拒绝，请在浏览器设置中允许访问 🔒' })
       microphonePermission.value = false
     } else {
-      message.error('语音识别启动失败，请重试')
+      NotifyPreset.operationFailed('语音识别启动失败')
     }
     isListening.value = false
     isRecognitionActive = false
@@ -1117,7 +1117,7 @@ async function requestMicrophonePermission() {
   try {
     // 检查浏览器是否支持 getUserMedia
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      message.warning('您的浏览器不支持语音输入')
+      $notify.warning({ title: '浏览器不支持', description: '您的浏览器不支持语音输入功能 🌐' })
       return
     }
     
@@ -1134,11 +1134,11 @@ async function requestMicrophonePermission() {
     stream.getTracks().forEach(track => track.stop())
     
     microphonePermission.value = true
-    message.success('🎤 麦克风权限已获取，可以开始使用语音输入了')
+    $notify.success({ title: '麦克风已就绪', description: '麦克风权限已获取，可以开始使用语音输入了 🎤' })
     
     // 如果是iOS Safari，需要用户交互后才能初始化语音识别
     if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-      message.info('iOS设备：请按住麦克风按钮开始语音对话')
+      $notify.info({ title: 'iOS提示', description: '请按住麦克风按钮开始语音对话 📱' })
     }
     
     console.log('[麦克风] 权限获取成功')
@@ -1151,21 +1151,21 @@ async function requestMicrophonePermission() {
       switch (error.name) {
         case 'NotAllowedError':
         case 'PermissionDeniedError':
-          message.error('麦克风权限被拒绝，请点击麦克风图标重新授权')
+          $notify.error({ title: '权限被拒绝', description: '麦克风权限被拒绝，请点击麦克风图标重新授权 🔒' })
           break
         case 'NotFoundError':
         case 'DevicesNotFoundError':
-          message.error('未找到麦克风设备，请检查硬件连接')
+          $notify.error({ title: '未找到麦克风', description: '未找到麦克风设备，请检查硬件连接 🎤' })
           break
         case 'NotReadableError':
         case 'TrackStartError':
-          message.error('麦克风被其他应用占用，请关闭其他使用麦克风的程序')
+          $notify.error({ title: '麦克风被占用', description: '麦克风被其他应用占用，请关闭其他使用麦克风的程序 🎤' })
           break
         default:
-          message.error('无法获取麦克风权限，请检查浏览器设置')
+          $notify.error({ title: '麦克风权限获取失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
       }
     } else {
-      message.error('无法获取麦克风权限，请检查浏览器设置')
+      $notify.error({ title: '麦克风权限获取失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
     }
   }
 }
@@ -1197,7 +1197,7 @@ function playAudio(base64Audio: string) {
     audio.onerror = (e) => {
       isPlayingAudio.value = false
       console.error('[AIButler] 语音播放失败:', e)
-      message.warning('语音播放失败，请检查音量设置')
+      $notify.warning({ title: '语音播放失败', description: 'AI语音播放失败，请检查音量设置 🔊' })
     }
     
     // 尝试播放（处理自动播放策略）
@@ -1211,7 +1211,7 @@ function playAudio(base64Audio: string) {
         console.warn('[AIButler] 自动播放被阻止:', error)
         
         // 显示提示让用户点击启用
-        message.info('🔊 点击页面任意位置播放AI语音')
+        $notify.info({ title: '点击播放语音', description: '点击页面任意位置即可播放AI语音 🔊' })
         
         // 监听一次用户点击来播放
         const playOnce = () => {
@@ -1386,7 +1386,7 @@ async function initWebRTC(callId: string) {
       })
     } catch (mediaError) {
       console.error('[WebRTC] 获取麦克风失败:', mediaError)
-      message.error('无法访问麦克风，请检查权限设置')
+      $notify.error({ title: '麦克风访问失败', description: '无法访问麦克风，请检查权限设置 🎤' })
       throw mediaError
     }
     
@@ -1438,7 +1438,7 @@ async function initWebRTC(callId: string) {
             }).catch(e => {
               console.error('[AIButler] 播放远程音频失败:', e)
               // 如果是自动播放策略问题，尝试在用户交互后播放
-              message.info('请点击页面以启用音频')
+              $notify.info({ title: '启用音频', description: '请点击页面以启用音频播放 🔊' })
             })
           }
         } else {

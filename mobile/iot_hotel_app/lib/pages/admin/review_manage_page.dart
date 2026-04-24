@@ -411,7 +411,7 @@ class _AdminReviewManagePageState extends ConsumerState<AdminReviewManagePage>
         break;
       default:
         statusColor = AppColors.textHint;
-        statusText = status;
+        statusText = '未知';
     }
 
     return Container(

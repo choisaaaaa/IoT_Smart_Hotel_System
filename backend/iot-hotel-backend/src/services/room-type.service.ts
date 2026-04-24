@@ -73,9 +73,11 @@ export class RoomTypeService {
   static async createRoomType(data: Partial<RoomType> & { hotel_id?: number }): Promise<number> {
     try {
       const { name, code, base_price, area, bed_type, max_guests, facilities, description, images, hotel_id } = data;
+      const finalCode = code || name?.replace(/\s+/g, '_').toUpperCase().substring(0, 20) || `RT_${Date.now()}`;
+      const finalBasePrice = base_price || 0;
       const [result] = await pool.query<ResultSetHeader>(
         'INSERT INTO room_types (name, code, base_price, area, bed_type, max_guests, facilities, description, images, hotel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, code, base_price, area, bed_type, max_guests, JSON.stringify(facilities || []), description, JSON.stringify(images || []), hotel_id || 0]
+        [name, finalCode, finalBasePrice, area, bed_type, max_guests, JSON.stringify(facilities || []), description, JSON.stringify(images || []), hotel_id || 0]
       );
       return result.insertId;
     } catch (error) {

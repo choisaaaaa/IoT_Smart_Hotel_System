@@ -221,7 +221,7 @@ class VoiceCallService {
     debugPrint('[VoiceCallService] 发起呼叫: callee_type=$calleeType, callee_id=$calleeId');
 
     final result = await _callApi.outbound(
-      callerId: _clientId ?? 'unknown',
+      callerId: _clientId ?? '未知',
       calleeType: calleeType,
       calleeId: calleeId,
       callerType: _clientType ?? 'front_desk',
@@ -241,7 +241,7 @@ class VoiceCallService {
           }
         }
         final retryResult = await _callApi.outbound(
-          callerId: _clientId ?? 'unknown',
+          callerId: _clientId ?? '未知',
           calleeType: calleeType,
           calleeId: calleeId,
           callerType: _clientType ?? 'front_desk',
@@ -442,8 +442,8 @@ class VoiceCallService {
 
     try {
       final offer = RTCSessionDescription(
-        data['offer']['sdp'] ?? data['offer']['sdp'],
-        data['offer']['type'] ?? data['offer']['type'],
+        data['offer']['sdp'] ?? '',
+        data['offer']['type'] ?? 'offer',
       );
       await _peerConnection!.setRemoteDescription(offer);
 

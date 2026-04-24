@@ -15,7 +15,11 @@ class SceneController {
         hotelId = req.query.hotel_id ? parseInt(req.query.hotel_id as string) : undefined;
       }
       if (!hotelId) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
+        if (isSystemAdmin(user?.role)) {
+          hotelId = 1;
+        } else {
+          return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
       }
 
       const { room_id, page = 1, pageSize = 20 } = req.query;

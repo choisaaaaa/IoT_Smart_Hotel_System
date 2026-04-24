@@ -60,6 +60,7 @@ export const bookingApi = {
     guest_name?: string; 
     guest_phone?: string; 
     guest_id_number?: string;
+    room_id?: number;
     manual_discount?: number;
     manual_reduce?: number;
     total_price?: number;

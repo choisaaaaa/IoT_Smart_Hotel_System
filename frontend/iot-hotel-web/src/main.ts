@@ -6,13 +6,21 @@ import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
 import './assets/global.css'
+import './assets/global-notify.css'
 import { initWebSocket } from './utils/websocket'
-import { message } from 'ant-design-vue'
+import { message, notification } from 'ant-design-vue'
 
-// 全局消息配置
 message.config({
   duration: 3,
-  maxCount: 2, // 最大存留数调成 2
+  maxCount: 2,
+})
+
+notification.config({
+  placement: 'topRight',
+  duration: 4.5,
+  maxCount: 3,
+  top: '24px',
+  right: '24px',
 })
 const app = createApp(App)
 

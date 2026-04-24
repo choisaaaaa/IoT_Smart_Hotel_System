@@ -230,7 +230,8 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
-import { message, Modal, Empty } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal, Empty } from 'ant-design-vue'
 import {
   PhoneOutlined, CloseOutlined, HomeOutlined, UserOutlined,
   TeamOutlined, HistoryOutlined, AppstoreOutlined, AudioOutlined, CheckCircleOutlined, WarningOutlined,
@@ -245,6 +246,7 @@ import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { useNotificationStore } from '@/stores/notification'
 import { CANONICAL_ROLES } from '@/api/auth'
+import { formatTimeHHmm, now, formatDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const hotelStore = useHotelStore()
@@ -318,11 +320,11 @@ const broadcastRoomColumns = [
 
   const handleBroadcast = async () => {
     if (!broadcastForm.room_ids || broadcastForm.room_ids.length === 0) {
-      message.warning('请选择房间')
+      $notify.warning({ title: '请选择房间', description: '请至少选择一个目标房间 📢' })
       return
     }
     if (!broadcastForm.text) {
-      message.warning('请输入广播内容')
+      $notify.warning({ title: '请输入广播内容', description: '请填写需要广播的文字内容 📝' })
       return
     }
 
@@ -335,19 +337,19 @@ const broadcastRoomColumns = [
       // 记录历史
       broadcastHistory.value.unshift({
         id: Date.now(),
-        time: new Date().toLocaleTimeString(),
+        time: formatTimeHHmm(now()),
         text: broadcastForm.text,
         targets: targetRoomIds,
         successCount: results.length,
         totalCount: targetRoomIds.length
       })
       
-      message.success(`广播已成功下发至 ${results.length} 个房间`)
+      NotifyPreset.broadcastSuccess(results.length)
       // broadcastVisible.value = false // 保持打开，方便查看历史或继续操作
       broadcastForm.room_ids = []
       broadcastForm.text = ''
     } catch (err: any) {
-      message.error(err.response?.data?.message || '广播下发失败')
+      NotifyPreset.operationFailed(err.response?.data?.message || '广播下发失败')
     } finally {
       broadcasting.value = false
     }
@@ -402,7 +404,7 @@ async function checkMicPermission() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     // 成功获取流，说明权限 OK
     micStatus.value = 'success'
-    message.success('麦克风权限已就绪，您可以正常通话')
+    $notify.success({ title: '麦克风权限已就绪', description: '麦克风检测通过，您可以正常通话 🎤' })
 
     // 释放测试流
     stream.getTracks().forEach(track => track.stop())
@@ -411,11 +413,11 @@ async function checkMicPermission() {
     micStatus.value = 'error'
 
     if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-      message.error('麦克风权限已被拒绝，请在浏览器地址栏左侧点击“锁”图标开启权限')
+      $notify.error({ title: '麦克风权限被拒绝', description: '请在浏览器地址栏左侧点击"锁"图标开启权限 🔒' })
     } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-      message.error('未检测到麦克风设备，请检查硬件连接')
+      $notify.error({ title: '未检测到麦克风', description: '未检测到麦克风设备，请检查硬件连接 🎤' })
     } else {
-      message.error('麦克风检测异常: ' + error.message)
+      $notify.error({ title: '麦克风检测异常', description: error.message })
     }
   } finally {
     micChecking.value = false
@@ -535,7 +537,7 @@ async function fetchStats() {
 function handleCardClick(target: any) {
   const socket = getSocket()
   if (!socket || !socket.connected) {
-    message.error('通信服务未连接，请稍后再试')
+    $notify.error({ title: '通信服务未连接', description: 'WebSocket 未连接，请稍后再试 📡' })
     return
   }
 
@@ -578,7 +580,7 @@ async function startCall(target: any) {
 
     await fetchCalls()
   } catch (error) {
-    message.error('发起呼叫失败')
+    NotifyPreset.operationFailed('发起呼叫失败')
   } finally {
     calling.value = false
   }
@@ -630,7 +632,7 @@ function stopCallDurationTimer() {
 
 async function toggleRegister() {
   // 此函数已废弃，现在由 websocket.ts 自动处理登录即上线
-  message.info('系统已自动为您接通在线状态')
+  $notify.info({ title: '已自动上线', description: '系统已自动为您接通在线状态 🟢' })
 }
 
 // 使用命名函数以便正确移除监听器
@@ -644,7 +646,7 @@ const handleCallAnswered = (data: any) => {
   // 处理外呼通话
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
-    message.success('对方已接听')
+    $notify.success({ title: '对方已接听', description: '通话已接通 📞' })
   }
 
   // 更新全局通话状态为已连接（包括来电）
@@ -655,7 +657,7 @@ const handleCallAnswered = (data: any) => {
     })
     // 启动通话时长计时
     startCallDurationTimer()
-    message.success('通话已连接')
+    $notify.success({ title: '通话已连接', description: '通话已成功建立连接 📞' })
   }
 
   fetchCalls()
@@ -664,14 +666,14 @@ const handleCallAnswered = (data: any) => {
 const handleCallRejected = (data: any) => {
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
-    message.warning('通话被拒接')
+    $notify.warning({ title: '通话被拒接', description: '对方拒绝了本次通话 📵' })
     appStore.clearCurrentCall()
     stopCallDurationTimer()
     fetchCalls()
   } else if (appStore.currentCall?.call_id === data.call_id) {
     appStore.clearCurrentCall()
     stopCallDurationTimer()
-    message.warning('通话被拒接')
+    $notify.warning({ title: '通话被拒接', description: '对方拒绝了本次通话 📵' })
     fetchCalls()
   }
 }
@@ -679,14 +681,14 @@ const handleCallRejected = (data: any) => {
 const handleCallHungup = (data: any) => {
   if (data.call_id === outgoingCallModal.callId) {
     outgoingCallModal.visible = false
-    message.info('通话已挂断')
+    $notify.info({ title: '通话已挂断', description: '当前通话已结束 📞' })
     appStore.clearCurrentCall()
     stopCallDurationTimer()
     fetchCalls()
   } else if (appStore.currentCall?.call_id === data.call_id) {
     appStore.clearCurrentCall()
     stopCallDurationTimer()
-    message.info('对方已挂断')
+    $notify.info({ title: '对方已挂断', description: '对方已结束通话 📞' })
     fetchCalls()
   }
 }
@@ -709,7 +711,7 @@ const handleIncomingCall = (data: any) => {
 
   // 显示来电提醒
   if (data.isTransfer) {
-    message.info(`AI管家转接: ${data.transferReason || '客人要求转人工'}`)
+    $notify.info({ title: 'AI管家转接', description: `${data.transferReason || '客人要求转人工'} 🤖➡️👤` })
   }
 }
 
@@ -773,7 +775,7 @@ const historyColumns = [
   { title: '被叫', dataIndex: 'callee_id', width: 120 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '时长', dataIndex: 'duration_sec', key: 'duration', width: 100 },
-  { title: '时间', dataIndex: 'started_at', width: 180 }
+  { title: '时间', dataIndex: 'started_at', key: 'started_at', width: 180, customRender: ({ text }: any) => formatDateTime(text) }
 ]
 </script>
 

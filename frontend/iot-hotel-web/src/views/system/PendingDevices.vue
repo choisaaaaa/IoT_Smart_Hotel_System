@@ -52,7 +52,7 @@
             <a-badge :status="record.device_status === 'online' ? 'success' : 'default'" :text="record.device_status === 'online' ? '在线' : '离线'" />
           </template>
           <template v-if="column.key === 'last_seen'">
-            {{ record.last_seen ? dayjs(record.last_seen).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+            {{ record.last_seen ? formatDateTimeSec(record.last_seen) : '-' }}
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
@@ -107,10 +107,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { SyncOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { deviceApi } from '@/api/device'
 import { roomApi } from '@/api/room'
 import dayjs from 'dayjs'
+import { formatDateTimeSec } from '@/utils/date'
 
 const columns = [
   { title: '设备ID', dataIndex: 'device_id', key: 'device_id', width: 200 },
@@ -159,16 +160,13 @@ const fetchPendingDevices = async () => {
     // 处理后端返回的数据结构 { success: true, data: [...] }
     if (res && res.success && Array.isArray(res.data)) {
       pendingDevices.value = res.data
-      message.success(`获取到 ${res.data.length} 个待审核设备`)
     } else if (Array.isArray(res)) {
       pendingDevices.value = res
-      message.success(`获取到 ${res.length} 个待审核设备`)
     } else {
       pendingDevices.value = []
-      message.warning('暂无待审核设备')
     }
   } catch (error) {
-    message.error('获取待审核设备失败')
+    pendingDevices.value = []
     console.error('Fetch pending devices error:', error)
     debugInfo.value = `错误: ${error}`
   } finally {
@@ -202,7 +200,7 @@ const showAuditModal = (record: any) => {
 
 const handleAudit = async () => {
   if (!auditForm.value.room_id) {
-    message.error('请选择分配的房间')
+    $notify.error({ title: '请选择房间', description: '审核设备前请先选择分配的房间' })
     return
   }
 
@@ -213,11 +211,11 @@ const handleAudit = async () => {
       room_id: auditForm.value.room_id,
       area: auditForm.value.area
     })
-    message.success('设备审核通过')
+    $notify.success({ title: '审核通过', description: '设备已审核通过并分配至指定房间 ✅' })
     auditVisible.value = false
     fetchPendingDevices()
   } catch (error) {
-    message.error('审核失败')
+    NotifyPreset.operationFailed('设备审核失败')
   } finally {
     auditLoading.value = false
   }
@@ -226,10 +224,10 @@ const handleAudit = async () => {
 const rejectDevice = async (id: number) => {
   try {
     await deviceApi.auditDevice(id, { status: 'rejected' })
-    message.success('已拒绝该设备')
+    $notify.success({ title: '已拒绝', description: '该设备已被拒绝接入 🚫' })
     fetchPendingDevices()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   }
 }
 

@@ -796,7 +796,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import { formatShortDate, formatDate } from '@/utils/date'
 import guestService, { FrequentGuest } from '@/api/frequent-guest'
@@ -856,7 +857,7 @@ const handlePreSubmit = () => {
         onOk: () => {
           // 可以在这里自动切换到微信支付，或者让用户手动在界面选
           paymentMethod.value = 'wechat'
-          message.info('已为您切换至微信支付，请再次点击提交')
+          $notify.info({ title: '已切换支付方式', description: '已为您切换至微信支付，请再次点击提交' })
         }
       })
     }
@@ -1135,7 +1136,7 @@ const filteredHotels = computed(() => {
 
 // --- Methods ---
 const searchHotels = async (shouldAdvance = true) => {
-  if (!dateRange.value?.[0] || !dateRange.value?.[1]) return message.warning('请选择入住和退房日期')
+  if (!dateRange.value?.[0] || !dateRange.value?.[1]) return $notify.warning({ title: '请选择日期', description: '请选择入住和退房日期' })
   try {
     const items = await hotelApi.searchHotels({
       destination: searchForm.destination || '',
@@ -1154,7 +1155,7 @@ const searchHotels = async (shouldAdvance = true) => {
       currentStep.value = 1
     }
   } catch (error) {
-    message.error('酒店搜索失败，请稍后重试')
+    NotifyPreset.operationFailed('酒店搜索失败，请稍后重试')
   }
 }
 
@@ -1172,13 +1173,13 @@ const selectHotel = async (hotel: any) => {
     currentStep.value = 2
     fetchReviewStats()
   } catch (error) {
-    message.error('加载房态失败，请稍后重试')
+    NotifyPreset.operationFailed('加载房态失败，请稍后重试')
   }
 }
 
 const selectPlan = async (type: any, plan: any) => {
   if (!appStore.userInfo) {
-    message.info('请先登录后再进行预订')
+    $notify.info({ title: '请先登录', description: '请先登录后再进行预订' })
     appStore.showLoginModal = true
     return
   }
@@ -1228,7 +1229,7 @@ const selectFrequentGuest = (guest: FrequentGuest) => {
   bookingForm.phone = guest.phone
   bookingForm.idType = guest.id_type
   bookingForm.idNumber = guest.id_number
-  message.success(`已选择：${guest.name}`)
+  NotifyPreset.roomSelected(guest.name)
 }
 
 const handleAddGuest = () => {
@@ -1246,24 +1247,24 @@ const handleEditGuest = (guest: FrequentGuest) => {
 const handleDeleteGuest = async (id: number) => {
   try {
     await guestService.remove(id)
-    message.success('删除成功')
+    NotifyPreset.profileUpdated('常客信息')
     fetchFrequentGuests()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除常客信息失败')
   }
 }
 
 const saveGuest = async () => {
   if (!guestModalForm.name || !guestModalForm.phone || !guestModalForm.id_number) {
-    return message.warning('请填写完整信息')
+    return $notify.warning({ title: '信息不完整', description: '请填写完整信息' })
   }
   if (guestModalForm.id_type === 'idcard') {
     const idNumber = guestModalForm.id_number.trim()
     if (idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(idNumber)) {
-      return message.warning('请填写正确的18位身份证号码')
+      return $notify.warning({ title: '证件格式错误', description: '请填写正确的18位身份证号码' })
     }
   } else if (guestModalForm.id_number.trim().length < 5) {
-    return message.warning('证件号码至少5位')
+    return $notify.warning({ title: '证件格式错误', description: '证件号码至少5位' })
   }
   try {
     if (editingGuestId.value) {
@@ -1271,30 +1272,30 @@ const saveGuest = async () => {
     } else {
       await guestService.create(guestModalForm)
     }
-    message.success(editingGuestId.value ? '更新成功' : '添加成功')
+    NotifyPreset.profileUpdated(editingGuestId.value ? '常客信息' : '常客信息')
     showGuestModal.value = false
     fetchFrequentGuests()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed('保存常客信息失败')
   }
 }
 
 const submitBooking = async () => {
   if (!bookingForm.guestName) {
-    return message.warning('请填写入住人姓名')
+    return $notify.warning({ title: '信息不完整', description: '请填写入住人姓名' })
   }
   if (!bookingForm.phone || bookingForm.phone.length < 11) {
-    return message.warning('请填写正确的手机号码')
+    return $notify.warning({ title: '格式错误', description: '请填写正确的手机号码' })
   }
   if (!bookingForm.idNumber || bookingForm.idNumber.length < 15) {
-    return message.warning('请填写正确的身份证号码')
+    return $notify.warning({ title: '证件格式错误', description: '请填写正确的身份证号码' })
   }
   if (bookingForm.idType === 'idcard') {
     if (bookingForm.idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(bookingForm.idNumber)) {
-      return message.warning('请填写正确的18位身份证号码')
+      return $notify.warning({ title: '证件格式错误', description: '请填写正确的18位身份证号码' })
     }
   } else if (bookingForm.idNumber.length < 5) {
-    return message.warning('证件号码至少5位')
+    return $notify.warning({ title: '证件格式错误', description: '证件号码至少5位' })
   }
 
   const payload = {
@@ -1355,16 +1356,16 @@ const submitBooking = async () => {
 
     currentStep.value = 4
     if (paymentDeadline && paymentMethod.value === 'front_desk') {
-      message.success(`预订成功！请在15分钟内到店支付，超时订单将自动取消`)
+      NotifyPreset.bookingSuccess(true)
     } else {
-      message.success('预订成功！')
+      NotifyPreset.bookingSuccess(false)
     }
   } catch (error: any) {
     console.error('预订或支付失败:', error)
     if (error?.response?.status === 409) {
-      message.error('该房间已被其他顾客预订，请选择其他房间')
+      NotifyPreset.bookingFailed('该房间已被其他顾客预订，请选择其他房间')
     } else {
-      message.error(error?.response?.data?.message || error?.message || '预订失败，请稍后重试')
+      NotifyPreset.bookingFailed(error?.response?.data?.message || error?.message)
     }
   } finally {
     submitting.value = false

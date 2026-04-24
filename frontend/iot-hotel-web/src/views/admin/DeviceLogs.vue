@@ -35,7 +35,7 @@
             <a-tag :color="getLevelColor(record.level)">{{ getLevelText(record.level) }}</a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
-            {{ dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+            {{ formatDateTimeSec(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
             <a-button type="link" size="small" @click="showDetail(record)">详情</a-button>
@@ -46,7 +46,7 @@
 
     <a-modal v-model:open="detailVisible" title="日志详情" :footer="null">
       <a-descriptions :column="1" bordered>
-        <a-descriptions-item label="时间">{{ currentLog?.created_at }}</a-descriptions-item>
+        <a-descriptions-item label="时间">{{ formatDateTimeSec(currentLog?.created_at) }}</a-descriptions-item>
         <a-descriptions-item label="设备">{{ currentLog?.device_name }} ({{ currentLog?.device_id }})</a-descriptions-item>
         <a-descriptions-item label="操作">{{ currentLog?.action }}</a-descriptions-item>
         <a-descriptions-item label="级别">
@@ -62,8 +62,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import dayjs from 'dayjs'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { formatDateTimeSec } from '@/utils/date'
 import request from '@/api/request'
 
 const loading = ref(false)
@@ -122,7 +122,7 @@ const fetchLogs = async () => {
       pagination.value.total = data.total || logs.value.length
     }
   } catch (error) {
-    message.error('获取日志失败')
+    $notify.error({ title: '获取日志失败', description: '无法加载设备日志，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -193,7 +193,7 @@ const showDetail = (record: any) => {
 }
 
 const exportLogs = () => {
-  message.success('日志导出成功')
+  $notify.success({ title: '导出成功', description: '日志已成功导出 📥' })
 }
 
 onMounted(() => {

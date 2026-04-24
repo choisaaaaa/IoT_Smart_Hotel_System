@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/ai_butler_service.dart';
+import '../../services/speech_recognition_service.dart';
 import '../../services/voice_call_service.dart';
 
 class AiButlerPage extends ConsumerStatefulWidget {
@@ -29,6 +34,16 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
   final VoiceCallService _callService = VoiceCallService();
   StreamSubscription? _callEventSubscription;
 
+  final SpeechRecognitionService _speechService = SpeechRecognitionService();
+  bool _isRecording = false;
+  bool _isRecognizing = false;
+  late AnimationController _recordingController;
+  late AnimationController _rippleController;
+
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingAudio = false;
+  StreamSubscription? _audioStateSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -36,9 +51,22 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
+    _recordingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+    _rippleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
     _loadSmartSuggestions();
     _addWelcomeMessage();
     _initCallService();
+    _speechService.onAutoStop = () {
+      if (mounted && _isRecording) {
+        _stopRecordingAndRecognize();
+      }
+    };
   }
 
   void _initCallService() {
@@ -101,8 +129,13 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     _messageController.dispose();
     _scrollController.dispose();
     _pulseController.dispose();
+    _recordingController.dispose();
+    _rippleController.dispose();
     _typewriterTimer?.cancel();
     _callEventSubscription?.cancel();
+    _speechService.dispose();
+    _audioStateSubscription?.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -148,11 +181,13 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       List<Map<String, String>>? quickActions;
       String? action;
       String? target;
+      String? audioUrl;
 
       if (result.success && result.data != null) {
         reply = result.data!['reply']?.toString() ?? result.data!['message']?.toString() ?? '抱歉，我暂时无法理解您的问题。';
         action = result.data!['action']?.toString();
         target = result.data!['target']?.toString();
+        audioUrl = result.data!['audioUrl']?.toString();
         final actions = result.data!['quick_actions'] ?? result.data!['actions'];
         if (actions is List) {
           quickActions = actions.map((a) => {
@@ -161,7 +196,6 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
           }).toList();
         }
       } else {
-        // API 调用失败，自动转接前台
         reply = '抱歉，AI服务暂时不可用，正在为您转接前台...';
         action = 'transfer';
         target = 'front_desk';
@@ -170,6 +204,10 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       setState(() => _isLoading = false);
       _startTypewriterEffect(reply, quickActions: quickActions);
 
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        _playTtsAudio(audioUrl);
+      }
+
       if (action == 'transfer' && target == 'front_desk') {
         _handleTransferToFrontDesk();
       }
@@ -177,10 +215,113 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       if (mounted) {
         setState(() => _isLoading = false);
         _startTypewriterEffect('抱歉，服务暂时不可用，正在为您转接前台...');
-        // 发生异常时自动转接前台
         _handleTransferToFrontDesk();
       }
     }
+  }
+
+  Future<void> _playTtsAudio(String audioData) async {
+    try {
+      String audioPath;
+
+      if (audioData.startsWith('http')) {
+        audioPath = audioData;
+      } else if (audioData.startsWith('data:audio')) {
+        final base64Str = audioData.split(',').last;
+        final bytes = base64Decode(base64Str);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/tts_${DateTime.now().millisecondsSinceEpoch}.mp3');
+        await file.writeAsBytes(bytes);
+        audioPath = file.path;
+      } else {
+        final bytes = base64Decode(audioData);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/tts_${DateTime.now().millisecondsSinceEpoch}.mp3');
+        await file.writeAsBytes(bytes);
+        audioPath = file.path;
+      }
+
+      setState(() => _isPlayingAudio = true);
+      await _audioPlayer.play(UrlSource(audioPath));
+      _audioStateSubscription?.cancel();
+      _audioStateSubscription = _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (mounted && (state == PlayerState.completed || state == PlayerState.stopped)) {
+          setState(() => _isPlayingAudio = false);
+        }
+      });
+    } catch (e) {
+      debugPrint('[TTS] 音频播放失败: $e');
+      if (mounted) setState(() => _isPlayingAudio = false);
+    }
+  }
+
+  Future<void> _startVoiceInput() async {
+    if (_isRecording) {
+      await _stopRecordingAndRecognize();
+      return;
+    }
+
+    final hasPermission = await _speechService.hasPermission();
+    if (!hasPermission) {
+      final granted = await _speechService.requestPermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('需要麦克风权限才能使用语音输入'),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    final started = await _speechService.startRecording();
+    if (started) {
+      setState(() => _isRecording = true);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('录音启动失败，请重试'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecordingAndRecognize() async {
+    setState(() {
+      _isRecording = false;
+      _isRecognizing = true;
+    });
+
+    final result = await _speechService.stopAndRecognize();
+
+    if (!mounted) return;
+
+    setState(() => _isRecognizing = false);
+
+    if (result.success && result.data != null && result.data!.isNotEmpty) {
+      _messageController.text = result.data!;
+      _sendMessage(result.data!);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? '未识别到语音内容'),
+          backgroundColor: AppColors.warning,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _cancelRecording() async {
+    await _speechService.cancelRecording();
+    setState(() => _isRecording = false);
   }
 
   void _handleTransferToFrontDesk() {
@@ -336,15 +477,6 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
     }
   }
 
-  void _startVoiceInput() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('语音输入功能开发中，敬请期待'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -401,6 +533,14 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
           ],
         ),
         actions: [
+          if (_isPlayingAudio)
+            IconButton(
+              icon: const Icon(Icons.volume_up, color: AppColors.primary),
+              onPressed: () {
+                _audioPlayer.stop();
+                setState(() => _isPlayingAudio = false);
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.history_outlined, color: AppColors.textPrimary),
             onPressed: () {},
@@ -411,7 +551,126 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
         children: [
           if (_smartSuggestions.isNotEmpty) _buildSmartSuggestions(),
           Expanded(child: _buildMessageList()),
+          if (_isRecording) _buildRecordingOverlay(),
+          if (_isRecognizing) _buildRecognizingIndicator(),
           _buildInputBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingOverlay() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary.withValues(alpha: 0.05), AppColors.primary.withValues(alpha: 0.1)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _rippleController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: const Size(48, 48),
+                      painter: _RipplePainter(
+                        progress: _rippleController.value,
+                        color: AppColors.error,
+                      ),
+                    );
+                  },
+                ),
+                AnimatedBuilder(
+                  animation: _recordingController,
+                  builder: (context, child) {
+                    final scale = 0.8 + 0.2 * _recordingController.value;
+                    return Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: const BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '正在录音...',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '点击麦克风按钮结束并发送',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _cancelRecording,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecognizingIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+      color: AppColors.primary.withValues(alpha: 0.05),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            '正在识别语音...',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -634,10 +893,7 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.mic_outlined, color: AppColors.primary, size: 28),
-            onPressed: _startVoiceInput,
-          ),
+          _buildMicButton(),
           const SizedBox(width: 4),
           Expanded(
             child: Container(
@@ -650,8 +906,9 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
                 controller: _messageController,
                 textInputAction: TextInputAction.send,
                 onSubmitted: _sendMessage,
+                enabled: !_isRecording && !_isRecognizing,
                 decoration: InputDecoration(
-                  hintText: '问我任何问题...',
+                  hintText: _isRecording ? '正在录音...' : _isRecognizing ? '正在识别...' : '问我任何问题...',
                   hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
                   border: InputBorder.none,
                   isDense: true,
@@ -666,6 +923,62 @@ class _AiButlerPageState extends ConsumerState<AiButlerPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMicButton() {
+    if (_isRecording) {
+      return GestureDetector(
+        onTap: _stopRecordingAndRecognize,
+        child: AnimatedBuilder(
+          animation: _recordingController,
+          builder: (context, child) {
+            final scale = 1.0 + 0.15 * _recordingController.value;
+            return Transform.scale(
+              scale: scale,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.error.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.stop_rounded, color: Colors.white, size: 24),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    if (_isRecognizing) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+          ),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: const Icon(Icons.mic_outlined, color: AppColors.primary, size: 28),
+      onPressed: _startVoiceInput,
     );
   }
 }
@@ -684,4 +997,34 @@ class _ChatMessage {
     this.quickActions,
     this.isTyping = false,
   });
+}
+
+class _RipplePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _RipplePainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    for (int i = 0; i < 2; i++) {
+      final rippleProgress = (progress + i * 0.5) % 1.0;
+      final radius = 12.0 + rippleProgress * 12.0;
+      final opacity = (1.0 - rippleProgress) * 0.3;
+
+      final paint = Paint()
+        ..color = color.withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RipplePainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
 }

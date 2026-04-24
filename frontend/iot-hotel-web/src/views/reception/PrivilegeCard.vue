@@ -301,8 +301,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import { getSocket } from '@/utils/websocket'
 import {
   SafetyOutlined,
@@ -355,7 +356,7 @@ async function fetchManagers() {
 function openAuthorizeModal() {
   if (isAuthorized.value) {
     isAuthorized.value = false
-    message.info('已解除授权')
+    $notify.info({ title: '已解除授权', description: '经理授权已撤销 🔓' })
     return
   }
   
@@ -367,7 +368,7 @@ function openAuthorizeModal() {
 
 async function handleAuthorize() {
   if (!authForm.manager_id || !authForm.password) {
-    return message.warning('请选择经理并输入密码')
+    return $notify.warning({ title: '请选择经理并输入密码', description: '经理授权需要选择经理账号并输入验证密码 🔐' })
   }
 
   try {
@@ -378,9 +379,9 @@ async function handleAuthorize() {
     })
     isAuthorized.value = true
     authorizeModalVisible.value = false
-    message.success('经理授权成功，您可以签发特权卡')
+    NotifyPreset.managerAuthorized()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '授权失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '授权失败')
   } finally {
     authorizing.value = false
   }
@@ -464,8 +465,8 @@ const cardColumns = [
       return name + id + detail;
     } 
   },
-  { title: '签发时间', dataIndex: 'issued_at', key: 'issued_at', customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm') },
-  { title: '有效期至', dataIndex: 'expires_at', key: 'expires_at', customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm') },
+  { title: '签发时间', dataIndex: 'issued_at', key: 'issued_at', customRender: ({ text }: any) => formatDateTime(text) },
+  { title: '有效期至', dataIndex: 'expires_at', key: 'expires_at', customRender: ({ text }: any) => formatDateTime(text) },
   { title: '操作', key: 'action' }
 ]
 
@@ -483,7 +484,7 @@ async function fetchCardList() {
     cardList.value = responseData.list || []
     pagination.total = responseData.total || 0
   } catch (error) {
-    message.error('获取卡片列表失败')
+    $notify.error({ title: '获取卡片列表失败', description: '无法加载发卡记录，请稍后重试 🔄' })
   } finally {
     loadingCards.value = false
   }
@@ -515,10 +516,10 @@ async function handleDeactivate(record: any) {
       reason: '经理手动下线作废',
       encoder_id: selectedEncoder.value // 传入当前选择的发卡器以便下发注销指令
     })
-    message.success('卡片已作废')
+    $notify.success({ title: '卡片已作废', description: '该卡片权限已失效，无法再开启对应门锁 🗝️' })
     fetchCardList()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   }
 }
 
@@ -536,11 +537,11 @@ async function handleUpdateExpiry() {
       card_uid: editingCard.value.card_uid,
       expiry_date: newExpiryDate.value.format('YYYY-MM-DD HH:mm:ss')
     })
-    message.success('有效期已更新')
+    NotifyPreset.profileUpdated('有效期')
     expiryModalVisible.value = false
     fetchCardList()
   } catch (error) {
-    message.error('更新失败')
+    NotifyPreset.operationFailed('更新失败')
   } finally {
     updatingExpiry.value = false
   }
@@ -563,7 +564,7 @@ async function fetchEncoders() {
       }
     }
   } catch (error) {
-    message.error('获取发卡设备失败')
+    $notify.error({ title: '获取发卡设备失败', description: '无法加载发卡器列表，请检查设备连接 🖥️' })
   }
 }
 
@@ -597,10 +598,10 @@ const issueForm = reactive({
 
 function openIssueModal(type: any) {
   if (!isAuthorized.value) {
-    return message.warning('签发特权卡需要经理授权')
+    return $notify.warning({ title: '需要经理授权', description: '签发特权卡需要经理授权，请先完成授权验证 🔐' })
   }
   if (!selectedEncoder.value) {
-    return message.warning('请先在右上角选择发卡器设备')
+    return $notify.warning({ title: '请选择发卡器', description: '请先在右上角选择发卡器设备 🖥️' })
   }
   selectedType.value = type
   issueStep.value = 'form'
@@ -626,10 +627,10 @@ async function handleIssue() {
   }
 
   if (!isAuthorized.value) {
-    return message.error('授权已过期或未授权，请重新进行经理授权')
+    return NotifyPreset.authorizationExpired()
   }
   if (!issueForm.holder_name || !issueForm.holder_id || !issueForm.confirm_password) {
-    return message.warning('请填写完整必要信息并输入确认密码')
+    return $notify.warning({ title: '信息不完整', description: '请填写完整必要信息并输入确认密码 📋' })
   }
 
   try {
@@ -703,7 +704,7 @@ function handleSecurityEvent(event: any) {
       issueStep.value = 'success'
       issuedUid.value = event.data?.card_uid || ''
       issueStatusMsg.value = `硬件写卡成功，权限已生效。`
-      message.success(`${selectedType.value.name} 签发成功`)
+      NotifyPreset.cardCreated(issuedUid.value || undefined)
       isAuthorized.value = false 
       
       // 成功后 2 秒自动关闭弹窗

@@ -337,10 +337,24 @@ export const issueToUser = async (req: AuthRequest, res: Response) => {
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const {
-      coupon_name, coupon_type, discount_value, min_amount,
+      coupon_name, name, coupon_type, type, discount_value, value, min_amount,
       total_count, valid_from, valid_to, coupon_code, is_multiple_use,
       hotel_id, hotel_ids, scope_type, is_public
     } = req.body;
+
+    const finalCouponName = coupon_name || name;
+    const finalCouponType = coupon_type || type;
+    const finalDiscountValue = discount_value || value;
+
+    if (!finalCouponName) {
+      return res.status(400).json(errorResponse('缺少优惠券名称(coupon_name或name)'));
+    }
+    if (!finalCouponType) {
+      return res.status(400).json(errorResponse('缺少优惠券类型(coupon_type或type)'));
+    }
+    if (!finalDiscountValue && finalDiscountValue !== 0) {
+      return res.status(400).json(errorResponse('缺少优惠金额(discount_value或value)'));
+    }
 
     const user = req.user as any;
     const userRole = user.role;
@@ -381,7 +395,7 @@ export const create = async (req: AuthRequest, res: Response) => {
         total_count, is_multiple_use, received_count, valid_from, valid_to, hotel_id, hotel_ids,
         scope_type, is_public, created_by_role) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [coupon_name, coupon_code || null, coupon_type, discount_value, min_amount, 
+      [finalCouponName, coupon_code || null, finalCouponType, finalDiscountValue, min_amount, 
        total_count, is_multiple_use || false, 0, valid_from, valid_to, finalHotelId, finalHotelIds,
        finalScopeType, finalIsPublic, userRole]
     );

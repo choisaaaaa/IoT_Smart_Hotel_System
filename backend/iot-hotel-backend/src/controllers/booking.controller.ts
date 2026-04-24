@@ -534,6 +534,35 @@ export const create = async (req: AuthRequest, res: Response) => {
       return res.status(400).json(errorResponse('请选择房间或房型'));
     }
 
+    if (!check_in_date || !check_out_date) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('请选择入住和退房日期'));
+    }
+
+    const checkInDate = dayjs(check_in_date);
+    const checkOutDate = dayjs(check_out_date);
+    const today = dayjs().startOf('day');
+
+    if (checkInDate.isBefore(today)) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('入住日期不能早于今天'));
+    }
+
+    if (!checkOutDate.isAfter(checkInDate)) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('退房日期必须晚于入住日期'));
+    }
+
+    if (guest_name && guest_name.length > 50) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('客人姓名不能超过50个字符'));
+    }
+
+    if (guest_phone && guest_phone.length > 20) {
+      await connection.rollback();
+      return res.status(400).json(errorResponse('手机号不能超过20个字符'));
+    }
+
     if (guest_id_number) {
       const idType = req.body.id_type || 'idcard';
       if (idType === 'idcard') {
@@ -1844,7 +1873,7 @@ export const getCalculatedPrice = async (req: AuthRequest, res: Response) => {
     } = req.query;
 
     if ((!room_id && !room_type_id) || !check_in_date || !check_out_date) {
-      return res.status(400).json(errorResponse('缺少必要参数'));
+      return res.status(400).json(errorResponse('缺少必要参数: room_id或room_type_id, check_in_date, check_out_date'));
     }
 
     const candidatePhone = String(guest_phone || '').trim();

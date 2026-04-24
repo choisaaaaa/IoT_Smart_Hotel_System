@@ -22,7 +22,7 @@ export const getPriceCalendar = async (req: AuthRequest, res: Response) => {
     }
 
     if (!room_type_id || !start_date || !end_date) {
-      return res.status(400).json(errorResponse('缺少必要参数'));
+      return res.status(400).json(errorResponse('缺少必要参数: room_type_id, start_date, end_date'));
     }
 
     let sql = 'SELECT * FROM room_prices WHERE room_type_id = ? AND hotel_id = ? AND price_date BETWEEN ? AND ?';

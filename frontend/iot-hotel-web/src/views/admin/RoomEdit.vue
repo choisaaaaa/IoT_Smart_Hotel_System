@@ -121,7 +121,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import type { RoomInfo, RoomTypeInfo } from '@/types'
 import { roomApi } from '@/api/room'
@@ -182,7 +182,7 @@ const fetchRooms = async () => {
       activeFloorTab.value = groupedRooms.value[0].floor
     }
   } catch (error) {
-    message.error('获取房间数据失败')
+    $notify.error({ title: '获取房间数据失败', description: '无法加载房间列表，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -193,7 +193,7 @@ const fetchRoomTypes = async () => {
     const res = await roomTypeApi.getRoomTypeList()
     roomTypes.value = (res.data as any) || []
   } catch (error) {
-    message.error('获取房型数据失败')
+    $notify.error({ title: '获取房型数据失败', description: '无法加载房型列表，请稍后重试 🔄' })
   }
 }
 
@@ -252,9 +252,9 @@ const editRoom = (room: RoomInfo) => {
 
 const handleUploadChange = (info: any) => {
   if (info.file.status === 'done') {
-    message.success('图片上传成功')
+    $notify.success({ title: '图片上传成功', description: '房间图片已成功上传 🖼️' })
   } else if (info.file.status === 'error') {
-    message.error('图片上传失败')
+    $notify.error({ title: '图片上传失败', description: '上传过程中出现错误，请重试 🖼️' })
   }
 }
 
@@ -279,15 +279,15 @@ const saveRoom = async () => {
 
     if (editingId.value) {
       await roomApi.updateRoom(editingId.value, formModel)
-      message.success('更新房间成功')
+      NotifyPreset.profileUpdated('房间信息')
     } else {
       await roomApi.createRoom({ ...formModel, hotel_id: hotelStore.currentHotelId! })
-      message.success('创建房间成功')
+      $notify.success({ title: '创建房间成功', description: '新房间已成功添加 ✅' })
     }
     modalVisible.value = false
     fetchRooms()
   } catch (error) {
-    message.error('保存失败')
+    NotifyPreset.operationFailed('保存房间失败')
   } finally {
     submitLoading.value = false
   }
@@ -296,10 +296,10 @@ const saveRoom = async () => {
 const handleDelete = async (id: number) => {
   try {
     await roomApi.deleteRoom(id)
-    message.success('房间已删除')
+    $notify.success({ title: '房间已删除', description: '房间已成功从系统中移除 🗑️' })
     fetchRooms()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除房间失败')
   }
 }
 

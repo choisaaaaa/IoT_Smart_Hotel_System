@@ -77,8 +77,8 @@
           <a-descriptions-item label="账单号">{{ currentBill.bill_no }}</a-descriptions-item>
           <a-descriptions-item label="客人">{{ currentBill.guest_name }}</a-descriptions-item>
           <a-descriptions-item label="房号">{{ currentBill.room_number }}</a-descriptions-item>
-          <a-descriptions-item label="入住日期">{{ currentBill.check_in }}</a-descriptions-item>
-          <a-descriptions-item label="退房日期">{{ currentBill.check_out }}</a-descriptions-item>
+          <a-descriptions-item label="入住日期">{{ formatDate(currentBill.check_in) }}</a-descriptions-item>
+          <a-descriptions-item label="退房日期">{{ formatDate(currentBill.check_out) }}</a-descriptions-item>
         </a-descriptions>
         <h4 style="margin: 16px 0 8px;">费用明细</h4>
         <a-table :columns="detailColumns" :data-source="billDetails" :pagination="false" size="small" row-key="id">
@@ -98,7 +98,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { FileTextOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons-vue'
 import { bookingApi } from '@/api/booking'
 import { formatDate, formatTimeHHmm } from '@/utils/date'
@@ -122,7 +122,14 @@ function paymentMethodText(method: string): string {
     wechat_pay: '微信支付',
     credit_card: '银行卡',
     cash: '现金',
-    pending: '待支付'
+    pending: '待支付',
+    online: '在线支付',
+    offline: '线下支付',
+    bank_transfer: '银行转账',
+    member_card: '会员卡',
+    free: '免费',
+    complimentary: '赠送',
+    room_charge: '挂房账'
   }
   return map[method] || method || '未设置'
 }
@@ -163,10 +170,10 @@ const columns = [
   { title: '账单号', dataIndex: 'booking_number', width: 170 },
   { title: '客人', dataIndex: 'guest_name', width: 90 },
   { title: '房号', dataIndex: 'room_number', width: 70 },
-  { title: '入住日期', dataIndex: 'check_in_date', key: 'check_in_date', width: 110 },
-  { title: '退房日期', dataIndex: 'check_out_date', key: 'check_out_date', width: 110 },
+  { title: '入住日期', dataIndex: 'check_in_date', key: 'check_in_date', width: 110, customRender: ({ text }: any) => formatDate(text) },
+  { title: '退房日期', dataIndex: 'check_out_date', key: 'check_out_date', width: 110, customRender: ({ text }: any) => formatDate(text) },
   { title: '总金额', dataIndex: 'total_price', key: 'amount', width: 110 },
-  { title: '支付方式', dataIndex: 'payment_method', width: 100 },
+  { title: '支付方式', dataIndex: 'payment_method', key: 'payment_method', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '操作', key: 'action', width: 140 }
 ]
@@ -194,7 +201,7 @@ async function fetchBills() {
       .reduce((sum: number, b: any) => sum + Number(b.total_price), 0)
       
   } catch (error) {
-    message.error('获取账单列表失败')
+    $notify.error({ title: '获取账单列表失败', description: '无法加载账单数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -207,7 +214,7 @@ function viewBillDetail(bill: any) {
 }
 
 function collectPayment(bill: any) { 
-  message.success(`已收取 ${bill.guest_name} 账单 ¥${bill.total_price}`) 
+  NotifyPreset.paymentSuccess(Number(bill.total_price)) 
 }
 
 onMounted(fetchBills)

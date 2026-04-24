@@ -107,7 +107,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
       case 'completed':
         return '已完成';
       default:
-        return status;
+        return '未知';
     }
   }
 

@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { systemConfigApi } from '@/api/system-config'
 import { useAppStore } from '@/stores/app'
 
@@ -112,7 +112,7 @@ const fetchConfigs = async () => {
       }
     }
   } catch (error) {
-    message.error('获取配置失败')
+    NotifyPreset.operationFailed('获取配置失败')
   }
 }
 
@@ -122,9 +122,9 @@ const handleSave = async () => {
     await systemConfigApi.updateConfigs(configs.value)
     // 更新全局状态，使用深拷贝确保响应式数据纯净同步
     appStore.setSystemConfigs(JSON.parse(JSON.stringify(configs.value)))
-    message.success('会员方案配置更新成功')
+    $notify.success({ title: '保存成功', description: '会员方案配置已更新并生效 ✅' })
   } catch (error) {
-    message.error('更新配置失败')
+    NotifyPreset.operationFailed('更新配置失败')
   } finally {
     saving.value = false
   }

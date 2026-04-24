@@ -131,7 +131,7 @@ import {
   PhoneOutlined, CloseOutlined, FullscreenExitOutlined, 
   CustomerServiceOutlined, HomeOutlined, ReloadOutlined 
 } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import IncomingCallModal from '@/components/common/IncomingCallModal.vue'
 import AlarmAlertModal from '@/components/common/AlarmAlertModal.vue'
@@ -166,7 +166,7 @@ function refreshCallStatus() {
   const socket = getSocket()
   if (socket) {
     socket.emit('get_online_status')
-    message.success('已发起状态同步')
+    $notify.success({ title: '状态同步已发起', description: '正在同步在线状态 🔄' })
   }
 }
 
@@ -414,7 +414,7 @@ async function handleHangup() {
     cleanupWebRTC()
     stopAudioCapture()
     appStore.clearCurrentCall()
-    message.success('通话已挂断')
+    $notify.success({ title: '通话已挂断', description: '当前通话已结束 📞' })
   }
 }
 
@@ -608,7 +608,7 @@ async function _doInitWebRTC(callId: string, targetType: string, targetId: strin
               console.log('[WebRTC] 远程音频播放成功')
             }).catch(e => {
               console.error('[WebRTC] 自动播放失败:', e)
-              message.info('请点击页面任意位置以启用通话音频')
+              $notify.info({ title: '请启用音频', description: '请点击页面任意位置以启用通话音频 🔊' })
             })
           }
           
@@ -907,7 +907,7 @@ const handleCallHungup = (data: any) => {
   if (appStore.currentCall?.call_id === data.call_id) {
     appStore.clearCurrentCall()
   }
-  message.info('通话已结束')
+  $notify.info({ title: '通话已结束', description: '对方已结束通话 📞' })
 }
 
 const handleCallRejected = (data: any) => {
@@ -915,7 +915,7 @@ const handleCallRejected = (data: any) => {
   if (appStore.currentCall?.call_id === data.call_id) {
     cleanupWebRTC()
     appStore.clearCurrentCall()
-    message.warning('通话被拒接')
+    $notify.warning({ title: '通话被拒接', description: '对方拒绝了本次通话 📵' })
   }
 }
 

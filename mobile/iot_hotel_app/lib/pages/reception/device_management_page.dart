@@ -389,7 +389,7 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final deviceType = device['device_type'] ?? device['type'] ?? 'unknown';
+    final deviceType = device['device_type'] ?? device['type'] ?? '未知';
     final deviceName = device['device_name'] ?? device['name'] ?? '未命名设备';
     final roomNumber = device['room_number'] ?? device['room_id'] ?? '-';
     final status = (device['device_status'] ?? device['status'])?.toString() ?? 'offline';

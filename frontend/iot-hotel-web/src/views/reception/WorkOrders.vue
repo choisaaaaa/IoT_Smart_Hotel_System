@@ -47,6 +47,9 @@
           :loading="loading"
         >
           <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'fault_type'">
+              {{ faultTypeText(record.fault_type) }}
+            </template>
             <template v-if="column.key === 'priority'">
               <a-tag :color="priorityColor(record.priority)">{{ priorityText(record.priority) }}</a-tag>
             </template>
@@ -131,7 +134,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { ClockCircleOutlined, ToolOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
@@ -181,6 +184,14 @@ function priorityColor(p: string): string {
 function priorityText(p: string): string {
   return ({ low: '低', medium: '中', high: '高', urgent: '紧急' } as Record<string, string>)[p] || p
 }
+function faultTypeText(t: string): string {
+  const map: Record<string, string> = {
+    maintenance: '维修', cleaning: '保洁', equipment: '设备故障',
+    plumbing: '水管问题', electrical: '电路问题', furniture: '家具问题',
+    ac: '空调问题', lock: '门锁问题', other: '其他'
+  }
+  return map[t] || t
+}
 function orderBadge(s: string): string {
   return ({ pending: 'warning', assigned: 'processing', processing: 'processing', completed: 'success' } as Record<string, string>)[s] || 'default'
 }
@@ -191,11 +202,11 @@ function orderStatusText(s: string): string {
 const maintenanceColumns = [
   { title: '工单号', dataIndex: 'ticket_no', width: 160 },
   { title: '房间', dataIndex: 'room_number', width: 70 },
-  { title: '类型', dataIndex: 'fault_type', width: 100 },
+  { title: '类型', dataIndex: 'fault_type', key: 'fault_type', width: 100 },
   { title: '描述', dataIndex: 'fault_description', ellipsis: true },
   { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '创建时间', dataIndex: 'created_at', width: 160 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
   { title: '操作', key: 'action', width: 150 }
 ]
 
@@ -218,7 +229,7 @@ async function fetchOrders() {
       ticket_no: item.ticket_no || `MT${String(item.id).padStart(6, '0')}`
     }))
   } catch (error) {
-    message.error('获取工单失败')
+    $notify.error({ title: '获取工单失败', description: '无法加载维修工单列表，请检查网络后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -226,7 +237,7 @@ async function fetchOrders() {
 
 async function createOrder() {
   if (!newOrder.room_id || !newOrder.description) {
-    message.warning('请填写必填项')
+    $notify.warning({ title: '请填写必填项', description: '请选择关联房间并填写问题描述 📋' })
     return
   }
   try {
@@ -236,12 +247,12 @@ async function createOrder() {
       fault_description: newOrder.description,
       priority: newOrder.priority
     })
-    message.success('工单已创建')
+    NotifyPreset.workOrderCreated()
     modalVisible.value = false
     Object.assign(newOrder, { room_id: undefined, fault_type: '设备故障', description: '', priority: 'medium' })
     await fetchOrders()
   } catch (error) {
-    message.error('创建失败')
+    NotifyPreset.operationFailed('创建工单失败')
   }
 }
 
@@ -249,51 +260,51 @@ async function startProcess(order: any) {
   try {
     const username = appStore.userInfo?.username || '前台'
     await maintenanceApi.assign(order.id, username)
-    message.info(`工单 ${order.ticket_no} 已分配给 ${username}`)
+    $notify.info({ title: '工单已分配', description: `工单 ${order.ticket_no} 已分配给 ${username}，请及时处理 🔧` })
     await fetchOrders()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   }
 }
 
 async function startWork(order: any) {
   try {
     await maintenanceApi.updateStatus(order.id, 'processing')
-    message.info(`工单 ${order.ticket_no} 已开始维修`)
+    $notify.info({ title: '维修已开始', description: `工单 ${order.ticket_no} 已开始维修 🔨` })
     await fetchOrders()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   }
 }
 
 async function completeOrder(order: any) {
   try {
     await maintenanceApi.complete(order.id)
-    message.success(`${order.ticket_no} 已完成`)
+    $notify.success({ title: '工单已完成', description: `${order.ticket_no} 已完成维修 ✅` })
     await fetchOrders()
     await hotelStore.fetchRooms({ pageSize: 300 })
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   }
 }
 
 async function markCleaning(roomId: number) {
   try {
     await roomApi.updateRoomStatus(roomId, 'cleaning')
-    message.success('已标记为待清扫')
+    $notify.success({ title: '已标记为待清扫', description: '房间状态已更新为待清扫，等待保洁处理 🧹' })
     await hotelStore.fetchRooms({ pageSize: 300 })
   } catch (error) {
-    message.error('状态更新失败')
+    NotifyPreset.operationFailed('状态更新失败')
   }
 }
 
 async function finishCleaning(roomId: number) {
   try {
     await roomApi.updateRoomStatus(roomId, 'available')
-    message.success('打扫完成，房间已可售')
+    $notify.success({ title: '打扫完成', description: '房间已清扫完毕，可重新售卖 ✨' })
     await hotelStore.fetchRooms({ pageSize: 300 })
   } catch (error) {
-    message.error('状态更新失败')
+    NotifyPreset.operationFailed('状态更新失败')
   }
 }
 

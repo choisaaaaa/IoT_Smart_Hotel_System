@@ -160,7 +160,8 @@
 
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import { SaveOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
 import { hotelManageApi } from '@/api/hotel-manage'
@@ -209,13 +210,13 @@ const handleImageUpload = (info: { file: { status: string; response?: { data: { 
       } else {
         formData.image_url = url
       }
-      message.success('图片上传成功')
+      $notify.success({ title: '图片上传成功', description: '图片已成功上传 🖼️' })
     } else {
-      message.error('图片上传失败：无效的响应数据')
+      $notify.error({ title: '图片上传失败', description: '无效的响应数据，请重试 🔄' })
     }
     loading.value = false
   } else if (info.file.status === 'error') {
-    message.error('图片上传失败')
+    $notify.error({ title: '图片上传失败', description: '上传过程中出现错误，请重试 🖼️' })
     loading.value = false
   }
 }
@@ -234,16 +235,16 @@ const handleGalleryUpload = async (info: { file: { status: string; response?: { 
           image_type: 'gallery',
           sort_order: hotelImages.value.length
         })
-        message.success('照片添加成功')
+        $notify.success({ title: '照片添加成功', description: '相册照片已成功添加 🖼️' })
         loadHotelImages()
       } catch (err) {
-        message.error('照片添加失败')
+        NotifyPreset.operationFailed('照片添加失败')
       }
     } else {
-      message.error('图片上传失败：无效的响应数据')
+      $notify.error({ title: '图片上传失败', description: '无效的响应数据，请重试 🔄' })
     }
   } else if (info.file.status === 'error') {
-    message.error('图片上传失败')
+    $notify.error({ title: '图片上传失败', description: '上传过程中出现错误，请重试 🖼️' })
   }
 }
 
@@ -258,10 +259,10 @@ const deleteImage = (imageId: number) => {
     async onOk() {
       try {
         await hotelApi.deleteHotelImage(hotelId.value, imageId)
-        message.success('照片删除成功')
+        $notify.success({ title: '照片删除成功', description: '相册照片已成功删除 🗑️' })
         loadHotelImages()
       } catch (err) {
-        message.error('照片删除失败')
+        NotifyPreset.operationFailed('照片删除失败')
       }
     }
   })
@@ -301,7 +302,7 @@ async function loadData() {
       await loadHotelImages()
     }
   } catch (err) {
-    message.error('加载酒店信息失败')
+    $notify.error({ title: '加载酒店信息失败', description: '无法加载酒店信息，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -322,10 +323,10 @@ async function handleSave() {
       logo: formData.logo,
       image_url: formData.image_url
     })
-    message.success('酒店信息已保存成功')
+    NotifyPreset.profileUpdated('酒店信息')
     loadData()
   } catch (err) {
-    message.error('保存失败')
+    NotifyPreset.operationFailed('保存酒店信息失败')
   } finally {
     saving.value = false
   }

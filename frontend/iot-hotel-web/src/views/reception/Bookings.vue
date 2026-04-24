@@ -165,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/date'
@@ -264,7 +264,7 @@ async function fetchBookings() {
 
     bookings.value = list
   } catch (error) {
-    message.error('获取预订列表失败')
+    $notify.error({ title: '获取预订列表失败', description: '无法加载预订数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -277,7 +277,7 @@ function showCreateModal() {
 
 async function handleCreateBooking() {
   if (!newBooking.guest_name || !newBooking.guest_phone || !newBooking.room_id) {
-    message.warning('请填写必填项')
+    $notify.warning({ title: '请填写必填项', description: '请填写客人姓名、联系电话并选择房间 📋' })
     return
   }
   try {
@@ -287,51 +287,51 @@ async function handleCreateBooking() {
       check_out_date: newBooking.check_out_date.format('YYYY-MM-DD'),
       hotel_id: hotelStore.currentHotelId!
     })
-    message.success('预订创建成功')
+    NotifyPreset.bookingSuccess()
     modalVisible.value = false
     fetchBookings()
   } catch (error) {
-    message.error('创建预订失败')
+    NotifyPreset.bookingFailed('创建预订失败')
   }
 }
 
 async function handleConfirm(id: number) {
   try {
     await bookingApi.updateBookingStatus(id, 'confirmed')
-    message.success('预订已确认')
+    $notify.success({ title: '预订已确认', description: '订单状态已更新为已确认 ✅' })
     fetchBookings()
   } catch (error) {
-    message.error('确认失败')
+    NotifyPreset.operationFailed('确认失败')
   }
 }
 
 async function handleCheckin(id: number) {
   try {
     await bookingApi.checkin(id)
-    message.success('入住办理成功')
+    NotifyPreset.checkinSuccess(newBooking.guest_name || '客人')
     fetchBookings()
   } catch (error: any) {
-    message.error(error?.response?.data?.message || '入住办理失败')
+    NotifyPreset.checkinFailed(error?.response?.data?.message)
   }
 }
 
 async function handleCancel(id: number) {
   try {
     await bookingApi.updateBookingStatus(id, 'cancelled')
-    message.success('预订已取消')
+    NotifyPreset.orderCancelled()
     fetchBookings()
   } catch (error) {
-    message.error('取消失败')
+    NotifyPreset.operationFailed('取消失败')
   }
 }
 
 async function handleCheckout(id: number) {
   try {
     await bookingApi.updateBookingStatus(id, 'checked_out')
-    message.success('退房成功，订单已完成')
+    $notify.success({ title: '退房成功', description: '订单已完成，房间已释放 ✨' })
     fetchBookings()
   } catch (error) {
-    message.error('退房失败')
+    NotifyPreset.checkoutFailed('退房失败')
   }
 }
 

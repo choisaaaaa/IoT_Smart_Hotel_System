@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { createOrUpdateKnowledge } from '@/api/knowledge-base'
 import type { KnowledgeCategoryConfig } from '@/config/knowledge-base.config'
 
@@ -161,7 +161,7 @@ const handleSave = async () => {
     .map(f => f.label)
 
   if (missingFields.length > 0) {
-    message.warning(`请填写必填项：${missingFields.join('、')}`)
+    $notify.warning({ title: '请填写必填项', description: `请填写：${missingFields.join('、')}` })
     return
   }
 
@@ -177,7 +177,7 @@ const handleSave = async () => {
       sort_order: 100
     })
 
-    message.success('保存成功')
+    $notify.success({ title: '保存成功', description: '知识库信息已保存 ✅' })
     emit('update:visible', false)
     emit('saved')
   } catch (error) {

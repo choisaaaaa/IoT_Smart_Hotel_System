@@ -1,0 +1,257 @@
+/*
+ * 慧宿智联 - 增强版消息通知样式
+ * 设计理念：玻璃态 + 渐变边框 + 微动画 + 类型色彩区分
+ */
+
+@keyframes notify-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.8);
+  }
+  60% {
+    transform: translateX(-8px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes notify-icon-bounce {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes notify-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.ant-notification {
+  z-index: 1050 !important;
+}
+
+.ant-notification-notice {
+  position: relative;
+  overflow: hidden !important;
+  border-radius: 16px !important;
+  margin-bottom: 16px !important;
+  animation: notify-slide-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow:
+    0 8px 32px rgba(26, 43, 74, 0.12),
+    0 2px 8px rgba(26, 43, 74, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  max-width: 420px !important;
+  width: 420px !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+.ant-notification-notice:hover {
+  transform: translateX(-4px) !important;
+  box-shadow:
+    0 12px 40px rgba(26, 43, 74, 0.18),
+    0 4px 12px rgba(26, 43, 74, 0.08) !important;
+}
+
+.hotel-notify .ant-notification-notice-content {
+  padding: 16px 44px 16px 16px !important;
+  position: relative !important;
+}
+
+.hotel-notify .ant-notification-notice-content::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 16px 0 0 16px;
+}
+
+.hotel-notify .ant-notification-notice-content::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 0 0 0 16px;
+  animation: notify-progress linear forwards;
+}
+
+.hotel-notify-success .ant-notification-notice-content::before {
+  background: linear-gradient(180deg, #27AE60, #2ecc71);
+}
+
+.hotel-notify-success .ant-notification-notice-content::after {
+  background: linear-gradient(90deg, #27AE60, #2ecc71);
+  animation-duration: 4.5s;
+}
+
+.hotel-notify-success {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(212, 245, 228, 0.3)) !important;
+}
+
+.hotel-notify-error .ant-notification-notice-content::before {
+  background: linear-gradient(180deg, #E74C3C, #e57373);
+}
+
+.hotel-notify-error .ant-notification-notice-content::after {
+  background: linear-gradient(90deg, #E74C3C, #e57373);
+  animation-duration: 5s;
+}
+
+.hotel-notify-error {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(253, 226, 226, 0.3)) !important;
+}
+
+.hotel-notify-warning .ant-notification-notice-content::before {
+  background: linear-gradient(180deg, #F39C12, #f1c40f);
+}
+
+.hotel-notify-warning .ant-notification-notice-content::after {
+  background: linear-gradient(90deg, #F39C12, #f1c40f);
+  animation-duration: 5s;
+}
+
+.hotel-notify-warning {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(254, 243, 205, 0.3)) !important;
+}
+
+.hotel-notify-info .ant-notification-notice-content::before {
+  background: linear-gradient(180deg, #3498DB, #5dade2);
+}
+
+.hotel-notify-info .ant-notification-notice-content::after {
+  background: linear-gradient(90deg, #3498DB, #5dade2);
+  animation-duration: 4.5s;
+}
+
+.hotel-notify-info {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(214, 234, 248, 0.3)) !important;
+}
+
+.hotel-notify .ant-notification-notice-with-icon {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+}
+
+.hotel-notify .ant-notification-notice-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: static !important;
+  top: auto !important;
+  animation: notify-icon-bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) !important;
+}
+
+.hotel-notify-success .ant-notification-notice-icon {
+  background: linear-gradient(135deg, #d4f5e4, #b8ecd0) !important;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2) !important;
+  color: #27AE60 !important;
+}
+
+.hotel-notify-error .ant-notification-notice-icon {
+  background: linear-gradient(135deg, #fde2e2, #f8c4c4) !important;
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.2) !important;
+  color: #E74C3C !important;
+}
+
+.hotel-notify-warning .ant-notification-notice-icon {
+  background: linear-gradient(135deg, #fef3cd, #fce5a0) !important;
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2) !important;
+  color: #F39C12 !important;
+}
+
+.hotel-notify-info .ant-notification-notice-icon {
+  background: linear-gradient(135deg, #d6eaf8, #aed6f1) !important;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2) !important;
+  color: #3498DB !important;
+}
+
+.hotel-notify .ant-notification-notice-icon .anticon {
+  font-size: 22px !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+}
+
+.hotel-notify .ant-notification-notice-message {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--hotel-primary) !important;
+  margin-bottom: 4px !important;
+  line-height: 1.4 !important;
+  padding-right: 0 !important;
+  display: block !important;
+}
+
+.hotel-notify .ant-notification-notice-description {
+  font-size: 13px !important;
+  color: var(--hotel-text-secondary) !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+  display: block !important;
+}
+
+.hotel-notify .ant-notification-notice-close {
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+  z-index: 10 !important;
+}
+
+.hotel-notify-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.hotel-notify-close:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.65);
+  transform: rotate(90deg);
+}
+
+@media (max-width: 576px) {
+  .ant-notification {
+    width: calc(100vw - 24px) !important;
+    right: 12px !important;
+  }
+
+  .ant-notification-notice {
+    max-width: calc(100vw - 24px) !important;
+    width: calc(100vw - 24px) !important;
+  }
+}

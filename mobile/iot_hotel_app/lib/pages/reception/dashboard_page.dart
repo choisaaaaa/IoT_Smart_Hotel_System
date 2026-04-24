@@ -773,7 +773,8 @@ class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
     if (dateTime == null) return '';
     try {
       final date = DateTime.parse(dateTime.toString());
-      final diff = DateTime.now().difference(date);
+      final utc8 = DateUtils.toUtc8(date);
+      final diff = DateTime.now().difference(utc8);
       if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
       if (diff.inHours < 24) return '${diff.inHours}小时前';
       return '${diff.inDays}天前';

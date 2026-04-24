@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { SyncOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import request from '@/api/request'
 import { formatDateTime } from '@/utils/date'
 
@@ -67,7 +67,7 @@ const fetchDevices = async () => {
     // 后端返回 { success: true, data: [...] }
     devices.value = res && res.success && Array.isArray(res.data) ? res.data : []
   } catch (error) {
-    message.error('获取设备列表失败')
+    $notify.error({ title: '获取设备列表失败', description: '无法加载设备数据，请检查网络后重试 🔄' })
     console.error('获取设备列表失败:', error)
   } finally {
     loading.value = false
@@ -80,9 +80,9 @@ const testDevice = async (record: any) => {
       command: 'ping',
       value: '1'
     })
-    message.success('测试指令已下发，请观察设备反馈')
+    $notify.success({ title: '测试指令已下发', description: '请观察设备反馈，确认通信是否正常 📡' })
   } catch (error) {
-    message.error('下发失败')
+    NotifyPreset.operationFailed('下发失败')
   }
 }
 

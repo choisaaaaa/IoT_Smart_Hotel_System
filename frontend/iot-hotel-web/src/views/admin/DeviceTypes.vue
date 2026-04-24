@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import request from '@/api/request'
 
 const loading = ref(false)
@@ -130,7 +130,7 @@ const fetchDeviceTypes = async () => {
       })
     }
   } catch (error) {
-    message.error('获取设备类型失败')
+    $notify.error({ title: '获取设备类型失败', description: '无法加载设备类型列表，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -156,7 +156,7 @@ const showEditModal = (record: any) => {
 
 const handleSubmit = async () => {
   if (!formData.value.name || !formData.value.code) {
-    message.error('请填写完整信息')
+    $notify.error({ title: '信息不完整', description: '请填写设备类型名称和编码 📋' })
     return
   }
 
@@ -167,7 +167,7 @@ const handleSubmit = async () => {
       if (index > -1) {
         deviceTypes.value[index] = { ...deviceTypes.value[index], ...formData.value }
       }
-      message.success('更新成功')
+      NotifyPreset.profileUpdated('设备类型')
     } else {
       typeConfig[formData.value.code] = {
         name: formData.value.name,
@@ -179,11 +179,11 @@ const handleSubmit = async () => {
         count: 0,
         status: 'active'
       })
-      message.success('添加成功')
+      $notify.success({ title: '添加成功', description: '新设备类型已成功添加 ✅' })
     }
     modalVisible.value = false
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   } finally {
     submitting.value = false
   }

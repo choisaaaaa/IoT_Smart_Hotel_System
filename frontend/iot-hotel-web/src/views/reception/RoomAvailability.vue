@@ -125,7 +125,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import type { RoomInfo } from '@/types'
 import { useHotelStore } from '@/stores/hotel'
 import { roomApi } from '@/api/room'
@@ -205,7 +205,7 @@ async function updateStatus(roomId: number, status: string) {
     currentRoom.value = { ...currentRoom.value, room_status: status }
   }
   hotelStore.optimisticUpdates.set(roomId, { status, timestamp: Date.now() })
-  message.success(`房间状态已更新为 ${statusMap[status]?.label || status}`)
+  $notify.success({ title: '房态已更新', description: `房间状态已更新为 ${statusMap[status]?.label || status} 🏨` })
 
   try {
     await roomApi.updateRoomStatus(roomId, status)
@@ -215,7 +215,7 @@ async function updateStatus(roomId: number, status: string) {
       currentRoom.value = { ...currentRoom.value, room_status: oldStatus }
     }
     hotelStore.optimisticUpdates.delete(roomId)
-    message.error('房态更新失败')
+    NotifyPreset.operationFailed('房态更新失败')
   }
 }
 
@@ -227,11 +227,11 @@ async function reportMaintenance(room: RoomInfo) {
       fault_description: `${room.room_number}房间需要维修`,
       priority: 'medium'
     })
-    message.success('报修工单已创建，房间状态已更新为维修中')
+    $notify.success({ title: '报修工单已创建', description: '房间状态已更新为维修中 🔧' })
     drawerVisible.value = false
     await refreshData()
   } catch (error) {
-    message.error('创建报修工单失败')
+    NotifyPreset.operationFailed('创建报修工单失败')
   }
 }
 
@@ -240,7 +240,7 @@ async function refreshData() {
   try {
     await hotelStore.fetchRooms({ pageSize: 300 }, true)
   } catch (error) {
-    message.error('刷新房态失败')
+    NotifyPreset.operationFailed('刷新房态失败')
   } finally {
     loading.value = false
   }

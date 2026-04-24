@@ -149,8 +149,11 @@ export const create = async (req: AuthRequest, res: Response) => {
     );
 
     if (checkinRows.length === 0) {
-      res.status(403).json(errorResponse('该房间当前未办理入住，无法请求客房服务'));
-      return;
+      const userRole = req.user?.role;
+      if (userRole === 'customer' || userRole === 'guest') {
+        res.status(400).json(errorResponse('该房间当前未办理入住，请先确认您的入住房间号'));
+        return;
+      }
     }
 
     const currentBooking = checkinRows[0] as any;

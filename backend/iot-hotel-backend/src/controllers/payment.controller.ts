@@ -47,26 +47,35 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { order_type, order_id, amount, payment_method, description } = req.body;
+    const { order_type, order_id, booking_id, amount, payment_method, description } = req.body;
+    const finalOrderId = order_id || booking_id;
+    const finalOrderType = order_type || (booking_id ? 'booking' : undefined);
     let hotel_id = 0;
 
     logger.info(`[Payment Create] Request body: ${JSON.stringify(req.body)}, user hotel_id: ${req.user?.hotel_id}`);
 
-    if (order_type === 'booking' && order_id) {
-      const numericOrderId = Number(order_id);
+    if (!finalOrderId) {
+      return res.status(400).json(errorResponse('缺少订单ID(order_id或booking_id)'));
+    }
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json(errorResponse('支付金额必须大于0'));
+    }
+
+    if (finalOrderType === 'booking' && finalOrderId) {
+      const numericOrderId = Number(finalOrderId);
       logger.info(`[Payment Create] Looking up booking with id: ${numericOrderId}`);
       const [rows] = await pool.query('SELECT hotel_id FROM bookings WHERE id = ?', [numericOrderId]);
       logger.info(`[Payment Create] Booking lookup result: ${JSON.stringify(rows)}`);
       if (Array.isArray(rows) && rows.length > 0) {
         hotel_id = (rows[0] as any).hotel_id || 1;
       }
-    } else if (order_type === 'delivery' && order_id) {
-      const [rows] = await pool.query('SELECT hotel_id FROM delivery_orders WHERE id = ?', [Number(order_id)]);
+    } else if (finalOrderType === 'delivery' && finalOrderId) {
+      const [rows] = await pool.query('SELECT hotel_id FROM delivery_orders WHERE id = ?', [Number(finalOrderId)]);
       if (Array.isArray(rows) && rows.length > 0) {
         hotel_id = (rows[0] as any).hotel_id || 1;
       }
-    } else if (order_type === 'maintenance' && order_id) {
-      const [rows] = await pool.query('SELECT hotel_id FROM maintenance_tickets WHERE id = ?', [Number(order_id)]);
+    } else if (finalOrderType === 'maintenance' && finalOrderId) {
+      const [rows] = await pool.query('SELECT hotel_id FROM maintenance_tickets WHERE id = ?', [Number(finalOrderId)]);
       if (Array.isArray(rows) && rows.length > 0) {
         hotel_id = (rows[0] as any).hotel_id || 1;
       }
@@ -77,8 +86,8 @@ export const create = async (req: AuthRequest, res: Response) => {
     logger.info(`[Payment Create] Creating payment with hotel_id: ${hotel_id}, order_id: ${Number(order_id)}`);
     const result = await PaymentService.createPayment({
       hotel_id,
-      order_type,
-      order_id: Number(order_id),
+      order_type: finalOrderType,
+      order_id: Number(finalOrderId),
       amount: Number(amount),
       payment_method,
       description

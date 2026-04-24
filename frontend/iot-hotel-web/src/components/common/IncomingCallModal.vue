@@ -50,7 +50,7 @@ import { computed } from 'vue'
 import { PhoneOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { getSocket } from '@/utils/websocket'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { useRouter } from 'vue-router'
 
 const appStore = useAppStore()
@@ -78,7 +78,7 @@ function handleAnswer() {
     // 跳转到通话页面（如果不在的话）
     router.push('/reception/voice-calls')
     
-    message.success('通话已接通')
+    $notify.success({ title: '通话已接通', description: '已成功接听来电 📞' })
   }
 }
 
@@ -89,7 +89,7 @@ function handleReject() {
   if (socket) {
     socket.emit('reject_call', { call_id: appStore.incomingCall.call_id })
     appStore.clearIncomingCall()
-    message.info('已拒接来电')
+    $notify.info({ title: '已拒接来电', description: '来电已被拒接' })
   }
 }
 </script>

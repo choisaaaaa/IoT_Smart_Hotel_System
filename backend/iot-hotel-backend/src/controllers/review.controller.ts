@@ -95,9 +95,11 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const {
       order_id,
+      booking_id,
       hotel_id,
       room_type_id,
       score,
+      rating,
       environment_rating,
       facility_rating,
       comfort_rating,
@@ -105,10 +107,13 @@ export const create = async (req: AuthRequest, res: Response) => {
       photos
     } = req.body;
 
-    if (!order_id) {
-      return res.status(400).json(errorResponse('缺少订单ID'));
+    const finalOrderId = order_id || booking_id;
+    const finalScore = score || rating;
+
+    if (!finalOrderId) {
+      return res.status(400).json(errorResponse('缺少订单ID(order_id或booking_id)'));
     }
-    if (!score || score < 1 || score > 5) {
+    if (!finalScore || finalScore < 1 || finalScore > 5) {
       return res.status(400).json(errorResponse('评分需在1-5之间'));
     }
     if (!content || content.trim().length === 0) {
@@ -117,7 +122,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const [existingReviews] = await pool.query<RowDataPacket[]>(
       'SELECT id FROM reviews WHERE order_id = ? AND is_deleted = 0',
-      [order_id]
+      [finalOrderId]
     );
     if (existingReviews.length > 0) {
       return res.status(400).json(errorResponse('该订单已评价，不能重复评价'));
@@ -125,7 +130,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const [bookings] = await pool.query<RowDataPacket[]>(
       'SELECT id, user_id, hotel_id, room_type_id, status FROM bookings WHERE id = ?',
-      [order_id]
+      [finalOrderId]
     );
     if (bookings.length === 0) {
       return res.status(404).json(errorResponse('订单不存在'));
@@ -158,12 +163,12 @@ export const create = async (req: AuthRequest, res: Response) => {
       `INSERT INTO reviews (order_id, order_type, member_id, hotel_id, room_type_id, user_id, score, environment_rating, facility_rating, comfort_rating, content, photos)
        VALUES (?, 'booking', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        order_id,
+        finalOrderId,
         memberId,
         finalHotelId,
         finalRoomTypeId,
         userId,
-        score,
+        finalScore,
         environment_rating || 5,
         facility_rating || 5,
         comfort_rating || 5,

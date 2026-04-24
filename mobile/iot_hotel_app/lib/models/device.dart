@@ -64,7 +64,14 @@ class Device {
   }
 
   String get typeName {
-    const map = {'light': '灯光', 'ac': '空调', 'curtain': '窗帘', 'tv': '电视', 'lock': '门锁', 'sensor': '传感器'};
-    return map[deviceType] ?? deviceType;
+    const map = {
+      'light': '灯光', 'ac': '空调', 'curtain': '窗帘', 'tv': '电视', 'lock': '门锁',
+      'sensor': '传感器', 'smoke_detector': '烟雾探测器', 'temperature_sensor': '温度传感器',
+      'humidity_sensor': '湿度传感器', 'thermostat': '温控器', 'air_conditioner': '空调',
+      'floor_controller': '楼控节点', 'front_desk': '前台终端', 'room': '客房终端',
+      'gateway': '网关', 'floor': '楼层控制器', 'door_sensor': '门磁传感器',
+      'window_sensor': '窗户传感器', 'humidifier': '加湿器',
+    };
+    return map[deviceType] ?? '未知设备';
   }
 }

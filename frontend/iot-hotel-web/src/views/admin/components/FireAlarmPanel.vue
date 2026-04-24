@@ -153,7 +153,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import { WarningFilled, ExclamationCircleFilled, CheckCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type FireAlarmRecord } from '@/api/environment'
 import dayjs from 'dayjs'
@@ -229,10 +230,10 @@ async function handleAcknowledge(alarm: FireAlarmRecord) {
           handler: 'admin',
           notes: '管理员正在处理中'
         })
-        message.success('警报已确认，请尽快现场处理')
+        $notify.success({ title: '警报已确认', description: '请尽快前往现场处理 🔥' })
         fetchAlarms()
       } catch (err) {
-        message.error('操作失败')
+        NotifyPreset.operationFailed()
       }
     }
   })
@@ -246,7 +247,7 @@ function handleResolve(alarm: FireAlarmRecord) {
 
 async function confirmResolve() {
   if (!resolution.value.trim()) {
-    message.warning('请输入解决方案')
+    $notify.warning({ title: '请输入解决方案', description: '请填写警报处理方案 📝' })
     return
   }
 
@@ -256,11 +257,11 @@ async function confirmResolve() {
       resolution: resolution.value,
       handler: 'admin'
     })
-    message.success('警报已标记为已解决')
+    $notify.success({ title: '警报已解决', description: '警报已标记为已解决 ✅' })
     resolveModalVisible.value = false
     fetchAlarms()
   } catch (err) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed('解决警报失败')
   } finally {
     resolving.value = false
   }

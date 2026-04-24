@@ -182,7 +182,7 @@ import {
   WifiOutlined,
   DisconnectOutlined
 } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { useAppStore } from '@/stores/app'
 import { useHotelStore } from '@/stores/hotel'
 import { authService } from '@/api/auth'
@@ -234,7 +234,7 @@ onMounted(() => {
   // 检查权限
   const userRole = appStore.userInfo?.role
   if (!userRole || (userRole !== 'system_admin' && userRole !== 'hotel_admin')) {
-    message.warning('您没有权限访问管理后台')
+    NotifyPreset.permissionDenied('访问管理后台')
     router.push('/guest/booking')
   }
 })

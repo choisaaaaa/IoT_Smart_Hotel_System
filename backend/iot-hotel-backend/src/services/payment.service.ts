@@ -227,7 +227,7 @@ export class PaymentService {
       }
 
       // 4. 处理预订相关的积分和优惠券扣除（仅在支付成功时执行）
-      if (payment.order_type === 'booking') {
+      if (payment.order_type === 'booking' || payment.order_type === 'booking_extend') {
         // 获取预订信息（包含优惠券和积分信息）
         const [bookingRows] = await connection.query<RowDataPacket[]>(
           `SELECT b.coupon_id, b.used_points, b.guest_phone, b.user_id, u.phone as user_phone
@@ -240,61 +240,67 @@ export class PaymentService {
         if (bookingRows.length > 0) {
           const booking = bookingRows[0] as any;
           
-          // 确定权益扣除对象：优先使用预订关联的用户，其次是入住人
-          const deductPhone = booking.user_phone || booking.guest_phone;
+          // 确定权益扣除对象：使用 guest_phone（与价格计算时一致）
+          const pointsDeductPhone = booking.guest_phone;
           
-          // 4.1 扣除积分（如果有）
-          if (booking.used_points > 0 && deductPhone) {
+          // 4.1 扣除积分（如果有，仅 booking 类型需要在此扣减；booking_extend 已在 extendStay 中扣减）
+          if (payment.order_type === 'booking' && booking.used_points > 0 && pointsDeductPhone) {
             const [memberRows] = await connection.query<RowDataPacket[]>(
               'SELECT id, points FROM members WHERE phone = ?',
-              [deductPhone]
+              [pointsDeductPhone]
             );
             if (memberRows.length > 0) {
               const member = memberRows[0] as any;
-              if (member.points >= booking.used_points) {
-                await connection.query(
-                  'UPDATE members SET points = points - ? WHERE id = ?',
-                  [booking.used_points, member.id]
+              if (Number(member.points) >= Number(booking.used_points)) {
+                const [updateResult] = await connection.query(
+                  'UPDATE members SET points = points - ? WHERE id = ? AND points >= ?',
+                  [booking.used_points, member.id, booking.used_points]
                 );
-                logger.info(`支付时扣除积分: 手机号=${deductPhone}, 积分=${booking.used_points}`);
+                if ((updateResult as any).affectedRows === 0) {
+                  logger.warn(`积分扣减并发冲突: 手机号=${pointsDeductPhone}, 积分=${booking.used_points}`);
+                } else {
+                  logger.info(`支付时扣除积分: 手机号=${pointsDeductPhone}, 积分=${booking.used_points}`);
+                }
               } else {
-                logger.warn(`积分不足: 手机号=${deductPhone}, 可用=${member.points}, 需要=${booking.used_points}`);
+                logger.warn(`积分不足: 手机号=${pointsDeductPhone}, 可用=${member.points}, 需要=${booking.used_points}`);
               }
             }
           }
           
-          // 4.2 标记优惠券为已使用（如果有）
-          if (booking.coupon_id) {
+          // 4.2 标记优惠券为已使用（如果有，仅 booking 类型需要在此标记；booking_extend 已在 extendStay 中标记）
+          if (payment.order_type === 'booking' && booking.coupon_id) {
             // 验证优惠券是否属于该会员
             const [couponRows] = await connection.query<RowDataPacket[]>(
               `SELECT mc.id FROM member_coupons mc
                JOIN members m ON mc.member_id = m.id
                WHERE mc.id = ? AND m.phone = ? AND mc.status = 'unused'`,
-              [booking.coupon_id, deductPhone]
+              [booking.coupon_id, pointsDeductPhone]
             );
             if (couponRows.length > 0) {
               await connection.query(
                 'UPDATE member_coupons SET status = "used", used_at = CURRENT_TIMESTAMP WHERE id = ?',
                 [booking.coupon_id]
               );
-              logger.info(`支付时使用优惠券: coupon_id=${booking.coupon_id}, 手机号=${deductPhone}`);
+              logger.info(`支付时使用优惠券: coupon_id=${booking.coupon_id}, 手机号=${pointsDeductPhone}`);
             } else {
-              logger.warn(`优惠券不可用: coupon_id=${booking.coupon_id}, 手机号=${deductPhone}`);
+              logger.warn(`优惠券不可用: coupon_id=${booking.coupon_id}, 手机号=${pointsDeductPhone}`);
             }
           }
         }
         
         // 4.3 更新预订状态
-        await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
+        if (payment.order_type === 'booking') {
+          await connection.query('UPDATE bookings SET status = ? WHERE id = ?', ['confirmed', payment.order_id]);
 
-        const [roomRows] = await connection.query<RowDataPacket[]>(
-          'SELECT room_id FROM bookings WHERE id = ?',
-          [payment.order_id]
-        );
-        if (roomRows.length > 0) {
-          const roomId = (roomRows[0] as any).room_id;
-          if (roomId) {
-            await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['reserved', roomId]);
+          const [roomRows] = await connection.query<RowDataPacket[]>(
+            'SELECT room_id FROM bookings WHERE id = ?',
+            [payment.order_id]
+          );
+          if (roomRows.length > 0) {
+            const roomId = (roomRows[0] as any).room_id;
+            if (roomId) {
+              await connection.query('UPDATE rooms SET room_status = ? WHERE id = ?', ['reserved', roomId]);
+            }
           }
         }
       } else if (payment.order_type === 'delivery') {

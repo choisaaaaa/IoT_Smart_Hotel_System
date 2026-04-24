@@ -186,7 +186,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import {
   CloudOutlined,
   AlertOutlined,
@@ -282,7 +282,7 @@ async function fetchData() {
       Object.assign(summary, data.summary)
     }
   } catch (err: any) {
-    message.error('获取环境数据失败')
+    $notify.error({ title: '获取环境数据失败', description: '无法加载环境监测数据，请检查网络后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -343,13 +343,13 @@ function formatTime(time: string): string {
 function toggleAutoRefresh(checked: boolean) {
   if (checked) {
     refreshTimer = setInterval(fetchData, 30000)
-    message.info('已开启自动刷新（每30秒）')
+    $notify.info({ title: '已开启自动刷新', description: '环境数据将每30秒自动更新 🔄' })
   } else {
     if (refreshTimer) {
       clearInterval(refreshTimer)
       refreshTimer = null
     }
-    message.info('已关闭自动刷新')
+    $notify.info({ title: '已关闭自动刷新', description: '已切换为手动刷新模式 ⏸️' })
   }
 }
 

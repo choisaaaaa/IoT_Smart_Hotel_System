@@ -9,6 +9,7 @@ class RFIDController {
     try {
       const hotelId = (req as any).user?.hotel_id || req.body.hotel_id;
       if (!hotelId) {return res.status(401).json(errorResponse('Unauthorized'));}
+      if (!req.body.card_uid) {return res.status(400).json(errorResponse('缺少必要参数: card_uid'));}
 
       const id = await rfidService.issueCard({ ...req.body, hotel_id: hotelId });
       res.json(successResponse({ id }, '发卡成功'));

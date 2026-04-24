@@ -123,12 +123,15 @@
               </a-row>
               <a-card size="small" class="selected-room-card">
                 <div class="selected-room-header">
-                  <span>{{ fillingBookingId ? '预订房间' : '已选空房' }}</span>
+                  <span>{{ fillingBookingId ? (fillingBookingHasRoom ? '预订房间' : '请选择入住房间') : '已选空房' }}</span>
                   <a-tag v-if="selectedRoom" :color="fillingBookingId ? 'blue' : 'success'">{{ selectedRoom.room_number }}</a-tag>
                   <a-tag v-else color="warning">未选择</a-tag>
                 </div>
                 <div v-if="selectedRoom" class="selected-room-text">
                   {{ selectedRoom.room_name }} · ¥{{ selectedRoom.room_price }}/晚
+                </div>
+                <div v-else-if="fillingBookingId && !fillingBookingHasRoom" class="selected-room-text" style="color: #fa541c;">
+                  该订单未分配具体房间，请从右侧选择对应房型的空房
                 </div>
               </a-card>
 
@@ -247,6 +250,9 @@
           </a-col>
           <a-col :xs="24" :xl="9">
             <a-card size="small" title="空房清单">
+              <template v-if="fillingBookingId && !fillingBookingHasRoom && fillingBookingRoomTypeId" #extra>
+                <a-tag color="orange">按订单房型筛选</a-tag>
+              </template>
               <a-input v-model:value="roomSearchKeyword" placeholder="搜索房号/房名" allow-clear />
               <div class="room-grid">
                 <div
@@ -309,6 +315,13 @@
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'nights'">
                     {{ record.stay_nights }}晚
+                  </template>
+                  <template v-if="column.dataIndex === 'room_number'">
+                    <span v-if="record.room_number && record.room_number !== '-'">{{ record.room_number }}</span>
+                    <a-tag v-else color="warning">待分配</a-tag>
+                  </template>
+                  <template v-if="column.dataIndex === 'room_type_name'">
+                    <a-tag color="blue">{{ record.room_type_name }}</a-tag>
                   </template>
                   <template v-if="column.key === 'action'">
                     <a-button type="link" size="small" style="padding: 0;" @click="fillByBooking(record)">办理入住</a-button>
@@ -523,7 +536,7 @@
                   </a-tag>
                 </template>
                 <template v-if="column.key === 'time'">
-                  {{ dayjs(record.issued_at).format('MM-DD HH:mm') }}
+                  {{ formatDotDateTime(record.issued_at) }}
                 </template>
               </template>
             </a-table>
@@ -536,7 +549,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import request from '@/api/request'
 import {
   UserAddOutlined,
@@ -555,6 +568,7 @@ import {
   ApiOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
+import { formatDotDateTime } from '@/utils/date'
 import { useHotelStore } from '@/stores/hotel'
 import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notification'
@@ -610,14 +624,14 @@ const getLogoUrl = (url?: string) => {
 
 async function testCommunication() {
   if (!selectedDevice.value) {
-    return message.warning('请先选择一个前台设备')
+    return $notify.warning({ title: '请选择设备', description: '请先选择一个前台设备' })
   }
   testing.value = true
   try {
     await deviceApi.testBeep(selectedDevice.value)
-    message.success('测试指令已发送，请检查设备蜂鸣器')
+    $notify.success({ title: '测试指令已发送', description: '请检查前台设备蜂鸣器是否响应 🔔' })
   } catch (error) {
-    message.error('通信测试失败，请检查设备连接')
+    $notify.error({ title: '通信测试失败', description: '请检查设备连接是否正常' })
   } finally {
     testing.value = false
   }
@@ -645,7 +659,7 @@ async function fetchTodayInventory() {
     const res: any = await request.get('/price-calendar/today')
     todayInventoryList.value = res.data || []
   } catch (error) {
-    message.error('获取今日余量失败')
+    $notify.error({ title: '获取失败', description: '获取今日余量数据失败，请稍后重试' })
   } finally {
     inventoryLoading.value = false
   }
@@ -662,10 +676,10 @@ async function handleUpdateInventory() {
       default_inventory: item.default_inventory
     }))
     await request.post('/price-calendar/today/update', { updates })
-    message.success('更新成功')
+    NotifyPreset.profileUpdated('余量数据')
     inventoryModalVisible.value = false
   } catch (error) {
-    message.error('更新失败')
+    NotifyPreset.operationFailed('余量更新失败')
   } finally {
     updatingInventory.value = false
   }
@@ -690,7 +704,7 @@ function openAuthorizeModal() {
     checkinForm.manual_discount = 1.0
     checkinForm.manual_reduce = 0
     updateEstimatedPrice()
-    message.info('已解除授权，重置折扣')
+    $notify.info({ title: '授权已解除', description: '手动折扣已重置' })
     return
   }
   
@@ -702,7 +716,7 @@ function openAuthorizeModal() {
 
 async function handleAuthorize() {
   if (!authForm.manager_id || !authForm.password) {
-    return message.warning('请选择经理并输入密码')
+    return $notify.warning({ title: '信息不完整', description: '请选择经理并输入密码' })
   }
 
   try {
@@ -713,9 +727,9 @@ async function handleAuthorize() {
     })
     isAuthorized.value = true
     authorizeModalVisible.value = false
-    message.success('授权成功，您可以进行手动打折')
+    NotifyPreset.managerAuthorized()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '授权失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '经理授权失败')
   } finally {
     authorizing.value = false
   }
@@ -767,7 +781,7 @@ function openCardModal(type: 'issue' | 'revoke', record?: any) {
 
 async function handleCardOp() {
   if (cardOpType.value === 'issue' && !idLastFour.value) {
-    return message.warning('请输入证件后四位进行验证')
+    return $notify.warning({ title: '信息不完整', description: '请输入证件后四位进行验证' })
   }
 
   try {
@@ -779,13 +793,13 @@ async function handleCardOp() {
     })
 
     if (res.data.success) {
-      message.loading({ content: cardOpType.value === 'issue' ? '正在制卡中，请在设备上放置卡片...' : '正在注销中...', key: 'card_op', duration: 0 })
+      $notify.info({ title: cardOpType.value === 'issue' ? '正在制卡' : '正在注销', description: cardOpType.value === 'issue' ? '请在设备上放置卡片...' : '正在注销房卡，请稍候...', key: 'card_op', duration: 0 })
       // 不立即关闭弹窗，等待 WebSocket 反馈或手动刷新
     } else {
-      message.error(res.data.message || '操作失败')
+      NotifyPreset.operationFailed(res.data.message)
     }
   } catch (error: any) {
-    message.error(error.response?.data?.message || '设备通信失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '设备通信失败')
   } finally {
     cardOpLoading.value = false
   }
@@ -820,14 +834,14 @@ const targetIssueName = ref('')
 
 async function showIssueCouponModal() {
   if (!checkinForm.phone || checkinForm.phone.length < 11) {
-    return message.warning('请先输入完整的客人手机号')
+    return $notify.warning({ title: '信息不完整', description: '请先输入完整的客人手机号' })
   }
   showIssueCouponModalForPhone(checkinForm.phone, checkinForm.guest_name)
 }
 
 async function showIssueCouponModalForPhone(phone: string, name: string) {
   if (!phone || phone.length < 11) {
-    return message.warning('手机号不正确')
+    return $notify.warning({ title: '格式错误', description: '手机号格式不正确，请检查后重新输入' })
   }
   targetIssuePhone.value = phone
   targetIssueName.value = name || '客人'
@@ -837,12 +851,12 @@ async function showIssueCouponModalForPhone(phone: string, name: string) {
     allAvailableCoupons.value = res.data.list || []
     issueCouponModalVisible.value = true
   } catch (error) {
-    message.error('获取优惠券列表失败')
+    NotifyPreset.operationFailed('获取优惠券列表失败')
   }
 }
 
 async function handleIssueCoupon() {
-  if (!selectedIssueCouponId.value) return message.warning('请选择优惠券')
+  if (!selectedIssueCouponId.value) return $notify.warning({ title: '请选择优惠券', description: '请先选择一张优惠券再发放' })
 
   try {
     issuingCoupon.value = true
@@ -850,13 +864,13 @@ async function handleIssueCoupon() {
       coupon_id: selectedIssueCouponId.value,
       phone: targetIssuePhone.value
     })
-    message.success('优惠券发放成功')
+    NotifyPreset.couponIssued()
     issueCouponModalVisible.value = false
     if (targetIssuePhone.value === checkinForm.phone) {
       fetchUserCoupons(checkinForm.phone) // 刷新当前客人的可用优惠券
     }
   } catch (error: any) {
-    message.error(error.response?.data?.message || '发放失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '优惠券发放失败')
   } finally {
     issuingCoupon.value = false
   }
@@ -886,9 +900,13 @@ watch(() => checkinForm.phone, (newVal) => {
 
 const availableRooms = computed(() => hotelStore.getAvailableRooms())
 const searchedRooms = computed(() => {
+  let rooms = availableRooms.value
+  if (fillingBookingId.value && !fillingBookingHasRoom.value && fillingBookingRoomTypeId.value) {
+    rooms = rooms.filter(room => Number(room.room_type_id) === Number(fillingBookingRoomTypeId.value))
+  }
   const keyword = roomSearchKeyword.value.trim().toLowerCase()
-  if (!keyword) return availableRooms.value
-  return availableRooms.value.filter(room =>
+  if (!keyword) return rooms
+  return rooms.filter(room =>
     String(room.room_number).toLowerCase().includes(keyword) ||
     String(room.room_name).toLowerCase().includes(keyword)
   )
@@ -904,7 +922,7 @@ const selectedRoom = computed(() => {
 
   if (fillingBookingId.value) {
     const booking = todayBookings.value.find(b => b.id === fillingBookingId.value);
-    if (booking) {
+    if (booking && booking.room_id) {
       return {
         id: booking.room_id,
         room_number: booking.room_number,
@@ -974,7 +992,8 @@ const checkoutColumns = [
 const todayBookingColumns = [
   { title: '姓名', dataIndex: 'guest_name', width: 80 },
   { title: '手机号', dataIndex: 'guest_phone', width: 110 },
-  { title: '房间', dataIndex: 'room_number', width: 60 },
+  { title: '房间', dataIndex: 'room_number', width: 80 },
+  { title: '房型', dataIndex: 'room_type_name', width: 80 },
   { title: '夜数', key: 'nights', width: 60 },
   { title: '操作', key: 'action', width: 70 }
 ]
@@ -1058,7 +1077,7 @@ async function fetchCurrentGuests() {
       }
     })
   } catch (error) {
-    message.error('获取在住客人失败')
+    NotifyPreset.operationFailed('获取在住客人列表失败')
   }
 }
 
@@ -1100,11 +1119,13 @@ async function fetchTodayBookings(force = false) {
       return {
         ...item,
         stay_nights: nights,
+        room_number: item.room_number || '-',
+        room_type_name: item.room_type_name || item.room_type || '-',
         phone_registered: isPhoneRegistered(item.guest_phone)
       }
     })
   } catch (error) {
-    message.error('获取今日预订失败')
+    NotifyPreset.operationFailed('获取今日预订列表失败')
   } finally {
     todayBookingLoading.value = false
   }
@@ -1113,6 +1134,8 @@ async function fetchTodayBookings(force = false) {
 function fillByBooking(booking: any) {
   activeTab.value = 'checkin'
   fillingBookingId.value = booking.id
+  fillingBookingRoomTypeId.value = booking.room_type_id || null
+  fillingBookingHasRoom.value = !!booking.room_id
   checkinForm.guest_name = booking.guest_name || ''
   checkinForm.phone = booking.guest_phone || ''
   checkinForm.id_type = booking.id_type || 'idcard'
@@ -1122,7 +1145,6 @@ function fillByBooking(booking: any) {
   if (booking.check_out_date) checkinForm.check_out_date = dayjs(booking.check_out_date)
   if (booking.payment_method) checkinForm.payment_method = booking.payment_method
   
-  // 重置授权状态
   isAuthorized.value = false
   checkinForm.manual_discount = 1.0
   checkinForm.manual_reduce = 0
@@ -1130,17 +1152,13 @@ function fillByBooking(booking: any) {
   companions.value = []
   
   if (booking.room_id) {
-    // 即使房间不是 vacant 状态，只要是订单绑定的房间，也要回填
     checkinForm.room_id = booking.room_id
-    
-    // 如果该房间不在当前显示的空房列表中，我们手动构造一个临时的 room 对象，确保 UI 能显示房号
     const roomInList = availableRooms.value.find(item => item.id === booking.room_id)
     if (!roomInList) {
       console.log('预订房间不在空房列表中，强制回填房号:', booking.room_number)
-      // selectedRoom 是计算属性，依赖 availableRooms。
-      // 这里我们只需要确保 checkinForm.room_id 正确，
-      // handleCheckIn 时后端会识别并处理。
     }
+  } else {
+    checkinForm.room_id = undefined
   }
 }
 
@@ -1149,7 +1167,7 @@ function checkInSelectedBooking() {
   if (!targetId) return
   const booking = todayBookings.value.find(item => Number(item.id) === Number(targetId))
   if (!booking) {
-    message.warning('未找到选中的预订记录')
+    $notify.warning({ title: '未找到记录', description: '未找到选中的预订记录，请重新选择' })
     return
   }
   fillByBooking(booking)
@@ -1157,28 +1175,33 @@ function checkInSelectedBooking() {
 
 const lastCreatedBookingId = ref<number | null>(null)
 const fillingBookingId = ref<number | null>(null)
+const fillingBookingRoomTypeId = ref<number | null>(null)
+const fillingBookingHasRoom = ref(false)
 
 async function handleCheckIn() {
   if (submitting.value) {
-    message.warning('正在办理入住中，请勿重复点击')
+    $notify.warning({ title: '请稍候', description: '正在办理入住中，请勿重复点击' })
     return
   }
   
   if (!checkinForm.guest_name || !checkinForm.phone) {
-    message.warning('请填写客人姓名和联系电话'); return
+    $notify.warning({ title: '信息不完整', description: '请填写客人姓名和联系电话' }); return
+  }
+  if (fillingBookingId.value && !fillingBookingHasRoom.value && !checkinForm.room_id) {
+    $notify.warning({ title: '请选择房间', description: '该订单未分配房间，请从右侧选择一间对应房型的空房' }); return
   }
   if (checkinForm.id_number) {
     if (checkinForm.id_type === 'idcard') {
       const idNumber = checkinForm.id_number.trim()
       if (idNumber.length !== 18 || !/^\d{17}[\dXx]$/.test(idNumber)) {
-        message.warning('请填写正确的18位身份证号码'); return
+        $notify.warning({ title: '证件格式错误', description: '请填写正确的18位身份证号码' }); return
       }
     } else if (checkinForm.id_number.trim().length < 5) {
-      message.warning('证件号码至少5位'); return
+      $notify.warning({ title: '证件格式错误', description: '证件号码至少5位' }); return
     }
   }
   if (!hotelStore.hotelInfo?.id) {
-    message.warning('未获取到门店信息，请刷新页面重试'); return
+    $notify.warning({ title: '数据异常', description: '未获取到门店信息，请刷新页面重试' }); return
   }
 
   submitting.value = true
@@ -1199,18 +1222,22 @@ async function handleCheckIn() {
 
     let res: any
     if (existingBookingId) {
-      res = await bookingApi.checkin(existingBookingId, {
+      const checkinData: any = {
         guest_name: checkinForm.guest_name,
         guest_phone: checkinForm.phone,
         guest_id_number: checkinForm.id_number,
         manual_discount: checkinForm.manual_discount < 1 ? checkinForm.manual_discount : undefined,
         manual_reduce: checkinForm.manual_reduce > 0 ? checkinForm.manual_reduce : undefined,
         total_price: estimatedPrice.value
-      })
-      message.success(`入住成功！${checkinForm.guest_name} 的预订已确认入住`)
+      }
+      if (checkinForm.room_id) {
+        checkinData.room_id = checkinForm.room_id
+      }
+      res = await bookingApi.checkin(existingBookingId, checkinData)
+      NotifyPreset.checkinSuccess(checkinForm.guest_name)
     } else {
       if (!checkinForm.room_id) {
-        message.warning('请选择一间空房'); 
+        $notify.warning({ title: '请选择房间', description: '请从右侧选择一间空房' }); 
         submitting.value = false
         return
       }
@@ -1225,7 +1252,7 @@ async function handleCheckIn() {
         companions: companions.value.filter(item => item.name || item.phone || item.id_number)
       }
       res = await bookingApi.createBooking(payload)
-      message.success(`入住成功！${checkinForm.guest_name} 已分配房间`)
+      NotifyPreset.checkinSuccess(checkinForm.guest_name, selectedRoom.value?.room_number)
     }
 
     lastCreatedBookingId.value = res.data?.id || existingBookingId
@@ -1253,7 +1280,7 @@ async function handleCheckIn() {
     
   } catch (error: any) {
     console.error('办理入住失败:', error)
-    message.error(error?.response?.data?.message || '办理入住失败')
+    NotifyPreset.checkinFailed(error?.response?.data?.message)
   } finally {
     submitting.value = false
   }
@@ -1261,6 +1288,8 @@ async function handleCheckIn() {
 
 function resetCheckinForm() {
   fillingBookingId.value = null
+  fillingBookingRoomTypeId.value = null
+  fillingBookingHasRoom.value = false
   checkinForm.guest_name = ''
   checkinForm.phone = ''
   checkinForm.id_type = 'idcard'
@@ -1282,13 +1311,13 @@ function resetCheckinForm() {
 async function handleCheckout(record: any) {
   try {
     await bookingApi.updateBookingStatus(record.id, 'checked_out')
-    message.success(`${record.guest_name}（${record.room_number}）退房成功，应付 ¥${record.total_amount}`)
+    NotifyPreset.checkoutSuccess(record.guest_name, record.room_number, record.total_amount)
     await Promise.all([
       fetchCurrentGuests(),
       hotelStore.fetchRooms({ pageSize: 300 })
     ])
   } catch (error) {
-    message.error('办理退房失败')
+    NotifyPreset.checkoutFailed()
   }
 }
 
@@ -1298,14 +1327,14 @@ async function handleBatchCheckout() {
     await Promise.all(
       checkoutKeys.value.map(id => bookingApi.updateBookingStatus(id, 'checked_out'))
     )
-    message.success(`批量退房成功，共 ${checkoutKeys.value.length} 间房`)
+    NotifyPreset.batchCheckoutSuccess(checkoutKeys.value.length)
     checkoutKeys.value = []
     await Promise.all([
       fetchCurrentGuests(),
       hotelStore.fetchRooms({ pageSize: 300 })
     ])
   } catch (error) {
-    message.error('批量退房失败')
+    NotifyPreset.operationFailed('批量退房失败，请稍后重试')
   }
 }
 
@@ -1317,7 +1346,7 @@ async function fillByBookingId() {
     const booking = (res.data?.list || []).find((item: any) => Number(item.id) === bookingId)
     if (booking) fillByBooking(booking)
   } catch (error) {
-    message.error('预订信息回填失败')
+    NotifyPreset.operationFailed('预订信息回填失败')
   }
 }
 
@@ -1328,12 +1357,12 @@ onMounted(async () => {
   const socket = initWebSocket()
   socket.on('security_event', (event: any) => {
     if (event.event_type === 'card_issued') {
-      message.success({ content: `房卡制作成功！UID: ${event.data?.card_uid}`, key: 'card_op', duration: 3 })
+      NotifyPreset.cardCreated(event.data?.card_uid)
       if (selectedGuestForCard.value) {
         fetchBookingCards(selectedGuestForCard.value.id)
       }
     } else if (event.event_type === 'card_revoked') {
-      message.success({ content: '房卡已成功销毁/收回', key: 'card_op', duration: 3 })
+      NotifyPreset.cardDestroyed()
       if (selectedGuestForCard.value) {
         fetchBookingCards(selectedGuestForCard.value.id)
       }

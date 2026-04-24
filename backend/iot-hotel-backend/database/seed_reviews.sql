@@ -1,0 +1,160 @@
+-- ============================================================
+-- 公开测试酒店评价数据生成脚本
+-- 共100条评价：10条4分、30条4.5分、60条5分
+-- ============================================================
+
+-- 先插入30个真实姓名的会员
+INSERT INTO members (phone, password, name, member_level, points, total_stays) VALUES
+('13810001001', '$2b$10$dummyhash001', '王建国', 'standard', 120, 2),
+('13810001002', '$2b$10$dummyhash002', '李秀英', 'silver', 350, 5),
+('13810001003', '$2b$10$dummyhash003', '张伟', 'standard', 80, 1),
+('13810001004', '$2b$10$dummyhash004', '刘芳', 'gold', 820, 8),
+('13810001005', '$2b$10$dummyhash005', '陈明', 'silver', 260, 4),
+('13810001006', '$2b$10$dummyhash006', '赵丽华', 'standard', 150, 2),
+('13810001007', '$2b$10$dummyhash007', '孙志强', 'gold', 900, 10),
+('13810001008', '$2b$10$dummyhash008', '周婷', 'silver', 300, 3),
+('13810001009', '$2b$10$dummyhash009', '吴晓峰', 'standard', 90, 1),
+('13810001010', '$2b$10$dummyhash010', '郑美玲', 'silver', 280, 4),
+('13810001011', '$2b$10$dummyhash011', '黄海涛', 'standard', 100, 2),
+('13810001012', '$2b$10$dummyhash012', '林雅琴', 'gold', 750, 7),
+('13810001013', '$2b$10$dummyhash013', '何俊杰', 'silver', 320, 3),
+('13810001014', '$2b$10$dummyhash014', '马晓燕', 'standard', 60, 1),
+('13810001015', '$2b$10$dummyhash015', '罗文斌', 'silver', 240, 4),
+('13810001016', '$2b$10$dummyhash016', '谢雪梅', 'gold', 680, 6),
+('13810001017', '$2b$10$dummyhash017', '韩天宇', 'standard', 110, 2),
+('13810001018', '$2b$10$dummyhash018', '唐慧敏', 'silver', 290, 3),
+('13810001019', '$2b$10$dummyhash019', '冯国栋', 'standard', 70, 1),
+('13810001020', '$2b$10$dummyhash020', '曹静怡', 'gold', 850, 9),
+('13810001021', '$2b$10$dummyhash021', '彭志远', 'silver', 310, 3),
+('13810001022', '$2b$10$dummyhash022', '邓丽萍', 'standard', 130, 2),
+('13810001023', '$2b$10$dummyhash023', '许永强', 'silver', 270, 4),
+('13810001024', '$2b$10$dummyhash024', '傅晓雯', 'gold', 720, 7),
+('13810001025', '$2b$10$dummyhash025', '沈德明', 'standard', 95, 1),
+('13810001026', '$2b$10$dummyhash026', '曾婉如', 'silver', 330, 5),
+('13810001027', '$2b$10$dummyhash027', '卢浩然', 'standard', 85, 1),
+('13810001028', '$2b$10$dummyhash028', '姚丹凤', 'gold', 780, 8),
+('13810001029', '$2b$10$dummyhash029', '蒋家豪', 'silver', 250, 3),
+('13810001030', '$2b$10$dummyhash030', '蔡思琪', 'standard', 140, 2);
+
+-- 获取新插入会员的起始ID（用于后续关联）
+SET @member_start_id = (SELECT MIN(id) FROM members WHERE phone LIKE '138100010%');
+
+-- ============================================================
+-- 插入100条评价记录
+-- hotel_id = 3 (公开测试酒店)
+-- room_type_id: 45(大床房), 46(双床房)
+-- order_id: 从332开始递增（无FK约束，仅逻辑关联）
+-- ============================================================
+
+INSERT INTO reviews (order_id, order_type, member_id, hotel_id, room_type_id, user_id, score, environment_rating, facility_rating, comfort_rating, content, photos, reply, replied_at, is_deleted, created_at) VALUES
+-- ========== 10条 4.0分评价 ==========
+(332, 'booking', @member_start_id+0, 3, 45, NULL, 4.0, 4, 4, 4, '房间隔音一般，其他还行', NULL, NULL, NULL, 0, '2025-12-05 14:22:00'),
+(333, 'booking', @member_start_id+1, 3, 46, NULL, 4.0, 4, 5, 4, '整体不错，早餐种类少了点', NULL, NULL, NULL, 0, '2025-12-08 09:15:00'),
+(334, 'booking', @member_start_id+2, 3, 45, NULL, 4.0, 5, 4, 4, '位置便利，设施有些旧了', NULL, NULL, NULL, 0, '2025-12-12 18:30:00'),
+(335, 'booking', @member_start_id+3, 3, 46, NULL, 4.0, 4, 4, 5, '床很舒服，卫生间有点小', NULL, NULL, NULL, 0, '2025-12-15 11:45:00'),
+(336, 'booking', @member_start_id+4, 3, 45, NULL, 4.0, 4, 4, 4, '服务态度好，房间偏小', NULL, NULL, NULL, 0, '2025-12-20 16:08:00'),
+(337, 'booking', @member_start_id+5, 3, 46, NULL, 4.0, 5, 4, 4, '环境优美，WiFi信号弱', NULL, NULL, NULL, 0, '2025-12-25 20:33:00'),
+(338, 'booking', @member_start_id+6, 3, 45, NULL, 4.0, 4, 5, 4, '性价比可以，停车不太方便', NULL, NULL, NULL, 0, '2026-01-03 08:50:00'),
+(339, 'booking', @member_start_id+7, 3, 46, NULL, 4.0, 4, 4, 4, '卫生干净，空调声音有点大', NULL, NULL, NULL, 0, '2026-01-07 13:20:00'),
+(340, 'booking', @member_start_id+8, 3, 45, NULL, 4.0, 5, 4, 4, '装修有特色，热水不太稳定', NULL, NULL, NULL, 0, '2026-01-12 17:40:00'),
+(341, 'booking', @member_start_id+9, 3, 46, NULL, 4.0, 4, 4, 5, '前台效率高，走廊有点吵', NULL, NULL, NULL, 0, '2026-01-18 10:05:00'),
+
+-- ========== 30条 4.5分评价 ==========
+(342, 'booking', @member_start_id+10, 3, 45, NULL, 4.5, 5, 4, 5, '住得很舒服，下次还来', NULL, NULL, NULL, 0, '2025-11-10 09:30:00'),
+(343, 'booking', @member_start_id+11, 3, 46, NULL, 4.5, 5, 5, 4, '房间宽敞明亮，很满意', NULL, NULL, NULL, 0, '2025-11-14 14:22:00'),
+(344, 'booking', @member_start_id+12, 3, 45, NULL, 4.5, 4, 5, 5, '设施齐全，体验很棒', NULL, NULL, NULL, 0, '2025-11-18 19:45:00'),
+(345, 'booking', @member_start_id+13, 3, 46, NULL, 4.5, 5, 4, 5, '服务周到细致，值得推荐', NULL, NULL, NULL, 0, '2025-11-22 11:10:00'),
+(346, 'booking', @member_start_id+14, 3, 45, NULL, 4.5, 5, 5, 4, '地理位置好，出行方便', NULL, NULL, NULL, 0, '2025-11-26 16:38:00'),
+(347, 'booking', @member_start_id+15, 3, 46, NULL, 4.5, 4, 5, 5, '床品舒适，睡眠质量好', NULL, NULL, NULL, 0, '2025-12-01 08:55:00'),
+(348, 'booking', @member_start_id+16, 3, 45, NULL, 4.5, 5, 4, 5, '智能控制很方便，点赞', NULL, NULL, NULL, 0, '2025-12-04 20:15:00'),
+(349, 'booking', @member_start_id+17, 3, 46, NULL, 4.5, 5, 5, 4, '卫生做得很到位，放心住', NULL, NULL, NULL, 0, '2025-12-09 12:40:00'),
+(350, 'booking', @member_start_id+18, 3, 45, NULL, 4.5, 4, 5, 5, '早餐丰富美味，很享受', NULL, NULL, NULL, 0, '2025-12-13 07:30:00'),
+(351, 'booking', @member_start_id+19, 3, 46, NULL, 4.5, 5, 4, 5, '前台小姐姐态度特别好', NULL, NULL, NULL, 0, '2025-12-17 15:25:00'),
+(352, 'booking', @member_start_id+20, 3, 45, NULL, 4.5, 5, 5, 4, '房间布局合理，很温馨', NULL, NULL, NULL, 0, '2025-12-21 18:50:00'),
+(353, 'booking', @member_start_id+21, 3, 46, NULL, 4.5, 4, 5, 5, '性价比很高，超出预期', NULL, NULL, NULL, 0, '2025-12-24 10:08:00'),
+(354, 'booking', @member_start_id+22, 3, 45, NULL, 4.5, 5, 4, 5, '夜景很美，视野开阔', NULL, NULL, NULL, 0, '2025-12-28 21:33:00'),
+(355, 'booking', @member_start_id+23, 3, 46, NULL, 4.5, 5, 5, 4, '退房快捷，体验顺畅', NULL, NULL, NULL, 0, '2026-01-01 09:20:00'),
+(356, 'booking', @member_start_id+24, 3, 45, NULL, 4.5, 4, 5, 5, '周边配套齐全很方便', NULL, NULL, NULL, 0, '2026-01-05 14:45:00'),
+(357, 'booking', @member_start_id+25, 3, 46, NULL, 4.5, 5, 4, 5, '空调制热快，冬天很暖和', NULL, NULL, NULL, 0, '2026-01-09 17:10:00'),
+(358, 'booking', @member_start_id+26, 3, 45, NULL, 4.5, 5, 5, 4, '浴室干湿分离做得好', NULL, NULL, NULL, 0, '2026-01-13 11:55:00'),
+(359, 'booking', @member_start_id+27, 3, 46, NULL, 4.5, 4, 5, 5, '电视节目多，娱乐丰富', NULL, NULL, NULL, 0, '2026-01-17 20:30:00'),
+(360, 'booking', @member_start_id+28, 3, 45, NULL, 4.5, 5, 4, 5, '隔音效果不错，安静', NULL, NULL, NULL, 0, '2026-01-21 08:15:00'),
+(361, 'booking', @member_start_id+29, 3, 46, NULL, 4.5, 5, 5, 4, '电梯很快不用等太久', NULL, NULL, NULL, 0, '2026-01-25 13:40:00'),
+(362, 'booking', @member_start_id+0, 3, 45, NULL, 4.5, 4, 5, 5, '第二次入住了，依然满意', NULL, NULL, NULL, 0, '2026-01-29 16:22:00'),
+(363, 'booking', @member_start_id+1, 3, 46, NULL, 4.5, 5, 4, 5, '停车场很大，停车方便', NULL, NULL, NULL, 0, '2026-02-02 19:50:00'),
+(364, 'booking', @member_start_id+2, 3, 45, NULL, 4.5, 5, 5, 4, '房间干净整洁无异味', NULL, NULL, NULL, 0, '2026-02-06 10:35:00'),
+(365, 'booking', @member_start_id+3, 3, 46, NULL, 4.5, 4, 5, 5, '床垫软硬适中很舒服', NULL, NULL, NULL, 0, '2026-02-10 15:18:00'),
+(366, 'booking', @member_start_id+4, 3, 45, NULL, 4.5, 5, 4, 5, '大堂装修大气有档次', NULL, NULL, NULL, 0, '2026-02-14 12:05:00'),
+(367, 'booking', @member_start_id+5, 3, 46, NULL, 4.5, 5, 5, 4, '热水充足洗澡很舒服', NULL, NULL, NULL, 0, '2026-02-18 21:45:00'),
+(368, 'booking', @member_start_id+6, 3, 45, NULL, 4.5, 4, 5, 5, '管家服务贴心周到', NULL, NULL, NULL, 0, '2026-02-22 09:28:00'),
+(369, 'booking', @member_start_id+7, 3, 46, NULL, 4.5, 5, 4, 5, '窗外风景好心情愉悦', NULL, NULL, NULL, 0, '2026-02-26 18:12:00'),
+(370, 'booking', @member_start_id+8, 3, 45, NULL, 4.5, 5, 5, 4, '入住办理迅速不排队', NULL, NULL, NULL, 0, '2026-03-02 14:55:00'),
+(371, 'booking', @member_start_id+9, 3, 46, NULL, 4.5, 4, 5, 5, '拖鞋毛巾质量都不错', NULL, NULL, NULL, 0, '2026-03-06 07:40:00'),
+
+-- ========== 60条 5.0分评价 ==========
+(372, 'booking', @member_start_id+10, 3, 45, NULL, 5.0, 5, 5, 5, '完美入住体验，强烈推荐', NULL, NULL, NULL, 0, '2025-10-01 09:00:00'),
+(373, 'booking', @member_start_id+11, 3, 46, NULL, 5.0, 5, 5, 5, '无可挑剔，五星好评', NULL, NULL, NULL, 0, '2025-10-05 14:30:00'),
+(374, 'booking', @member_start_id+12, 3, 45, NULL, 5.0, 5, 5, 5, '超出期望，惊喜满满', NULL, NULL, NULL, 0, '2025-10-09 18:45:00'),
+(375, 'booking', @member_start_id+13, 3, 46, NULL, 5.0, 5, 5, 5, '服务一流，宾至如归', NULL, NULL, NULL, 0, '2025-10-13 11:20:00'),
+(376, 'booking', @member_start_id+14, 3, 45, NULL, 5.0, 5, 5, 5, '环境优雅，身心放松', NULL, NULL, NULL, 0, '2025-10-17 16:55:00'),
+(377, 'booking', @member_start_id+15, 3, 46, NULL, 5.0, 5, 5, 5, '设施先进，科技感十足', NULL, NULL, NULL, 0, '2025-10-21 08:10:00'),
+(378, 'booking', @member_start_id+16, 3, 45, NULL, 5.0, 5, 5, 5, '干净整洁，住着安心', NULL, NULL, NULL, 0, '2025-10-25 20:35:00'),
+(379, 'booking', @member_start_id+17, 3, 46, NULL, 5.0, 5, 5, 5, '位置绝佳，出行无忧', NULL, NULL, NULL, 0, '2025-10-29 12:40:00'),
+(380, 'booking', @member_start_id+18, 3, 45, NULL, 5.0, 5, 5, 5, '早餐丰盛，味蕾享受', NULL, NULL, NULL, 0, '2025-11-02 07:25:00'),
+(381, 'booking', @member_start_id+19, 3, 46, NULL, 5.0, 5, 5, 5, '员工热情，服务周到', NULL, NULL, NULL, 0, '2025-11-06 15:50:00'),
+(382, 'booking', @member_start_id+20, 3, 45, NULL, 5.0, 5, 5, 5, '性价比超高，物超所值', NULL, NULL, NULL, 0, '2025-11-10 19:15:00'),
+(383, 'booking', @member_start_id+21, 3, 46, NULL, 5.0, 5, 5, 5, '智能客房太酷了', NULL, NULL, NULL, 0, '2025-11-14 10:30:00'),
+(384, 'booking', @member_start_id+22, 3, 45, NULL, 5.0, 5, 5, 5, '安静舒适，睡眠极佳', NULL, NULL, NULL, 0, '2025-11-18 22:05:00'),
+(385, 'booking', @member_start_id+23, 3, 46, NULL, 5.0, 5, 5, 5, '装修精致，品味不凡', NULL, NULL, NULL, 0, '2025-11-22 13:45:00'),
+(386, 'booking', @member_start_id+24, 3, 45, NULL, 5.0, 5, 5, 5, '浴室宽敞，洗浴舒适', NULL, NULL, NULL, 0, '2025-11-26 17:20:00'),
+(387, 'booking', @member_start_id+25, 3, 46, NULL, 5.0, 5, 5, 5, '第三次入住，一如既往好', NULL, NULL, NULL, 0, '2025-11-30 09:55:00'),
+(388, 'booking', @member_start_id+26, 3, 45, NULL, 5.0, 5, 5, 5, '景观房视野太棒了', NULL, NULL, NULL, 0, '2025-12-04 21:30:00'),
+(389, 'booking', @member_start_id+27, 3, 46, NULL, 5.0, 5, 5, 5, '前台专业高效点赞', NULL, NULL, NULL, 0, '2025-12-08 11:10:00'),
+(390, 'booking', @member_start_id+28, 3, 45, NULL, 5.0, 5, 5, 5, '床品五星级标准', NULL, NULL, NULL, 0, '2025-12-12 16:40:00'),
+(391, 'booking', @member_start_id+29, 3, 46, NULL, 5.0, 5, 5, 5, '停车免费很贴心', NULL, NULL, NULL, 0, '2025-12-16 08:25:00'),
+(392, 'booking', @member_start_id+0, 3, 45, NULL, 5.0, 5, 5, 5, '全家出游首选酒店', NULL, NULL, NULL, 0, '2025-12-20 14:50:00'),
+(393, 'booking', @member_start_id+1, 3, 46, NULL, 5.0, 5, 5, 5, 'WiFi飞快，办公无忧', NULL, NULL, NULL, 0, '2025-12-24 18:15:00'),
+(394, 'booking', @member_start_id+2, 3, 45, NULL, 5.0, 5, 5, 5, '空调静音效果好', NULL, NULL, NULL, 0, '2025-12-28 10:35:00'),
+(395, 'booking', @member_start_id+3, 3, 46, NULL, 5.0, 5, 5, 5, '周边美食多很方便', NULL, NULL, NULL, 0, '2026-01-01 20:00:00'),
+(396, 'booking', @member_start_id+4, 3, 45, NULL, 5.0, 5, 5, 5, '隔音超好完全安静', NULL, NULL, NULL, 0, '2026-01-05 12:20:00'),
+(397, 'booking', @member_start_id+5, 3, 46, NULL, 5.0, 5, 5, 5, '迷你吧品种丰富', NULL, NULL, NULL, 0, '2026-01-09 15:45:00'),
+(398, 'booking', @member_start_id+6, 3, 45, NULL, 5.0, 5, 5, 5, '管家服务太贴心了', NULL, NULL, NULL, 0, '2026-01-13 09:10:00'),
+(399, 'booking', @member_start_id+7, 3, 46, NULL, 5.0, 5, 5, 5, '退房速度很快不耽误', NULL, NULL, NULL, 0, '2026-01-17 17:30:00'),
+(400, 'booking', @member_start_id+8, 3, 45, NULL, 5.0, 5, 5, 5, '房间设计很有格调', NULL, NULL, NULL, 0, '2026-01-21 11:55:00'),
+(401, 'booking', @member_start_id+9, 3, 46, NULL, 5.0, 5, 5, 5, '毛巾柔软亲肤好评', NULL, NULL, NULL, 0, '2026-01-25 21:20:00'),
+(402, 'booking', @member_start_id+10, 3, 45, NULL, 5.0, 5, 5, 5, '电梯快捷不拥挤', NULL, NULL, NULL, 0, '2026-01-29 08:40:00'),
+(403, 'booking', @member_start_id+11, 3, 46, NULL, 5.0, 5, 5, 5, '大堂气派有面子', NULL, NULL, NULL, 0, '2026-02-02 14:05:00'),
+(404, 'booking', @member_start_id+12, 3, 45, NULL, 5.0, 5, 5, 5, '热水即开即来很方便', NULL, NULL, NULL, 0, '2026-02-06 19:25:00'),
+(405, 'booking', @member_start_id+13, 3, 46, NULL, 5.0, 5, 5, 5, '电视清晰频道多', NULL, NULL, NULL, 0, '2026-02-10 10:50:00'),
+(406, 'booking', @member_start_id+14, 3, 45, NULL, 5.0, 5, 5, 5, '带家人来都很满意', NULL, NULL, NULL, 0, '2026-02-14 16:15:00'),
+(407, 'booking', @member_start_id+15, 3, 46, NULL, 5.0, 5, 5, 5, '商务出行最佳选择', NULL, NULL, NULL, 0, '2026-02-18 12:35:00'),
+(408, 'booking', @member_start_id+16, 3, 45, NULL, 5.0, 5, 5, 5, '灯光设计温馨浪漫', NULL, NULL, NULL, 0, '2026-02-22 20:55:00'),
+(409, 'booking', @member_start_id+17, 3, 46, NULL, 5.0, 5, 5, 5, '插座多充电方便', NULL, NULL, NULL, 0, '2026-02-26 07:20:00'),
+(410, 'booking', @member_start_id+18, 3, 45, NULL, 5.0, 5, 5, 5, '窗帘遮光效果好', NULL, NULL, NULL, 0, '2026-03-02 15:40:00'),
+(411, 'booking', @member_start_id+19, 3, 46, NULL, 5.0, 5, 5, 5, '房间有保险箱很安全', NULL, NULL, NULL, 0, '2026-03-06 11:05:00'),
+(412, 'booking', @member_start_id+20, 3, 45, NULL, 5.0, 5, 5, 5, '衣帽间空间充足', NULL, NULL, NULL, 0, '2026-03-10 18:30:00'),
+(413, 'booking', @member_start_id+21, 3, 46, NULL, 5.0, 5, 5, 5, '洗漱用品品质高', NULL, NULL, NULL, 0, '2026-03-14 09:45:00'),
+(414, 'booking', @member_start_id+22, 3, 45, NULL, 5.0, 5, 5, 5, '地暖给力冬天暖和', NULL, NULL, NULL, 0, '2026-03-18 14:10:00'),
+(415, 'booking', @member_start_id+23, 3, 46, NULL, 5.0, 5, 5, 5, '健身房设备齐全', NULL, NULL, NULL, 0, '2026-03-22 17:35:00'),
+(416, 'booking', @member_start_id+24, 3, 45, NULL, 5.0, 5, 5, 5, '泳池干净水质好', NULL, NULL, NULL, 0, '2026-03-26 21:00:00'),
+(417, 'booking', @member_start_id+25, 3, 46, NULL, 5.0, 5, 5, 5, '送餐服务快捷美味', NULL, NULL, NULL, 0, '2026-03-30 08:20:00'),
+(418, 'booking', @member_start_id+26, 3, 45, NULL, 5.0, 5, 5, 5, '行李寄存服务好', NULL, NULL, NULL, 0, '2026-04-03 12:50:00'),
+(419, 'booking', @member_start_id+27, 3, 46, NULL, 5.0, 5, 5, 5, '叫醒服务准时可靠', NULL, NULL, NULL, 0, '2026-04-07 16:15:00'),
+(420, 'booking', @member_start_id+28, 3, 45, NULL, 5.0, 5, 5, 5, '洗衣服务又快又好', NULL, NULL, NULL, 0, '2026-04-11 10:40:00'),
+(421, 'booking', @member_start_id+29, 3, 46, NULL, 5.0, 5, 5, 5, '接机服务方便省心', NULL, NULL, NULL, 0, '2026-04-15 19:05:00'),
+(422, 'booking', @member_start_id+0, 3, 45, NULL, 5.0, 5, 5, 5, '房间有阳台很惬意', NULL, NULL, NULL, 0, '2026-04-19 13:30:00'),
+(423, 'booking', @member_start_id+1, 3, 46, NULL, 5.0, 5, 5, 5, '冰箱里饮料免费', NULL, NULL, NULL, 0, '2026-04-23 07:55:00'),
+(424, 'booking', @member_start_id+2, 3, 45, NULL, 5.0, 5, 5, 5, '沙发舒适可躺可坐', NULL, NULL, NULL, 0, '2025-10-15 11:15:00'),
+(425, 'booking', @member_start_id+3, 3, 46, NULL, 5.0, 5, 5, 5, '书桌宽敞办公方便', NULL, NULL, NULL, 0, '2025-10-19 15:40:00'),
+(426, 'booking', @member_start_id+4, 3, 45, NULL, 5.0, 5, 5, 5, '衣架数量充足好用', NULL, NULL, NULL, 0, '2025-10-23 20:05:00'),
+(427, 'booking', @member_start_id+5, 3, 46, NULL, 5.0, 5, 5, 5, '镜子多化妆方便', NULL, NULL, NULL, 0, '2025-10-27 08:30:00'),
+(428, 'booking', @member_start_id+6, 3, 45, NULL, 5.0, 5, 5, 5, '花洒水压足很爽', NULL, NULL, NULL, 0, '2025-10-31 17:55:00'),
+(429, 'booking', @member_start_id+7, 3, 46, NULL, 5.0, 5, 5, 5, '浴缸泡澡太享受了', NULL, NULL, NULL, 0, '2025-11-04 12:20:00'),
+(430, 'booking', @member_start_id+8, 3, 45, NULL, 5.0, 5, 5, 5, '吹风机风力很大', NULL, NULL, NULL, 0, '2025-11-08 09:45:00'),
+(431, 'booking', @member_start_id+9, 3, 46, NULL, 5.0, 5, 5, 5, '客房服务响应快', NULL, NULL, NULL, 0, '2025-11-12 14:10:00');
+
+-- 更新酒店评分和评价数量
+UPDATE hotels SET
+    rating = (SELECT ROUND(AVG(score), 2) FROM reviews WHERE hotel_id = 3 AND is_deleted = 0),
+    review_count = (SELECT COUNT(*) FROM reviews WHERE hotel_id = 3 AND is_deleted = 0)
+WHERE id = 3;

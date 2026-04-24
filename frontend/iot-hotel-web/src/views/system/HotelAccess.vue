@@ -46,7 +46,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { SettingOutlined, CustomerServiceOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import { useHotelStore } from '@/stores/hotel'
@@ -86,7 +86,7 @@ async function fetchHotels() {
     hotels.value = res.data.hotels
     pagination.total = res.data.total || res.data.hotels.length // 后端 search 接口目前没返回 total，先用 length
   } catch (error) {
-    message.error('获取酒店列表失败')
+    NotifyPreset.operationFailed('获取酒店列表失败')
   } finally {
     loading.value = false
   }
@@ -122,7 +122,7 @@ async function enterHotelSystem(hotel: any, type: 'admin' | 'reception') {
       hotelStore.setCurrentHotelId(hotel.id)
       
       // 成功切换提示
-      message.success(`已切换到酒店: ${hotel.name}`)
+      $notify.success({ title: '切换成功', description: `已切换到酒店: ${hotel.name} 🏨` })
 
       // 稍微延迟后跳转，确保 Store 已更新
       setTimeout(() => {
@@ -134,7 +134,7 @@ async function enterHotelSystem(hotel: any, type: 'admin' | 'reception') {
       }, 500)
     }
   } catch (error) {
-    message.error('切换酒店失败')
+    NotifyPreset.operationFailed('切换酒店失败')
   }
 }
 

@@ -86,7 +86,7 @@ export const create = async (req: AuthRequest, res: Response) => {
       return res.status(403).json(errorResponse('无权创建酒店'));
     }
     const id = await HotelService.createHotel(req.body);
-    res.status(201).json(successResponse({ id }, '酒店创建成功'));
+    res.json(successResponse({ id }, '酒店创建成功'));
   } catch (error: any) {
     logger.error('创建酒店失败:', error.message);
     res.status(500).json(errorResponse(error.message || '创建酒店失败'));

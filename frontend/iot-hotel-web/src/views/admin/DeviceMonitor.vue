@@ -87,7 +87,7 @@
                   <div class="card-body">
                     <div class="device-title">
                       <h3 class="name">{{ device.device_name }}</h3>
-                      <a-tag :color="getTypeColor(device.device_type)">{{ device.device_type }}</a-tag>
+                      <a-tag :color="getTypeColor(device.device_type)">{{ getDeviceTypeText(device.device_type) }}</a-tag>
                     </div>
                     <div class="device-meta">
                       <div class="meta-item">
@@ -151,12 +151,12 @@
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'type'">
-                  <a-tag :color="getTypeColor(record.device_type)">{{ record.device_type }}</a-tag>
+                  <a-tag :color="getTypeColor(record.device_type)">{{ getDeviceTypeText(record.device_type) }}</a-tag>
                 </template>
                 <template v-if="column.key === 'network'">
                   <div class="network-info">
                     <span>IP: {{ record.ip_address || '127.0.0.1' }}</span>
-                    <span>MAC: {{ record.mac_address || 'N/A' }}</span>
+                    <span>MAC: {{ record.mac_address || '无' }}</span>
                   </div>
                 </template>
                 <template v-if="column.key === 'action'">
@@ -199,7 +199,7 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="设备类型">
-              <a-tag :color="getTypeColor(currentAudit.device_type)">{{ currentAudit.device_type }}</a-tag>
+              <a-tag :color="getTypeColor(currentAudit.device_type)">{{ getDeviceTypeText(currentAudit.device_type) }}</a-tag>
             </a-form-item>
           </a-col>
         </a-row>
@@ -272,7 +272,7 @@
             <component :is="getDeviceIcon(currentDebug.deviceType)" class="mini-icon" />
             <div class="mini-info">
               <div class="name">{{ currentDebug.deviceName }}</div>
-              <a-tag :color="getTypeColor(currentDebug.deviceType)">{{ currentDebug.deviceType }}</a-tag>
+              <a-tag :color="getTypeColor(currentDebug.deviceType)">{{ getDeviceTypeText(currentDebug.deviceType) }}</a-tag>
             </div>
           </div>
 
@@ -286,8 +286,8 @@
             
             <div class="custom-send mt-4">
               <p class="small-label">自定义 MQTT 消息</p>
-              <a-input v-model:value="customMqtt.topic" placeholder="Topic" size="small" class="mb-2" />
-              <a-textarea v-model:value="customMqtt.payload" placeholder="Payload (JSON)" :rows="4" size="small" class="mb-2" />
+              <a-input v-model:value="customMqtt.topic" placeholder="主题" size="small" class="mb-2" />
+              <a-textarea v-model:value="customMqtt.payload" placeholder="消息内容 (JSON)" :rows="4" size="small" class="mb-2" />
               <a-button type="primary" block size="small" @click="sendCustomMqtt">
                 <template #icon><SendOutlined /></template> 发送
               </a-button>
@@ -392,7 +392,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import {
   SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
   DesktopOutlined, SafetyCertificateOutlined, BugOutlined, ControlOutlined,
@@ -408,9 +408,31 @@ import request from '@/api/request'
 import { useAppStore } from '@/stores/app'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { formatDotDateTime } from '@/utils/date'
+import { formatDotDateTime, toTz } from '@/utils/date'
 
 dayjs.extend(relativeTime)
+
+function getDeviceTypeText(type: string): string {
+  const types: Record<string, string> = {
+    room: '客房终端',
+    front_desk: '前台终端',
+    sensor: '传感器',
+    gateway: '网关',
+    floor: '楼层控制器',
+    ac: '空调',
+    light: '灯光',
+    smoke_detector: '烟雾探测器',
+    curtain: '窗帘',
+    tv: '智能电视',
+    lock: '门锁',
+    humidifier: '加湿器',
+    door_sensor: '门磁传感器',
+    window_sensor: '窗户传感器',
+    thermostat: '温控器',
+    floor_controller: '楼控节点'
+  }
+  return types[type] || type
+}
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -465,7 +487,7 @@ const filteredActiveDevices = computed(() => {
 const pendingDevices = computed(() => devices.value.filter(d => d.audit_status === 'pending'))
 
 const auditColumns = [
-  { title: '终端识别码 (Device ID)', dataIndex: 'device_id', key: 'device_id' },
+  { title: '终端识别码', dataIndex: 'device_id', key: 'device_id' },
   { title: '类型', key: 'type', width: 120 },
   { title: '网络指纹', key: 'network' },
   { title: '首次上报时间', dataIndex: 'created_at', key: 'created_at', customRender: ({ text }: any) => formatDotDateTime(text) },
@@ -597,7 +619,7 @@ async function fetchMqttLogs(isManual = false) {
       }
     }
   } catch (err) {
-    if (isManual) message.error('刷新日志失败')
+    if (isManual) $notify.error({ title: '刷新日志失败', description: '无法刷新MQTT日志，请稍后重试 🔄' })
   }
 }
 
@@ -623,10 +645,10 @@ async function sendSimulationCommand(sim: any) {
       payload: payload,
       qos: 1
     })
-    message.success(`指令已发送: ${sim.label}`)
+    $notify.success({ title: '指令已发送', description: `模拟指令 ${sim.label} 已成功发送 📡` })
     fetchMqttLogs(true)
   } catch (err) {
-    message.error('发送失败')
+    NotifyPreset.operationFailed('MQTT消息发送失败')
   }
 }
 
@@ -640,10 +662,10 @@ async function sendCustomMqtt() {
       topic: customMqtt.topic,
       payload
     })
-    message.success('消息已发布')
+    $notify.success({ title: '消息已发布', description: '自定义MQTT消息已成功发布 📡' })
     fetchMqttLogs(true)
   } catch (err) {
-    message.error('发送失败')
+    NotifyPreset.operationFailed('MQTT消息发送失败')
   }
 }
 
@@ -670,7 +692,7 @@ const getTypeColor = (type: string) => {
 
 const statusText = (s: string) => ({ online: '在线', offline: '离线', error: '异常' } as any)[s] || '未知'
 
-const formatTime = (t: string) => t ? dayjs(t).fromNow() : '从未连接'
+const formatTime = (t: string) => t ? (toTz(t)?.fromNow() || '从未连接') : '从未连接'
 
 // API Actions
 async function fetchDevices() {
@@ -702,7 +724,7 @@ async function fetchDevices() {
       raw_data: res
     }, null, 2)
   } catch (err: any) {
-    message.error('同步设备状态失败')
+    $notify.error({ title: '同步设备状态失败', description: '无法同步设备状态，请检查网络后重试 🔄' })
     debugInfo.value = JSON.stringify({
       timestamp: new Date().toISOString(),
       status: 'error',
@@ -773,11 +795,11 @@ async function confirmAudit() {
       area: currentAudit.area,
       device_name: currentAudit.device_name
     })
-    message.success('审核操作已提交')
+    $notify.success({ title: '审核已提交', description: '设备审核操作已成功提交 ✅' })
     auditModalVisible.value = false
     fetchDevices()
   } catch (err) {
-    message.error('审核处理失败')
+    NotifyPreset.operationFailed('审核处理失败')
   } finally {
     auditLoading.value = false
   }
@@ -786,10 +808,10 @@ async function confirmAudit() {
 async function deleteDevice(id: number) {
   try {
     await deviceApi.deleteDevice(id)
-    message.success('设备已成功移除')
+    $notify.success({ title: '设备已移除', description: '设备已成功从系统中移除 🗑️' })
     fetchDevices()
   } catch (err) {
-    message.error('移除失败')
+    NotifyPreset.operationFailed('移除设备失败')
   }
 }
 
@@ -810,10 +832,10 @@ async function confirmCommand() {
   cmdLoading.value = true
   try {
     await deviceApi.sendCommand(currentCmd.id, currentCmd.commandType, currentCmd.commandValue)
-    message.success(`控制指令已送达 ${currentCmd.deviceId}`)
+    $notify.success({ title: '指令已送达', description: `控制指令已送达 ${currentCmd.deviceId} 📡` })
     cmdModalVisible.value = false
   } catch (err) {
-    message.error('指令发送失败')
+    NotifyPreset.operationFailed('指令发送失败')
   } finally {
     cmdLoading.value = false
   }

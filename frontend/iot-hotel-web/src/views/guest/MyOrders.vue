@@ -357,7 +357,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import {
   MinusOutlined,
   PlusOutlined,
@@ -469,7 +470,7 @@ const fetchOrders = async () => {
     }
   } catch (error) {
     console.error('获取订单失败:', error)
-    message.error('获取订单失败')
+    $notify.error({ title: '获取订单失败', description: '无法加载订单数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -478,7 +479,7 @@ const fetchOrders = async () => {
 // 手动搜索订单
 const handleManualSearch = async (keyword: string) => {
   if (!keyword) {
-    message.warning('请输入预订号或手机号')
+    $notify.warning({ title: '请输入搜索关键词', description: '请输入预订号或手机号进行查询 🔍' })
     return
   }
 
@@ -488,14 +489,14 @@ const handleManualSearch = async (keyword: string) => {
     if (res.data) {
       // 搜索结果展示 (清空当前列表并显示搜索到的这一个)
       orders.value = [res.data]
-      message.success('查询成功')
+      $notify.success({ title: '查询成功', description: '已找到匹配的订单 📋' })
     }
   } catch (error: any) {
     console.error('查询订单失败:', error)
     if (error.response?.status === 404) {
-      message.error('未找到相关订单')
+      $notify.error({ title: '未找到订单', description: '未找到相关订单，请确认预订号或手机号 🔍' })
     } else {
-      message.error('查询失败，请稍后重试')
+      $notify.error({ title: '查询失败', description: '查询过程中出现错误，请稍后重试 🔄' })
     }
   } finally {
     searching.value = false
@@ -531,7 +532,7 @@ const confirmPay = async () => {
   if (payMethod.value === 'balance') {
     const balance = Number(memberInfo.value?.balance || 0)
     if (balance < Number(selectedOrder.value.total_price)) {
-      message.error('余额不足，请选择其他支付方式或先充值')
+      NotifyPreset.balanceInsufficient(balance, Number(selectedOrder.value.total_price))
       return
     }
   }
@@ -550,13 +551,13 @@ const confirmPay = async () => {
     if (payment && payment.id) {
       // 2. 执行支付
       await paymentApi.payPayment(payment.id)
-      message.success('支付成功！现在可以办理预入住选房了。')
+      $notify.success({ title: '支付成功', description: '支付完成，现在可以办理预入住选房了 ✅' })
       payModalVisible.value = false
       fetchOrders()
     }
   } catch (error: any) {
     console.error('支付失败:', error)
-    message.error(error?.response?.data?.message || '支付失败，请重试')
+    NotifyPreset.paymentFailed(error?.response?.data?.message || '支付失败，请重试')
   } finally {
     loading.value = false
   }
@@ -570,10 +571,10 @@ const handleCancel = (bookingId: number) => {
     onOk: async () => {
       try {
         await request.put(`/bookings/${bookingId}/cancel`)
-        message.success('订单已成功取消')
+        NotifyPreset.orderCancelled()
         fetchOrders()
       } catch (error) {
-        message.error('取消订单失败')
+        NotifyPreset.operationFailed('取消订单失败')
       }
     }
   })
@@ -642,19 +643,19 @@ const handleExtendStay = async () => {
     if (res.data?.need_payment && res.data?.payment_id) {
       try {
         await paymentApi.payPayment(res.data.payment_id)
-        message.success('续住成功，支付已完成！')
+        $notify.success({ title: '续住成功', description: '续住成功，支付已完成 ✅' })
       } catch (payErr) {
-        message.warning('续住已提交，但支付未完成，请稍后完成支付')
+        $notify.warning({ title: '续住已提交', description: '续住已提交，但支付未完成，请稍后完成支付 ⚠️' })
       }
     } else {
-      message.success('续住成功！')
+      $notify.success({ title: '续住成功', description: '续住申请已成功提交 ✅' })
     }
 
     extendModalVisible.value = false
     fetchOrders()
   } catch (e: any) {
     const errMsg = e?.response?.data?.message || '续住失败，请重试'
-    message.error(errMsg)
+    NotifyPreset.operationFailed(errMsg)
   } finally {
     extendSubmitting.value = false
   }
@@ -691,7 +692,7 @@ const openReviewModal = async (order: any, isEdit = false) => {
 const submitReview = async () => {
   if (!reviewOrder.value) return
   if (!reviewForm.content.trim()) {
-    return message.warning('请填写评价内容')
+    return $notify.warning({ title: '请填写评价内容', description: '请填写您的入住评价 ✍️' })
   }
 
   try {
@@ -706,7 +707,7 @@ const submitReview = async () => {
         comfort_rating: reviewForm.comfort_rating,
         content: reviewForm.content
       })
-      message.success('评价已更新')
+      $notify.success({ title: '评价已更新', description: '您的评价已成功更新 ✅' })
     } else {
       await createReview({
         order_id: reviewOrder.value.id,
@@ -718,13 +719,13 @@ const submitReview = async () => {
         comfort_rating: reviewForm.comfort_rating,
         content: reviewForm.content
       })
-      message.success('评价提交成功')
+      $notify.success({ title: '评价提交成功', description: '感谢您的评价反馈 ⭐' })
     }
 
     reviewModalVisible.value = false
     fetchOrders()
   } catch (error: any) {
-    message.error(error?.response?.data?.message || '评价提交失败')
+    NotifyPreset.operationFailed(error?.response?.data?.message || '评价提交失败')
   } finally {
     reviewSubmitting.value = false
   }

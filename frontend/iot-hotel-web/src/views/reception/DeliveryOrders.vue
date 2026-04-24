@@ -86,7 +86,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { SendOutlined, CarOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useHotelStore } from '@/stores/hotel'
 import { deliveryApi } from '@/api/delivery'
@@ -128,7 +128,7 @@ const columns = [
   { title: '数量', dataIndex: 'quantity', width: 60 },
   { title: '备注', dataIndex: 'note', ellipsis: true },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '创建时间', dataIndex: 'created_at', width: 160 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
   { title: '操作', key: 'action', width: 140 }
 ]
 
@@ -152,7 +152,7 @@ async function fetchOrders() {
     const res: any = await deliveryApi.getList({ pageSize: 200 })
     orders.value = res.data?.list || []
   } catch (error) {
-    message.error('获取送物订单失败')
+    $notify.error({ title: '获取送物订单失败', description: '无法加载送物订单列表，请检查网络后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -160,7 +160,7 @@ async function fetchOrders() {
 
 async function createDelivery() {
   if (!form.room_id || !form.item_name) {
-    message.warning('请填写必填项')
+    $notify.warning({ title: '请填写必填项', description: '请选择目标房间并填写物品名称 📦' })
     return
   }
   try {
@@ -171,33 +171,33 @@ async function createDelivery() {
       quantity: form.quantity,
       note: form.note
     })
-    message.success('送物订单已创建')
+    NotifyPreset.deliveryCreated()
     modalVisible.value = false
     Object.assign(form, { room_id: undefined, item_category: 'beverage', item_name: '', quantity: 1, note: '' })
     await fetchOrders()
   } catch (error) {
-    message.error('创建送物订单失败')
+    NotifyPreset.operationFailed('创建送物订单失败')
   }
 }
 
 function startDelivery(order: any) {
   order.status = 'delivering'
-  message.info(`${order.order_no} 已派送`)
+  $notify.info({ title: '已开始配送', description: `${order.order_no} 已派送，工作人员正在前往 🏃` })
 }
 
 async function completeDelivery(order: any) {
   try {
     await deliveryApi.complete(order.id)
-    message.success(`${order.order_no} 已送达`)
+    $notify.success({ title: '已送达确认', description: `${order.order_no} 已成功送达 ✅` })
     await fetchOrders()
   } catch (error) {
-    message.error('送达确认失败')
+    NotifyPreset.operationFailed('送达确认失败')
   }
 }
 
 function cancelOrder(order: any) {
   order.status = 'cancelled'
-  message.warning(`已取消 ${order.order_no}`)
+  $notify.warning({ title: '订单已取消', description: `已取消 ${order.order_no} 🚫` })
 }
 
 onMounted(async () => {

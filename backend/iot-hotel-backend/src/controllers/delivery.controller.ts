@@ -124,14 +124,20 @@ export const getById = async (req: AuthRequest, res: Response) => {
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { room_id, booking_id, guest_id, item_name, quantity, note } = req.body;
+    const { room_id, booking_id, guest_id, item_name, quantity, items, note } = req.body;
     
-    if (!room_id || !item_name || !quantity) {
-      res.status(400).json(errorResponse('缺少必要参数（room_id, item_name, quantity）'));
+    const finalItems = items || (item_name ? [{ item_name, quantity: quantity || 1 }] : []);
+    
+    if (!room_id) {
+      res.status(400).json(errorResponse('缺少必要参数: room_id'));
       return;
     }
 
-    // 关键修复：客房服务只对前台已确认入住用户开放
+    if (finalItems.length === 0) {
+      res.status(400).json(errorResponse('缺少物品信息(items或item_name+quantity)'));
+      return;
+    }
+
     const [checkinRows] = await pool.query<RowDataPacket[]>(
       `SELECT id, status, hotel_id FROM bookings 
        WHERE room_id = ? AND status = 'checked_in'
@@ -140,17 +146,21 @@ export const create = async (req: AuthRequest, res: Response) => {
     );
 
     if (checkinRows.length === 0) {
-      res.status(403).json(errorResponse('该房间当前未办理入住，无法请求客房服务'));
-      return;
+      const userRole = req.user?.role;
+      if (userRole === 'customer' || userRole === 'guest') {
+        res.status(400).json(errorResponse('该房间当前未办理入住，请先确认您的入住房间号'));
+        return;
+      }
     }
 
-    const currentBooking = checkinRows[0] as any;
+    const currentBooking = (checkinRows.length > 0 ? checkinRows[0] : null) as any;
     
     const orderNo = `DEL${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${uuidv4().slice(0, 8).toUpperCase()}`;
     
+    const firstItem = finalItems[0];
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO delivery_orders (order_no, room_id, booking_id, guest_id, item_name, quantity, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [orderNo, room_id, booking_id || currentBooking.id, guest_id || null, item_name, quantity, note || '', 'pending']
+      [orderNo, room_id, booking_id || (currentBooking?.id || null), guest_id || null, firstItem.item_name, firstItem.quantity || 1, note || '', 'pending']
     );
 
     // 获取房间号用于 MQTT 通知

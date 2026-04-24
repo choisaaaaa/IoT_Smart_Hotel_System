@@ -107,7 +107,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message, Space } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Space } from 'ant-design-vue'
 import {
   AlertFilled,
   ClockCircleFilled,
@@ -119,6 +120,7 @@ import {
 import { environmentApi, type EventLog } from '@/api/environment'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import { toTz } from '@/utils/date'
 
 dayjs.extend(relativeTime)
 
@@ -194,7 +196,9 @@ function getEventTypeText(type: string): string {
 }
 
 function formatTime(time: string): string {
-  return time ? dayjs(time).fromNow() : '-'
+  if (!time) return '-'
+  const d = toTz(time)
+  return d ? d.fromNow() : '-'
 }
 
 onMounted(() => {

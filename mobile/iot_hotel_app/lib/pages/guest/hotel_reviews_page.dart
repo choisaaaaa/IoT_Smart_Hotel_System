@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/date_utils.dart';
 import '../../models/review.dart';
 import '../../services/review_service.dart';
 
@@ -241,7 +242,7 @@ class _HotelReviewsPageState extends ConsumerState<HotelReviewsPage> {
                   ],
                 ),
               ),
-              Text(review.createdAt ?? '', style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
+              Text(DateUtils.formatDynamic(review.createdAt), style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
             ],
           ),
           const SizedBox(height: 10),

@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { roomTypeApi } from '@/api/room-type'
 
 const loading = ref(false)
@@ -57,7 +57,7 @@ async function fetchRoomTypes() {
       base_price_edit: Number(item.base_price)
     }))
   } catch (error) {
-    message.error('获取房型列表失败')
+    $notify.error({ title: '获取房型列表失败', description: '无法加载房型数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -69,9 +69,9 @@ async function savePrice(record: any) {
       base_price: Number(record.base_price_edit)
     })
     record.base_price = Number(record.base_price_edit)
-    message.success(`房型 ${record.name} 价格已更新`)
+    NotifyPreset.profileUpdated(`房型 ${record.name} 价格`)
   } catch (error) {
-    message.error('保存房价失败')
+    NotifyPreset.operationFailed('保存房价失败')
   }
 }
 

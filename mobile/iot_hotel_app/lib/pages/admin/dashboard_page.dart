@@ -387,7 +387,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     if (time == null) return '';
     try {
       final dt = DateTime.parse(time.toString());
-      final diff = DateTime.now().difference(dt);
+      final utc8 = DateUtils.toUtc8(dt);
+      final diff = DateTime.now().difference(utc8);
       if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
       if (diff.inHours < 24) return '${diff.inHours}小时前';
       return '${diff.inDays}天前';

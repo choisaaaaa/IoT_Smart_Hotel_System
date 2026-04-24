@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../core/utils/date_utils.dart';
 import '../../services/auth_service.dart';
 import '../../core/services/app_realtime_provider.dart';
 import '../../core/services/realtime_service.dart';
@@ -33,6 +34,13 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
   bool _isLoading = true;
   final _dutyRole = 'receptionist';
   final _broadcastController = TextEditingController();
+
+  bool _inCall = false;
+  String? _activeCallId;
+  DateTime? _callStartTime;
+  Timer? _callTimer;
+  Duration _callDuration = Duration.zero;
+  bool _isCaller = false;
 
   @override
   void initState() {
@@ -106,11 +114,22 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
           break;
         case 'call_answered':
           Navigator.of(context).maybePop();
+          setState(() {
+            _inCall = true;
+            _activeCallId = event['data']?['call_id'] ?? _callService.currentCallId;
+            _callStartTime = DateTime.now();
+            _callDuration = Duration.zero;
+          });
+          _startCallTimer();
+          if (_isCaller) {
+            _callService.onCallAnswered(Map<String, dynamic>.from(event['data'] as Map));
+          }
           _addToCallHistory(event['data'], 'answered');
           break;
         case 'call_rejected':
-        case 'call_hungup':
+        case 'call_hangup':
           Navigator.of(context).maybePop();
+          _endCall();
           _addToCallHistory(event['data'], 'ended');
           break;
         case 'call_error':
@@ -313,6 +332,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
     }
 
     _callService.startCall(calleeId, calleeType);
+    _isCaller = true;
 
     showDialog(
       context: context,
@@ -346,18 +366,55 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
     );
   }
 
+  void _startCallTimer() {
+    _callTimer?.cancel();
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_callStartTime != null && mounted) {
+        setState(() {
+          _callDuration = DateTime.now().difference(_callStartTime!);
+        });
+      }
+    });
+  }
+
+  void _endCall() {
+    _callTimer?.cancel();
+    _callTimer = null;
+    setState(() {
+      _inCall = false;
+      _activeCallId = null;
+      _callStartTime = null;
+      _callDuration = Duration.zero;
+      _isCaller = false;
+    });
+  }
+
+  void _hangupCall() {
+    final callId = _activeCallId ?? _callService.currentCallId;
+    if (callId != null) {
+      _callService.hangup(callId);
+    }
+    _endCall();
+  }
+
+  void _toggleMute() {
+    _callService.toggleMute();
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _callEventSubscription?.cancel();
     _securityEventSub?.cancel();
     _incomingCallSub?.cancel();
     _broadcastController.dispose();
+    _callTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final onlineRooms = _onlineStatus?['mobile']?.where((c) => c['type'] == 'guest_room')?.toList() ?? [];
+    final onlineRooms = _onlineStatus?['rooms']?.where((c) => c['type'] == 'room')?.toList() ?? [];
     final onlineStaff = _onlineStatus?['web']?.where((c) => c['type'] == 'front_desk')?.toList() ?? [];
 
     return Scaffold(
@@ -377,7 +434,9 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : _inCall
+              ? _buildInCallView()
+              : Column(
               children: [
                 _buildStatusCard(),
                 _buildStatsRow(onlineRooms.length, onlineStaff.length),
@@ -408,6 +467,117 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildInCallView() {
+    final duration = _callDuration;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    return Container(
+      color: AppColors.primary,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 60),
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.phone_in_talk_rounded,
+                size: 60,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              '通话中',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$minutes:$seconds',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 36,
+                fontWeight: FontWeight.w300,
+              ),
+            ),
+            const Spacer(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _toggleMute,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: _callService.isMuted
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _callService.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                          color: _callService.isMuted ? AppColors.primary : Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _callService.isMuted ? '已静音' : '静音',
+                      style: TextStyle(
+                        color: _callService.isMuted ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 48),
+                Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _hangupCall,
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.call_end_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '挂断',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 60),
+          ],
+        ),
+      ),
     );
   }
 
@@ -547,7 +717,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
           icon: Icons.hotel,
           isOnline: isOnline,
           onTap: isOnline && _isOnline
-              ? () => _makeCall(roomId, 'guest_room', '${room['room_number']}号房')
+              ? () => _makeCall(roomId, 'room', '${room['room_number']}号房')
               : null,
           onBroadcast: _isOnline ? () => _showBroadcastDialog(room) : null,
         );
@@ -639,7 +809,7 @@ class _VoiceCallsPageState extends ConsumerState<VoiceCallsPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${call['time'].toString().substring(11, 16)} · ${call['status'] == 'answered' ? '已接听' : '已结束'}',
+                      '${DateUtils.formatSlashDateTime(call['time'])} · ${call['status'] == 'answered' ? '已接听' : '已结束'}',
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   ],

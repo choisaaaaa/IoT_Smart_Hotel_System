@@ -147,7 +147,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { CheckCircleFilled, PlayCircleFilled, MinusCircleFilled, CloseCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type DeviceInfo } from '@/api/environment'
 
@@ -268,14 +268,14 @@ async function executeControl() {
       case 'turn_off': actionText = '关闭'; break
     }
 
-    message.success(`已向 ${currentDevice.value.device_name} 发送${actionText}指令`)
+    $notify.success({ title: '指令已发送', description: `已向 ${currentDevice.value.device_name} 发送${actionText}指令 📡` })
     controlModalVisible.value = false
 
     setTimeout(() => {
       fetchDevices()
     }, 1500)
   } catch (err) {
-    message.error('发送控制指令失败')
+    NotifyPreset.operationFailed('发送控制指令失败')
   } finally {
     controlling.value = false
   }

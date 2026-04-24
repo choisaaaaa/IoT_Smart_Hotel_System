@@ -380,8 +380,7 @@ router.post('/login', async (req, res) => {
       let warningMessage = '';
 
       if (failResult.warningAttempts > 0 && failResult.warningAttempts <= config.incrementFailedCount) {
-        // 在5次错误范围内，显示警告消息
-        warningMessage = `，错误 ${failResult.attempts} 次后将被禁止登录 ${config.initialLockoutMinutes} 分钟`;
+        warningMessage = `，再错误 ${failResult.warningAttempts} 次将被禁止登录 ${config.initialLockoutMinutes} 分钟`;
       }
 
       logger.warn(`[Auth] 密码错误 - 账户: ${phone}, 剩余尝试次数: ${failResult.remainingAttempts}`);

@@ -94,7 +94,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { floorApi } from '@/api/floor'
 import type { FloorInfo } from '@/types'
 
@@ -137,7 +137,7 @@ const fetchFloors = async () => {
     const res = await floorApi.getFloorList()
     floors.value = (res.data as any) || []
   } catch (error) {
-    message.error('获取楼层列表失败')
+    $notify.error({ title: '获取楼层列表失败', description: '无法加载楼层数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -165,12 +165,12 @@ const handleUploadChange = (info: any) => {
     const res = info.file.response
     if (res.code === 200) {
       formState.floor_plan_image = res.data.url
-      message.success('图片上传成功')
+      $notify.success({ title: '图片上传成功', description: '楼层平面图已成功上传 🖼️' })
     } else {
-      message.error(res.message || '上传失败')
+      $notify.error({ title: '上传失败', description: res.message || '图片上传出现错误 🖼️' })
     }
   } else if (info.file.status === 'error') {
-    message.error('图片上传失败')
+    $notify.error({ title: '图片上传失败', description: '上传过程中出现错误，请重试 🖼️' })
   }
 }
 
@@ -180,15 +180,15 @@ const handleModalOk = async () => {
     submitLoading.value = true
     if (editingId.value) {
       await floorApi.updateFloor(editingId.value, formState)
-      message.success('更新楼层成功')
+      NotifyPreset.profileUpdated('楼层信息')
     } else {
       await floorApi.createFloor(formState)
-      message.success('创建楼层成功')
+      $notify.success({ title: '创建楼层成功', description: '新楼层已成功添加 ✅' })
     }
     modalVisible.value = false
     fetchFloors()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '保存失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '保存楼层失败')
   } finally {
     submitLoading.value = false
   }
@@ -197,10 +197,10 @@ const handleModalOk = async () => {
 const handleDelete = async (id: number) => {
   try {
     await floorApi.deleteFloor(id)
-    message.success('删除楼层成功')
+    $notify.success({ title: '删除楼层成功', description: '楼层已成功从系统中移除 🗑️' })
     fetchFloors()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '删除失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '删除楼层失败')
   }
 }
 

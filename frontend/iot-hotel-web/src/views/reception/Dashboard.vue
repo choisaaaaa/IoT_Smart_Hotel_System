@@ -257,13 +257,13 @@ import { bookingApi } from '@/api/booking'
 import { maintenanceApi } from '@/api/maintenance'
 import { deliveryApi } from '@/api/delivery'
 import { hotelApi } from '@/api/hotel'
-import { formatTimeHHmm } from '@/utils/date'
+import { formatTimeHHmm, formatDateWeekdayCN, formatDate, now } from '@/utils/date'
 
 const router = useRouter()
 const notificationStore = useNotificationStore()
 
 const loading = ref(false)
-const currentDate = computed(() => dayjs().format('YYYY年MM月DD日 dddd'))
+const currentDate = computed(() => formatDateWeekdayCN(now()))
 
 const stats = ref({
   todayCheckin: 0,
@@ -310,7 +310,7 @@ async function loadDashboardData() {
 
 async function loadStats() {
   try {
-    const today = dayjs().format('YYYY-MM-DD')
+    const today = formatDate(now())
     
     // 获取酒店统计数据
     const statsRes: any = await hotelApi.getStatistics()
@@ -371,7 +371,7 @@ async function loadPendingDeliveries() {
 
 async function loadTodayBookings() {
   try {
-    const today = dayjs().format('YYYY-MM-DD')
+    const today = formatDate(now())
     const res: any = await bookingApi.getBookingList({ 
       checkin_date: today,
       pageSize: 1000 

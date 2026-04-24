@@ -130,7 +130,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { hotelManageApi, type HotelManageInfo } from '@/api/hotel-manage'
 
 const columns = [
@@ -189,7 +189,7 @@ const fetchHotels = async () => {
     const res: any = await hotelManageApi.getAllHotels()
     hotels.value = res.data || []
   } catch (error) {
-    message.error('获取酒店列表失败')
+    NotifyPreset.operationFailed('获取酒店列表失败')
   } finally {
     loading.value = false
   }
@@ -221,7 +221,7 @@ const handleUploadChange = (info: any) => {
     const res = info.file.response
     if (res.code === 200) {
       formState.logo = res.data.url
-      message.success('图片上传成功')
+      $notify.success({ title: '上传成功', description: '图片已上传成功 📷' })
     }
   }
 }
@@ -232,15 +232,15 @@ const handleModalOk = async () => {
     submitLoading.value = true
     if (editingId.value) {
       await hotelManageApi.updateHotelInfo(editingId.value, formState)
-      message.success('更新酒店成功')
+      $notify.success({ title: '更新成功', description: '酒店信息已更新 ✅' })
     } else {
       await hotelManageApi.createHotel(formState)
-      message.success('创建酒店成功')
+      $notify.success({ title: '创建成功', description: '新酒店已创建成功 🏨' })
     }
     modalVisible.value = false
     fetchHotels()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '保存失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '保存失败')
   } finally {
     submitLoading.value = false
   }
@@ -249,10 +249,10 @@ const handleModalOk = async () => {
 const handleDelete = async (id: number) => {
   try {
     await hotelManageApi.deleteHotel(id)
-    message.success('酒店已删除')
+    $notify.success({ title: '删除成功', description: '酒店已删除 🗑️' })
     fetchHotels()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除酒店失败')
   }
 }
 

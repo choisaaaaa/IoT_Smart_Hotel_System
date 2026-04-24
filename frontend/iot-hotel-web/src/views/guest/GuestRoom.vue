@@ -467,7 +467,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import {
   SendOutlined,
   PhoneOutlined,
@@ -607,14 +607,14 @@ const suggestionMap: Record<string, string[]> = {
 
 onMounted(async () => {
   if (!appStore.userInfo) {
-    message.warning('请先登录以查看客房服务')
+    $notify.warning({ title: '请先登录', description: '请先登录以查看客房服务 🔐' })
     appStore.showLoginModal = true
     router.push('/guest/booking')
     return
   }
 
   if (!appStore.userStatus?.is_checked_in) {
-    message.warning('您当前未入住，无法使用客房服务。请先在预入住页面选房或到前台办理。')
+    $notify.warning({ title: '未入住', description: '您当前未入住，无法使用客房服务。请先在预入住页面选房或到前台办理 🏨' })
     router.push('/guest/checkin-online')
     return
   }
@@ -647,14 +647,14 @@ function registerAsRoom() {
 function handleCallAnswered(data: any) {
   if (data.call_id === transferModal.value.callId || transferModal.value.visible) {
     transferModal.value.visible = false
-    message.success('前台已接听，正在建立连接...')
+    $notify.success({ title: '前台已接听', description: '正在建立连接，请稍候 📞' })
   }
 }
 
 function handleCallHungup(data: any) {
   if (data.call_id === transferModal.value.callId) {
     transferModal.value.visible = false
-    message.info('通话已结束')
+    $notify.info({ title: '通话已结束', description: '当前通话已挂断 📞' })
   }
 }
 
@@ -789,7 +789,7 @@ function initSpeechRecognition() {
   // 检查浏览器是否支持MediaRecorder
   if (!window.MediaRecorder) {
     console.warn('[语音识别] 浏览器不支持MediaRecorder')
-    message.warning('您的浏览器不支持语音输入')
+    $notify.warning({ title: '浏览器不支持', description: '您的浏览器不支持语音输入功能 🎤' })
     return
   }
   console.log('[语音识别] 已初始化（使用后端Fun-ASR）')
@@ -798,7 +798,7 @@ function initSpeechRecognition() {
 // 开始录音并发送到后端ASR
 async function startListening() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    message.warning('您的浏览器不支持语音输入')
+    $notify.warning({ title: '浏览器不支持', description: '您的浏览器不支持语音输入功能 🎤' })
     return
   }
 
@@ -846,7 +846,7 @@ async function startListening() {
 
     mediaRecorder.onerror = (event) => {
       console.error('[录音] 错误:', event)
-      message.error('录音失败，请重试')
+      $notify.error({ title: '录音失败', description: '录音过程中出现错误，请重试 🎤' })
       stopRecording()
     }
 
@@ -857,7 +857,7 @@ async function startListening() {
     microphonePermission.value = true
     
     console.log('[录音] 开始录制')
-    message.info('🎤 正在聆听，请说话...')
+    $notify.info({ title: '正在聆听', description: '请说话，我正在聆听 🎤' })
 
     // 设置最大录音时间（10秒）
     recordingTimeout = setTimeout(() => {
@@ -893,12 +893,12 @@ function stopRecording() {
 // 将音频发送到后端进行ASR识别
 async function sendAudioToBackend() {
   if (audioChunks.length === 0) {
-    message.info('没有检测到语音，请再试一次')
+    $notify.info({ title: '未检测到语音', description: '没有检测到语音输入，请再试一次 🎤' })
     return
   }
 
   try {
-    message.loading('正在识别语音...', 0)
+    $notify.info({ title: '正在识别', description: '正在识别语音，请稍候 ⏳' })
 
     // 合并音频块
     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
@@ -916,8 +916,6 @@ async function sendAudioToBackend() {
       timeout: 60000  // ASR识别需要更长时间，设置60秒超时
     })
 
-    message.destroy()
-    
     console.log('[ASR] 后端返回的完整响应:', JSON.stringify(res))
     console.log('[ASR] res.code:', res.code)
     console.log('[ASR] res.data:', res.data)
@@ -934,16 +932,15 @@ async function sendAudioToBackend() {
         inputText.value = recognizedText
         await sendMessage()
       } else {
-        message.info('没有识别到有效语音，请再试一次')
+        $notify.info({ title: '未识别到语音', description: '没有识别到有效语音，请再试一次 🎤' })
       }
     } else {
       console.error('[ASR] 识别失败或响应格式异常:', res)
-      message.error('语音识别失败，请重试')
+      $notify.error({ title: '语音识别失败', description: '识别过程中出现错误，请重试 🎤' })
     }
   } catch (error) {
-    message.destroy()
     console.error('[ASR] 发送音频失败:', error)
-    message.error('语音识别失败，请检查网络连接')
+    $notify.error({ title: '语音识别失败', description: '请检查网络连接后重试 🌐' })
   }
 }
 
@@ -1052,22 +1049,22 @@ function handleMicrophoneError(error: any) {
     switch (error.name) {
       case 'NotAllowedError':
       case 'PermissionDeniedError':
-        message.error('麦克风权限被拒绝，请点击麦克风图标重新授权')
+        $notify.error({ title: '麦克风权限被拒绝', description: '请点击麦克风图标重新授权 🎤' })
         microphonePermission.value = false
         break
       case 'NotFoundError':
       case 'DevicesNotFoundError':
-        message.error('未找到麦克风设备，请检查硬件连接')
+        $notify.error({ title: '未找到麦克风', description: '未检测到麦克风设备，请检查硬件连接 🎤' })
         break
       case 'NotReadableError':
       case 'TrackStartError':
-        message.error('麦克风被其他应用占用，请关闭其他使用麦克风的程序')
+        $notify.error({ title: '麦克风被占用', description: '麦克风被其他应用占用，请关闭其他使用麦克风的程序 🎤' })
         break
       default:
-        message.error('无法获取麦克风权限，请检查浏览器设置')
+        $notify.error({ title: '麦克风权限失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
     }
   } else {
-    message.error('无法获取麦克风权限，请检查浏览器设置')
+    $notify.error({ title: '麦克风权限失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
   }
 }
 
@@ -1087,7 +1084,7 @@ async function handleVoiceButtonClick() {
     // 正在录音，检查是否达到最小时长
     const recordingDuration = Date.now() - recordingStartTime
     if (recordingDuration < MIN_RECORDING_DURATION) {
-      message.info(`录音时间太短，请至少录音${MIN_RECORDING_DURATION / 1000}秒`)
+      $notify.info({ title: '录音时间太短', description: `请至少录音${MIN_RECORDING_DURATION / 1000}秒 🎤` })
       return
     }
     // 停止录音
@@ -1111,7 +1108,7 @@ async function requestMicrophonePermission() {
 
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      message.warning('您的浏览器不支持语音输入')
+      $notify.warning({ title: '浏览器不支持', description: '您的浏览器不支持语音输入功能 🎤' })
       return
     }
 
@@ -1126,10 +1123,10 @@ async function requestMicrophonePermission() {
     stream.getTracks().forEach(track => track.stop())
 
     microphonePermission.value = true
-    message.success('🎤 麦克风权限已获取')
+    $notify.success({ title: '麦克风权限已获取', description: '麦克风已就绪，可以开始语音对话 🎤' })
 
     if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-      message.info('iOS设备：请按住麦克风按钮开始语音对话')
+      $notify.info({ title: 'iOS设备提示', description: '请按住麦克风按钮开始语音对话 📱' })
     }
 
     console.log('[麦克风] 权限获取成功')
@@ -1141,30 +1138,30 @@ async function requestMicrophonePermission() {
       switch (error.name) {
         case 'NotAllowedError':
         case 'PermissionDeniedError':
-          message.error('麦克风权限被拒绝，请点击麦克风图标重新授权')
+          $notify.error({ title: '麦克风权限被拒绝', description: '请点击麦克风图标重新授权 🎤' })
           break
         case 'NotFoundError':
         case 'DevicesNotFoundError':
-          message.error('未找到麦克风设备，请检查硬件连接')
+          $notify.error({ title: '未找到麦克风', description: '未检测到麦克风设备，请检查硬件连接 🎤' })
           break
         case 'NotReadableError':
         case 'TrackStartError':
-          message.error('麦克风被其他应用占用，请关闭其他使用麦克风的程序')
+          $notify.error({ title: '麦克风被占用', description: '麦克风被其他应用占用，请关闭其他使用麦克风的程序 🎤' })
           break
         default:
-          message.error('无法获取麦克风权限，请检查浏览器设置')
+          $notify.error({ title: '麦克风权限失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
       }
     } else {
-      message.error('无法获取麦克风权限，请检查浏览器设置')
+      $notify.error({ title: '麦克风权限失败', description: '无法获取麦克风权限，请检查浏览器设置 🔒' })
     }
   }
 }
 
 // Service center actions
 async function requestDelivery() {
-  if (!deliveryForm.item_name) return message.warning('请填写物品名称')
+  if (!deliveryForm.item_name) return $notify.warning({ title: '请填写物品名称', description: '请填写您需要的物品名称 📦' })
   const roomId = appStore.userStatus?.checkin_info?.room_id
-  if (!roomId) return message.warning('请先办理入住')
+  if (!roomId) return $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能使用客房服务 🏨' })
   
   deliveryLoading.value = true
   try {
@@ -1175,20 +1172,20 @@ async function requestDelivery() {
       quantity: deliveryForm.quantity,
       note: deliveryForm.note
     })
-    message.success('送物请求已提交')
+    NotifyPreset.deliveryCreated()
     showDeliveryModal.value = false
     Object.assign(deliveryForm, { category: 'beverage', item_name: '', quantity: 1, note: '' })
   } catch (e) {
-    message.error('提交失败')
+    NotifyPreset.operationFailed('提交送物请求失败')
   } finally {
     deliveryLoading.value = false
   }
 }
 
 async function requestMaintenance() {
-  if (!maintenanceForm.fault_description) return message.warning('请描述故障情况')
+  if (!maintenanceForm.fault_description) return $notify.warning({ title: '请描述故障情况', description: '请填写故障描述以便维修人员处理 🔧' })
   const roomId = appStore.userStatus?.checkin_info?.room_id
-  if (!roomId) return message.warning('请先办理入住')
+  if (!roomId) return $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能使用客房服务 🏨' })
 
   maintenanceLoading.value = true
   try {
@@ -1198,11 +1195,11 @@ async function requestMaintenance() {
       fault_description: maintenanceForm.fault_description,
       priority: maintenanceForm.priority
     })
-    message.success('报修申请已提交，维修人员将尽快联系您')
+    NotifyPreset.workOrderCreated()
     showMaintenanceModal.value = false
     Object.assign(maintenanceForm, { fault_type: 'electric', fault_description: '', priority: 'medium' })
   } catch (e) {
-    message.error('提交失败')
+    NotifyPreset.operationFailed('提交报修申请失败')
   } finally {
     maintenanceLoading.value = false
   }
@@ -1210,7 +1207,7 @@ async function requestMaintenance() {
 
 async function callFrontDesk() {
   const roomId = appStore.userStatus?.checkin_info?.room_id || appStore.userStatus?.checkin_info?.room_number || '101'
-  if (!roomId) return message.warning('请先办理入住')
+  if (!roomId) return $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能呼叫前台 🏨' })
   try {
     const res: any = await callApi.outbound({
       caller_type: 'room',
@@ -1236,17 +1233,17 @@ async function callFrontDesk() {
         status: 'calling'
       })
     } else {
-      message.error('呼叫请求失败')
+      $notify.error({ title: '呼叫请求失败', description: '未能成功发起呼叫请求，请重试 📞' })
     }
   } catch (e) {
-    message.error('呼叫失败')
+    $notify.error({ title: '呼叫失败', description: '呼叫前台失败，请稍后再试 📞' })
   }
 }
 
 function showMessagePanel() { messageModalVisible.value = true }
 async function sendMsgToReception() {
-  if (!msgContent.value.trim()) return message.warning('请输入留言内容')
-  message.success('消息已发送至前台')
+  if (!msgContent.value.trim()) return $notify.warning({ title: '请输入留言内容', description: '请填写您要发送给前台的留言 📝' })
+  $notify.success({ title: '消息已发送', description: '您的留言已发送至前台 📨' })
   msgContent.value = ''
   messageModalVisible.value = false
 }
@@ -1254,7 +1251,7 @@ async function sendMsgToReception() {
 // 我的记录方法
 async function showMyDeliveryRecords() {
   if (!appStore.userStatus?.is_checked_in) {
-    message.warning('请先办理入住')
+    $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能查看配送记录 🏨' })
     return
   }
   showDeliveryRecordsModal.value = true
@@ -1263,7 +1260,7 @@ async function showMyDeliveryRecords() {
     const res: any = await deliveryApi.getList({ pageSize: 50 })
     deliveryRecords.value = res.data?.list || res.data?.data?.list || []
   } catch (e) {
-    message.error('获取配送记录失败')
+    $notify.error({ title: '获取配送记录失败', description: '无法加载配送记录，请稍后重试 🔄' })
   } finally {
     deliveryRecordsLoading.value = false
   }
@@ -1271,7 +1268,7 @@ async function showMyDeliveryRecords() {
 
 async function showMyMaintenanceRecords() {
   if (!appStore.userStatus?.is_checked_in) {
-    message.warning('请先办理入住')
+    $notify.warning({ title: '请先办理入住', description: '您需要先办理入住才能查看维修记录 🏨' })
     return
   }
   showMaintenanceRecordsModal.value = true
@@ -1280,7 +1277,7 @@ async function showMyMaintenanceRecords() {
     const res: any = await maintenanceApi.getList({ pageSize: 50 })
     maintenanceRecords.value = res.data?.list || res.data?.data?.list || []
   } catch (e) {
-    message.error('获取维修记录失败')
+    $notify.error({ title: '获取维修记录失败', description: '无法加载维修记录，请稍后重试 🔄' })
   } finally {
     maintenanceRecordsLoading.value = false
   }

@@ -20,14 +20,14 @@
       <a-col :span="8">
         <a-card title="手动下发指令" :bordered="false">
           <a-form :model="commandForm" layout="vertical" @finish="sendCommand">
-            <a-form-item label="主题 (Topic)" name="topic" required>
+            <a-form-item label="主题" name="topic" required>
               <a-auto-complete
                 v-model:value="commandForm.topic"
                 placeholder="例如: hotel/device/command/room/301"
                 :options="topicOptions"
               />
             </a-form-item>
-            <a-form-item label="内容 (Payload/JSON)" name="payload" required>
+            <a-form-item label="消息内容 (JSON)" name="payload" required>
               <a-textarea
                 v-model:value="commandForm.payload"
                 placeholder='{"command_type": "light_on", "command_id": 123}'
@@ -36,11 +36,11 @@
             </a-form-item>
             <a-row :gutter="8">
               <a-col :span="12">
-                <a-form-item label="QoS" name="qos">
+                <a-form-item label="服务质量 (QoS)" name="qos">
                   <a-select v-model:value="commandForm.qos">
-                    <a-select-option :value="0">0 (At most once)</a-select-option>
-                    <a-select-option :value="1">1 (At least once)</a-select-option>
-                    <a-select-option :value="2">2 (Exactly once)</a-select-option>
+                    <a-select-option :value="0">0 - 最多一次</a-select-option>
+                    <a-select-option :value="1">1 - 至少一次</a-select-option>
+                    <a-select-option :value="2">2 - 恰好一次</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -122,7 +122,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import { formatDotDateTime, formatDateTime } from '@/utils/date'
@@ -177,10 +177,10 @@ const pagination = reactive({
 
 const columns = [
   { title: '方向', key: 'direction', dataIndex: 'direction', width: 80 },
-  { title: '主题 (Topic)', dataIndex: 'topic', key: 'topic', ellipsis: true },
-  { title: '内容 (Payload)', dataIndex: 'payload', key: 'payload' },
+  { title: '主题', dataIndex: 'topic', key: 'topic', ellipsis: true },
+  { title: '消息内容', dataIndex: 'payload', key: 'payload' },
   { title: '设备ID', dataIndex: 'device_id', key: 'device_id', width: 120 },
-  { title: 'QoS', dataIndex: 'qos', key: 'qos', width: 60 },
+  { title: '服务质量', dataIndex: 'qos', key: 'qos', width: 60 },
   { title: '时间', dataIndex: 'timestamp', key: 'timestamp', width: 160 }
 ]
 
@@ -193,7 +193,7 @@ const fetchStatus = async () => {
       lastUpdate: formatDateTime(new Date())
     }
   } catch (err) {
-    message.error('获取MQTT状态失败')
+    $notify.error({ title: '获取MQTT状态失败', description: '无法获取MQTT服务状态，请检查网络连接' })
   } finally {
     loading.status = false
   }
@@ -214,7 +214,7 @@ const fetchLogs = async () => {
     logs.value = res.data
     pagination.total = res.data.length < pagination.pageSize ? (pagination.current - 1) * pagination.pageSize + res.data.length : 1000
   } catch (err) {
-    message.error('获取通信日志失败')
+    $notify.error({ title: '获取通信日志失败', description: '无法加载MQTT通信记录，请稍后重试' })
   } finally {
     loading.logs = false
   }
@@ -250,10 +250,10 @@ const sendCommand = async () => {
       qos: commandForm.qos,
       retain: commandForm.retain
     })
-    message.success('指令已发送')
+    $notify.success({ title: '指令已发送', description: 'MQTT指令已成功下发至目标设备 📡' })
     fetchLogs()
   } catch (err) {
-    message.error('指令发送失败')
+    NotifyPreset.operationFailed('MQTT指令发送失败')
   } finally {
     loading.send = false
   }

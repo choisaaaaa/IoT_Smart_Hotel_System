@@ -81,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { FireOutlined, CloudOutlined, AlertOutlined, TrophyOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { environmentApi, type EnvironmentData, type EnvironmentSummary } from '@/api/environment'
 

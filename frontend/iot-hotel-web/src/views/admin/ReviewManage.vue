@@ -216,7 +216,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import {
   MoreOutlined,
   EditOutlined,
@@ -296,7 +297,7 @@ const loadReviews = async () => {
   try {
     const hotelId = appStore.userInfo?.hotel_id
     if (!hotelId) {
-      message.error('未获取到酒店信息')
+      $notify.error({ title: '未获取到酒店信息', description: '无法获取当前酒店信息，请重新登录 🏨' })
       return
     }
 
@@ -316,7 +317,7 @@ const loadReviews = async () => {
       pagination.total = res.data.total || 0
     }
   } catch (err) {
-    message.error('加载评价列表失败')
+    $notify.error({ title: '加载评价列表失败', description: '无法加载评价数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -338,19 +339,19 @@ const handleReply = (review: any) => {
 // 提交回复
 const submitReply = async () => {
   if (!replyForm.content.trim()) {
-    message.warning('请输入回复内容')
+    $notify.warning({ title: '请输入回复内容', description: '请填写您对评价的回复内容 ✍️' })
     return
   }
 
   replySubmitting.value = true
   try {
     await replyReview(currentReview.value.id, replyForm.content.trim())
-    message.success('回复成功')
+    $notify.success({ title: '回复成功', description: '评价回复已成功提交 ✅' })
     replyModalVisible.value = false
     loadReviews()
     loadStats()
   } catch (err) {
-    message.error('回复失败')
+    NotifyPreset.operationFailed('回复评价失败')
   } finally {
     replySubmitting.value = false
   }
@@ -373,11 +374,11 @@ const handleDelete = (review: any) => {
     async onOk() {
       try {
         await deleteReview(review.id)
-        message.success('删除成功')
+        $notify.success({ title: '删除成功', description: '评价已成功删除 🗑️' })
         loadReviews()
         loadStats()
       } catch (err) {
-        message.error('删除失败')
+        NotifyPreset.operationFailed('删除评价失败')
       }
     }
   })

@@ -64,6 +64,15 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   }
 }
 
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    authenticate(req, res, next);
+  } else {
+    next();
+  }
+}
+
 /**
  * 角色鉴权中间件
  * @param roles 允许的角色列表

@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, reactive } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { 
   BankOutlined, TeamOutlined, DesktopOutlined, 
   DollarOutlined, ReloadOutlined 
@@ -156,7 +156,7 @@ const fetchStats = async () => {
     renderCharts()
   } catch (error) {
     console.error('获取统计数据失败:', error)
-    message.error('获取统计数据失败')
+    NotifyPreset.operationFailed('获取统计数据失败')
   } finally {
     loading.value = false
   }

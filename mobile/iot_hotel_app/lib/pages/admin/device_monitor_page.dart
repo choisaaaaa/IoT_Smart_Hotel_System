@@ -33,7 +33,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
             id: d['id'] ?? 0,
             deviceId: d['device_id']?.toString() ?? d['id']?.toString() ?? '',
             deviceName: d['device_name'] ?? '未知设备',
-            deviceType: d['type'] ?? d['device_type'] ?? 'unknown',
+            deviceType: d['type'] ?? d['device_type'] ?? '未知',
             deviceKey: d['device_key'] ?? d['device_code'] ?? '',
             deviceStatus: d['device_status'] ?? d['status'] ?? 'offline',
           )).toList();
@@ -74,7 +74,7 @@ class _DeviceMonitorPageState extends ConsumerState<DeviceMonitorPage> {
       case 'unlocked': return '已解锁';
       case 'normal': return '正常';
       case 'error': return '异常';
-      default: return d.deviceStatus;
+      default: return '未知';
     }
   }
 

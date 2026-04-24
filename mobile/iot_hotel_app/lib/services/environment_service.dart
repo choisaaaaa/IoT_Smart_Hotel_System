@@ -115,7 +115,7 @@ class EnvironmentService {
               mappedStatus = alarmStatus;
           }
 
-          String alarmType = alarm['alarm_type'] ?? 'unknown';
+          String alarmType = alarm['alarm_type'] ?? '未知';
           String mappedAlarmType;
           switch (alarmType) {
             case 'smoke':
@@ -421,7 +421,7 @@ class EnvironmentService {
   }
 
   String _getAlarmTitle(String? alarmType, String? alarmLevel) {
-    final type = alarmType?.toString() ?? 'unknown';
+    final type = alarmType?.toString() ?? '未知';
     final level = alarmLevel?.toString() ?? 'warning';
 
     String levelEmoji;

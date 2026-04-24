@@ -101,8 +101,9 @@ class _NotificationCenterPageState extends ConsumerState<NotificationCenterPage>
   String _formatTime(DateTime? time) {
     if (time == null) return '';
     try {
+      final localTime = time.toLocal();
       final now = DateTime.now();
-      final diff = now.difference(time);
+      final diff = now.difference(localTime);
       if (diff.inMinutes < 1) return '刚刚';
       if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
       if (diff.inDays < 1) return '${diff.inHours}小时前';

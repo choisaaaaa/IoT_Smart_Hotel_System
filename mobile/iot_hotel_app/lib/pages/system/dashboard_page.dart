@@ -1173,7 +1173,7 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
                         itemCount: _filteredDevices.length,
                         itemBuilder: (ctx, i) {
                           final d = _filteredDevices[i];
-                          final status = d['status'] ?? d['device_status'] ?? 'unknown';
+                          final status = d['status'] ?? d['device_status'] ?? '未知';
                           Color statusColor;
                           switch (status) {
                             case 'online': statusColor = AppColors.success; break;
@@ -1185,7 +1185,7 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
                             child: ListTile(
                               leading: Icon(Icons.devices, color: statusColor),
                               title: Text(d['device_name'] ?? d['name'] ?? '设备${d['id']}', style: const TextStyle(fontWeight: FontWeight.w500)),
-                              subtitle: Text('ID: ${d['id']} | ${d['device_type'] ?? ''}'),
+                              subtitle: Text('编号: ${d['id']} | ${_getDeviceTypeName(d['device_type'] ?? '')}'),
                               trailing: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
@@ -1198,6 +1198,21 @@ class _DevicesTabState extends ConsumerState<_DevicesTab> {
               ),
       ),
     ]);
+  }
+
+  String _getDeviceTypeName(String type) {
+    switch (type) {
+      case 'light': return '灯光';
+      case 'ac': case 'air_conditioner': return '空调';
+      case 'curtain': return '窗帘';
+      case 'tv': return '电视';
+      case 'lock': return '门锁';
+      case 'thermostat': case 'temperature_sensor': return '温控器';
+      case 'humidity_sensor': return '湿度传感器';
+      case 'smoke_detector': case 'sensor': return '烟感器';
+      case 'smart_speaker': return '智能音箱';
+      default: return type.isNotEmpty ? type : '未知';
+    }
   }
 
   Widget _buildHotelSelector() {
@@ -2213,7 +2228,7 @@ class _SystemReviewControlTabState extends ConsumerState<_SystemReviewControlTab
         break;
       default:
         statusColor = AppColors.textHint;
-        statusText = status;
+        statusText = '未知';
     }
 
     return Container(

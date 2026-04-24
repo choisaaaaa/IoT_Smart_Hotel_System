@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { deviceApi } from '@/api/device'
 import { hotelManageApi, type HotelManageInfo } from '@/api/hotel-manage'
 import { formatDateTime } from '@/utils/date'
@@ -157,10 +157,10 @@ const showDetail = (record: any) => {
 const handleDelete = async (id: number) => {
   try {
     await deviceApi.deleteDevice(id)
-    message.success('设备已删除')
+    $notify.success({ title: '设备已删除', description: '设备记录已成功移除 🗑️' })
     fetchDevices()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除设备失败')
   }
 }
 

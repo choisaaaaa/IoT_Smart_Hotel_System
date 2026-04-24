@@ -186,7 +186,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { PlusOutlined, QrcodeOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import request from '@/api/request'
 import { CANONICAL_ROLES } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
@@ -265,7 +265,7 @@ const fetchCoupons = async () => {
     const res = await request.get('/coupons', { params })
     coupons.value = res.data.list || []
   } catch (error) {
-    message.error('获取优惠券失败')
+    $notify.error({ title: '获取优惠券失败', description: '无法加载优惠券列表，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -278,7 +278,7 @@ const showDirectIssueModal = (record: any) => {
 }
 
 const handleDirectIssue = async () => {
-  if (!directIssuePhone.value) return message.warning('请输入手机号')
+  if (!directIssuePhone.value) return $notify.warning({ title: '请输入手机号', description: '请输入用户手机号以发放优惠券 📱' })
 
   directIssueLoading.value = true
   try {
@@ -286,11 +286,11 @@ const handleDirectIssue = async () => {
       coupon_id: selectedCouponForIssue.value.id,
       phone: directIssuePhone.value
     })
-    message.success('发放成功')
+    NotifyPreset.couponIssued()
     directIssueVisible.value = false
     fetchCoupons()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '发放失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '发放失败')
   } finally {
     directIssueLoading.value = false
   }
@@ -307,11 +307,11 @@ const handleConfirmRedeem = async () => {
   redeemLoading.value = true
   try {
     await request.post(`/coupons/${selectedCouponForRedeem.value.id}/redeem`)
-    message.success('核销成功')
+    $notify.success({ title: '核销成功', description: '优惠券已成功核销 ✅' })
     redeemVisible.value = false
     fetchCoupons()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '核销失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '核销失败')
   } finally {
     redeemLoading.value = false
   }
@@ -371,7 +371,7 @@ const editCoupon = (record: any) => {
 
 const handleSave = async () => {
   if (!formState.coupon_name || validRange.value.length < 2) {
-    return message.warning('请填写必要信息')
+    return $notify.warning({ title: '请填写必要信息', description: '请填写优惠券名称和有效期 📋' })
   }
 
   submitLoading.value = true
@@ -396,15 +396,15 @@ const handleSave = async () => {
 
     if (editingId.value) {
       await request.put(`/coupons/${editingId.value}`, data)
-      message.success('更新成功')
+      NotifyPreset.profileUpdated('优惠券')
     } else {
       await request.post('/coupons', data)
-      message.success('创建成功')
+      $notify.success({ title: '创建成功', description: '新优惠券已成功创建 🎫' })
     }
     modalVisible.value = false
     fetchCoupons()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '保存失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '保存失败')
   } finally {
     submitLoading.value = false
   }
@@ -413,10 +413,10 @@ const handleSave = async () => {
 const deleteCoupon = async (id: number) => {
   try {
     await request.delete(`/coupons/${id}`)
-    message.success('已删除')
+    $notify.success({ title: '已删除', description: '优惠券已成功删除 🗑️' })
     fetchCoupons()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除优惠券失败')
   }
 }
 

@@ -129,7 +129,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
+import { Modal } from 'ant-design-vue'
 import {
   WarningFilled,
   EnvironmentOutlined,
@@ -143,6 +144,7 @@ import dayjs from 'dayjs'
 import { useAppStore } from '@/stores/app'
 import request from '@/api/request'
 import { environmentApi } from '@/api/environment'
+import { formatTimeHHmmss, formatDateTimeSec } from '@/utils/date'
 
 interface AlarmInfo {
   id: string
@@ -284,12 +286,12 @@ async function handleAcknowledge() {
       currentAlarm.value.acknowledged = true
     }
     
-    message.success('报警已确认并消除')
+    $notify.success({ title: '报警已确认', description: '报警已确认并消除 🔥' })
     
     // 刷新报警列表
     appStore.refreshAlarmList()
   } catch (error) {
-    message.error('消警失败，请重试')
+    NotifyPreset.operationFailed('消警失败')
   } finally {
     acknowledging.value = false
   }
@@ -382,12 +384,12 @@ function getDeviceTypeText(deviceId: string | undefined): string {
 
 function formatTime(timestamp: string): string {
   if (!timestamp) return '-'
-  return dayjs(timestamp).format('HH:mm:ss')
+  return formatTimeHHmmss(timestamp)
 }
 
 function formatDateTime(timestamp: string): string {
   if (!timestamp) return '-'
-  return dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss')
+  return formatDateTimeSec(timestamp)
 }
 
 onUnmounted(() => {

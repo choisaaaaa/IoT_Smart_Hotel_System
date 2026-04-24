@@ -214,7 +214,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import dayjs, { Dayjs } from 'dayjs'
@@ -231,7 +231,7 @@ const loading = ref(false)
 const showRatePlanModal = ref(false)
 const handleOpenRatePlanModal = () => {
   if (!selectedRoomTypeId.value) {
-    message.warning('请先选择房型')
+    $notify.warning({ title: '请先选择房型', description: '请先选择一个房型再管理价格方案 🏨' })
     return
   }
   fetchRatePlans()
@@ -287,22 +287,22 @@ const openPlanEdit = (record: any) => {
 }
 
 const handleSavePlan = async () => {
-  if (!planForm.plan_name) return message.warning('请填写方案名称')
+  if (!planForm.plan_name) return $notify.warning({ title: '请填写方案名称', description: '价格方案名称不能为空 📋' })
   
   planSubmitLoading.value = true
   try {
     const data = { ...planForm, room_type_id: selectedRoomTypeId.value }
     if (planForm.id) {
       await request.put(`/rate-plans/${planForm.id}`, data)
-      message.success('更新成功')
+      NotifyPreset.profileUpdated('价格方案')
     } else {
       await request.post('/rate-plans', data)
-      message.success('创建成功')
+      $notify.success({ title: '创建成功', description: '新价格方案已成功创建 ✅' })
     }
     planEditVisible.value = false
     fetchRatePlans()
   } catch (error) {
-    message.error('操作失败')
+    NotifyPreset.operationFailed()
   } finally {
     planSubmitLoading.value = false
   }
@@ -311,10 +311,10 @@ const handleSavePlan = async () => {
 const handleDeletePlan = async (id: number) => {
   try {
     await request.delete(`/rate-plans/${id}`)
-    message.success('删除成功')
+    $notify.success({ title: '删除成功', description: '价格方案已成功删除 🗑️' })
     fetchRatePlans()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '删除失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '删除失败')
   }
 }
 
@@ -360,7 +360,7 @@ const fetchRoomTypes = async () => {
       fetchCalendar()
     }
   } catch (error) {
-    message.error('获取房型失败')
+    $notify.error({ title: '获取房型失败', description: '无法加载房型列表，请稍后重试 🔄' })
   }
 }
 
@@ -400,7 +400,7 @@ const fetchCalendar = async () => {
     })
     calendarData.value = res.data || []
   } catch (error) {
-    message.error('获取价格日历失败')
+    $notify.error({ title: '获取价格日历失败', description: '无法加载价格日历数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -444,11 +444,11 @@ const handleSavePrice = async () => {
         discount_rate: editForm.discount_rate
       }]
     })
-    message.success('价格设置成功')
+    $notify.success({ title: '价格设置成功', description: '日期价格已成功更新 ✅' })
     modalVisible.value = false
     fetchCalendar()
   } catch (error) {
-    message.error('保存失败')
+    NotifyPreset.operationFailed('保存价格失败')
   } finally {
     submitLoading.value = false
   }

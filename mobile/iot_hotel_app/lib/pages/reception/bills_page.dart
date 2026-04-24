@@ -476,7 +476,7 @@ class _BillItem extends StatelessWidget {
       case 'paid': case 'completed': statusColor = Colors.green; statusText = '已支付';
       case 'pending': statusColor = Colors.orange; statusText = '待支付';
       case 'refunded': statusColor = Colors.grey; statusText = '已退款';
-      default: statusColor = Colors.grey; statusText = status;
+      default: statusColor = Colors.grey; statusText = '未知';
     }
 
     return GestureDetector(

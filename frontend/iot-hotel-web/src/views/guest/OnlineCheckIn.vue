@@ -201,7 +201,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { AuditOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { useRoute } from 'vue-router'
 import { formatDate } from '@/utils/date'
 import { bookingApi } from '@/api/booking'
@@ -291,24 +291,24 @@ const getFullUrl = (url: string) => {
 }
 
 async function searchBooking() {
-  if (!searchKey.value.trim()) { message.warning('请输入查询内容'); return }
+  if (!searchKey.value.trim()) { $notify.warning({ title: '请输入查询内容', description: '请输入预订号或手机号后再查询' }); return }
   searching.value = true
   try {
     const res: any = await bookingApi.lookupBooking(searchKey.value.trim())
     foundBooking.value = res?.data || null
     if (!foundBooking.value) {
-      message.error('未找到匹配的预订')
+      $notify.error({ title: '未找到匹配的预订', description: '请检查输入的预订号或手机号是否正确' })
       return
     }
     checkinForm.real_name = foundBooking.value.guest_name
     checkinForm.id_number = ''
-    message.success('找到预订记录')
+    $notify.success({ title: '找到预订记录', description: '已成功匹配到您的预订信息 🎉' })
   } catch (error: any) {
     if (error?.response?.status === 404) {
-      message.error('未找到匹配的预订')
+      $notify.error({ title: '未找到匹配的预订', description: '请检查输入的预订号或手机号是否正确' })
       return
     }
-    message.error('查询失败，请稍后重试')
+    NotifyPreset.operationFailed('查询失败，请稍后重试')
   } finally {
     searching.value = false
   }
@@ -355,7 +355,7 @@ async function goToSelectRoom() {
     console.log('Available rooms found:', availableRooms.value.length)
     floors.value = floorRes.data?.list || floorRes.data || []
   } catch (e) {
-    message.error('加载房间或楼层信息失败')
+    NotifyPreset.operationFailed('加载房间或楼层信息失败')
   } finally {
     loadingRooms.value = false
   }
@@ -369,19 +369,19 @@ function selectRoom(room: RoomInfo) {
 
 async function confirmCheckin() {
   if (!foundBooking.value) {
-    message.warning('请先查询预订')
+    $notify.warning({ title: '请先查询预订', description: '请先输入预订号或手机号查询您的预订' })
     return
   }
   if (!selectedRoomId.value) {
-    message.warning('请先选择房间')
+    $notify.warning({ title: '请先选择房间', description: '请在上方选择一间空余房间' })
     return
   }
   if (!checkinForm.real_name.trim()) {
-    message.warning('请填写真实姓名')
+    $notify.warning({ title: '请填写真实姓名', description: '真实姓名需与证件一致' })
     return
   }
   if (!validateIdNumber()) {
-    message.warning(idNumberError.value || '请输入正确的证件号码')
+    $notify.warning({ title: idNumberError.value || '请输入正确的证件号码', description: '请检查证件号码格式' })
     return
   }
   confirming.value = true
@@ -405,14 +405,14 @@ async function confirmCheckin() {
       room_number: selectedRoomNumber.value,
       booking_no: payload.booking_no || foundBooking.value?.booking_no,
       guest_phone: foundBooking.value?.guest_phone,
-      check_in_date: new Date().toISOString()
+      check_in_date: formatDate(new Date())
     }
     localStorage.setItem('guest_checkin_info', JSON.stringify(guestInfo))
     
     currentStep.value = 4
-    message.success('入住办理成功！')
+    NotifyPreset.checkinSuccess(checkinForm.real_name, selectedRoomNumber.value)
   } catch (error: any) {
-    message.error(error?.response?.data?.message || '办理失败，请稍后重试')
+    NotifyPreset.checkinFailed(error?.response?.data?.message || '办理失败，请稍后重试')
   } finally {
     confirming.value = false
   }

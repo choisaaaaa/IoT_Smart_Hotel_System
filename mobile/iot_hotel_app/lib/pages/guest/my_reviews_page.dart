@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/date_utils.dart';
 import '../../models/review.dart';
 import '../../services/review_service.dart';
 
@@ -281,7 +282,7 @@ class _MyReviewsPageState extends ConsumerState<MyReviewsPage> {
           Row(
             children: [
               Text(
-                review.createdAt ?? '',
+                DateUtils.formatDynamic(review.createdAt),
                 style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textHint),
               ),
               const Spacer(),

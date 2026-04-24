@@ -45,6 +45,9 @@
             :scroll="{ x: 700 }"
           >
             <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'room_type'">
+                {{ roomTypeText(record.room_type) }}
+              </template>
               <template v-if="column.key === 'room_status'">
                 <a-tag :color="statusColor(record.room_status)">{{ statusText(record.room_status) }}</a-tag>
               </template>
@@ -84,12 +87,22 @@ const statsCards = computed(() => [
 
 const roomColumns = [
   { title: '房号', dataIndex: 'room_number', width: 80 },
-  { title: '房型', dataIndex: 'room_type', width: 100 },
-  { title: '价格(元/晚)', dataIndex: 'room_price', width: 110 },
-  { title: '状态', dataIndex: 'room_status', width: 100 },
+  { title: '房型', dataIndex: 'room_type', key: 'room_type', width: 100 },
+  { title: '价格(元/晚)', dataIndex: 'room_price', key: 'room_price', width: 110 },
+  { title: '状态', dataIndex: 'room_status', key: 'room_status', width: 100 },
   { title: '楼层', dataIndex: 'floor', width: 60 },
   { title: '面积(m²)', dataIndex: 'area', width: 90 }
 ]
+
+function roomTypeText(t: string): string {
+  const map: Record<string, string> = {
+    standard: '标准间', single: '单人间', double: '双人间',
+    suite: '套房', deluxe: '豪华间', family: '家庭房',
+    esport: '电竞房', esports: '电竞房', business: '商务间',
+    presidential: '总统套房', twin: '双床房', king: '大床房'
+  }
+  return map[t?.toLowerCase()] || t
+}
 
 function statusColor(s: string): string {
   return ({ available: 'success', occupied: 'warning', maintenance: 'error', cleaning: 'processing' } as Record<string, string>)[s] || 'default'

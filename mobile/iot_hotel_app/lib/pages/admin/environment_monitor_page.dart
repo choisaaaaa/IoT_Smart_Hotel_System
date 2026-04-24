@@ -399,7 +399,7 @@ class _EnvironmentMonitorPageState extends ConsumerState<EnvironmentMonitorPage>
                 if (updateTime.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    '更新时间: $updateTime',
+                    '更新时间: ${DateUtils.formatDynamic(updateTime)}',
                     style: TextStyle(
                       color: Colors.grey[400],
                       fontSize: 11,
@@ -1014,7 +1014,7 @@ class _FireAlarmCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alarmType = alarm['alarm_type'] ?? 'unknown';
+    final alarmType = alarm['alarm_type'] ?? '未知';
     final roomNumber = alarm['room_number'] ?? alarm['room_id'] ?? '-';
     final status = alarm['status'] ?? 'active';
     final createdAt = alarm['triggered_at'] ?? alarm['created_at'] ?? '';
@@ -1179,7 +1179,7 @@ class _FireAlarmCard extends StatelessWidget {
       case 'false_alarm':
         return '误报';
       default:
-        return status;
+        return '未知';
     }
   }
 }
@@ -1191,7 +1191,7 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final deviceType = device['device_type'] ?? device['type'] ?? 'unknown';
+    final deviceType = device['device_type'] ?? device['type'] ?? '未知';
     final roomNumber = device['room_number'] ?? device['room_id'] ?? '-';
     final status = device['device_status'] ?? device['status'] ?? 'offline';
     final name = device['device_name'] ?? device['name'] ?? '未命名设备';
@@ -1309,7 +1309,7 @@ class _EventLogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final eventType = log['event_type'] ?? 'unknown';
+    final eventType = log['event_type'] ?? '未知';
     final description = log['description'] ?? log['title'] ?? '';
     final roomNumber = log['room_number'] ?? log['room_id'] ?? '-';
     final createdAt = log['created_at'] ?? '';

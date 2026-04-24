@@ -68,6 +68,21 @@ export function formatTimeHHmm(val: any): string {
   return d ? d.tz(TZ).format('HH:mm') : '-'
 }
 
+export function formatTimeHHmmss(val: any): string {
+  const d = ensureDayjs(val)
+  return d ? d.tz(TZ).format('HH:mm:ss') : '-'
+}
+
+export function formatDateTimeSec(val: any): string {
+  const d = ensureDayjs(val)
+  return d ? d.tz(TZ).format('YYYY-MM-DD HH:mm:ss') : '-'
+}
+
+export function formatDateWeekdayCN(val: any): string {
+  const d = ensureDayjs(val)
+  return d ? d.tz(TZ).format('YYYY年MM月DD日 dddd') : '-'
+}
+
 export function now(): dayjs.Dayjs {
   return dayjs().tz(TZ)
 }

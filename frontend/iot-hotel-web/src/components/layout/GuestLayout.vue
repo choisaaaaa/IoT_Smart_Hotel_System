@@ -371,7 +371,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { NotifyPreset } from '@/utils/notify'
 import type { Rule } from 'ant-design-vue/es/form'
 import {
   HomeOutlined,
@@ -570,7 +570,7 @@ const handleLogin = async () => {
     const { user } = await authService.login(loginForm)
 
     appStore.showLoginModal = false
-    message.success('欢迎回来，登录成功')
+    NotifyPreset.loginSuccess(user.username)
 
     const redirect = route.query.redirect as string
     if (redirect) {
@@ -590,15 +590,17 @@ const handleLogin = async () => {
     const serverMsg = error?.response?.data?.message
 
     if (status === 429) {
-      message.error(serverMsg || '账户已被锁定，请稍后再试')
+      const lockMatch = serverMsg?.match(/(\d+)\s*分钟/)
+      NotifyPreset.accountLocked(lockMatch ? parseInt(lockMatch[1]) : undefined)
     } else if (status === 401) {
       if (serverMsg?.includes('锁定')) {
-        message.error(serverMsg)
+        const lockMatch = serverMsg?.match(/(\d+)\s*分钟/)
+        NotifyPreset.accountLocked(lockMatch ? parseInt(lockMatch[1]) : undefined)
       } else {
-        message.warning(serverMsg || '手机号或密码错误')
+        NotifyPreset.loginError(serverMsg)
       }
     } else {
-      message.error(serverMsg || '登录失败，请重试')
+      NotifyPreset.loginError(serverMsg || '登录失败，请重试')
     }
   } finally {
     loginLoading.value = false
@@ -625,7 +627,7 @@ const handleGenerateQrToken = async () => {
     }
 
     pollQrStatus(token)
-    message.success('二维码已生成')
+    NotifyPreset.qrCodeGenerated()
   } catch (error) {
     console.error('生成二维码失败:', error)
   } finally {
@@ -644,7 +646,7 @@ const pollQrStatus = async (token: string) => {
       localStorage.setItem('auth_token', result.token)
       appStore.setUserInfo(normalizedUser)
       initWebSocket()
-      message.success('扫码登录成功')
+      NotifyPreset.qrLoginSuccess()
       appStore.showLoginModal = false
       redirectByRole(normalizedUser.role)
       return
@@ -668,7 +670,7 @@ const pollQrStatus = async (token: string) => {
 // 倒计时结束
 const handleCountdownFinish = () => {
   qrExpired.value = true
-  message.warning('二维码已过期，请刷新')
+  NotifyPreset.qrCodeExpired()
 }
 
 // 重置扫码
@@ -693,7 +695,7 @@ const handleRegister = async () => {
       phone: registerForm.phone
     })
 
-    message.success('注册成功，请登录')
+    NotifyPreset.registerSuccess()
     showRegisterModal.value = false
 
     registerForm.username = ''
@@ -706,7 +708,7 @@ const handleRegister = async () => {
   } catch (error: any) {
     console.error('注册失败:', error)
     const errorMessage = error?.response?.data?.message || '注册失败，请重试'
-    message.error(errorMessage)
+    NotifyPreset.operationFailed(errorMessage)
   } finally {
     registerLoading.value = false
   }
@@ -716,7 +718,7 @@ const handleRegister = async () => {
 const handleLogout = async () => {
   try {
     await authService.logout()
-    message.success('已安全退出')
+    NotifyPreset.logout()
     router.push('/guest/booking')
   } catch (error) {
     console.error('登出失败:', error)

@@ -68,6 +68,7 @@ import { ref, reactive, onMounted, nextTick, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { FileTextOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
+import { formatDashDate } from '@/utils/date'
 
 function paymentMethodText(method: string): string {
   const map: Record<string, string> = {
@@ -160,8 +161,8 @@ const renderCharts = () => {
     const trendData = reports.revenue_trend
     const dates = trendData.map(item => {
       // 兼容 date 可能是 Date 对象或字符串
-      const dateStr = typeof item.date === 'string' ? item.date : new Date(item.date).toISOString().split('T')[0]
-      return dateStr.substring(5)
+      const dateStr = typeof item.date === 'string' ? formatDashDate(item.date) : formatDashDate(item.date)
+      return dateStr
     })
     const values = trendData.map(item => item.revenue)
     revenueChart.setOption({

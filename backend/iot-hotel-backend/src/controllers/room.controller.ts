@@ -105,7 +105,19 @@ export const create = async (req: AuthRequest, res: Response) => {
       return res.status(401).json(errorResponse('未授权，必须提供酒店 ID'));
     }
 
-    const id = await RoomService.createRoom({ ...req.body, hotel_id: hotelId });
+    const roomData = { ...req.body, hotel_id: hotelId };
+    if (roomData.floor_id !== undefined && roomData.floor === undefined) {
+      roomData.floor = roomData.floor_id;
+      delete roomData.floor_id;
+    }
+    if (roomData.room_price === undefined || roomData.room_price === null) {
+      roomData.room_price = 0;
+    }
+    if (roomData.room_status === undefined) {
+      roomData.room_status = 'available';
+    }
+
+    const id = await RoomService.createRoom(roomData);
     res.json(successResponse({ id }, '创建房间成功'));
   } catch (error: any) {
     logger.error('创建房间失败:', error.message);
@@ -268,7 +280,7 @@ export const getGuestRoom = async (req: AuthRequest, res: Response) => {
     }
 
     if (bookings.length === 0) {
-      return res.status(404).json(errorResponse('当前没有入住记录'));
+      return res.json(successResponse(null, '当前没有入住记录'));
     }
 
     res.json(successResponse(bookings[0], '获取房间信息成功'));

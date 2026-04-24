@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/mqtt/mqtt_service.dart';
 import '../../core/constants/mqtt_constants.dart';
 import '../../core/auth/auth_state_notifier.dart';
+import '../../core/utils/date_utils.dart';
 import '../../services/auth_service.dart';
 import '../../core/services/app_realtime_provider.dart';
 import '../../core/services/realtime_service.dart';
@@ -425,7 +426,7 @@ class _RoomServicePageState extends ConsumerState<RoomServicePage>
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final device = _devices[index];
-                              final deviceType = device['device_type'] ?? device['type'] ?? 'unknown';
+                              final deviceType = device['device_type'] ?? device['type'] ?? '未知';
                               final isOn = (device['device_status'] ?? device['status'] ?? 'off') == 'on' ||
                                   (device['device_status'] ?? device['status'] ?? 'off') == 'unlocked';
                               return _DeviceControlTile(
@@ -1870,7 +1871,8 @@ class _MoreServicesTabState extends ConsumerState<_MoreServicesTab> {
     if (dateTime is String) {
       try {
         final dt = DateTime.parse(dateTime);
-        return '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+        final utc8 = DateUtils.toUtc8(dt);
+        return '${utc8.month}/${utc8.day} ${utc8.hour.toString().padLeft(2, '0')}:${utc8.minute.toString().padLeft(2, '0')}';
       } catch (_) {
         return dateTime;
       }

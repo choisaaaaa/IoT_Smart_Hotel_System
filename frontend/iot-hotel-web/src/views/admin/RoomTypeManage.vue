@@ -110,7 +110,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { roomTypeApi } from '@/api/room-type'
 import type { RoomTypeInfo } from '@/types'
 
@@ -160,7 +160,7 @@ const fetchRoomTypes = async () => {
     const res = await roomTypeApi.getRoomTypeList()
     roomTypes.value = (res.data as any) || []
   } catch (error) {
-    message.error('获取房型列表失败')
+    $notify.error({ title: '获取房型列表失败', description: '无法加载房型数据，请稍后重试 🔄' })
   } finally {
     loading.value = false
   }
@@ -202,9 +202,9 @@ const handleEdit = (record: RoomTypeInfo) => {
 
 const handleUploadChange = (info: any) => {
   if (info.file.status === 'done') {
-    message.success('图片上传成功')
+    $notify.success({ title: '图片上传成功', description: '房型图片已成功上传 🖼️' })
   } else if (info.file.status === 'error') {
-    message.error('图片上传失败')
+    $notify.error({ title: '图片上传失败', description: '上传过程中出现错误，请重试 🖼️' })
   }
 }
 
@@ -220,17 +220,17 @@ const handleModalOk = async () => {
 
     if (editingId.value) {
       await roomTypeApi.updateRoomType(editingId.value, formState)
-      message.success('更新房型成功')
+      NotifyPreset.profileUpdated('房型信息')
     } else {
       await roomTypeApi.createRoomType(formState)
-      message.success('创建房型成功')
+      $notify.success({ title: '创建房型成功', description: '新房型已成功添加 ✅' })
     }
     modalVisible.value = false
     fetchRoomTypes()
   } catch (error) {
     const err = error as any
     const backendMessage = err?.response?.data?.message || err?.message
-    message.error(backendMessage || '保存失败')
+    NotifyPreset.operationFailed(backendMessage || '保存失败')
   } finally {
     submitLoading.value = false
   }
@@ -239,10 +239,10 @@ const handleModalOk = async () => {
 const handleDelete = async (id: number) => {
   try {
     await roomTypeApi.deleteRoomType(id)
-    message.success('删除房型成功')
+    $notify.success({ title: '删除房型成功', description: '房型已成功从系统中移除 🗑️' })
     fetchRoomTypes()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除房型失败')
   }
 }
 

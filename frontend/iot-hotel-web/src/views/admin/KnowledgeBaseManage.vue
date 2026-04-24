@@ -222,7 +222,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { PlusOutlined, FormOutlined, EditOutlined } from '@ant-design/icons-vue'
 import KnowledgeBaseWizard from '@/components/admin/KnowledgeBaseWizard.vue'
 import { useHotelStore } from '@/stores/hotel'
@@ -437,7 +437,7 @@ const handleSubmit = async () => {
 
     await createOrUpdateKnowledge(formData.category, submitData)
     
-    message.success('保存成功')
+    NotifyPreset.profileUpdated('知识库条目')
     modalVisible.value = false
     await loadData()
   } catch (error) {
@@ -451,7 +451,7 @@ const toggleActive = async (id: number) => {
   toggleLoadingMap.value[id] = true
   try {
     await toggleKnowledgeActive(id)
-    message.success('状态更新成功')
+    $notify.success({ title: '状态更新成功', description: '知识库条目状态已更新 ✅' })
     await loadData()
   } catch (error) {
     console.error('切换状态失败:', error)
@@ -469,11 +469,11 @@ const handleInit = async () => {
   try {
     // 传入当前酒店ID
     const res: any = await initDefaultKnowledge(hotelStore.currentHotelId || undefined)
-    message.success(res.message || '初始化成功')
+    $notify.success({ title: '初始化成功', description: res.message || '默认知识库已初始化 ✅' })
     initModalVisible.value = false
     await loadData()
   } catch (error: any) {
-    message.error(error?.message || '初始化失败')
+    NotifyPreset.operationFailed(error?.message || '初始化失败')
   } finally {
     initLoading.value = false
   }

@@ -148,11 +148,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, reactive } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { $notify, NotifyPreset } from '@/utils/notify'
 import { useAppStore } from '@/stores/app'
 import axios from '@/api/request'
 import { hotelManageApi } from '@/api/hotel-manage'
 import { CANONICAL_ROLES } from '@/api/auth'
+import { formatDateTime } from '@/utils/date'
 
 interface UserItem {
   id: number
@@ -240,33 +241,22 @@ const getRoleColor = (role: string) => {
 }
 
 const getRoleText = (role: string) => {
-  const texts: any = { system: '系统管理员', admin: '门店管理员', staff: '门店员工', user: '普通用户' }
+  const texts: any = { system: '系统管理员', admin: '门店管理员', staff: '门店员工', user: '普通用户', customer: '顾客' }
   return texts[role] || role
-}
-
-const formatDateTime = (dateStr: string | undefined) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 const handleToggleLock = async (record: any) => {
   try {
     if (record.is_locked) {
       await axios.post(`/users/${record.id}/unlock`)
-      message.success(`用户 ${record.username} 已解锁`)
+      $notify.success({ title: '解锁成功', description: `用户 ${record.username} 已解锁 🔓` })
     } else {
       await axios.post(`/users/${record.id}/lock`)
-      message.success(`用户 ${record.username} 已锁定`)
+      $notify.success({ title: '锁定成功', description: `用户 ${record.username} 已锁定 🔒` })
     }
     fetchUsers()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '操作失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '操作失败')
   }
 }
 
@@ -289,7 +279,7 @@ const fetchUsers = async () => {
     users.value = res.data.users
     pagination.total = res.data.total
   } catch (error) {
-    message.error('获取用户列表失败')
+    $notify.error({ title: '获取用户列表失败', description: '无法加载用户列表，请稍后重试' })
   } finally {
     loading.value = false
   }
@@ -342,15 +332,15 @@ const handleModalOk = async () => {
     submitLoading.value = true
     if (editingId.value) {
       await axios.put(`/users/${editingId.value}`, formState)
-      message.success('更新成功')
+      $notify.success({ title: '更新成功', description: '用户信息已更新' })
     } else {
       await axios.post('/users', formState)
-      message.success('创建成功')
+      $notify.success({ title: '创建成功', description: '新用户已创建成功' })
     }
     modalVisible.value = false
     fetchUsers()
   } catch (error: any) {
-    message.error(error.response?.data?.message || '操作失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || '操作失败')
   } finally {
     submitLoading.value = false
   }
@@ -359,10 +349,10 @@ const handleModalOk = async () => {
 const handleDelete = async (id: number) => {
   try {
     await axios.delete(`/users/${id}`)
-    message.success('删除成功')
+    $notify.success({ title: '删除成功', description: '用户已删除' })
     fetchUsers()
   } catch (error) {
-    message.error('删除失败')
+    NotifyPreset.operationFailed('删除用户失败')
   }
 }
 

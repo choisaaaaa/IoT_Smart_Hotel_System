@@ -308,7 +308,7 @@ import { useNotificationStore } from '@/stores/notification'
 import { authService, CANONICAL_ROLES } from '@/api/auth'
 import { initWebSocket } from '@/utils/websocket'
 import request from '@/api/request'
-import dayjs from 'dayjs'
+import { formatTimeHHmm, now } from '@/utils/date'
 
 const route = useRoute()
 const router = useRouter()
@@ -325,7 +325,7 @@ appStore.initUserInfo()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
 const notificationVisible = ref(false)
-const currentTime = ref(dayjs().format('HH:mm'))
+const currentTime = ref(formatTimeHHmm(now()))
 
 let timeInterval: ReturnType<typeof setInterval>
 
@@ -339,7 +339,7 @@ onMounted(async () => {
   } catch (error) {}
   
   timeInterval = setInterval(() => {
-    currentTime.value = dayjs().format('HH:mm')
+    currentTime.value = formatTimeHHmm(now())
     // 定期刷新未读数
     notificationStore.fetchAllUnreadCounts()
   }, 60000)

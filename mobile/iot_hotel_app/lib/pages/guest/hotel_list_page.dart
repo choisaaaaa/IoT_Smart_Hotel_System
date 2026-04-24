@@ -190,8 +190,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
       ),
       body: Column(
         children: [
-          _buildFilterBar(),
-          _buildQuickFilters(),
           _buildPointsInfo(),
           Expanded(
             child: _isLoading
@@ -220,50 +218,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
                       ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _FilterItem(label: '推荐排序'),
-          _FilterItem(label: '品牌价格'),
-          _FilterItem(label: '位置距离'),
-          _FilterItem(label: '筛选', showIcon: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickFilters() {
-    final filters = ['我的酒店', '服务设施', '官网特惠', '会员权益'];
-    return Container(
-      height: 50,
-      color: Colors.white,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: filters.length,
-        itemBuilder: (context, i) => Container(
-          margin: const EdgeInsets.only(right: 8, top: 8, bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            children: [
-              Text(filters[i], style: const TextStyle(fontSize: 12, color: AppColors.textPrimary)),
-              const Icon(Icons.keyboard_arrow_down, size: 14),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -419,22 +373,6 @@ class _HotelListPageState extends ConsumerState<HotelListPage> {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
       child: Text(label, style: TextStyle(color: text, fontSize: 10)),
-    );
-  }
-}
-
-class _FilterItem extends StatelessWidget {
-  final String label;
-  final bool showIcon;
-  const _FilterItem({required this.label, this.showIcon = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
-        Icon(showIcon ? Icons.tune : Icons.keyboard_arrow_down, size: 16, color: AppColors.textHint),
-      ],
     );
   }
 }
