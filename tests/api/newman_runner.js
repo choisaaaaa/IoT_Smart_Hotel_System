@@ -14,7 +14,7 @@ const path = require('path');
 const config = {
   collection: path.join(__dirname, 'postman_collection.json'),
   environment: {
-    baseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
+    baseUrl: process.env.API_BASE_URL || 'http://localhost:9000',
     timeout: 30000
   },
   reporters: ['cli', 'json', 'htmlextra'],

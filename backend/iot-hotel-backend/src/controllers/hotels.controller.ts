@@ -70,9 +70,9 @@ export async function search(req: AuthRequest, res: Response) {
         location: h.hotel_address || h.location || '酒店地址',
         star: h.hotel_star || h.star_rating || 5,
         rating: h.rating || 4.5,
-        reviewCount: h.review_count || 100,
+        reviewCount: h.review_count || 0,
         price: h.min_price || 299,
-        image: h.logo || h.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+        image: h.image_url || h.logo || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
         availableRooms: h.available_rooms
       }))
     });
@@ -105,7 +105,7 @@ export async function detail(req: AuthRequest, res: Response) {
         location: hotel.hotel_address || hotel.location,
         star: hotel.hotel_star || hotel.star_rating,
         rating: hotel.rating || 4.5,
-        reviewCount: hotel.review_count || 100,
+        reviewCount: hotel.review_count || 0,
         image: hotel.logo || hotel.image_url
       }
     });

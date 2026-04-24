@@ -8,15 +8,24 @@ import { isSystemAdmin, isHotelAdmin, isCustomer, isGuest, normalizeRole, CANONI
 export const get = async (req: AuthRequest, res: Response) => {
   try {
     const hotelId = req.user?.hotel_id;
-    const userRole = normalizeRole(req.user?.role);
+    const userRole = req.user ? normalizeRole(req.user.role) : null;
 
-    // 系统管理员和顾客可以从 query 指定 hotel_id
+    // 系统管理员和顾客/游客可以从 query 指定 hotel_id
     const queryHotelId = req.query.hotel_id;
-    if ((isSystemAdmin(userRole) || isCustomer(userRole) || isGuest(userRole)) && queryHotelId) {
+    if ((!userRole || isSystemAdmin(userRole) || isCustomer(userRole) || isGuest(userRole)) && queryHotelId) {
       const id = parseInt(queryHotelId as string);
       const hotel = await HotelService.getHotelById(id);
       if (!hotel) {return res.status(404).json(errorResponse('酒店不存在'));}
       return res.json(successResponse(hotel, '获取指定酒店信息成功'));
+    }
+
+    // 如果是游客且没有指定 hotel_id，默认返回第一个酒店（或总部信息）
+    if (!req.user) {
+      const hotels = await HotelService.getAllHotels();
+      if (hotels && hotels.length > 0) {
+        return res.json(successResponse(hotels[0], '获取默认酒店信息成功'));
+      }
+      return res.status(404).json(errorResponse('暂无酒店信息'));
     }
 
     // 如果 hotelId 为 0 且是系统管理员，则显示总部信息

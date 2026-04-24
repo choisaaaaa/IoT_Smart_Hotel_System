@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import axios from 'axios';
 
-// Mock axios
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => ({
+// Use vi.hoisted to define variables that need to be available in vi.mock
+const { mockHoistedCreate } = vi.hoisted(() => {
+  return {
+    mockHoistedCreate: vi.fn().mockReturnValue({
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() }
@@ -13,27 +13,39 @@ vi.mock('axios', () => ({
       post: vi.fn(),
       put: vi.fn(),
       delete: vi.fn()
-    }))
+    })
+  };
+});
+
+// Mock ant-design-vue to prevent icon loading errors
+vi.mock('ant-design-vue', () => ({
+  message: {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn()
   }
 }));
 
+// Mock axios BEFORE importing request
+vi.mock('axios', () => {
+  return {
+    default: {
+      create: mockHoistedCreate
+    },
+    create: mockHoistedCreate
+  };
+});
+
+// Import request after mocking axios
+import '../request';
+
 describe('API 请求测试', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('应该正确创建 axios 实例', () => {
-    const mockCreate = axios.create as any;
-    expect(mockCreate).toHaveBeenCalled();
+    expect(mockHoistedCreate).toHaveBeenCalled();
   });
 
   it('应该配置基础 URL', () => {
-    const mockCreate = axios.create as any;
-    const config = mockCreate.mock.calls[0]?.[0];
+    const config = mockHoistedCreate.mock.calls[0]?.[0];
     
     if (config) {
       expect(config.baseURL).toBeDefined();
@@ -41,8 +53,7 @@ describe('API 请求测试', () => {
   });
 
   it('应该配置超时时间', () => {
-    const mockCreate = axios.create as any;
-    const config = mockCreate.mock.calls[0]?.[0];
+    const config = mockHoistedCreate.mock.calls[0]?.[0];
     
     if (config) {
       expect(config.timeout).toBeGreaterThan(0);

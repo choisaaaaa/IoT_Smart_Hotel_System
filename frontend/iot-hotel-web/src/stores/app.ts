@@ -216,7 +216,8 @@ export const useAppStore = defineStore('app', () => {
       return url
     }
     // 获取当前 API 的基础路径
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'
+    // 优先使用环境变量，其次使用当前页面的协议和主机（避免混合内容问题）
+    const apiBase = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.host}`
     return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`
   }
 

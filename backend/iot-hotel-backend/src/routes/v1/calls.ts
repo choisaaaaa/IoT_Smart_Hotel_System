@@ -8,17 +8,200 @@ import logger from '../../utils/logger';
 import pool, { RowDataPacket } from '../../config/database';
 import mqttService from '../../services/mqtt.service';
 
+/**
+ * @swagger
+ * tags:
+ *   name: Calls
+ *   description: 语音通话与前台呼叫接口
+ */
+
 const router = Router();
 
-// 原有通话路由
+/**
+ * @swagger
+ * /calls/initiate:
+ *   post:
+ *     summary: 发起通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [callee_type, callee_id]
+ *             properties:
+ *               callee_type: { type: string, enum: [front_desk, room] }
+ *               callee_id: { type: string }
+ *     responses:
+ *       200:
+ *         description: 通话已发起
+ */
 router.post('/initiate', authenticate as any, callController.initiateCall);
+
+/**
+ * @swagger
+ * /calls/outbound:
+ *   post:
+ *     summary: 发起外呼通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 外呼已发起
+ */
 router.post('/outbound', authenticate as any, callController.outboundCall);
+
+/**
+ * @swagger
+ * /calls/active:
+ *   get:
+ *     summary: 获取当前活跃通话列表
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
+/**
+ * @swagger
+ * /calls/{call_id}/answer:
+ *   get:
+ *     summary: 获取通话应答状态
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: call_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
+router.get('/:call_id/answer', authenticate as any, callController.answerCall);
+
+/**
+ * @swagger
+ * /calls/{call_id}/answer:
+ *   post:
+ *     summary: 接听通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: call_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 接听成功
+ */
 router.post('/:call_id/answer', authenticate as any, callController.answerCall);
+
+/**
+ * @swagger
+ * /calls/{call_id}/reject:
+ *   post:
+ *     summary: 拒接通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: call_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 拒接成功
+ */
 router.post('/:call_id/reject', authenticate as any, callController.rejectCall);
+
+/**
+ * @swagger
+ * /calls/{call_id}/hangup:
+ *   post:
+ *     summary: 挂断通话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: call_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 挂断成功
+ */
 router.post('/:call_id/hangup', authenticate as any, callController.hangupCall);
+
+/**
+ * @swagger
+ * /calls/{call_id}/status:
+ *   get:
+ *     summary: 获取通话状态
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: call_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 成功获取状态
+ */
 router.get('/:call_id/status', authenticate as any, callController.getCallStatus);
+
+/**
+ * @swagger
+ * /calls/active:
+ *   get:
+ *     summary: 获取活跃通话列表
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/active', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getActiveCalls);
+
+/**
+ * @swagger
+ * /calls/history:
+ *   get:
+ *     summary: 获取通话历史记录
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/history', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallHistory);
+
+/**
+ * @swagger
+ * /calls/stats:
+ *   get:
+ *     summary: 获取通话统计数据
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.STAFF, CANONICAL_ROLES.SYSTEM_ADMIN]), callController.getCallStats);
 
 // ============================================
@@ -30,7 +213,31 @@ router.get('/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN
  * 创建 WebRTC 语音会话
  * 用于前端浏览器与房间硬件设备建立 WebRTC 语音通话
  */
+/**
+ * @swagger
+ * /calls/webrtc/session:
+ *   post:
+ *     summary: 创建 WebRTC 语音会话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [call_id]
+ *             properties:
+ *               call_id: { type: string }
+ *               room_id: { type: integer }
+ *               room_number: { type: string }
+ *     responses:
+ *       200:
+ *         description: 会话已创建
+ */
 router.post('/webrtc/session', authenticate as any, async (req: AuthRequest, res) => {
+
   try {
     const { call_id, room_id, room_number } = req.body;
     const currentUser = req.user as any;
@@ -103,6 +310,32 @@ router.post('/webrtc/session', authenticate as any, async (req: AuthRequest, res
  * POST /api/v1/calls/webrtc/:session_id/sdp-offer
  * 前端发送 SDP Offer 到语音网关
  */
+/**
+ * @swagger
+ * /calls/webrtc/{session_id}/sdp-offer:
+ *   post:
+ *     summary: 发送SDP Offer到语音网关
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: session_id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sdp]
+ *             properties:
+ *               sdp: { type: object, description: "SDP Offer对象" }
+ *     responses:
+ *       200:
+ *         description: SDP Offer已接收
+ */
 router.post('/webrtc/:session_id/sdp-offer', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const { session_id } = req.params;
@@ -146,6 +379,32 @@ router.post('/webrtc/:session_id/sdp-offer', authenticate as any, async (req: Au
  * POST /api/v1/calls/webrtc/:session_id/ice-candidate
  * 前端发送 ICE Candidate 到语音网关
  */
+/**
+ * @swagger
+ * /calls/webrtc/{session_id}/ice-candidate:
+ *   post:
+ *     summary: 发送ICE Candidate到语音网关
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: session_id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [candidate]
+ *             properties:
+ *               candidate: { type: object, description: "ICE Candidate对象" }
+ *     responses:
+ *       200:
+ *         description: ICE Candidate已接收
+ */
 router.post('/webrtc/:session_id/ice-candidate', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const { session_id } = req.params;
@@ -177,6 +436,30 @@ router.post('/webrtc/:session_id/ice-candidate', authenticate as any, async (req
 /**
  * POST /api/v1/calls/webrtc/:session_id/terminate
  * 终止 WebRTC 会话
+ */
+/**
+ * @swagger
+ * /calls/webrtc/{session_id}/terminate:
+ *   post:
+ *     summary: 终止WebRTC会话
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: session_id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason: { type: string, example: "user_hangup" }
+ *     responses:
+ *       200:
+ *         description: 会话已终止
  */
 router.post('/webrtc/:session_id/terminate', authenticate as any, async (req: AuthRequest, res) => {
   try {
@@ -214,6 +497,18 @@ router.post('/webrtc/:session_id/terminate', authenticate as any, async (req: Au
  * GET /api/v1/calls/webrtc/sessions
  * 获取活跃 WebRTC 会话列表（管理用）
  */
+/**
+ * @swagger
+ * /calls/webrtc/sessions:
+ *   get:
+ *     summary: 获取活跃WebRTC会话列表
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取会话列表
+ */
 router.get('/webrtc/sessions', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), async (req: AuthRequest, res) => {
   try {
     const voiceGateway = getVoiceGateway();
@@ -234,6 +529,18 @@ router.get('/webrtc/sessions', authenticate as any, authorize([CANONICAL_ROLES.H
 /**
  * GET /api/v1/calls/webrtc/stats
  * 获取 WebRTC 语音网关统计
+ */
+/**
+ * @swagger
+ * /calls/webrtc/stats:
+ *   get:
+ *     summary: 获取WebRTC语音网关统计
+ *     tags: [Calls]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取统计
  */
 router.get('/webrtc/stats', authenticate as any, authorize([CANONICAL_ROLES.HOTEL_ADMIN, CANONICAL_ROLES.SYSTEM_ADMIN]), async (req: AuthRequest, res) => {
   try {

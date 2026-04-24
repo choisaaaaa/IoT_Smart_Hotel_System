@@ -4,12 +4,62 @@ import pool, { RowDataPacket, ResultSetHeader } from '../../config/database';
 import { authenticate } from '../../middleware/auth';
 import logger from '../../utils/logger';
 
+/**
+ * @swagger
+ * tags:
+ *   name: Favorites
+ *   description: 用户酒店收藏管理接口
+ */
+
 const router = Router();
+
+/**
+ * @swagger
+ * /favorites:
+ *   get:
+ *     summary: 获取我的收藏列表
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ *   post:
+ *     summary: 添加酒店到收藏
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [hotel_id]
+ *             properties:
+ *               hotel_id: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 收藏成功
+ */
 
 // 需要认证的路由
 const authenticatedRouter = Router();
+
 authenticatedRouter.use(authenticate);
 
+/**
+ * @swagger
+ * /favorites:
+ *   get:
+ *     summary: 获取收藏列表
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -53,6 +103,18 @@ authenticatedRouter.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /favorites:
+ *   post:
+ *     summary: 添加收藏
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: 添加成功
+ */
 authenticatedRouter.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -93,6 +155,23 @@ authenticatedRouter.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /favorites/{hotelId}:
+ *   delete:
+ *     summary: 取消收藏酒店
+ *     tags: [Favorites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 取消成功
+ */
 authenticatedRouter.delete('/:hotelId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -118,6 +197,21 @@ authenticatedRouter.delete('/:hotelId', async (req: AuthRequest, res: Response) 
   }
 });
 
+/**
+ * @swagger
+ * /favorites/check/{hotelId}:
+ *   get:
+ *     summary: 查询酒店是否已收藏
+ *     tags: [Favorites]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 成功返回状态
+ */
 // 公开路由 - 游客也可访问
 router.get('/check/:hotelId', async (req: AuthRequest, res: Response) => {
   try {

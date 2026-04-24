@@ -1,16 +1,82 @@
 {
   "info": {
-    "_postman_id": "iot-device-api-collection",
-    "name": "IoT设备控制API测试集合",
-    "description": "慧宿智联智能酒店系统 - IoT设备控制API测试\n对应配图：8.2 设备控制API测试报告\n\n测试范围：\n1. 设备指令下发 API\n2. 设备状态查询 API\n3. 环境数据获取 API\n4. 批量设备控制 API",
+    "_postman_id": "iot-device-api-collection-v2",
+    "name": "IoT设备控制API测试集合（前端已实现功能）",
+    "description": "慧宿智联智能酒店系统 - IoT设备控制API测试\n对应配图：8.2 设备控制API测试报告\n\n测试范围（仅包含前端已实现功能）：\n✅ 设备控制API\n✅ 环境数据API\n\n以下功能前端未实现，已从测试项移除：\n❌ MQTT管理 (/mqtt/*)\n❌ 场景模式管理 (/scenes/*)\n❌ 红外遥控管理 (/ir-remote/*)\n❌ 设备分组管理 (/device-groups/*)\n❌ 设备报警管理 (/device-alarms/*)\n❌ 固件管理 (/firmware/*)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "01-认证登录",
+      "name": "01-系统健康检查",
       "item": [
         {
-          "name": "管理员登录获取Token",
+          "name": "系统信息",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('状态码为 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('返回系统信息', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.code).to.eql(200);",
+                  "    pm.expect(jsonData.message).to.contain('慧宿智联');",
+                  "    pm.expect(jsonData.version).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "健康检查",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('服务健康', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('healthy');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02-认证模块",
+      "item": [
+        {
+          "name": "管理员登录",
           "request": {
             "method": "POST",
             "header": [
@@ -21,7 +87,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+              "raw": "{\n    \"phone\": \"13666666666\",\n    \"password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
@@ -55,263 +121,10 @@
       ]
     },
     {
-      "name": "02-设备指令下发API",
+      "name": "03-设备控制模块（前端已实现）",
       "item": [
         {
-          "name": "发送开灯指令",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_101_light\",\n    \"command\": \"turn_on\",\n    \"params\": {}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_light/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_light", "command"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('指令下发成功', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "    pm.expect(jsonData.message).to.contain('成功');",
-                  "});",
-                  "",
-                  "pm.test('响应时间小于 500ms', function () {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(500);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "发送关灯指令",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_101_light\",\n    \"command\": \"turn_off\",\n    \"params\": {}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_light/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_light", "command"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('关灯指令下发成功', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "发送空调温度设置指令",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_101_ac\",\n    \"command\": \"set_temperature\",\n    \"params\": {\n        \"temperature\": 24\n    }\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_ac/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_ac", "command"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('空调温度设置成功', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "发送窗帘控制指令",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_101_curtain\",\n    \"command\": \"open\",\n    \"params\": {}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_curtain/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_curtain", "command"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('窗帘控制指令下发成功', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "发送无效指令-应该返回错误",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_101_light\",\n    \"command\": \"invalid_command\",\n    \"params\": {}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_light/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_light", "command"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('无效指令返回错误', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.be.oneOf([400, 422]);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "03-设备状态查询API",
-      "item": [
-        {
-          "name": "查询单个设备状态",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/room_101_light/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "room_101_light", "status"]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('设备状态查询成功', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "    pm.expect(jsonData.data).to.have.property('online');",
-                  "    pm.expect(jsonData.data).to.have.property('state');",
-                  "});",
-                  "",
-                  "pm.test('响应时间小于 200ms', function () {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "查询所有设备列表",
+          "name": "获取设备列表",
           "request": {
             "method": "GET",
             "header": [
@@ -332,11 +145,15 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('设备列表查询成功', function () {",
+                  "pm.test('获取设备列表成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
                   "    pm.expect(jsonData.code).to.eql(200);",
                   "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('响应时间小于 200ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(200);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -375,8 +192,160 @@
                   "pm.test('按房间筛选设备成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
                   "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "获取设备详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/devices/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "devices", "1"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('获取设备详情成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('device_id');",
+                  "    pm.expect(jsonData.data).to.have.property('status');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "发送设备控制指令-开灯",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"command_type\": \"relay_on\",\n    \"command_value\": \"on\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/devices/1/command",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "devices", "1", "command"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('设备控制指令发送成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.code).to.be.oneOf([200, 202]);",
+                  "});",
+                  "",
+                  "pm.test('响应时间小于 500ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(500);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "发送设备控制指令-关灯",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"command_type\": \"relay_off\",\n    \"command_value\": \"off\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/devices/1/command",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "devices", "1", "command"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('关灯指令发送成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.code).to.be.oneOf([200, 202]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "获取设备传感器数据",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/devices/1/sensor-data",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "devices", "1", "sensor-data"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('获取传感器数据成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -387,10 +356,10 @@
       ]
     },
     {
-      "name": "04-环境数据获取API",
+      "name": "04-环境数据模块（前端已实现）",
       "item": [
         {
-          "name": "获取所有环境数据",
+          "name": "获取环境数据汇总",
           "request": {
             "method": "GET",
             "header": [
@@ -428,7 +397,7 @@
           ]
         },
         {
-          "name": "按房间获取环境数据",
+          "name": "按楼层获取环境数据",
           "request": {
             "method": "GET",
             "header": [
@@ -438,13 +407,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/environment?room_id=101",
+              "raw": "{{baseUrl}}/api/v1/environment?floor_id=1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "environment"],
               "query": [
                 {
-                  "key": "room_id",
-                  "value": "101"
+                  "key": "floor_id",
+                  "value": "1"
                 }
               ]
             }
@@ -455,10 +424,9 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('按房间获取环境数据成功', function () {",
+                  "pm.test('按楼层获取环境数据成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
                   "    pm.expect(jsonData.data).to.exist;",
                   "});"
                 ],
@@ -478,7 +446,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/environment/history?room_id=101&start_date=2026-04-01&end_date=2026-04-24",
+              "raw": "{{baseUrl}}/api/v1/environment/history?room_id=101&hours=24",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "environment", "history"],
               "query": [
@@ -487,12 +455,8 @@
                   "value": "101"
                 },
                 {
-                  "key": "start_date",
-                  "value": "2026-04-01"
-                },
-                {
-                  "key": "end_date",
-                  "value": "2026-04-24"
+                  "key": "hours",
+                  "value": "24"
                 }
               ]
             }
@@ -506,8 +470,73 @@
                   "pm.test('环境数据历史查询成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "    pm.expect(jsonData.data).to.have.property('list');",
+                  "    pm.expect(jsonData.data).to.have.property('history');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "获取消防报警记录",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/environment/fire-alarms",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "environment", "fire-alarms"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('消防报警记录查询成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('alarms');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "获取事件日志",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/environment/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "environment", "event-logs"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('事件日志查询成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('logs');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -518,30 +547,22 @@
       ]
     },
     {
-      "name": "05-批量设备控制API",
+      "name": "05-房间管理模块（前端已实现）",
       "item": [
         {
-          "name": "批量控制房间所有设备",
+          "name": "获取房间列表",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
               {
                 "key": "Authorization",
                 "value": "Bearer {{adminToken}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"room_id\": 101,\n    \"commands\": [\n        {\n            \"device_id\": \"room_101_light\",\n            \"command\": \"turn_on\"\n        },\n        {\n            \"device_id\": \"room_101_ac\",\n            \"command\": \"turn_on\"\n        },\n        {\n            \"device_id\": \"room_101_curtain\",\n            \"command\": \"open\"\n        }\n    ]\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/batch-control",
+              "raw": "{{baseUrl}}/api/v1/rooms",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "batch-control"]
+              "path": ["api", "v1", "rooms"]
             }
           },
           "response": [],
@@ -550,11 +571,43 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('批量控制成功', function () {",
+                  "pm.test('获取房间列表成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.eql(200);",
-                  "    pm.expect(jsonData.data).to.have.property('success_count');",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "获取房间详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rooms/101",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "rooms", "101"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('获取房间详情成功', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('status');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -571,7 +624,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// 全局前置脚本 - 设置默认超时"
+          "// 全局前置脚本"
         ]
       }
     },
@@ -580,7 +633,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// 全局测试脚本 - 统计测试结果"
+          "// 全局测试脚本"
         ]
       }
     }

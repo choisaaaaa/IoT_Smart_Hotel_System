@@ -1,0 +1,1123 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for iot-hotel-web/src/views/reception/Bookings.vue</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../../prettify.css" />
+    <link rel="stylesheet" href="../../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">iot-hotel-web/src/views/reception</a> Bookings.vue</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/274</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/274</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&lt;template&gt;
+<span class="cstat-no" title="statement not covered" >  &lt;div class="reception-bookings"&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div class="toolbar"&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-input-search v-model:value="searchKey" placeholder="搜索预订号/客人名" style="width: 240px;" allow-clear @search="fetchBookings" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-select v-model:value="filterStatus" placeholder="状态筛选" allow-clear style="width: 140px;" @change="fetchBookings"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="pending"&gt;待确认&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="confirmed"&gt;已支付&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="pre_checked_in"&gt;预入住&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="checked_in"&gt;已入住&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="checked_out"&gt;已退房&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select-option value="cancelled"&gt;已取消&lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-select&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;a-button type="primary" @click="showCreateModal"&gt;&lt;PlusOutlined /&gt; 新建预订&lt;/a-button&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    &lt;a-tabs v-model:activeKey="activeTab" @change="fetchBookings"&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;a-tab-pane key="today"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;template #tab&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-badge :count="pendingBookingCount" :offset="[12, -4]" :show-zero="false"&gt;</span>
+            今日预订
+<span class="cstat-no" title="statement not covered" >          &lt;/a-badge&gt;</span>
+        &lt;/template&gt;
+<span class="cstat-no" title="statement not covered" >      &lt;/a-tab-pane&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;a-tab-pane key="history" tab="历史预订" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/a-tabs&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    &lt;a-table</span>
+<span class="cstat-no" title="statement not covered" >      :columns="columns"</span>
+<span class="cstat-no" title="statement not covered" >      :data-source="bookings"</span>
+<span class="cstat-no" title="statement not covered" >      :loading="loading"</span>
+<span class="cstat-no" title="statement not covered" >      :pagination="{ pageSize: 10 }"</span>
+<span class="cstat-no" title="statement not covered" >      row-key="id"</span>
+<span class="cstat-no" title="statement not covered" >      size="middle"</span>
+    &gt;
+<span class="cstat-no" title="statement not covered" >      &lt;template #bodyCell="{ column, record }"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;template v-if="column.key === 'status'"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-tag :color="statusColor(record.status)"&gt;{{ statusText(record.status) }}&lt;/a-tag&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/template&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;template v-if="column.key === 'total_price'"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;span style="font-weight: 600;"&gt;¥{{ record.total_price }}&lt;/span&gt;</span>
+        &lt;/template&gt;
+<span class="cstat-no" title="statement not covered" >        &lt;template v-if="column.key === 'action'"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-button type="link" size="small" @click="viewDetail(record)"&gt;详情&lt;/a-button&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-dropdown v-if="['pending', 'confirmed', 'pre_checked_in', 'checked_in'].includes(record.status)"&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;a-button type="link" size="small"&gt;操作 &lt;DownOutlined /&gt;&lt;/a-button&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;template #overlay&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;a-menu&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;a-menu-item v-if="record.status === 'pending'" @click="handleConfirm(record.id)"&gt;确认预订&lt;/a-menu-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;a-menu-item v-if="record.status === 'checked_in'" @click="handleCheckout(record.id)"&gt;办理退房&lt;/a-menu-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;a-menu-item danger v-if="['pending', 'confirmed', 'pre_checked_in'].includes(record.status)" @click="handleCancel(record.id)"&gt;取消预订&lt;/a-menu-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/a-menu&gt;</span>
+              &lt;/template&gt;
+<span class="cstat-no" title="statement not covered" >            &lt;/a-dropdown&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-space&gt;</span>
+        &lt;/template&gt;
+      &lt;/template&gt;
+<span class="cstat-no" title="statement not covered" >    &lt;/a-table&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    &lt;a-modal v-model:open="modalVisible" title="新建预订" @ok="handleCreateBooking" width="600px"&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;a-form :model="newBooking" layout="vertical"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-row :gutter="16"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-col :span="12"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-form-item label="客人姓名" required&gt;&lt;a-input v-model:value="newBooking.guest_name" /&gt;&lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-col&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-col :span="12"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-form-item label="联系电话" required&gt;&lt;a-input v-model:value="newBooking.guest_phone" /&gt;&lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-col&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-row&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-row :gutter="16"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-col :span="12"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-form-item label="入住日期"&gt;&lt;a-date-picker v-model:value="newBooking.check_in_date" style="width: 100%;" /&gt;&lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-col&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-col :span="12"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-form-item label="退房日期"&gt;&lt;a-date-picker v-model:value="newBooking.check_out_date" style="width: 100%;" /&gt;&lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-col&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-row&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-form-item label="分配房间" required&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-select v-model:value="newBooking.room_id" placeholder="选择房间"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-select-option v-for="r in hotelStore.getAvailableRooms()" :key="r.id" :value="r.id"&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {{ r.room_number }} - {{ r.room_name }} (¥{{ r.room_price }})</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/a-select-option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-select&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-form-item label="备注"&gt;&lt;a-textarea v-model:value="newBooking.special_requests" :rows="2" /&gt;&lt;/a-form-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/a-form&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/a-modal&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    &lt;!-- 订单详情弹窗 --&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;a-modal</span>
+<span class="cstat-no" title="statement not covered" >      v-model:open="detailVisible"</span>
+<span class="cstat-no" title="statement not covered" >      title="订单详情"</span>
+<span class="cstat-no" title="statement not covered" >      :footer="null"</span>
+<span class="cstat-no" title="statement not covered" >      width="700px"</span>
+    &gt;
+<span class="cstat-no" title="statement not covered" >      &lt;div v-if="currentBooking" class="booking-detail-content"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;a-descriptions title="基本信息" bordered :column="2" size="small"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="预订号"&gt;{{ currentBooking.booking_number }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="状态"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-tag :color="statusColor(currentBooking.status)"&gt;{{ statusText(currentBooking.status) }}&lt;/a-tag&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="客人姓名"&gt;{{ currentBooking.guest_name }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="联系电话"&gt;{{ currentBooking.guest_phone }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="证件号码"&gt;{{ currentBooking.guest_id_number || '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="入住人数"&gt;{{ currentBooking.guest_count }}人&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-descriptions&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;a-descriptions title="入住信息" bordered :column="2" size="small" style="margin-top: 20px;"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="房型"&gt;{{ currentBooking.room_type_name || currentBooking.room_type || '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="分配房号"&gt;{{ currentBooking.room_number || '未分配' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="实际入住"&gt;{{ currentBooking.check_in_time ? formatDateTime(currentBooking.check_in_time) : '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="实际退房"&gt;{{ currentBooking.check_out_time ? formatDateTime(currentBooking.check_out_time) : '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="预订入住"&gt;{{ formatDateTime(currentBooking.check_in_date) }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="预订退房"&gt;{{ formatDateTime(currentBooking.check_out_date) }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-descriptions&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;a-descriptions title="费用与支付" bordered :column="2" size="small" style="margin-top: 20px;"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="房型基准价"&gt;¥{{ currentBooking.room_type_base_price || '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="选定方案"&gt;{{ currentBooking.plan_name || '标准价' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="方案挂牌价"&gt;¥{{ currentBooking.plan_base_price || currentBooking.room_type_base_price || '-' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="支付方式"&gt;{{ currentBooking.payment_method === 'balance' ? '余额支付' : '到店支付' }}&lt;/a-descriptions-item&gt;</span>
+          
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="总金额" :span="2"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span style="color: #f5222d; font-weight: bold; font-size: 18px;"&gt;¥{{ currentBooking.total_price }}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-descriptions-item&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="优惠详情" :span="2"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-space direction="vertical" size="small"&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div v-if="currentBooking.coupon_name"&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;a-tag color="orange"&gt;优惠券&lt;/a-tag&gt; {{ currentBooking.coupon_name }}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div v-if="currentBooking.points_discount &gt; 0"&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;a-tag color="gold"&gt;积分抵扣&lt;/a-tag&gt; ¥{{ currentBooking.points_discount }} (使用 {{ currentBooking.used_points }} 积分)</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div v-if="currentBooking.manual_discount &lt; 1"&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;a-tag color="blue"&gt;手动折扣&lt;/a-tag&gt; {{ (currentBooking.manual_discount * 10).toFixed(1) }}折</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div v-if="currentBooking.manual_reduce &gt; 0"&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;a-tag color="red"&gt;手动立减&lt;/a-tag&gt; ¥{{ currentBooking.manual_reduce }}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div v-if="!currentBooking.coupon_name &amp;&amp; !(currentBooking.points_discount &gt; 0) &amp;&amp; currentBooking.manual_discount &gt;= 1 &amp;&amp; !(currentBooking.manual_reduce &gt; 0)"&gt;</span>
+                无优惠
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-descriptions&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;a-descriptions title="其他" bordered :column="1" size="small" style="margin-top: 20px;"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="特别要求"&gt;{{ currentBooking.special_requests || '无' }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-descriptions-item label="下单时间"&gt;{{ formatDateTime(currentBooking.created_at) }}&lt;/a-descriptions-item&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/a-descriptions&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;div class="detail-actions" style="margin-top: 30px; text-align: right;"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-button @click="detailVisible = false"&gt;关闭&lt;/a-button&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;a-button v-if="currentBooking.status === 'pending'" type="primary" @click="handleConfirm(currentBooking.id)"&gt;确认订单&lt;/a-button&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/a-space&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/a-modal&gt;</span>
+<span class="cstat-no" title="statement not covered" >  &lt;/div&gt;</span>
+&lt;/template&gt;
+&nbsp;
+&lt;script setup lang="ts"&gt;
+<span class="cstat-no" title="statement not covered" >import { ref, reactive, onMounted, computed } from 'vue'</span>
+<span class="cstat-no" title="statement not covered" >import { message } from 'ant-design-vue'</span>
+<span class="cstat-no" title="statement not covered" >import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'</span>
+<span class="cstat-no" title="statement not covered" >import dayjs from 'dayjs'</span>
+<span class="cstat-no" title="statement not covered" >import { formatDateTime } from '@/utils/date'</span>
+<span class="cstat-no" title="statement not covered" >import { bookingApi } from '@/api/booking'</span>
+<span class="cstat-no" title="statement not covered" >import { useRouter } from 'vue-router'</span>
+<span class="cstat-no" title="statement not covered" >import { useHotelStore } from '@/stores/hotel'</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const router = useRouter()</span>
+<span class="cstat-no" title="statement not covered" >const hotelStore = useHotelStore()</span>
+<span class="cstat-no" title="statement not covered" >const loading = ref(false)</span>
+<span class="cstat-no" title="statement not covered" >const searchKey = ref('')</span>
+<span class="cstat-no" title="statement not covered" >const filterStatus = ref&lt;string | undefined&gt;()</span>
+<span class="cstat-no" title="statement not covered" >const activeTab = ref('today')</span>
+<span class="cstat-no" title="statement not covered" >const modalVisible = ref(false)</span>
+<span class="cstat-no" title="statement not covered" >const detailVisible = ref(false)</span>
+<span class="cstat-no" title="statement not covered" >const bookings = ref&lt;any[]&gt;([])</span>
+<span class="cstat-no" title="statement not covered" >const currentBooking = ref&lt;any&gt;(null)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const pendingBookingCount = computed(() =&gt; bookings.value.filter(b =&gt; b.status === 'pending').length)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const newBooking = reactive({</span>
+<span class="cstat-no" title="statement not covered" >  guest_name: '', </span>
+<span class="cstat-no" title="statement not covered" >  guest_phone: '', </span>
+<span class="cstat-no" title="statement not covered" >  room_id: undefined as number | undefined,</span>
+<span class="cstat-no" title="statement not covered" >  check_in_date: dayjs().add(1, 'day'), </span>
+<span class="cstat-no" title="statement not covered" >  check_out_date: dayjs().add(3, 'day'),</span>
+<span class="cstat-no" title="statement not covered" >  guest_count: 1,</span>
+<span class="cstat-no" title="statement not covered" >  special_requests: '',</span>
+<span class="cstat-no" title="statement not covered" >  payment_method: 'balance'</span>
+<span class="cstat-no" title="statement not covered" >})</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const columns = [</span>
+<span class="cstat-no" title="statement not covered" >  { title: '预订号', dataIndex: 'booking_number', width: 170 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '客人', dataIndex: 'guest_name', width: 100 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '电话', dataIndex: 'guest_phone', width: 130 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '房号', dataIndex: 'room_number', width: 80 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '实际入住', dataIndex: 'check_in_time', key: 'check_in_time', width: 130, customRender: ({ record }: any) =&gt; formatDateTime(record.check_in_time || record.check_in_date) },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '实际退房', dataIndex: 'check_out_time', key: 'check_out_time', width: 130, customRender: ({ record }: any) =&gt; formatDateTime(record.check_out_time || record.check_out_date) },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '金额', dataIndex: 'total_price', key: 'total_price', width: 110 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },</span>
+<span class="cstat-no" title="statement not covered" >  { title: '操作', key: 'action', width: 160 }</span>
+<span class="cstat-no" title="statement not covered" >]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function statusColor(s: string): string {</span>
+<span class="cstat-no" title="statement not covered" >  return ({ pending: 'warning', confirmed: 'processing', pre_checked_in: 'cyan', checked_in: 'success', checked_out: 'default', cancelled: 'error' } as Record&lt;string, string&gt;)[s] || 'default'</span>
+}
+<span class="cstat-no" title="statement not covered" >function statusText(s: string): string {</span>
+<span class="cstat-no" title="statement not covered" >  return ({ pending: '待确认', confirmed: '已支付', pre_checked_in: '预入住', checked_in: '已入住', checked_out: '已退房', cancelled: '已取消' } as Record&lt;string, string&gt;)[s] || s</span>
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function viewDetail(record: any) {</span>
+<span class="cstat-no" title="statement not covered" >  currentBooking.value = record</span>
+<span class="cstat-no" title="statement not covered" >  detailVisible.value = true</span>
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function doCheckin(record: any) {</span>
+<span class="cstat-no" title="statement not covered" >  router.push({</span>
+<span class="cstat-no" title="statement not covered" >    path: '/reception/checkinout',</span>
+<span class="cstat-no" title="statement not covered" >    query: { booking_id: record.id }</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function fetchBookings() {</span>
+<span class="cstat-no" title="statement not covered" >  loading.value = true</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    const params: any = {</span>
+<span class="cstat-no" title="statement not covered" >      guest_name: searchKey.value,</span>
+<span class="cstat-no" title="statement not covered" >      status: filterStatus.value</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+&nbsp;
+    // 如果没有筛选状态，且处于“今日预订”分栏，则不传状态给后端，由前端过滤
+    // 如果是“历史预订”分栏，且没有筛选状态，则也不传，由前端过滤
+    
+<span class="cstat-no" title="statement not covered" >    const res: any = await bookingApi.getBookingList(params)</span>
+<span class="cstat-no" title="statement not covered" >    let list = res.data?.list || []</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    const today = dayjs().format('YYYY-MM-DD')</span>
+    
+    // 前端二次过滤，确保分栏逻辑准确
+<span class="cstat-no" title="statement not covered" >    if (activeTab.value === 'today') {</span>
+<span class="cstat-no" title="statement not covered" >      list = list.filter((b: any) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        const isTodayCheckin = dayjs(b.check_in_date).isSame(today, 'day')</span>
+<span class="cstat-no" title="statement not covered" >        const isTodayCheckout = dayjs(b.check_out_date).isSame(today, 'day')</span>
+<span class="cstat-no" title="statement not covered" >        const isActive = ['pending', 'confirmed', 'pre_checked_in', 'checked_in'].includes(b.status)</span>
+        // 今日预订：活跃订单，或者虽然不是活跃但就在今天入住/离店的
+<span class="cstat-no" title="statement not covered" >        return isActive || isTodayCheckin || isTodayCheckout</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    } else {</span>
+      // 历史预订：已退房、已取消，且不是今天离店的（今天离店的留在今日预订）
+<span class="cstat-no" title="statement not covered" >      list = list.filter((b: any) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        const isHistoryStatus = ['checked_out', 'cancelled'].includes(b.status)</span>
+<span class="cstat-no" title="statement not covered" >        const isTodayCheckout = dayjs(b.check_out_date).isSame(today, 'day')</span>
+<span class="cstat-no" title="statement not covered" >        return isHistoryStatus &amp;&amp; !isTodayCheckout</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+    }
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    bookings.value = list</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error('获取预订列表失败')</span>
+<span class="cstat-no" title="statement not covered" >  } finally {</span>
+<span class="cstat-no" title="statement not covered" >    loading.value = false</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function showCreateModal() { </span>
+<span class="cstat-no" title="statement not covered" >  modalVisible.value = true </span>
+<span class="cstat-no" title="statement not covered" >  void hotelStore.fetchRooms({ pageSize: 300 }).catch(() =&gt; {})</span>
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function handleCreateBooking() {</span>
+<span class="cstat-no" title="statement not covered" >  if (!newBooking.guest_name || !newBooking.guest_phone || !newBooking.room_id) {</span>
+<span class="cstat-no" title="statement not covered" >    message.warning('请填写必填项')</span>
+<span class="cstat-no" title="statement not covered" >    return</span>
+  }
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    await bookingApi.createBooking({</span>
+<span class="cstat-no" title="statement not covered" >      ...newBooking,</span>
+<span class="cstat-no" title="statement not covered" >      check_in_date: newBooking.check_in_date.format('YYYY-MM-DD'),</span>
+<span class="cstat-no" title="statement not covered" >      check_out_date: newBooking.check_out_date.format('YYYY-MM-DD'),</span>
+<span class="cstat-no" title="statement not covered" >      hotel_id: hotelStore.currentHotelId!</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >    message.success('预订创建成功')</span>
+<span class="cstat-no" title="statement not covered" >    modalVisible.value = false</span>
+<span class="cstat-no" title="statement not covered" >    fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error('创建预订失败')</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function handleConfirm(id: number) {</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    await bookingApi.updateBookingStatus(id, 'confirmed')</span>
+<span class="cstat-no" title="statement not covered" >    message.success('预订已确认')</span>
+<span class="cstat-no" title="statement not covered" >    fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error('确认失败')</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function handleCheckin(id: number) {</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    await bookingApi.checkin(id)</span>
+<span class="cstat-no" title="statement not covered" >    message.success('入住办理成功')</span>
+<span class="cstat-no" title="statement not covered" >    fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error: any) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error(error?.response?.data?.message || '入住办理失败')</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function handleCancel(id: number) {</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    await bookingApi.updateBookingStatus(id, 'cancelled')</span>
+<span class="cstat-no" title="statement not covered" >    message.success('预订已取消')</span>
+<span class="cstat-no" title="statement not covered" >    fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error('取消失败')</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >async function handleCheckout(id: number) {</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    await bookingApi.updateBookingStatus(id, 'checked_out')</span>
+<span class="cstat-no" title="statement not covered" >    message.success('退房成功，订单已完成')</span>
+<span class="cstat-no" title="statement not covered" >    fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >  } catch (error) {</span>
+<span class="cstat-no" title="statement not covered" >    message.error('退房失败')</span>
+  }
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >onMounted(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >  void hotelStore.fetchRooms({ pageSize: 300 }).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >  fetchBookings()</span>
+<span class="cstat-no" title="statement not covered" >})</span>
+&lt;/script&gt;
+&nbsp;
+&lt;style scoped&gt;
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+&lt;/style&gt;
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-04-23T19:31:17.503Z
+            </div>
+        <script src="../../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../../sorter.js"></script>
+        <script src="../../../../block-navigation.js"></script>
+    </body>
+</html>
+    

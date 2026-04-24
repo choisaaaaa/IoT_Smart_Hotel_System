@@ -724,7 +724,8 @@ export const create = async (req: AuthRequest, res: Response) => {
     res.json(successResponse({ 
       id: bookingId, 
       booking_number: bookingNumber, 
-      total_price: total_price
+      total_price: total_price,
+      status: 'pending'
     }, '创建预订成功'));
   } catch (error) {
     await connection.rollback();

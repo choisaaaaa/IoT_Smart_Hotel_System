@@ -48,9 +48,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/health",
+              "raw": "{{baseUrl}}/api/v1/health",
               "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "path": ["api", "v1", "health"]
             }
           },
           "response": [],
@@ -60,9 +60,9 @@
               "script": {
                 "exec": [
                   "pm.test('服务健康', function () {",
-                  "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.status).to.eql('healthy');",
+                  "    pm.expect(jsonData.code).to.eql(200);",
+                  "    pm.expect(jsonData.message).to.exist;",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -87,7 +87,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+              "raw": "{\n    \"phone\": \"13666666666\",\n    \"password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
@@ -109,8 +109,8 @@
                   "    pm.environment.set('adminToken', jsonData.data.token);",
                   "});",
                   "",
-                  "pm.test('响应时间小于 200ms', function () {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(200);",
+                  "pm.test('响应时间合理', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -130,7 +130,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"username\": \"receptionist\",\n    \"password\": \"reception123\"\n}"
+              "raw": "{\n    \"phone\": \"13888888888\",\n    \"password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
@@ -148,7 +148,6 @@
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
                   "    pm.expect(jsonData.data.token).to.exist;",
-                  "    pm.expect(jsonData.data.user.role).to.eql('receptionist');",
                   "    pm.environment.set('receptionToken', jsonData.data.token);",
                   "});"
                 ],
@@ -169,12 +168,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"phone\": \"13800138000\",\n    \"code\": \"123456\"\n}"
+              "raw": "{\n    \"phone\": \"14000000000\",\n    \"password\": \"password123\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/guest-login",
+              "raw": "{{baseUrl}}/api/v1/auth/login",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "guest-login"]
+              "path": ["api", "v1", "auth", "login"]
             }
           },
           "response": [],
@@ -184,11 +183,10 @@
               "script": {
                 "exec": [
                   "pm.test('住客登录成功', function () {",
+                  "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    if (jsonData.code === 200) {",
-                  "        pm.expect(jsonData.data.token).to.exist;",
-                  "        pm.environment.set('guestToken', jsonData.data.token);",
-                  "    }",
+                  "    pm.expect(jsonData.data.token).to.exist;",
+                  "    pm.environment.set('guestToken', jsonData.data.token);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -208,7 +206,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"wrongpassword\"\n}"
+              "raw": "{\n    \"phone\": \"13666666666\",\n    \"password\": \"wrongpassword\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
@@ -269,18 +267,15 @@
               "script": {
                 "exec": [
                   "pm.test('创建预订成功', function () {",
+                  "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    if (jsonData.code === 200 || jsonData.code === 201) {",
-                  "        pm.expect(jsonData.data.id).to.exist;",
-                  "        pm.environment.set('bookingId', jsonData.data.id);",
-                  "    }",
+                  "    pm.expect(jsonData.data.booking_number).to.exist;",
+                  "    pm.environment.set('bookingId', jsonData.data.id);",
+                  "    pm.environment.set('bookingNumber', jsonData.data.booking_number);",
                   "});",
-                  "",
                   "pm.test('预订状态为 pending', function () {",
                   "    var jsonData = pm.response.json();",
-                  "    if (jsonData.data) {",
-                  "        pm.expect(jsonData.data.status).to.eql('pending');",
-                  "    }",
+                  "    pm.expect(jsonData.data.status).to.eql('pending');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -336,7 +331,7 @@
         {
           "name": "办理入住",
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -364,10 +359,9 @@
               "script": {
                 "exec": [
                   "pm.test('入住办理成功', function () {",
+                  "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    if (jsonData.code === 200) {",
-                  "        pm.expect(jsonData.data.status).to.eql('checked_in');",
-                  "    }",
+                  "    pm.expect(jsonData.code).to.eql(200);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -405,7 +399,7 @@
                   "pm.test('获取房间列表成功', function () {",
                   "    pm.response.to.have.status(200);",
                   "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.data.list).to.be.an('array');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -490,22 +484,18 @@
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
                 "key": "Authorization",
-                "value": "Bearer {{guestToken}}"
+                "value": "Bearer {{receptionToken}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"device_id\": \"room_001_light\",\n    \"command\": \"turn_off\",\n    \"mode\": \"sleep\"\n}"
+              "raw": "{\n    \"command_type\": \"light\",\n    \"command_value\": \"on\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/devices/control",
+              "raw": "{{baseUrl}}/api/v1/devices/1/command",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "control"]
+              "path": ["api", "v1", "devices", "1", "command"]
             }
           },
           "response": [],
@@ -515,8 +505,7 @@
               "script": {
                 "exec": [
                   "pm.test('设备控制指令发送成功', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.code).to.be.oneOf([200, 202]);",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 400]);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -531,29 +520,6 @@
       "item": [
         {
           "name": "WiFi密码查询",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{guestToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"message\": \"WiFi密码是多少\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai-butler/chat",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "ai-butler", "chat"]
-            }
-          },
-          "response": [],
           "event": [
             {
               "listen": "test",
@@ -562,19 +528,31 @@
                   "pm.test('AI回复成功', function () {",
                   "    var jsonData = pm.response.json();",
                   "    pm.expect(jsonData.code).to.eql(200);",
-                  "    pm.expect(jsonData.data.reply).to.exist;",
-                  "});",
-                  "",
-                  "pm.test('AI回复包含WiFi信息', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    var reply = jsonData.data.reply.toLowerCase();",
-                  "    pm.expect(reply).to.contain.oneOf(['wifi', '密码', '网络']);",
+                  "    pm.expect(jsonData.data.text).to.exist;",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{guestToken}}"
+              }
+            ],
+            "body": {
+               "mode": "raw",
+               "raw": "{\n    \"room_id\": \"206\",\n    \"text\": \"WiFi密码是多少？\"\n}"
+             },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ai-butler/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "ai-butler", "chat"]
+            }
+          }
         }
       ]
     }

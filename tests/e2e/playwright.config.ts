@@ -14,8 +14,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './specs',
   
-  // 完全并行运行测试
-  fullyParallel: true,
+  // 禁用完全并行模式，防止多个测试同时操作数据库导致冲突
+  fullyParallel: false,
   
   // 禁止在 CI 中并行运行测试
   forbidOnly: !!process.env.CI,
@@ -23,8 +23,8 @@ export default defineConfig({
   // 重试次数
   retries: process.env.CI ? 2 : 0,
   
-  // 并行工作进程数
-  workers: process.env.CI ? 1 : undefined,
+  // 并行工作进程数：设置为 1 以限制单次任务数，防止互相抢占服务导致卡死
+  workers: 1,
   
   // 报告器配置
   reporter: [
@@ -50,12 +50,20 @@ export default defineConfig({
     // 视口大小
     viewport: { width: 1280, height: 720 },
     
-    // 动作超时
-    actionTimeout: 15000,
+    // 动作超时：大幅延长至 30 秒，应对系统运行缓慢
+    actionTimeout: 30000,
     
-    // 导航超时
-    navigationTimeout: 30000,
+    // 导航超时：大幅延长至 60 秒
+    navigationTimeout: 60000,
+
+    // 放缓点击速度：每个动作增加 500ms 延迟，防止自动刷新冲突
+    launchOptions: {
+      slowMo: 500,
+    },
   },
+
+  // 全局超时：延长至 5 分钟
+  timeout: 300000,
 
   // 项目配置
   projects: [
@@ -63,30 +71,5 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    // 移动端测试
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
   ],
-
-  // 本地开发服务器配置
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
 });

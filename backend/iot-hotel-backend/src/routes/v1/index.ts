@@ -22,18 +22,23 @@ import roomTypes from './room-types';
 import priceCalendar from './price-calendar';
 import ratePlans from './rate-plans';
 import knowledgeBase from './knowledge-base';
-import mqtt from './mqtt';
 import rfid from './rfid';
 import rfidAccess from './rfid-access';
 import floors from './floors';
 import frequentGuests from './frequent-guests';
 import health from './health';
 import systemConfig from './system-config';
-import deviceGroups from './device-groups';
-import deviceAlarms from './device-alarms';
-import irRemote from './ir-remote';
-import scenes from './scenes';
-import firmware from './firmware';
+
+/**
+ * 已删除的前端未实现接口路由：
+ * - mqtt.ts (MQTT管理)
+ * - scenes.ts (场景模式管理)
+ * - ir-remote.ts (红外遥控管理)
+ * - device-groups.ts (设备分组管理)
+ * - device-alarms.ts (设备报警管理)
+ * - firmware.ts (固件管理)
+ * - guests.ts (访客管理 - 前端无对应页面)
+ */
 
 const router = Router();
 
@@ -54,17 +59,17 @@ router.use('/maintenance', maintenance);
 router.use('/reviews', reviews);
 router.use('/calls', calls);
 router.use('/devices', devices);
-router.use('/device-groups', deviceGroups);
-router.use('/device-alarms', deviceAlarms);
-router.use('/ir-remote', irRemote);
-router.use('/scenes', scenes);
-router.use('/firmware', firmware);
+// 已删除: router.use('/device-groups', deviceGroups);
+// 已删除: router.use('/device-alarms', deviceAlarms);
+// 已删除: router.use('/ir-remote', irRemote);
+// 已删除: router.use('/scenes', scenes);
+// 已删除: router.use('/firmware', firmware);
 router.use('/users', users);
 router.use('/upload', upload);
 router.use('/ai-butler', aiButler);
 router.use('/environment', environment);
 router.use('/knowledge-base', knowledgeBase);
-router.use('/mqtt', mqtt);
+// 已删除: router.use('/mqtt', mqtt);
 router.use('/rfid', rfid);
 router.use('/rfid-access', rfidAccess);
 router.use('/floors', floors);
@@ -72,6 +77,16 @@ router.use('/frequent-guests', frequentGuests);
 router.use('/health', health);
 router.use('/system-config', systemConfig);
 
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: 获取 API 根路径信息
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: 成功返回 API 模块索引
+ */
 router.get('/', (_req: Request, res: Response) => {
   res.json(successResponse({
     devices: '/api/v1/devices',
@@ -87,8 +102,12 @@ router.get('/', (_req: Request, res: Response) => {
     maintenance: '/api/v1/maintenance',
     reviews: '/api/v1/reviews',
     calls: '/api/v1/calls',
-    guests: '/api/v1/guests'
-  }));
+    guests: '/api/v1/guests',
+    environment: '/api/v1/environment',
+    'ai-butler': '/api/v1/ai-butler',
+    rfid: '/api/v1/rfid',
+    floors: '/api/v1/floors'
+  }, '慧宿智联智能酒店系统 API v1.0'));
 });
 
 export default router;

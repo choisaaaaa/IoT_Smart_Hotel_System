@@ -11,7 +11,39 @@ import { normalizeRole, isSystemAdmin, isHotelAdmin, isCustomer, isGuest, CANONI
 
 const router = Router();
 
-// 生成扫码登录二维码Token（无需认证）
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: 用户认证与扫码登录接口
+ */
+
+/**
+ * @swagger
+ * /auth/qr-generate:
+ *   post:
+ *     summary: 生成扫码登录二维码Token
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: 成功生成Token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     expiresAt:
+ *                       type: string
+ *                       format: date-time
+ */
 router.post('/qr-generate', async (req, res) => {
   try {
     const token = crypto.randomBytes(32).toString('hex');
@@ -30,7 +62,27 @@ router.post('/qr-generate', async (req, res) => {
   }
 });
 
-// APP确认扫码（需要APP的JWT认证）
+/**
+ * @swagger
+ * /auth/qr-confirm:
+ *   post:
+ *     summary: APP确认扫码（需要认证）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token: { type: string }
+ *     responses:
+ *       200:
+ *         description: 扫码确认成功
+ */
 router.post('/qr-confirm', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const user = req.user;
@@ -66,7 +118,23 @@ router.post('/qr-confirm', authenticate as any, async (req: AuthRequest, res) =>
   }
 });
 
-// Web端轮询扫码状态（无需认证）
+/**
+ * @swagger
+ * /auth/qr-status:
+ *   get:
+ *     summary: Web端轮询扫码状态
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 扫码Token
+ *     responses:
+ *       200:
+ *         description: 扫码状态
+ */
 router.get('/qr-status', async (req, res) => {
   try {
     const { token } = req.query;
@@ -170,7 +238,26 @@ router.get('/qr-status', async (req, res) => {
   }
 });
 
-// 生成 API Token (用于扫码登录)
+/**
+ * @swagger
+ * /auth/generate-token:
+ *   post:
+ *     summary: 生成API Token（用于扫码登录）
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, password]
+ *             properties:
+ *               phone: { type: string, example: "13800138000" }
+ *               password: { type: string, format: password, example: "123456" }
+ *     responses:
+ *       200:
+ *         description: Token生成成功
+ */
 router.post('/generate-token', async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -218,7 +305,25 @@ router.post('/generate-token', async (req, res) => {
   }
 });
 
-// 扫码登录 - 使用 API Token 登录
+/**
+ * @swagger
+ * /auth/scan-login:
+ *   post:
+ *     summary: 扫码登录 - 使用 API Token 登录
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token: { type: string }
+ *     responses:
+ *       200:
+ *         description: 登录成功
+ */
 router.post('/scan-login', async (req, res) => {
   try {
     const { token } = req.body;
@@ -322,7 +427,33 @@ router.post('/scan-login', async (req, res) => {
   }
 });
 
-// 手机号密码登录
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: 手机号密码登录
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "13800138000"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: 登录成功
+ */
 router.post('/login', async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -476,7 +607,28 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 用户注册
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: 用户注册 (Customer)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [username, password, phone]
+ *             properties:
+ *               username: { type: string, example: "张三" }
+ *               password: { type: string, format: password, example: "123456" }
+ *               phone: { type: string, example: "13800138001" }
+ *               email: { type: string, example: "zhangsan@example.com" }
+ *     responses:
+ *       200:
+ *         description: 注册成功
+ */
 router.post('/register', async (req, res) => {
   try {
     const { username, password, phone, email, role, hotel_id } = req.body;
@@ -551,7 +703,25 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 发送密码重置验证码
+/**
+ * @swagger
+ * /auth/reset-password/send-code:
+ *   post:
+ *     summary: 发送密码重置验证码
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone: { type: string, example: "13800138000" }
+ *     responses:
+ *       200:
+ *         description: 验证码已发送
+ */
 router.post('/reset-password/send-code', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -585,7 +755,27 @@ router.post('/reset-password/send-code', async (req, res) => {
   }
 });
 
-// 手机号找回密码（需要短信验证）
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: 手机号找回密码
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, new_password, verification_code]
+ *             properties:
+ *               phone: { type: string }
+ *               new_password: { type: string, format: password }
+ *               verification_code: { type: string }
+ *     responses:
+ *       200:
+ *         description: 密码重置成功
+ */
 router.post('/reset-password', async (req, res) => {
   try {
     const { phone, new_password, verification_code } = req.body;
@@ -640,7 +830,18 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// 登出
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: 用户登出
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 登出成功
+ */
 router.post('/logout', async (req: AuthRequest, res) => {
   try {
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
@@ -659,7 +860,18 @@ router.post('/logout', async (req: AuthRequest, res) => {
   }
 });
 
-// 获取当前用户信息
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: 获取当前登录用户信息
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取
+ */
 router.get('/me', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -706,7 +918,31 @@ router.get('/me', async (req: AuthRequest, res) => {
   }
 });
 
-// 角色升级申请
+/**
+ * @swagger
+ * /auth/role-application:
+ *   post:
+ *     summary: 提交角色升级申请
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [application_type]
+ *             properties:
+ *               application_type: { type: string, enum: [create_hotel, bind_employee], description: "申请类型" }
+ *               hotel_id: { type: integer, description: "绑定酒店ID(bind_employee时必填)" }
+ *               hotel_name: { type: string, description: "新建酒店名称(create_hotel时必填)" }
+ *               hotel_address: { type: string, description: "新建酒店地址(create_hotel时必填)" }
+ *               reason: { type: string, description: "申请理由" }
+ *     responses:
+ *       200:
+ *         description: 申请已提交
+ */
 router.post('/role-application', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -762,7 +998,23 @@ router.post('/role-application', async (req: AuthRequest, res) => {
   }
 });
 
-// 获取角色申请列表（管理端/系统管理员）
+/**
+ * @swagger
+ * /auth/role-applications:
+ *   get:
+ *     summary: 获取角色申请列表（管理端/系统管理员）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, approved, rejected] }
+ *         description: 按状态筛选
+ *     responses:
+ *       200:
+ *         description: 成功获取列表
+ */
 router.get('/role-applications', async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -809,7 +1061,33 @@ router.get('/role-applications', async (req: AuthRequest, res) => {
   }
 });
 
-// 审核角色申请
+/**
+ * @swagger
+ * /auth/role-applications/{id}/review:
+ *   put:
+ *     summary: 审核角色申请（管理员操作）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [approved, rejected] }
+ *               review_note: { type: string, description: "审核备注" }
+ *     responses:
+ *       200:
+ *         description: 审核完成
+ */
 router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
   const connection = await (await import('../../config/database')).default.getConnection();
   try {
@@ -926,7 +1204,27 @@ router.put('/role-applications/:id/review', async (req: AuthRequest, res) => {
   }
 });
 
-// 切换酒店 (仅系统管理员可用)
+/**
+ * @swagger
+ * /auth/switch-hotel:
+ *   post:
+ *     summary: 切换酒店上下文（仅系统管理员）
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [hotel_id]
+ *             properties:
+ *               hotel_id: { type: integer, description: "目标酒店ID，0表示集团总部" }
+ *     responses:
+ *       200:
+ *         description: 切换成功，返回新JWT
+ */
 router.post('/switch-hotel', authenticate as any, async (req: AuthRequest, res) => {
   try {
     const user = req.user;

@@ -222,10 +222,20 @@
                 <img :src="selectedHotel.image || '/hotel-placeholder.jpg'" />
               </div>
               <div class="side-imgs">
-                <div class="side-img-item"><img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400&auto=format&fit=crop" /></div>
-                <div class="side-img-item"><img src="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400&auto=format&fit=crop" /></div>
-                <div class="side-img-item more">
-                  <img src="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?q=80&w=400&auto=format&fit=crop" />
+                <div class="side-img-item" v-if="hotelImages[0]" @click="openImageGallery(0)">
+                  <img :src="hotelImages[0].image_url" />
+                </div>
+                <div class="side-img-item" v-else>
+                  <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400&auto=format&fit=crop" />
+                </div>
+                <div class="side-img-item" v-if="hotelImages[1]" @click="openImageGallery(1)">
+                  <img :src="hotelImages[1].image_url" />
+                </div>
+                <div class="side-img-item" v-else>
+                  <img src="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400&auto=format&fit=crop" />
+                </div>
+                <div class="side-img-item more" @click="openImageGallery(0)">
+                  <img :src="hotelImages[2]?.image_url || 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?q=80&w=400&auto=format&fit=crop'" />
                   <div class="overlay">查看全部图片</div>
                 </div>
               </div>
@@ -790,6 +800,44 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 图片画廊 -->
+    <a-modal
+      v-model:open="imageGalleryVisible"
+      :footer="null"
+      width="900px"
+      :centered="true"
+      class="image-gallery-modal"
+    >
+      <div class="image-gallery-content">
+        <div class="main-image-container">
+          <img 
+            :src="hotelImages[currentImageIndex]?.image_url || selectedHotel?.image" 
+            class="main-gallery-image"
+          />
+          <div class="image-nav prev" v-if="hotelImages.length > 1" @click="currentImageIndex = (currentImageIndex - 1 + hotelImages.length) % hotelImages.length">
+            <LeftOutlined />
+          </div>
+          <div class="image-nav next" v-if="hotelImages.length > 1" @click="currentImageIndex = (currentImageIndex + 1) % hotelImages.length">
+            <RightOutlined />
+          </div>
+        </div>
+        <div class="image-counter" v-if="hotelImages.length > 0">
+          {{ currentImageIndex + 1 }} / {{ hotelImages.length }}
+        </div>
+        <div class="thumbnail-list" v-if="hotelImages.length > 1">
+          <div 
+            v-for="(img, index) in hotelImages" 
+            :key="img.id"
+            class="thumbnail-item"
+            :class="{ active: currentImageIndex === index }"
+            @click="currentImageIndex = index"
+          >
+            <img :src="img.image_url" />
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -811,7 +859,7 @@ import { useAppStore } from '@/stores/app'
 import {
   EnvironmentOutlined, EnvironmentFilled, StarOutlined, StarFilled,
   UserOutlined, MobileOutlined, CheckOutlined,
-  CheckCircleOutlined, LeftOutlined, WifiOutlined,
+  CheckCircleOutlined, LeftOutlined, RightOutlined, WifiOutlined,
   CoffeeOutlined, WalletOutlined, WechatOutlined, AlipayCircleOutlined,
   SecurityScanOutlined, PlusOutlined, DeleteOutlined, EditOutlined, InfoCircleOutlined,
   QrcodeOutlined, UnlockOutlined, HomeOutlined, FullscreenOutlined, ThunderboltOutlined,
@@ -843,6 +891,11 @@ const reviewList = ref<any[]>([])
 const reviewLoading = ref(false)
 const reviewPage = ref(1)
 const reviewTotal = ref(0)
+
+// 酒店图片画廊
+const hotelImages = ref<any[]>([])
+const imageGalleryVisible = ref(false)
+const currentImageIndex = ref(0)
 
 const handlePreSubmit = () => {
   if (paymentMethod.value === 'balance') {
@@ -1172,9 +1225,32 @@ const selectHotel = async (hotel: any) => {
     roomTypes.value = res.roomTypes || []
     currentStep.value = 2
     fetchReviewStats()
+    fetchHotelImages()
   } catch (error) {
     NotifyPreset.operationFailed('加载房态失败，请稍后重试')
   }
+}
+
+// 获取酒店图片列表
+const fetchHotelImages = async () => {
+  if (!selectedHotel.value) return
+  try {
+    const images = await hotelApi.getHotelImages(Number(selectedHotel.value.id))
+    hotelImages.value = images || []
+  } catch (error) {
+    console.error('获取酒店图片失败:', error)
+    hotelImages.value = []
+  }
+}
+
+// 打开图片画廊
+const openImageGallery = (index: number = 0) => {
+  if (hotelImages.value.length === 0) {
+    message.info('暂无更多图片')
+    return
+  }
+  currentImageIndex.value = index
+  imageGalleryVisible.value = true
 }
 
 const selectPlan = async (type: any, plan: any) => {
@@ -3694,6 +3770,123 @@ watch(() => appStore.userInfo, (newVal) => {
   
   .final-total-ctrip .val .num {
     font-size: 32px;
+  }
+}
+
+/* ==================== Image Gallery Styles ==================== */
+.image-gallery-content {
+  padding: 20px 0;
+}
+
+.main-image-container {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: var(--hotel-radius-lg);
+  overflow: hidden;
+}
+
+.main-gallery-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: var(--hotel-primary);
+  font-size: 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.image-nav:hover {
+  background: white;
+  color: var(--hotel-gold);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.image-nav.prev {
+  left: 16px;
+}
+
+.image-nav.next {
+  right: 16px;
+}
+
+.image-counter {
+  text-align: center;
+  margin: 16px 0;
+  font-size: 14px;
+  color: var(--hotel-text-secondary);
+}
+
+.thumbnail-list {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 12px 0;
+  justify-content: center;
+}
+
+.thumbnail-item {
+  width: 80px;
+  height: 60px;
+  border-radius: var(--hotel-radius);
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.thumbnail-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnail-item.active {
+  border-color: var(--hotel-gold);
+  box-shadow: 0 4px 12px rgba(201, 169, 98, 0.3);
+}
+
+.thumbnail-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.side-img-item {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.side-img-item:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .main-image-container {
+    height: 300px;
+  }
+  
+  .thumbnail-item {
+    width: 60px;
+    height: 45px;
   }
 }
 </style>
