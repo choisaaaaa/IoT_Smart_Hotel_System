@@ -18,7 +18,7 @@ export interface NotificationItem {
   read: boolean
   time: string
   date: string 
-  createdAt: string // ISO string for 24h auto-clear logic
+  createdAt: string // ISO格式时间字符串，用于24小时自动清理逻辑
   deviceId?: string
   location?: string
 }

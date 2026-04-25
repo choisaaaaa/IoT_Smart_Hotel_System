@@ -104,6 +104,17 @@ esp_err_t hal_interactive_beep(uint8_t count, uint32_t duration_ms) {
     return driver_buzzer_active_beep(count, duration_ms, 50);
 }
 
+esp_err_t hal_interactive_buzzer_steady(bool on) {
+    if (!s_buzzer_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t e = on ? driver_buzzer_active_on() : driver_buzzer_active_off();
+    if (e == ESP_OK) {
+        ESP_LOGI(TAG, "蜂鸣器常响: %s", on ? "开" : "关");
+    }
+    return e;
+}
+
 esp_err_t hal_interactive_set_led_color(uint16_t led_index, uint8_t r, uint8_t g, uint8_t b) {
     // 当前接线为 1 颗共阳/共阴三线 RGB，led_index 保留但忽略。
     // 若后续换成 WS2812 灯带，可在此按 index 写入到对应灯珠。

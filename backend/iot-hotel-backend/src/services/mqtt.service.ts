@@ -9,6 +9,7 @@ import { AIButlerService } from './ai-butler.service';
 import { getVoiceGateway } from './voice-gateway.service';
 
 import CacheService from './cache.service';
+import { isRfidCardStatusActive, isRfidGuestCardNotExpired } from './rfid.service';
 
 interface DeviceStatusPayload {
   device_id: string;
@@ -401,7 +402,11 @@ class MQTTService {
             if (topic.startsWith('hotel/call/signaling/')) {
               await this.handleCallSignaling(topic, data);
             }
+          } else if (topic.startsWith('hotel/device/data/')) {
+            // 未入库或未审核：只走传感器入库/预览，禁止进入下方签名校验（否则 device 可能为 undefined）
+            await this.handleSensorData(data as SensorDataPayload, device?.hotel_id);
           }
+          return;
         } else {
           logger.warn(`未审核通过的设备尝试发送业务指令: ${deviceId} [${topic}]`);
           return;
@@ -409,6 +414,11 @@ class MQTTService {
       }
 
       // 3. 已通过审核的设备，必须验证签名
+      if (!device) {
+        logger.error(`签名校验前缺少设备记录: ${deviceId} [${topic}]`);
+        return;
+      }
+
       if (!data.signature || !data.timestamp) {
         logger.error(`已审核设备发送消息缺少签名或时间戳: ${deviceId} [${topic}]`);
         return;
@@ -1051,21 +1061,49 @@ class MQTTService {
             [deviceId]
           );
 
-          if (deviceRows.length > 0 && deviceRows[0].device_type === 'room') {
-            const deviceRoomId = deviceRows[0].room_id;
+          const dt = deviceRows.length > 0 ? String(deviceRows[0].device_type || '') : '';
+          const isRoomDevice = dt === 'room' || dt === 'room_terminal';
+
+          if (deviceRows.length > 0 && isRoomDevice) {
+            let deviceRoomId: number | null =
+              deviceRows[0].room_id != null ? Number(deviceRows[0].room_id) : null;
+
+            // 常见数据问题：device_id=room_301 但 devices.room_id 未绑；用房号从 rooms 表补全，避免 guest 卡永不通
+            if (
+              (deviceRoomId == null || !Number.isFinite(deviceRoomId)) &&
+              /^room_[0-9]+$/i.test(String(deviceId))
+            ) {
+              const rn = String(deviceId).replace(/^room_/i, '');
+              const [rrows] = await pool.query<RowDataPacket[]>(
+                'SELECT id FROM rooms WHERE room_number = ? AND hotel_id = ? LIMIT 1',
+                [rn, resolvedHotelId]
+              );
+              if (rrows.length > 0) {
+                deviceRoomId = Number(rrows[0].id);
+                logger.info(
+                  `[MQTT] 设备 ${deviceId} 未绑 room_id，已用房号 ${rn} 解析 rooms.id=${deviceRoomId}`
+                );
+              }
+            }
+
             let canUnlock = false;
+            const cardRoomId =
+              cardInfo.room_id != null && cardInfo.room_id !== '' ? Number(cardInfo.room_id) : null;
 
             if (cardInfo.card_type === 'master' || cardInfo.card_type === 'emergency') {
               canUnlock = true; // 万能卡或紧急卡
-            } else if (cardInfo.card_type === 'guest' && cardInfo.room_id === deviceRoomId) {
-              // 检查卡片是否有效且未过期
-              const now = new Date();
-              if (cardInfo.status === 'active' && (!cardInfo.expires_at || new Date(cardInfo.expires_at) > now)) {
+            } else if (
+              cardInfo.card_type === 'guest' &&
+              cardRoomId != null &&
+              deviceRoomId != null &&
+              cardRoomId === deviceRoomId
+            ) {
+              if (isRfidCardStatusActive(cardInfo.status) && isRfidGuestCardNotExpired(cardInfo.expires_at)) {
                 canUnlock = true;
               }
             } else if (cardInfo.card_type === 'floor' || cardInfo.card_type === 'staff') {
               // 检查楼层卡/员工卡权限 (这里简化处理，实际应查询 staff_access_policies)
-              canUnlock = true; 
+              canUnlock = true;
             }
 
             if (canUnlock) {
@@ -1077,7 +1115,13 @@ class MQTTService {
                 'system_auto_auth'
               );
             } else {
-              logger.warn(`[MQTT] 卡片 ${cardUid} 尝试开启房间 ${deviceRoomId} 但权限不足或已过期`);
+              logger.warn(
+                `[MQTT] 卡片 ${cardUid} 未自动开锁 device=${deviceId} type=${cardInfo.card_type} ` +
+                  `device_room_db_id=${deviceRoomId} card_room_db_id=${cardRoomId} ` +
+                  `status=${cardInfo.status} active=${isRfidCardStatusActive(cardInfo.status)} ` +
+                  `expires_at=${cardInfo.expires_at ?? 'null'} ` +
+                  `checkoutDayOk=${isRfidGuestCardNotExpired(cardInfo.expires_at)}`
+              );
             }
           }
         } else {
@@ -1600,6 +1644,20 @@ class MQTTService {
 
   async getCommunicationLogs(hotelId?: number, deviceId?: string, limit: number = 100, offset: number = 0): Promise<any[]> {
     try {
+      // 按酒店过滤时，仅用 mqtt_communication_logs.hotel_id 会漏掉历史行（曾写入 0 或与设备表不一致）；
+      // 通过 devices 表关联，只要 device_id 属于该酒店即可看到入站/出站记录。
+      if (deviceId && hotelId !== undefined && hotelId !== 0) {
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT m.* FROM mqtt_communication_logs m
+           INNER JOIN devices d ON m.device_id = d.device_id AND d.hotel_id = ?
+           WHERE d.device_id = ?
+           ORDER BY m.timestamp DESC
+           LIMIT ? OFFSET ?`,
+          [hotelId, deviceId, limit, offset]
+        );
+        return rows;
+      }
+
       let query = 'SELECT * FROM mqtt_communication_logs';
       const params: any[] = [];
       const conditions: string[] = [];
@@ -1675,8 +1733,13 @@ class MQTTService {
         'SELECT device_type FROM devices WHERE device_id = ?',
         [deviceId]
       );
-      const deviceType = deviceRows.length > 0 ? deviceRows[0].device_type : 'unknown';
-      const specificTopic = `hotel/device/command/${deviceType}/${deviceId}`;
+      const rawType = deviceRows.length > 0 ? String(deviceRows[0].device_type || '') : 'unknown';
+      // 客房：统一订阅 hotel/device/command/room/{device_id}。device_id 以 room_ 开头时强制走 room 段，避免库里 device_type 填错导致主题与固件不一致
+      let topicDeviceType = rawType === 'room_terminal' ? 'room' : rawType;
+      if (/^room[_]/i.test(deviceId)) {
+        topicDeviceType = 'room';
+      }
+      const specificTopic = `hotel/device/command/${topicDeviceType}/${deviceId}`;
 
       await this.publish(specificTopic, payload);
 

@@ -1,7 +1,6 @@
-# The following lines of boilerplate have to be in your project's
-# CMakeLists.txt.
+# 以下样板代码必须包含在项目的 CMakeLists.txt 中
 
-# This line tells the ESP-IDF build system the minimum CMake version
+# 此行指定 ESP-IDF 构建系统所需的最低 CMake 版本
 cmake_minimum_required(VERSION 3.16)
 
 # IDF 6：配网改用组件仓库 network_provisioning，排除已移除的旧 wifi_provisioning 占位
@@ -50,8 +49,8 @@ add_compile_definitions(
     GLOBAL_RGB_COMMON_ANODE=1
 )
 
-# Include the main ESP-IDF build system script
+# 包含主 ESP-IDF 构建系统脚本
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-# Set the name of your project
+# 设置项目名称
 project(room_terminal)

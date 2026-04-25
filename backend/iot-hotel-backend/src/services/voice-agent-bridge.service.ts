@@ -106,6 +106,24 @@ class VoiceAgentBridgeService {
   /** 当前正在处理的设备：用于尊重 DEVICE_CONCURRENCY */
   private inflight = new Set<string>();
 
+  /**
+   * 房间广播等多终端：已合成的 16k s16le mono PCM，按与 Agent 相同协议分片下发。
+   * （避免发到 hotel/ai/response，固件只订阅 hotel/device/audio/downlink。）
+   */
+  async publishBroadcastPcm(deviceId: string, pcm16: Buffer): Promise<boolean> {
+    if (!deviceId || !pcm16 || pcm16.length < 2) {
+      return false;
+    }
+    const ok = await this.isApprovedAgentDevice(deviceId);
+    if (!ok) {
+      logger.warn(`[VoiceAgentBridge] 广播 PCM 跳过，设备未审核或类型不支持: ${deviceId}`);
+      return false;
+    }
+    await this.sendTtsPcmDownlink(deviceId, pcm16);
+    logger.info(`[VoiceAgentBridge] 广播 PCM 已下发: ${deviceId} bytes=${pcm16.length}`);
+    return true;
+  }
+
   /** 前台/后台主动广播：把文本转 TTS 并下发到指定客房设备喇叭播放。 */
   async broadcastTextToDevice(deviceId: string, text: string): Promise<boolean> {
     const t = (text || '').trim();
@@ -241,7 +259,7 @@ class VoiceAgentBridgeService {
         `SELECT device_id
          FROM devices
          WHERE device_id = ?
-           AND device_type IN ('room', 'front_desk')
+           AND device_type IN ('room', 'room_terminal', 'front_desk')
            AND audit_status = ?`,
         [deviceId, 'approved']
       );

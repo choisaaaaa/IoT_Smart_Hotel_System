@@ -1,5 +1,6 @@
 #include "voice_session.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -13,6 +14,156 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+/** TTS 下行 JSON：避免 cJSON_Parse 整包（~8KB+）在堆上建完整树导致 OOM，表现为「JSON 解析失败」与 seq 缺口 */
+static const char *json_skip_ws(const char *p)
+{
+    if (p == NULL) {
+        return NULL;
+    }
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') {
+        p++;
+    }
+    return p;
+}
+
+static const char *json_find_key_value_ptr(const char *json, const char *key)
+{
+    char pat[40];
+    int n = snprintf(pat, sizeof(pat), "\"%s\"", key);
+    if (n <= 0 || (size_t)n >= sizeof(pat)) {
+        return NULL;
+    }
+    const char *p = strstr(json, pat);
+    if (p == NULL) {
+        return NULL;
+    }
+    p += strlen(pat);
+    p = json_skip_ws(p);
+    if (*p != ':') {
+        return NULL;
+    }
+    p++;
+    return json_skip_ws(p);
+}
+
+static bool json_read_string_value(const char *p, char *out, size_t cap)
+{
+    if (p == NULL || *p != '"') {
+        return false;
+    }
+    p++;
+    size_t i = 0;
+    while (*p != '\0' && *p != '"') {
+        if (*p == '\\') {
+            p++;
+            if (*p == '\0') {
+                return false;
+            }
+        }
+        if (i + 1 >= cap) {
+            return false;
+        }
+        out[i++] = *p++;
+    }
+    if (*p != '"') {
+        return false;
+    }
+    out[i] = '\0';
+    return true;
+}
+
+static bool json_read_b64_span(const char *p, const char **start, size_t *out_len)
+{
+    if (p == NULL || *p != '"') {
+        return false;
+    }
+    p++;
+    *start = p;
+    const char *end = strchr(p, '"');
+    if (end == NULL) {
+        return false;
+    }
+    *out_len = (size_t)(end - p);
+    return true;
+}
+
+static bool json_read_u32(const char *p, uint32_t *out)
+{
+    if (p == NULL) {
+        return false;
+    }
+    char *end = NULL;
+    unsigned long v = strtoul(p, &end, 10);
+    if (end == p) {
+        return false;
+    }
+    *out = (uint32_t)v;
+    return true;
+}
+
+static bool json_read_u64(const char *p, uint64_t *out)
+{
+    if (p == NULL) {
+        return false;
+    }
+    char *end = NULL;
+    unsigned long long v = strtoull(p, &end, 10);
+    if (end == p) {
+        return false;
+    }
+    *out = (uint64_t)v;
+    return true;
+}
+
+static bool voice_downlink_parse_tts_json(const char *json,
+                                          char *playback_id,
+                                          size_t playback_id_cap,
+                                          uint64_t *timestamp_ms,
+                                          uint32_t *seq,
+                                          uint32_t *total_seq,
+                                          const char **pcm_b64_start,
+                                          size_t *pcm_b64_len)
+{
+    const char *vf = json_find_key_value_ptr(json, "format");
+    char fmt[24] = {0};
+    if (vf == NULL || !json_read_string_value(vf, fmt, sizeof(fmt))) {
+        return false;
+    }
+    if (strcmp(fmt, "pcm_s16le") != 0) {
+        return false;
+    }
+
+    playback_id[0] = '\0';
+    const char *vpb = json_find_key_value_ptr(json, "playback_id");
+    if (vpb != NULL) {
+        (void)json_read_string_value(vpb, playback_id, playback_id_cap);
+    }
+
+    *timestamp_ms = 0;
+    const char *vts = json_find_key_value_ptr(json, "timestamp_ms");
+    if (vts != NULL) {
+        (void)json_read_u64(vts, timestamp_ms);
+    }
+
+    *seq = 0;
+    const char *vsq = json_find_key_value_ptr(json, "seq");
+    if (vsq != NULL) {
+        (void)json_read_u32(vsq, seq);
+    }
+
+    *total_seq = 0;
+    const char *vtot = json_find_key_value_ptr(json, "total_seq");
+    if (vtot != NULL) {
+        (void)json_read_u32(vtot, total_seq);
+    }
+
+    const char *vb = json_find_key_value_ptr(json, "pcm_base64");
+    if (vb == NULL || !json_read_b64_span(vb, pcm_b64_start, pcm_b64_len)) {
+        return false;
+    }
+    return true;
+}
 
 static const char *TAG = "VOICE_SESSION";
 
@@ -129,115 +280,26 @@ static void play_one_item(const voice_play_item_t *it)
 static void voice_playback_task(void *arg)
 {
     (void)arg;
-    voice_play_item_t pending[VOICE_PLAY_PENDING_MAX];
-    size_t pending_cnt = 0;
-    char active_playback_id[48] = {0};
-    uint32_t expected_seq = 1;
-    uint32_t active_total_seq = 0;
-    TickType_t wait_start_tick = 0;
     for (;;) {
         voice_play_item_t item;
         if (xQueueReceive(s_play_q, &item, portMAX_DELAY) != pdTRUE) {
             continue;
         }
+        play_one_item(&item);
+        free(item.pcm);
 
-        if (pending_cnt >= VOICE_PLAY_PENDING_MAX) {
-            ESP_LOGW(TAG, "重排缓冲已满，丢弃最旧片段");
-            free(pending[0].pcm);
-            memmove(&pending[0], &pending[1], (VOICE_PLAY_PENDING_MAX - 1) * sizeof(voice_play_item_t));
-            pending_cnt = VOICE_PLAY_PENDING_MAX - 1;
+        /* Agent/TTS 多片下发：仅在整句最后一包播完后清空队列，避免误删后续 seq。
+         * 播完后强制丢掉残留分段（迟到包、重复包、上一轮未消费），防止队列堵满导致下次无法入队。 */
+        bool utterance_complete = false;
+        if (item.total_seq > 0u) {
+            utterance_complete = (item.seq == item.total_seq);
+        } else {
+            utterance_complete = true;
         }
-        pending[pending_cnt++] = item;
-
-        // 尝试尽可能严格按 playback_id + seq 输出
-        for (;;) {
-            if (pending_cnt == 0) {
-                active_playback_id[0] = '\0';
-                expected_seq = 1;
-                active_total_seq = 0;
-                wait_start_tick = 0;
-                break;
-            }
-
-            // 选择活动会话：优先最早时间戳的分片
-            if (active_playback_id[0] == '\0') {
-                size_t pick = 0;
-                for (size_t i = 1; i < pending_cnt; i++) {
-                    if (pending[i].timestamp_ms < pending[pick].timestamp_ms) {
-                        pick = i;
-                    }
-                }
-                strncpy(active_playback_id, pending[pick].playback_id, sizeof(active_playback_id) - 1);
-                active_playback_id[sizeof(active_playback_id) - 1] = '\0';
-                expected_seq = 1;
-                active_total_seq = pending[pick].total_seq;
-                wait_start_tick = xTaskGetTickCount();
-            }
-
-            int exact_idx = -1;
-            int next_idx = -1;
-            for (size_t i = 0; i < pending_cnt; i++) {
-                if (!same_playback_id(pending[i].playback_id, active_playback_id)) {
-                    continue;
-                }
-                if (pending[i].seq == expected_seq) {
-                    exact_idx = (int)i;
-                    break;
-                }
-                if (pending[i].seq > expected_seq) {
-                    if (next_idx < 0 || pending[i].seq < pending[(size_t)next_idx].seq) {
-                        next_idx = (int)i;
-                    }
-                }
-            }
-
-            if (exact_idx >= 0) {
-                voice_play_item_t out = pending[(size_t)exact_idx];
-                memmove(&pending[(size_t)exact_idx], &pending[(size_t)exact_idx + 1], (pending_cnt - (size_t)exact_idx - 1) * sizeof(voice_play_item_t));
-                pending_cnt--;
-                play_one_item(&out);
-                free(out.pcm);
-                expected_seq++;
-                wait_start_tick = xTaskGetTickCount();
-                if (active_total_seq > 0 && expected_seq > active_total_seq) {
-                    active_playback_id[0] = '\0';
-                    expected_seq = 1;
-                    active_total_seq = 0;
-                }
-                continue;
-            }
-
-            if (next_idx >= 0) {
-                TickType_t now = xTaskGetTickCount();
-                if (wait_start_tick == 0) {
-                    wait_start_tick = now;
-                }
-                if ((now - wait_start_tick) < pdMS_TO_TICKS(VOICE_REORDER_WAIT_MS)) {
-                    // 继续收包等待缺失 seq
-                    break;
-                }
-                voice_play_item_t out = pending[(size_t)next_idx];
-                ESP_LOGW(TAG, "严格排序超时，跳过缺失 seq，播放 seq=%u 期望=%u pb=%s",
-                         (unsigned)out.seq, (unsigned)expected_seq, active_playback_id);
-                memmove(&pending[(size_t)next_idx], &pending[(size_t)next_idx + 1], (pending_cnt - (size_t)next_idx - 1) * sizeof(voice_play_item_t));
-                pending_cnt--;
-                play_one_item(&out);
-                free(out.pcm);
-                expected_seq = out.seq + 1;
-                wait_start_tick = xTaskGetTickCount();
-                if (active_total_seq > 0 && expected_seq > active_total_seq) {
-                    active_playback_id[0] = '\0';
-                    expected_seq = 1;
-                    active_total_seq = 0;
-                }
-                continue;
-            }
-
-            // 活跃会话已无可播片段，切到新会话
-            active_playback_id[0] = '\0';
-            expected_seq = 1;
-            active_total_seq = 0;
-            wait_start_tick = 0;
+        if (utterance_complete) {
+            voice_session_discard_downlink_buffer();
+            ESP_LOGI(TAG, "下行一轮播毕，已清空队列 pb=%s seq=%u/%u",
+                     item.playback_id, (unsigned)item.seq, (unsigned)item.total_seq);
         }
     }
 }
@@ -448,72 +510,43 @@ void voice_downlink_mqtt_cb(const char *topic, const char *data, int data_len)
     memcpy(json_str, data, data_len);
     json_str[data_len] = '\0';
 
-    cJSON *root = cJSON_Parse(json_str);
-    free(json_str);
-
-    if (root == NULL) {
-        ESP_LOGW(TAG, "下行 JSON 解析失败 len=%d", data_len);
-        return;
-    }
-    cJSON *fmt = cJSON_GetObjectItem(root, "format");
-    if (!cJSON_IsString(fmt) || strcmp(fmt->valuestring, "pcm_s16le") != 0) {
-        ESP_LOGW(TAG, "下行 format 非 pcm_s16le");
-        cJSON_Delete(root);
-        return;
-    }
-    cJSON *b64item = cJSON_GetObjectItem(root, "pcm_base64");
-    if (!cJSON_IsString(b64item) || b64item->valuestring == NULL) {
-        cJSON_Delete(root);
-        return;
-    }
-    size_t b64_len = strlen(b64item->valuestring);
-    char *b64str = (char *)malloc(b64_len + 1);
-    if (b64str == NULL) {
-        cJSON_Delete(root);
-        ESP_LOGE(TAG, "下行 OOM 无法拷贝 base64");
-        return;
-    }
-    memcpy(b64str, b64item->valuestring, b64_len + 1);
-    cJSON *tsItem = cJSON_GetObjectItem(root, "timestamp_ms");
-    cJSON *seqItem = cJSON_GetObjectItem(root, "seq");
-    cJSON *totalSeqItem = cJSON_GetObjectItem(root, "total_seq");
-    cJSON *playbackIdItem = cJSON_GetObjectItem(root, "playback_id");
-    uint64_t tsMs = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (cJSON_IsNumber(tsItem) && tsItem->valuedouble > 0) {
-        tsMs = (uint64_t)tsItem->valuedouble;
-    }
+    char playbackId[48] = {0};
+    uint64_t tsFromJson = 0;
     uint32_t seq = 0;
     uint32_t totalSeq = 0;
-    if (cJSON_IsNumber(seqItem) && seqItem->valuedouble > 0) {
-        seq = (uint32_t)seqItem->valuedouble;
+    const char *b64_start = NULL;
+    size_t b64_len = 0;
+    if (!voice_downlink_parse_tts_json(json_str, playbackId, sizeof(playbackId), &tsFromJson, &seq, &totalSeq,
+                                       &b64_start, &b64_len)) {
+        ESP_LOGW(TAG, "下行 TTS JSON 轻量解析失败 len=%d heap=%u", data_len, (unsigned)esp_get_free_heap_size());
+        free(json_str);
+        return;
     }
-    if (cJSON_IsNumber(totalSeqItem) && totalSeqItem->valuedouble > 0) {
-        totalSeq = (uint32_t)totalSeqItem->valuedouble;
-    }
-    char playbackId[48] = {0};
-    if (cJSON_IsString(playbackIdItem) && playbackIdItem->valuestring != NULL) {
-        strncpy(playbackId, playbackIdItem->valuestring, sizeof(playbackId) - 1);
-    } else {
+
+    if (playbackId[0] == '\0') {
         strncpy(playbackId, "legacy", sizeof(playbackId) - 1);
+    }
+    uint64_t tsMs = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (tsFromJson > 0) {
+        tsMs = tsFromJson;
     }
     const size_t alloc_bytes = (b64_len / 4) * 3 + 3;
     if (alloc_bytes > DOWNLINK_PCM_MAX_BYTES) {
         ESP_LOGW(TAG, "下行 PCM 过大: 预计 %u 字节 > 上限 %d，已丢弃",
                  (unsigned)alloc_bytes, DOWNLINK_PCM_MAX_BYTES);
-        free(b64str);
-        cJSON_Delete(root);
+        free(json_str);
         return;
     }
-    cJSON_Delete(root);
 
     uint8_t *raw = (uint8_t *)malloc(alloc_bytes);
     if (raw == NULL) {
         ESP_LOGE(TAG, "下行解码缓冲分配失败 need=%u", (unsigned)alloc_bytes);
+        free(json_str);
         return;
     }
     size_t raw_len = 0;
-    int dr = mbedtls_base64_decode(raw, alloc_bytes, &raw_len, (const unsigned char *)b64str, b64_len);
-    free(b64str);
+    int dr = mbedtls_base64_decode(raw, alloc_bytes, &raw_len, (const unsigned char *)b64_start, b64_len);
+    free(json_str);
     if (dr != 0 || raw_len < sizeof(int16_t) || (raw_len % sizeof(int16_t)) != 0) {
         ESP_LOGW(TAG, "下行 base64 解码失败 dr=%d len=%u", dr, (unsigned)raw_len);
         free(raw);

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -179,6 +180,56 @@ static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
         }
     }
     return false;
+}
+
+/** DeviceMonitor 调试页：command_delta + command_direction(up|down)，或与 value/command_value 绝对值 */
+static bool room_read_relative_or_absolute_int(cJSON *root, int *io_val, int min_v, int max_v)
+{
+    if (root == NULL || io_val == NULL) {
+        return false;
+    }
+    if (read_int_from_cmd_payload(root, io_val)) {
+        if (*io_val < min_v) {
+            *io_val = min_v;
+        }
+        if (*io_val > max_v) {
+            *io_val = max_v;
+        }
+        return true;
+    }
+    cJSON *dj = cJSON_GetObjectItem(root, "command_delta");
+    int delta = 0;
+    if (cJSON_IsNumber(dj)) {
+        delta = (int)dj->valuedouble;
+    } else if (cJSON_IsString(dj) && dj->valuestring != NULL) {
+        delta = (int)strtol(dj->valuestring, NULL, 10);
+    } else {
+        return false;
+    }
+    if (delta == 0) {
+        return false;
+    }
+    cJSON *dirj = cJSON_GetObjectItem(root, "command_direction");
+    if (!cJSON_IsString(dirj) || dirj->valuestring == NULL) {
+        return false;
+    }
+    int sign = 0;
+    if (strcasecmp(dirj->valuestring, "up") == 0) {
+        sign = 1;
+    } else if (strcasecmp(dirj->valuestring, "down") == 0) {
+        sign = -1;
+    } else {
+        return false;
+    }
+    int v = *io_val + sign * delta;
+    if (v < min_v) {
+        v = min_v;
+    }
+    if (v > max_v) {
+        v = max_v;
+    }
+    *io_val = v;
+    return true;
 }
 
 static bool room_play_alarm_audio_file(void)
@@ -633,15 +684,9 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
 
     if (strcmp(cmd_type, "set_light_brightness") == 0 || strcmp(cmd_type, "light_brightness") == 0) {
         int b = s_brightness_pct;
-        if (!read_int_from_cmd_payload(root, &b)) {
-            *out_result_msg = "缺少亮度参数(value)";
+        if (!room_read_relative_or_absolute_int(root, &b, 0, 100)) {
+            *out_result_msg = "缺少亮度参数(value 或 command_delta+direction)";
             return false;
-        }
-        if (b < 0) {
-            b = 0;
-        }
-        if (b > 100) {
-            b = 100;
         }
         s_brightness_pct = b;
         room_apply_brightness_to_light();
@@ -670,15 +715,9 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
 
     if (strcmp(cmd_type, "set_ac_temp") == 0 || strcmp(cmd_type, "ac_set_temp") == 0 || strcmp(cmd_type, "ac_temp") == 0) {
         int t = (int)s_ac_target_temp;
-        if (!read_int_from_cmd_payload(root, &t)) {
-            *out_result_msg = "缺少空调温度参数(value)";
+        if (!room_read_relative_or_absolute_int(root, &t, ROOM_EC11_AC_TEMP_MIN_C, ROOM_EC11_AC_TEMP_MAX_C)) {
+            *out_result_msg = "缺少空调温度参数(value 或 command_delta+direction)";
             return false;
-        }
-        if (t < ROOM_EC11_AC_TEMP_MIN_C) {
-            t = ROOM_EC11_AC_TEMP_MIN_C;
-        }
-        if (t > ROOM_EC11_AC_TEMP_MAX_C) {
-            t = ROOM_EC11_AC_TEMP_MAX_C;
         }
         s_ac_target_temp = (uint8_t)t;
         publish_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
@@ -729,15 +768,9 @@ static bool execute_room_command(const char *cmd_type, cJSON *root, const char *
 
     if (strcmp(cmd_type, "set_volume") == 0 || strcmp(cmd_type, "volume_set") == 0 || strcmp(cmd_type, "volume") == 0) {
         int vol = s_volume_pct;
-        if (!read_int_from_cmd_payload(root, &vol)) {
-            *out_result_msg = "缺少音量参数(value)";
+        if (!room_read_relative_or_absolute_int(root, &vol, 0, 100)) {
+            *out_result_msg = "缺少音量参数(value 或 command_delta+direction)";
             return false;
-        }
-        if (vol < 0) {
-            vol = 0;
-        }
-        if (vol > 100) {
-            vol = 100;
         }
         s_volume_pct = vol;
         hal_audio_set_playback_volume_pct(s_volume_pct);

@@ -52,6 +52,13 @@ class DeviceService {
       throw new Error('Device ID is required');
     }
 
+    const t = (device_type || '').toLowerCase();
+    const defaultArea =
+      t === 'front_desk' ? '前台' :
+      t === 'room' || t === 'room_terminal' ? '客房' :
+      t === 'floor' || t.startsWith('floor') ? '楼控' :
+      '未分配';
+
     try {
       // 检查设备是否已存在
       const [rows] = await pool.query<RowDataPacket[]>(
@@ -74,19 +81,35 @@ class DeviceService {
           }
         }
 
-        // 更新现有设备信息
-        await pool.query<ResultSetHeader>(
-          `UPDATE devices SET
-            firmware_version = COALESCE(?, firmware_version),
-            ip_address = COALESCE(?, ip_address),
-            mac_address = COALESCE(?, mac_address),
-            last_seen = NOW(),
-            device_status = 'online',
-            hotel_id = ?,
-            room_id = COALESCE(?, room_id)
-          WHERE device_id = ?`,
-          [firmware_version, ip_address, mac_address, hotel_id, final_room_id, device_id]
-        );
+        const hasAreaCol = await this.hasColumn('devices', 'area');
+        if (hasAreaCol) {
+          await pool.query<ResultSetHeader>(
+            `UPDATE devices SET
+              firmware_version = COALESCE(?, firmware_version),
+              ip_address = COALESCE(?, ip_address),
+              mac_address = COALESCE(?, mac_address),
+              last_seen = NOW(),
+              device_status = 'online',
+              hotel_id = ?,
+              room_id = COALESCE(?, room_id),
+              area = IF(area IS NULL OR TRIM(COALESCE(area,'')) = '' OR LOWER(TRIM(area)) = 'unknown', ?, area)
+            WHERE device_id = ?`,
+            [firmware_version, ip_address, mac_address, hotel_id, final_room_id, defaultArea, device_id]
+          );
+        } else {
+          await pool.query<ResultSetHeader>(
+            `UPDATE devices SET
+              firmware_version = COALESCE(?, firmware_version),
+              ip_address = COALESCE(?, ip_address),
+              mac_address = COALESCE(?, mac_address),
+              last_seen = NOW(),
+              device_status = 'online',
+              hotel_id = ?,
+              room_id = COALESCE(?, room_id)
+            WHERE device_id = ?`,
+            [firmware_version, ip_address, mac_address, hotel_id, final_room_id, device_id]
+          );
+        }
 
         // 清除相关缓存，确保设备状态更新
         await CacheService.delete(CacheService.deviceKeys.info(device.id!));
@@ -141,27 +164,51 @@ class DeviceService {
           }
         }
 
-        // 创建新设备，状态为待审核
-        await pool.query<ResultSetHeader>(
-          `INSERT INTO devices (
-            device_id, device_type, device_name, device_key,
-            device_status, firmware_version, last_seen,
-            audit_status, ip_address, mac_address, hotel_id, room_id
-          ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
-          [
-            device_id,
-            device_type || 'unknown',
-            device_name || `New Device ${device_id}`,
-            '', 
-            'online',
-            firmware_version,
-            'pending',
-            ip_address,
-            mac_address,
-            hotel_id,
-            initial_room_id
-          ]
-        );
+        const hasAreaColNew = await this.hasColumn('devices', 'area');
+        if (hasAreaColNew) {
+          await pool.query<ResultSetHeader>(
+            `INSERT INTO devices (
+              device_id, device_type, device_name, device_key,
+              device_status, firmware_version, last_seen,
+              audit_status, ip_address, mac_address, hotel_id, room_id, area
+            ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,
+            [
+              device_id,
+              device_type || 'unknown',
+              device_name || `New Device ${device_id}`,
+              '',
+              'online',
+              firmware_version,
+              'pending',
+              ip_address,
+              mac_address,
+              hotel_id,
+              initial_room_id,
+              defaultArea
+            ]
+          );
+        } else {
+          await pool.query<ResultSetHeader>(
+            `INSERT INTO devices (
+              device_id, device_type, device_name, device_key,
+              device_status, firmware_version, last_seen,
+              audit_status, ip_address, mac_address, hotel_id, room_id
+            ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+            [
+              device_id,
+              device_type || 'unknown',
+              device_name || `New Device ${device_id}`,
+              '',
+              'online',
+              firmware_version,
+              'pending',
+              ip_address,
+              mac_address,
+              hotel_id,
+              initial_room_id
+            ]
+          );
+        }
 
         // 清除待审核设备列表缓存，确保新注册设备能立即显示
         await CacheService.delete(CacheService.deviceKeys.pending());

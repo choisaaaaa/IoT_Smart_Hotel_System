@@ -89,9 +89,89 @@ emulator/build/
 # ==================== Trae IDE ====================
 .trae/
 
-docs/08-部署运维/云服务器部署指南.md
+# ==================== 文档目录（比赛提交时忽略所有文档）====================
+docs/*
+
+# ==================== 忽略所有 Markdown 文档（只保留根目录 README.md）====================
+*.md
+!README.md
+
+# ==================== 忽略其他文档文件 ====================
+*.doc
+*.docx
+*.pdf
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# ==================== 测试报告和覆盖率报告 ====================
+**/coverage/
+**/coverage-report/
+**/*coverage*.json
+**/*coverage*.html
+
+# ==================== 其他无关文件 ====================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.spec
 backend/iot-hotel-backend/.env服务器
 
-# 注意：tests/ 文件夹现在包含重要的测试用例，需要提交到仓库
-# tests/
-tests.zip
+# ==================== 大文件 & 二进制文件 ====================
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.img
+*.iso
+
+# ==================== 数据库备份文件 ====================
+*.sql
+*.dump
+*.backup
+
+# ==================== 本地开发配置 ====================
+.vscode/settings.json
+.idea/
+*.iml
+
+# ==================== 上传的临时文件 ====================
+uploads/temp/
+temp/
+tmp/
+
+# ==================== 测试相关文件（保留测试代码，忽略测试报告和结果）====================
+tests/playwright-report/
+tests/test-results/
+tests/**/*.md
+
+# ==================== 个人配置文件 ====================
+*.private
+*.personal
+*.secret
+secrets/
+
+# ==================== 根目录本地配置文件（可能包含个人信息）====================
+room_config.json
+front_desk_config.json
+floor_config.json
+
+# ==================== 截图和图片（可能包含敏感信息）====================
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+!frontend/iot-hotel-web/src/assets/**/*.svg
+!frontend/iot-hotel-web/public/**/*.png
+!frontend/iot-hotel-web/public/**/*.jpg
+!mobile/iot_hotel_app/assets/**/*.png
+!mobile/iot_hotel_app/assets/**/*.jpg
+
+/backup_all
+/.postman

@@ -28,7 +28,7 @@ class WebSocketService {
   init(httpServer: http.Server) {
     this.server = httpServer;
     
-    // WebSocket CORS配置 - 限制为已知的前端域名列表
+    // WebSocket CORS配置 - 限制为已知的前端域名列表（已翻译）
     const isProduction = process.env.NODE_ENV === 'production';
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3000',

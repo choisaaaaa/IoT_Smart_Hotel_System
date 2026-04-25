@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import pool, { RowDataPacket, ResultSetHeader } from '../config/database';
 import logger from '../utils/logger';
 import { isSystemAdmin } from '../utils/role';
-import { verifyDeviceKey } from '../utils/device-key';
+import { isRfidGuestCardNotExpired } from '../services/rfid.service';
 
 class RfidAccessController {
   /**
@@ -216,34 +216,60 @@ class RfidAccessController {
 
   /**
    * 验证房卡权限（设备端调用）
+   * 设备身份由 deviceAuthMiddleware（x-device-id / x-device-key）校验；请求体仅需 card_uid，
+   * 以及 room_id（rooms 表主键）或 room_number（如 "301"）之一以校验是否可开该房门。
    */
   async verify(req: Request, res: Response) {
     try {
-      const { card_uid, room_id, device_id, device_key } = req.body;
-
-      if (!card_uid || !room_id || !device_id || !device_key) {
-        return res.status(400).json({ success: false, message: 'Missing required parameters' });
+      const device = (req as any).device as { deviceId: string; hotelId: number } | undefined;
+      if (!device?.hotelId) {
+        return res.status(401).json({ success: false, message: 'Device not authenticated' });
       }
 
-      // 验证设备密钥
-      const [devices] = await pool.query<RowDataPacket[]>(
-        'SELECT hotel_id, device_key FROM devices WHERE device_id = ?',
-        [device_id]
-      );
+      const { card_uid, room_id, room_number } = req.body;
 
-      if (devices.length === 0 || !verifyDeviceKey(device_key, devices[0].device_key)) {
-        return res.status(401).json({ success: false, message: 'Invalid device credentials' });
+      if (!card_uid) {
+        return res.status(400).json({ success: false, message: 'Missing card_uid' });
       }
 
-      const hotelId = devices[0].hotel_id;
+      const cardUidNorm = String(card_uid).trim().toUpperCase();
+
+      const hotelId = device.hotelId;
+      let resolvedRoomDbId: number | null = null;
+
+      if (room_id !== undefined && room_id !== null && String(room_id).trim() !== '') {
+        const parsed = parseInt(String(room_id), 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          resolvedRoomDbId = parsed;
+        }
+      }
+
+      if (resolvedRoomDbId === null && room_number !== undefined && room_number !== null && String(room_number).trim() !== '') {
+        const [roomRows] = await pool.query<RowDataPacket[]>(
+          'SELECT id FROM rooms WHERE room_number = ? AND hotel_id = ? LIMIT 1',
+          [String(room_number).trim(), hotelId]
+        );
+        if (roomRows.length === 0) {
+          return res.json({
+            valid: false,
+            card_status: 'unknown',
+            message: 'Room not found for this hotel'
+          });
+        }
+        resolvedRoomDbId = roomRows[0].id as number;
+      }
+
+      if (resolvedRoomDbId === null) {
+        return res.status(400).json({ success: false, message: 'Missing room_id or room_number' });
+      }
 
       // 查询房卡信息
       const [cards] = await pool.query<RowDataPacket[]>(
         `SELECT rc.*, r.room_number 
          FROM rfid_cards rc
          LEFT JOIN rooms r ON rc.room_id = r.id
-         WHERE rc.card_uid = ? AND rc.hotel_id = ?`,
-        [card_uid, hotelId]
+         WHERE UPPER(TRIM(rc.card_uid)) = ? AND rc.hotel_id = ?`,
+        [cardUidNorm, hotelId]
       );
 
       if (cards.length === 0) {
@@ -273,8 +299,8 @@ class RfidAccessController {
         });
       }
 
-      // 检查有效期
-      if (card.expires_at && new Date(card.expires_at) < new Date()) {
+      // 检查有效期（退房日按自然日有效，与 MQTT 自动开锁一致）
+      if (card.expires_at && !isRfidGuestCardNotExpired(card.expires_at)) {
         return res.json({
           valid: false,
           card_status: 'expired',
@@ -284,12 +310,12 @@ class RfidAccessController {
       }
 
       // 检查房间权限
-      if (card.room_id && card.room_id !== parseInt(room_id)) {
+      if (card.room_id && card.room_id !== resolvedRoomDbId) {
         return res.json({
           valid: false,
           card_status: card.status,
           authorized_room: card.room_id,
-          requested_room: parseInt(room_id),
+          requested_room: resolvedRoomDbId,
           message: 'Card not authorized for this room'
         });
       }

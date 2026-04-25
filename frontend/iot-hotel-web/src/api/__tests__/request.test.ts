@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import axios from 'axios';
 
-// Use vi.hoisted to define variables that need to be available in vi.mock
+// 使用 vi.hoisted 定义需要在 vi.mock 中可用的变量
 const { mockHoistedCreate } = vi.hoisted(() => {
   return {
     mockHoistedCreate: vi.fn().mockReturnValue({
@@ -17,7 +17,7 @@ const { mockHoistedCreate } = vi.hoisted(() => {
   };
 });
 
-// Mock ant-design-vue to prevent icon loading errors
+// 模拟 ant-design-vue 以防止图标加载错误
 vi.mock('ant-design-vue', () => ({
   message: {
     error: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock('ant-design-vue', () => ({
   }
 }));
 
-// Mock axios BEFORE importing request
+// 在导入 request 之前模拟 axios
 vi.mock('axios', () => {
   return {
     default: {
@@ -36,7 +36,7 @@ vi.mock('axios', () => {
   };
 });
 
-// Import request after mocking axios
+// 在模拟 axios 之后导入 request
 import '../request';
 
 describe('API 请求测试', () => {

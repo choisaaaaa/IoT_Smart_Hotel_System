@@ -112,7 +112,7 @@
                     <a-tooltip title="设备二次分配/修改">
                       <EditOutlined @click="openEditModal(device)" />
                     </a-tooltip>
-                    <a-tooltip title="仿真调试控制台">
+                    <a-tooltip title="真实设备调试（MQTT）">
                       <ExperimentOutlined @click="openDebugTerminal(device)" />
                     </a-tooltip>
                     <a-tooltip title="查看实时数据">
@@ -260,80 +260,153 @@
     <!-- Debug Terminal Modal -->
     <a-modal 
       v-model:open="debugTerminalVisible" 
-      :title="`设备仿真调试控制台 - ${currentDebug.deviceId}`" 
-      width="850px"
+      :title="`真实设备调试 - ${currentDebug.deviceId}`" 
+      width="1000px"
       :footer="null"
       @cancel="closeDebugTerminal"
     >
       <div class="debug-terminal">
-        <!-- Sidebar: Device Info & Simulation Tools -->
-        <div class="terminal-sidebar">
-          <div class="device-card-mini">
-            <component :is="getDeviceIcon(currentDebug.deviceType)" class="mini-icon" />
-            <div class="mini-info">
-              <div class="name">{{ currentDebug.deviceName }}</div>
-              <a-tag :color="getTypeColor(currentDebug.deviceType)">{{ getDeviceTypeText(currentDebug.deviceType) }}</a-tag>
+        <div class="debug-terminal-top">
+          <div class="debug-terminal-top-left">
+            <div class="device-card-mini device-card-mini--inline">
+              <component :is="getDeviceIcon(currentDebug.deviceType)" class="mini-icon" />
+              <div class="mini-info">
+                <div class="name">{{ currentDebug.deviceName }}</div>
+                <div class="mini-meta-row">
+                  <a-tag :color="getTypeColor(currentDebug.deviceType)">{{ getDeviceTypeText(currentDebug.deviceType) }}</a-tag>
+                  <span class="mini-id"><code>{{ currentDebug.deviceId }}</code></span>
+                </div>
+                <div class="runtime-inline">
+                  <span>在线 <b>{{ debugRuntime.online ? '是' : '否' }}</b></span>
+                  <span class="sep">·</span>
+                  <span>最近上报 <b>{{ debugRuntime.lastUpdateText }}</b></span>
+                  <span class="sep">·</span>
+                  <span>最近下发 <b>{{ debugRuntime.lastCommandResult }}</b></span>
+                </div>
+              </div>
             </div>
           </div>
+          <div class="debug-terminal-top-right">
+            <div class="sensor-strip-title">
+              <LineChartOutlined /> 传感器（若有）
+              <a-button type="link" size="small" class="sensor-refresh" @click="fetchDebugTerminalSensors()">
+                <template #icon><SyncOutlined /></template>
+              </a-button>
+            </div>
+            <a-spin :spinning="debugTerminalSensorLoading" size="small">
+              <div v-if="debugTerminalSensors.length === 0" class="sensor-strip-empty">
+                暂无近期传感器数据
+              </div>
+              <div v-else class="sensor-chip-row">
+                <div
+                  v-for="sensor in debugTerminalSensors"
+                  :key="`${sensor.sensor_type}-${sensor.device_id || ''}-${sensor.id ?? ''}`"
+                  :class="['sensor-chip', getSensorStatus(sensor)]"
+                >
+                  <span class="chip-label">{{ getSensorTypeName(sensor.sensor_type) }}</span>
+                  <span class="chip-value">
+                    {{ sensor.sensor_value ?? '--' }}<span class="chip-unit">{{ sensor.unit || '' }}</span>
+                  </span>
+                </div>
+              </div>
+            </a-spin>
+          </div>
+        </div>
 
-          <a-divider>模拟指令下发</a-divider>
-          <div class="simulation-tools">
-            <div class="simulation-command-list">
-              <a-button v-for="sim in simulationCommands" :key="sim.label" @click="sendSimulationCommand(sim)">
+        <div class="debug-terminal-body">
+          <div class="terminal-command-pane">
+            <div class="pane-section-title">图形化指令（MQTT 下发）</div>
+            <p v-if="simulationCommands.length === 0" class="no-commands-hint">
+              当前设备类型暂无预设指令，请使用下方自定义主题下发。
+            </p>
+            <div v-else class="command-button-grid">
+              <a-button
+                v-for="sim in simulationCommands"
+                :key="sim.label"
+                size="small"
+                @click="sendSimulationCommand(sim)"
+              >
                 {{ sim.label }}
               </a-button>
             </div>
-            
-            <div class="custom-send mt-4">
-              <p class="small-label">自定义 MQTT 消息</p>
+
+            <a-divider class="compact-divider">自定义 MQTT</a-divider>
+            <div class="custom-send custom-send--compact">
               <a-input v-model:value="customMqtt.topic" placeholder="主题" size="small" class="mb-2" />
-              <a-textarea v-model:value="customMqtt.payload" placeholder="消息内容 (JSON)" :rows="4" size="small" class="mb-2" />
+              <a-textarea v-model:value="customMqtt.payload" placeholder="消息内容 (JSON)" :rows="3" size="small" class="mb-2" />
               <a-button type="primary" block size="small" @click="sendCustomMqtt">
                 <template #icon><SendOutlined /></template> 发送
               </a-button>
             </div>
-          </div>
-        </div>
 
-        <!-- Main: Message Logs -->
-        <div class="terminal-main">
-          <div class="runtime-status-panel">
-            <div class="status-title">客房实时状态</div>
-            <div class="status-grid">
-              <div class="status-item"><span>设备ID</span><b>{{ currentDebug.deviceId || '--' }}</b></div>
-              <div class="status-item"><span>在线状态</span><b>{{ debugRuntime.online ? '在线' : '离线' }}</b></div>
-              <div class="status-item"><span>最近上报</span><b>{{ debugRuntime.lastUpdateText }}</b></div>
-              <div class="status-item"><span>命令回执</span><b>{{ debugRuntime.lastCommandResult }}</b></div>
-              <div class="status-item"><span>温度</span><b>{{ debugRuntime.temperature }}</b></div>
-              <div class="status-item"><span>湿度</span><b>{{ debugRuntime.humidity }}</b></div>
-              <div class="status-item"><span>烟雾</span><b>{{ debugRuntime.smoke }}</b></div>
-              <div class="status-item"><span>光照</span><b>{{ debugRuntime.light }}</b></div>
-              <div class="status-item"><span>空调设定</span><b>{{ debugRuntime.acTarget }}</b></div>
-              <div class="status-item"><span>灯光亮度</span><b>{{ debugRuntime.brightness }}</b></div>
-              <div class="status-item"><span>音量</span><b>{{ debugRuntime.volume }}</b></div>
+            <div class="telemetry-hint pane-section-title telemetry-hint-title">上报快照（环境与本机状态，来自设备近期上报）</div>
+            <div class="telemetry-mini-grid">
+              <div class="telemetry-mini"><span>温度</span><b>{{ debugRuntime.temperature }}</b></div>
+              <div class="telemetry-mini"><span>湿度</span><b>{{ debugRuntime.humidity }}</b></div>
+              <div class="telemetry-mini"><span>烟雾</span><b>{{ debugRuntime.smoke }}</b></div>
+              <div class="telemetry-mini"><span>光照</span><b>{{ debugRuntime.light }}</b></div>
+              <div class="telemetry-mini"><span>空调</span><b>{{ debugRuntime.acTarget }}</b></div>
+              <div class="telemetry-mini"><span>亮度</span><b>{{ debugRuntime.brightness }}</b></div>
+              <div class="telemetry-mini"><span>音量</span><b>{{ debugRuntime.volume }}</b></div>
             </div>
           </div>
-          <div class="terminal-header">
-            <span class="title"><HistoryOutlined /> 通信日志流水</span>
-            <a-space>
-              <a-checkbox v-model:checked="autoScroll">自动滚动</a-checkbox>
-              <a-button size="small" @click="fetchMqttLogs(true)">
-                <template #icon><SyncOutlined /></template> 刷新
-              </a-button>
-              <a-button size="small" @click="mqttLogs = []">
-                <template #icon><ClearOutlined /></template> 清屏
-              </a-button>
-            </a-space>
-          </div>
-          <div class="log-container" ref="logContainerRef">
-            <div v-for="log in mqttLogs" :key="log.id" class="log-item" :class="log.direction">
-              <div class="log-time">{{ formatTime(log.timestamp) }}</div>
-              <div class="log-topic"><code>{{ log.topic }}</code></div>
-              <div class="log-payload">
-                <pre>{{ formatPayload(log.payload) }}</pre>
+
+          <div class="terminal-mqtt-strip">
+            <div class="mqtt-strip-header">
+              <div class="strip-title-block">
+                <span class="title"><HistoryOutlined /> 设备活动流</span>
+                <span class="strip-hint">MQTT 入/出站、平台状态与指令历史（按时间倒序）</span>
+              </div>
+              <a-space size="small">
+                <a-checkbox v-model:checked="autoScroll">滚到底</a-checkbox>
+                <a-button size="small" @click="refreshDebugActivityPanel">
+                  <template #icon><SyncOutlined /></template>
+                </a-button>
+                <a-button size="small" @click="clearDebugMqttLog">
+                  <template #icon><ClearOutlined /></template>
+                </a-button>
+              </a-space>
+            </div>
+            <div class="log-container log-container--strip" ref="logContainerRef">
+              <template v-for="(row, idx) in debugStreamRows" :key="debugStreamRowKey(row, idx)">
+                <div
+                  v-if="row.kind === 'status'"
+                  class="log-item log-item--compact log-item--synth log-item--status"
+                >
+                  <div class="log-time">{{ row.data.last_seen ? formatTime(row.data.last_seen) : '—' }}</div>
+                  <div class="log-topic"><code>__system/device_register</code></div>
+                  <div class="log-payload">
+                    <pre>{{ formatStatusForStream(row.data) }}</pre>
+                  </div>
+                </div>
+                <div
+                  v-else-if="row.kind === 'command'"
+                  class="log-item log-item--compact log-item--synth log-item--command out"
+                >
+                  <div class="log-time">{{ formatTime(row.data.created_at) }}</div>
+                  <div class="log-topic">
+                    <code>control_queue / {{ row.data.command_type ?? 'command' }}</code>
+                  </div>
+                  <div class="log-payload">
+                    <pre>{{ formatCommandForStream(row.data) }}</pre>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="log-item log-item--compact"
+                  :class="row.data.direction"
+                >
+                  <div class="log-time">{{ formatTime(row.data.timestamp) }}</div>
+                  <div class="log-topic"><code>{{ row.data.topic }}</code></div>
+                  <div class="log-payload">
+                    <pre>{{ formatPayload(row.data.payload) }}</pre>
+                  </div>
+                </div>
+              </template>
+              <div v-if="debugStreamRows.length === 0" class="log-empty">
+                暂无可显示记录。若设备已连 MQTT 仍无数据，请点刷新；无「主题」行多半是后台尚未收到该设备 id 的入站报文或通信日志未入库。
               </div>
             </div>
-            <div v-if="mqttLogs.length === 0" class="log-empty">等待通信数据中...</div>
           </div>
         </div>
       </div>
@@ -406,7 +479,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { $notify, NotifyPreset } from '@/utils/notify'
 import {
@@ -465,7 +538,7 @@ const debugInfo = ref('')
 const devices = ref<any[]>([])
 const rooms = ref<RoomInfo[]>([])
 
-// Computed Stats
+// 计算统计数据
 const stats = computed(() => ({
   online: devices.value.filter(d => d.device_status === 'online' && d.audit_status === 'approved').length,
   offline: devices.value.filter(d => d.device_status !== 'online' && d.audit_status === 'approved').length,
@@ -480,7 +553,7 @@ const goToLogin = () => {
   router.push('/guest/booking?login=1')
 }
 
-// Device Filtering
+// 设备筛选
 const filteredActiveDevices = computed(() => {
   let list = devices.value.filter(d => d.audit_status === 'approved')
 
@@ -510,7 +583,7 @@ const auditColumns = [
   { title: '操作', key: 'action', fixed: 'right', width: 150 }
 ]
 
-// Modal States
+// 弹窗状态
 const auditModalVisible = ref(false)
 const auditLoading = ref(false)
 const isReassign = ref(false)
@@ -545,7 +618,7 @@ const currentSensor = reactive({
   deviceType: ''
 })
 
-// Debug Terminal State
+// 调试终端状态
 const debugTerminalVisible = ref(false)
 const mqttLogs = ref<any[]>([])
 const autoScroll = ref(true)
@@ -570,8 +643,24 @@ const debugRuntime = reactive({
   volume: '--'
 })
 
+const customMqtt = reactive({
+  topic: '',
+  payload: ''
+})
+
+const debugTerminalSensors = ref<any[]>([])
+const debugTerminalSensorLoading = ref(false)
+/** 详情接口快照 + 本地列表行，供活动流中「设备状态」行使用 */
+const debugDeviceSnapshot = ref<Record<string, unknown> | null>(null)
+const debugCommandHistory = ref<any[]>([])
+
+const commandDeviceType = computed(() => {
+  const t = currentDebug.deviceType
+  return t === 'floor_controller' ? 'floor' : t
+})
+
 const simulationCommands = computed(() => {
-  const type = currentDebug.deviceType
+  const type = commandDeviceType.value
   const deviceId = currentDebug.deviceId
   const roomId = deviceId.includes('_') 
     ? deviceId.split('_').pop() 
@@ -603,7 +692,9 @@ const simulationCommands = computed(() => {
       { label: '🆕 开卡-房间301', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '301', booking_id: 'BK001' } } },
       { label: '🆕 开卡-房间302', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '302', booking_id: 'BK002' } } },
       { label: '🔍 验卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
+      { label: '📖 读卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'read_card' } },
       { label: '📟 刷卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'swipe_card' } },
+      { label: '🧹 清卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'clear_card' } },
       { label: '🗑️ 退卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'revoke', room_number: '301' } } },
       { label: '🚨 前台报警', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_trigger' } },
       { label: '🚨 301 广播警报', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'broadcast_alarm' } }
@@ -612,7 +703,108 @@ const simulationCommands = computed(() => {
   return []
 })
 
-function openDebugTerminal(device: any) {
+type DebugStreamRow =
+  | { kind: 'status'; order: number; data: any }
+  | { kind: 'command'; order: number; data: any }
+  | { kind: 'mqtt'; order: number; data: any }
+
+const debugStreamRows = computed((): DebugStreamRow[] => {
+  const out: DebugStreamRow[] = []
+  const snap = debugDeviceSnapshot.value
+  if (snap && typeof snap === 'object') {
+    const t = snap.last_seen ? new Date(String(snap.last_seen)).getTime() : 0
+    out.push({ kind: 'status', order: t, data: snap })
+  }
+  for (const c of debugCommandHistory.value) {
+    const t = c.created_at ? new Date(c.created_at).getTime() : 0
+    out.push({ kind: 'command', order: t, data: c })
+  }
+  for (const log of mqttLogs.value) {
+    const t = log.timestamp ? new Date(log.timestamp).getTime() : 0
+    out.push({ kind: 'mqtt', order: t, data: log })
+  }
+  out.sort((a, b) => b.order - a.order)
+  return out
+})
+
+function debugStreamRowKey(row: DebugStreamRow, idx: number) {
+  if (row.kind === 'mqtt') return `mqtt-${row.data.id ?? idx}`
+  if (row.kind === 'command') return `cmd-${row.data.id ?? idx}`
+  return 'status-snap'
+}
+
+function formatStatusForStream(s: any) {
+  return JSON.stringify(
+    {
+      device_id: s.device_id,
+      device_name: s.device_name,
+      device_type: s.device_type,
+      device_status: s.device_status,
+      last_seen: s.last_seen,
+      ip_address: s.ip_address,
+      mac_address: s.mac_address,
+      area: s.area,
+      room_number: s.room_number
+    },
+    null,
+    2
+  )
+}
+
+function formatCommandForStream(c: any) {
+  return JSON.stringify(
+    {
+      command_type: c.command_type,
+      command_value: c.command_value,
+      command_status: c.command_status,
+      created_at: c.created_at
+    },
+    null,
+    2
+  )
+}
+
+function scrollLogToEnd() {
+  if (autoScroll.value && logContainerRef.value) {
+    setTimeout(() => {
+      if (logContainerRef.value) logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+    }, 100)
+  }
+}
+
+async function fetchDebugDeviceContext() {
+  if (!currentDebug.id) return
+  try {
+    const [detRes, cmdRes]: any = await Promise.all([
+      deviceApi.getDeviceDetail(currentDebug.id),
+      deviceApi.getCommandHistory(currentDebug.id, { page: 1, pageSize: 25 })
+    ])
+    if (detRes?.data) {
+      debugDeviceSnapshot.value = detRes.data
+    } else {
+      debugDeviceSnapshot.value = (devices.value.find((x: any) => x.id === currentDebug.id) as any) || null
+    }
+    const list = cmdRes?.data?.list
+    debugCommandHistory.value = Array.isArray(list) ? list : []
+  } catch {
+    debugDeviceSnapshot.value = (devices.value.find((x: any) => x.id === currentDebug.id) as any) || null
+    debugCommandHistory.value = []
+  }
+  scrollLogToEnd()
+}
+
+async function refreshDebugActivityPanel() {
+  await Promise.all([fetchMqttLogs(true), fetchDebugDeviceContext()])
+  fetchDebugRuntimeStatus()
+  await fetchDebugTerminalSensors()
+  applyDebugRuntimeFromSensorStrip()
+}
+
+function clearDebugMqttLog() {
+  mqttLogs.value = []
+}
+
+async function openDebugTerminal(device: any) {
   Object.assign(currentDebug, {
     id: device.id,
     deviceId: device.device_id,
@@ -620,14 +812,27 @@ function openDebugTerminal(device: any) {
     deviceType: device.device_type
   })
   debugTerminalVisible.value = true
-  fetchMqttLogs()
+  await fetchMqttLogs()
   fetchDebugRuntimeStatus()
-  logTimer.value = setInterval(() => fetchMqttLogs(), 3000)
+  await fetchDebugDeviceContext()
+  await fetchDebugTerminalSensors()
+  applyDebugRuntimeFromSensorStrip()
+  logTimer.value = setInterval(async () => {
+    await fetchMqttLogs()
+    fetchDebugRuntimeStatus()
+    await fetchDebugDeviceContext()
+    await fetchDebugTerminalSensors({ silent: true })
+    applyDebugRuntimeFromSensorStrip()
+  }, 3000)
 }
 
 function closeDebugTerminal() {
   if (logTimer.value) clearInterval(logTimer.value)
+  logTimer.value = null
   debugTerminalVisible.value = false
+  debugTerminalSensors.value = []
+  debugDeviceSnapshot.value = null
+  debugCommandHistory.value = []
 }
 
 async function fetchMqttLogs(isManual = false) {
@@ -635,15 +840,12 @@ async function fetchMqttLogs(isManual = false) {
     const res: any = await request.get('/mqtt/logs', { 
       params: { device_id: currentDebug.deviceId, limit: 50 } 
     })
-    if (res.success) {
-      mqttLogs.value = res.data
+    const ok = res && (res.success === true || res.code === 200 || res.code === undefined)
+    if (ok && res.data !== undefined) {
+      mqttLogs.value = Array.isArray(res.data) ? res.data : []
       hydrateLastCommandResult()
       hydrateRuntimeFromLogs()
-      if (autoScroll.value && logContainerRef.value) {
-        setTimeout(() => {
-          logContainerRef.value!.scrollTop = logContainerRef.value!.scrollHeight
-        }, 100)
-      }
+      scrollLogToEnd()
     }
   } catch (err) {
     if (isManual) $notify.error({ title: '刷新日志失败', description: '无法刷新MQTT日志，请稍后重试 🔄' })
@@ -658,6 +860,82 @@ function formatPayload(p: any) {
   return JSON.stringify(p, null, 2)
 }
 
+function buildRealSimulationPayload(sim: any) {
+  const raw = sim.payload
+  if (raw != null && typeof raw === 'object') {
+    return JSON.parse(JSON.stringify(raw))
+  }
+  return raw
+}
+
+function parseLogPayload(log: any): Record<string, unknown> | null {
+  if (!log?.payload && log?.payload !== '') return null
+  if (typeof log.payload === 'object' && log.payload !== null) {
+    return log.payload as Record<string, unknown>
+  }
+  if (typeof log.payload === 'string') {
+    try {
+      const p = JSON.parse(log.payload)
+      return typeof p === 'object' && p !== null ? (p as Record<string, unknown>) : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function hydrateLastCommandResult() {
+  const out = mqttLogs.value.find((l: any) => l.direction === 'out')
+  if (!out) {
+    debugRuntime.lastCommandResult = '--'
+    return
+  }
+  const p = parseLogPayload(out)
+  const cmd = (p?.command_type as string) || (out.topic && String(out.topic).split('/').pop()) || '下发'
+  debugRuntime.lastCommandResult = String(cmd).slice(0, 48)
+}
+
+function hydrateRuntimeFromLogs() {
+  const next = {
+    temperature: '--',
+    humidity: '--',
+    smoke: '--',
+    light: '--',
+    acTarget: '--',
+    brightness: '--',
+    volume: '--'
+  }
+  for (const log of mqttLogs.value) {
+    if (log.direction !== 'in') continue
+    const p = parseLogPayload(log)
+    if (!p) continue
+    const setIf = (key: keyof typeof next, val: unknown) => {
+      if (next[key] !== '--') return
+      if (val === undefined || val === null || val === '') return
+      next[key] = String(val)
+    }
+    setIf('temperature', p.temperature ?? p.temp ?? p.ntc_temp_c)
+    setIf('humidity', p.humidity)
+    setIf('smoke', p.smoke ?? p.smoke_level)
+    setIf('light', p.light ?? p.light_level)
+    setIf('acTarget', p.ac_target ?? p.ac_temp ?? p.target_temp)
+    setIf('brightness', p.brightness ?? p.light_brightness)
+    setIf('volume', p.volume)
+  }
+  Object.assign(debugRuntime, next)
+}
+
+function fetchDebugRuntimeStatus() {
+  const d = devices.value.find((x: any) => x.id === currentDebug.id)
+  if (d) {
+    debugRuntime.online = d.device_status === 'online'
+    debugRuntime.lastUpdateText = d.last_seen ? String(formatTime(d.last_seen)) : '--'
+  } else {
+    debugRuntime.online = false
+    debugRuntime.lastUpdateText = '--'
+  }
+}
+
 async function sendSimulationCommand(sim: any) {
   try {
     const payload = buildRealSimulationPayload(sim)
@@ -667,7 +945,7 @@ async function sendSimulationCommand(sim: any) {
       payload: payload,
       qos: 1
     })
-    $notify.success({ title: '指令已发送', description: `模拟指令 ${sim.label} 已成功发送 📡` })
+    $notify.success({ title: '指令已发送', description: `${sim.label} 已通过 MQTT 下发 📡` })
     fetchMqttLogs(true)
   } catch (err) {
     NotifyPreset.operationFailed('MQTT消息发送失败')
@@ -697,7 +975,9 @@ const getDeviceIcon = (type: string) => {
     'room': LayoutOutlined,
     'front_desk': UserOutlined,
     'sensor': BulbOutlined,
-    'gateway': SettingOutlined
+    'gateway': SettingOutlined,
+    'floor': ClusterOutlined,
+    'floor_controller': ClusterOutlined
   }
   return map[type] || DesktopOutlined
 }
@@ -707,7 +987,9 @@ const getTypeColor = (type: string) => {
     'room': 'purple',
     'front_desk': 'blue',
     'sensor': 'orange',
-    'gateway': 'cyan'
+    'gateway': 'cyan',
+    'floor': 'geekblue',
+    'floor_controller': 'geekblue'
   }
   return map[type] || 'default'
 }
@@ -716,7 +998,7 @@ const statusText = (s: string) => ({ online: '在线', offline: '离线', error:
 
 const formatTime = (t: string) => t ? (toTz(t)?.fromNow() || '从未连接') : '从未连接'
 
-// API Actions
+// API操作
 async function fetchDevices() {
   loading.value = true
   try {
@@ -891,20 +1173,25 @@ const DEPRECATED_SENSOR_TYPES: ReadonlySet<string> = new Set([
   'pm25'               // 硬件未装 PM2.5 传感器
 ])
 
+function filterFreshSensorRows(data: any[]): any[] {
+  if (!Array.isArray(data)) return []
+  const now = Date.now()
+  return data.filter((s: any) => {
+    if (!s?.sensor_type) return false
+    if (DEPRECATED_SENSOR_TYPES.has(s.sensor_type)) return false
+    if (!s.created_at) return false
+    const t = new Date(s.created_at).getTime()
+    if (Number.isNaN(t)) return false
+    return now - t <= STALE_SENSOR_THRESHOLD_MS
+  })
+}
+
 async function fetchSensorData(deviceId: number) {
   sensorLoading.value = true
   try {
     const res: any = await request.get(`/devices/${deviceId}/sensor-data/latest`)
     if (res && res.success && Array.isArray(res.data)) {
-      const now = Date.now()
-      sensorData.value = res.data.filter((s: any) => {
-        if (!s?.sensor_type) return false
-        if (DEPRECATED_SENSOR_TYPES.has(s.sensor_type)) return false
-        if (!s.created_at) return false
-        const t = new Date(s.created_at).getTime()
-        if (Number.isNaN(t)) return false
-        return now - t <= STALE_SENSOR_THRESHOLD_MS
-      })
+      sensorData.value = filterFreshSensorRows(res.data)
     } else {
       sensorData.value = []
     }
@@ -915,8 +1202,56 @@ async function fetchSensorData(deviceId: number) {
   }
 }
 
+/** 将传感器条数据填入下方「上报快照」网格（优先 DB 合并结果，避免仅依赖 MQTT 日志解析） */
+function applyDebugRuntimeFromSensorStrip() {
+  const findVal = (...types: string[]) => {
+    for (const t of types) {
+      const s = debugTerminalSensors.value.find((x: any) => x.sensor_type === t)
+      if (s != null && s.sensor_value != null && String(s.sensor_value) !== '') {
+        return String(s.sensor_value)
+      }
+    }
+    return undefined
+  }
+  const t = findVal('temperature', 'ntc_temp_c')
+  if (t !== undefined) debugRuntime.temperature = t
+  const h = findVal('humidity')
+  if (h !== undefined) debugRuntime.humidity = h
+  const sm = findVal('smoke', 'air_quality_adc', 'smoke_level')
+  if (sm !== undefined) debugRuntime.smoke = sm
+  const li = findVal('light', 'light_level', 'light_adc')
+  if (li !== undefined) debugRuntime.light = li
+  const ac = findVal('ac_target_temp')
+  if (ac !== undefined) debugRuntime.acTarget = ac
+  const br = findVal('light_brightness')
+  if (br !== undefined) debugRuntime.brightness = br
+  const vol = findVal('volume')
+  if (vol !== undefined) debugRuntime.volume = vol
+}
+
+async function fetchDebugTerminalSensors(options?: { silent?: boolean }) {
+  if (!currentDebug.id) return
+  const showSpin = !options?.silent
+  if (showSpin) debugTerminalSensorLoading.value = true
+  try {
+    const res: any = await request.get(`/devices/${currentDebug.id}/sensor-data/latest`)
+    if (res && res.success && Array.isArray(res.data)) {
+      debugTerminalSensors.value = filterFreshSensorRows(res.data)
+    } else {
+      debugTerminalSensors.value = []
+    }
+  } catch {
+    debugTerminalSensors.value = []
+  } finally {
+    if (showSpin) debugTerminalSensorLoading.value = false
+  }
+}
+
 function getSensorTypeName(type: string): string {
   const map: Record<string, string> = {
+    light_brightness: '灯光亮度',
+    volume: '音量',
+    ac_target_temp: '空调目标温',
     temperature: '温度',
     humidity: '湿度',
     smoke: '烟雾(ADC)',
@@ -964,6 +1299,13 @@ function getSensorStatusText(sensor: any): string {
 onMounted(() => {
   fetchDevices()
   fetchRooms()
+})
+
+onUnmounted(() => {
+  if (logTimer.value) {
+    clearInterval(logTimer.value)
+    logTimer.value = null
+  }
 })
 </script>
 
@@ -1096,23 +1438,210 @@ onMounted(() => {
 .room-option { display: flex; justify-content: space-between; width: 100%; }
 .room-type { color: #8c8c8c; font-size: 12px; }
 
-/* Debug Terminal Styles */
+/* 调试终端样式 */
 .debug-terminal {
   display: flex;
-  height: 550px;
+  flex-direction: column;
+  height: 580px;
   background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   overflow: hidden;
 }
 
-.terminal-sidebar {
-  width: 250px;
-  border-right: 1px solid #f0f0f0;
-  padding: 16px;
+.debug-terminal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.debug-terminal-top-left { flex: 1; min-width: 0; }
+
+.debug-terminal-top-right {
+  flex: 0 0 340px;
+  max-width: 46%;
+  text-align: right;
+}
+
+.sensor-strip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #595959;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.sensor-strip-title .sensor-refresh { padding: 0 4px; margin: 0; height: auto; line-height: 1; }
+
+.sensor-strip-empty {
+  font-size: 12px;
+  color: #bfbfbf;
+  padding: 8px 0;
+}
+
+.sensor-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sensor-chip {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 88px;
+  text-align: left;
+}
+
+.sensor-chip.normal { border-left: 3px solid #52c41a; }
+.sensor-chip.warning { border-left: 3px solid #faad14; }
+.sensor-chip.danger { border-left: 3px solid #ff4d4f; }
+
+.sensor-chip .chip-label {
+  display: block;
+  font-size: 11px;
+  color: #8c8c8c;
+  margin-bottom: 2px;
+}
+
+.sensor-chip .chip-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.sensor-chip .chip-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8c8c8c;
+  margin-left: 2px;
+}
+
+.debug-terminal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.terminal-command-pane {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.pane-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #434343;
+  margin-bottom: 10px;
+}
+
+.no-commands-hint {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: 0 0 12px;
+}
+
+.command-button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.compact-divider { margin: 12px 0 8px; }
+
+.custom-send--compact { max-width: 100%; }
+
+.telemetry-hint-title {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #8c8c8c;
+  font-weight: 500;
+}
+
+.telemetry-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.telemetry-mini {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.telemetry-mini span { color: #8c8c8c; }
+.telemetry-mini b { font-size: 12px; color: #262626; }
+
+.terminal-mqtt-strip {
+  flex: 0 0 300px;
+  width: 300px;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  border-left: 1px solid #f0f0f0;
+  background: #fcfcfc;
+  min-height: 0;
+}
+
+.mqtt-strip-header {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.strip-title-block {
+  min-width: 0;
+  flex: 1;
+}
+
+.mqtt-strip-header .title {
+  font-weight: 600;
+  color: #595959;
+  font-size: 12px;
+  display: block;
+}
+
+.strip-hint {
+  display: block;
+  font-size: 10px;
+  color: #8c8c8c;
+  font-weight: 400;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.log-item--synth.log-item--status {
+  border-left-color: #faad14;
+}
+
+.log-item--synth.log-item--command {
+  border-left-color: #722ed1;
 }
 
 .device-card-mini {
@@ -1126,89 +1655,70 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.device-card-mini--inline {
+  margin-bottom: 0;
+  padding: 10px 12px;
+}
+
 .mini-icon { font-size: 24px; color: #1890ff; }
 .mini-info .name { font-weight: 600; font-size: 13px; }
 
-.simulation-tools { flex: 1; overflow-y: auto; }
-.simulation-command-list {
+.mini-meta-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.small-label { font-size: 12px; color: #8c8c8c; margin-bottom: 8px; }
-
-.terminal-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  margin-top: 4px;
+  flex-wrap: wrap;
 }
 
-.runtime-status-panel {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafcff;
-}
+.mini-id code { font-size: 11px; }
 
-.status-title {
-  font-weight: 600;
-  color: #2f54eb;
-  margin-bottom: 8px;
-}
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.status-item {
-  background: #fff;
-  border: 1px solid #eef2ff;
-  border-radius: 6px;
-  padding: 6px 8px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-}
-
-.status-item span {
+.runtime-inline {
+  margin-top: 8px;
+  font-size: 11px;
   color: #8c8c8c;
 }
 
-.terminal-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fff;
-}
+.runtime-inline b { color: #434343; font-weight: 500; }
+.runtime-inline .sep { margin: 0 4px; color: #d9d9d9; }
 
-.terminal-header .title { font-weight: 600; color: #595959; }
+.small-label { font-size: 12px; color: #8c8c8c; margin-bottom: 8px; }
 
 .log-container {
   flex: 1;
   background: #1e1e1e;
-  padding: 16px;
+  padding: 12px;
   overflow-y: auto;
   font-family: 'Consolas', 'Monaco', monospace;
+  min-height: 0;
+}
+
+.log-container--strip {
+  border-radius: 0;
 }
 
 .log-item {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
   border-bottom: 1px solid #333;
 }
 
-.log-item.in { border-left: 3px solid #52c41a; padding-left: 12px; }
-.log-item.out { border-left: 3px solid #1890ff; padding-left: 12px; }
+.log-item--compact {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
 
-.log-time { color: #8c8c8c; font-size: 11px; margin-bottom: 4px; }
-.log-topic { color: #d4d4d4; font-size: 12px; margin-bottom: 8px; }
+.log-item.in { border-left: 3px solid #52c41a; padding-left: 10px; }
+.log-item.out { border-left: 3px solid #1890ff; padding-left: 10px; }
+
+.log-time { color: #8c8c8c; font-size: 10px; margin-bottom: 4px; }
+.log-topic { color: #d4d4d4; font-size: 11px; margin-bottom: 6px; }
 .log-topic code { background: #333; padding: 2px 6px; border-radius: 4px; color: #569cd6; }
+
+.log-item--compact .log-payload pre {
+  font-size: 11px;
+  padding: 6px;
+}
 
 .log-payload pre {
   margin: 0;
@@ -1221,12 +1731,13 @@ onMounted(() => {
 }
 
 .log-empty {
-  height: 100%;
+  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #595959;
+  color: #8c8c8c;
   font-style: italic;
+  font-size: 12px;
 }
 
 .mb-2 { margin-bottom: 8px; }
