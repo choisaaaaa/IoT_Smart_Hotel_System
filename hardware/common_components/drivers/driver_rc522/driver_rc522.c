@@ -12,7 +12,7 @@ static bool s_inited = false;
 static bool s_bus_inited = false;
 static spi_device_handle_t s_rc522_spi = NULL;
 
-// MFRC522 registers
+// MFRC522 寄存器定义
 #define RC522_REG_COMMAND       0x01
 #define RC522_REG_COM_I_EN      0x02
 #define RC522_REG_DIV_I_EN      0x03
@@ -39,14 +39,14 @@ static spi_device_handle_t s_rc522_spi = NULL;
 #define RC522_REG_T_RELOAD_L    0x2D
 #define RC522_REG_VERSION       0x37
 
-// MFRC522 commands
+// MFRC522 命令定义
 #define PCD_IDLE                0x00
 #define PCD_CALC_CRC            0x03
 #define PCD_TRANSCEIVE          0x0C
 #define PCD_MF_AUTHENT          0x0E
 #define PCD_SOFT_RESET          0x0F
 
-// PICC commands
+// PICC 命令定义
 #define PICC_CMD_WUPA           0x52
 #define PICC_CMD_HLTA           0x50
 #define PICC_CMD_SEL_CL1        0x93
@@ -163,11 +163,11 @@ static esp_err_t rc522_transceive(const uint8_t *send, uint8_t send_len, uint8_t
     for (int i = 0; i < 35; i++) {
         uint8_t irq = 0;
         rc522_read_reg(RC522_REG_COM_IRQ, &irq);
-        if (irq & 0x30) { // RxIRq or IdleIRq
+        if (irq & 0x30) { // 接收中断或空闲中断
             irq_done = true;
             break;
         }
-        if (irq & 0x01) { // TimerIRq
+        if (irq & 0x01) { // 定时器中断
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
@@ -179,7 +179,7 @@ static esp_err_t rc522_transceive(const uint8_t *send, uint8_t send_len, uint8_t
 
     uint8_t err = 0;
     rc522_read_reg(RC522_REG_ERROR, &err);
-    if (err & 0x13) { // BufferOvfl ParityErr ProtocolErr
+    if (err & 0x13) { // 缓冲区溢出、奇偶校验错误或协议错误
         return ESP_FAIL;
     }
 
@@ -313,7 +313,7 @@ static esp_err_t rc522_auth_a(uint8_t block_addr, const uint8_t *key, const uint
 }
 
 static uint8_t rc522_sector_to_data_block(uint8_t sector_num) {
-    // MIFARE 1K: each sector has 4 blocks; first block is data block.
+    // MIFARE 1K: 每个扇区有4个块; 第一个块是数据块
     return (uint8_t)(sector_num * 4);
 }
 
@@ -425,7 +425,7 @@ esp_err_t driver_rc522_init(void) {
     }
 
     s_inited = true;
-    ESP_LOGI(TAG, "RC522 SPI init ok (MOSI=%d MISO=%d SCLK=%d CS=%d)",
+    ESP_LOGI(TAG, "RC522 SPI 初始化成功 (MOSI=%d MISO=%d SCLK=%d CS=%d)",
              GLOBAL_SPI_MOSI_PIN, GLOBAL_SPI_MISO_PIN, GLOBAL_SPI_SCLK_PIN, GLOBAL_SPI_CS_RC522_PIN);
     return ESP_OK;
 }

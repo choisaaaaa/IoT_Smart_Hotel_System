@@ -558,7 +558,7 @@ const roomIdDisplay = computed(() => {
   return '未入住'
 })
 
-// AI Butler 状态
+// AI管家状态
 const inputText = ref('')
 const aiThinking = ref(false)
 const chatContainerRef = ref<HTMLDivElement>()
@@ -725,7 +725,7 @@ function cancelTransfer() {
   transferModal.value.visible = false
 }
 
-// AI Butler Logic
+// AI管家逻辑
 function typeWriterEffect(text: string, callback?: () => void) {
   isTyping.value = true
   displayedText.value = ''
@@ -808,7 +808,7 @@ async function sendToAI(text: string) {
   }
 }
 
-// Audio Logic
+// 音频逻辑
 const audioPlayer = ref<HTMLAudioElement | null>(null)
 const isPlayingAudio = ref(false)
 
@@ -956,7 +956,7 @@ async function sendAudioToBackend() {
     const res: any = await request.post('/ai-butler/asr', {
       audio: base64Audio
     }, {
-      timeout: 60000  // ASR识别需要更长时间，设置60秒超时
+      timeout: 60000  // ASR识别需要更长时间，设置60秒超时时间
     })
 
     console.log('[ASR] 后端返回的完整响应:', JSON.stringify(res))
@@ -987,7 +987,7 @@ async function sendAudioToBackend() {
   }
 }
 
-// Blob转Base64
+// Blob转换为Base64
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -1200,7 +1200,7 @@ async function requestMicrophonePermission() {
   }
 }
 
-// Service center actions
+// 服务中心操作
 async function requestDelivery() {
   if (!deliveryForm.item_name) return $notify.warning({ title: '请填写物品名称', description: '请填写您需要的物品名称 📦' })
   const roomId = appStore.userStatus?.checkin_info?.room_id

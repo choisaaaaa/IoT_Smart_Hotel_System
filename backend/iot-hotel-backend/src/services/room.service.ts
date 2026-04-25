@@ -19,7 +19,7 @@ export interface Room extends RowDataPacket {
   images: string;
   created_at: Date;
   updated_at: Date;
-  // Join fields
+  // 关联查询字段
   room_type_name?: string;
   room_type_code?: string;
 }

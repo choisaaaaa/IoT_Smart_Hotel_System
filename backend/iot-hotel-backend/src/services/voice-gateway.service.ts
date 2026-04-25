@@ -12,7 +12,7 @@ export interface WebRTCSession {
   deviceId: string;
   roomNumber: string;
   hotelId: number;
-  frontendClientId: string | null; // WebSocket client ID
+  frontendClientId: string | null; // WebSocket客户端ID
   state: 'initiating' | 'negotiating' | 'connected' | 'terminated';
   createdAt: Date;
   connectedAt: Date | null;

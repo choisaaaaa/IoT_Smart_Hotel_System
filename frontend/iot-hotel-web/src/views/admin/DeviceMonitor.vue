@@ -505,7 +505,7 @@ const debugInfo = ref('')
 const devices = ref<any[]>([])
 const rooms = ref<RoomInfo[]>([])
 
-// Computed Stats
+// 计算统计数据
 const stats = computed(() => ({
   online: devices.value.filter(d => d.device_status === 'online' && d.audit_status === 'approved').length,
   offline: devices.value.filter(d => d.device_status !== 'online' && d.audit_status === 'approved').length,
@@ -520,7 +520,7 @@ const goToLogin = () => {
   router.push('/guest/booking?login=1')
 }
 
-// Device Filtering
+// 设备筛选
 const filteredActiveDevices = computed(() => {
   let list = devices.value.filter(d => d.audit_status === 'approved')
 
@@ -550,7 +550,7 @@ const auditColumns = [
   { title: '操作', key: 'action', fixed: 'right', width: 150 }
 ]
 
-// Modal States
+// 弹窗状态
 const auditModalVisible = ref(false)
 const auditLoading = ref(false)
 const isReassign = ref(false)
@@ -585,7 +585,7 @@ const currentSensor = reactive({
   deviceType: ''
 })
 
-// Debug Terminal State
+// 调试终端状态
 const debugTerminalVisible = ref(false)
 const mqttLogs = ref<any[]>([])
 const autoScroll = ref(true)
@@ -856,7 +856,7 @@ const statusText = (s: string) => ({ online: '在线', offline: '离线', error:
 
 const formatTime = (t: string) => t ? (toTz(t)?.fromNow() || '从未连接') : '从未连接'
 
-// API Actions
+// API操作
 async function fetchDevices() {
   loading.value = true
   try {
@@ -1266,7 +1266,7 @@ onUnmounted(() => {
 .room-option { display: flex; justify-content: space-between; width: 100%; }
 .room-type { color: #8c8c8c; font-size: 12px; }
 
-/* Debug Terminal Styles */
+/* 调试终端样式 */
 .debug-terminal {
   display: flex;
   flex-direction: column;

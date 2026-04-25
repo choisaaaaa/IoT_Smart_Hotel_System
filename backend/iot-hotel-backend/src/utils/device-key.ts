@@ -14,7 +14,7 @@ import crypto from 'crypto';
 // 设备密钥哈希算法配置
 const DEVICE_KEY_HASH_ALGORITHM = 'sha256';
 
-// AES-256-GCM 加密配置
+// AES-256-GCM 加密算法配置
 const AES_ALGORITHM = 'aes-256-gcm';
 const AES_IV_LENGTH = 16;
 const AES_AUTH_TAG_LENGTH = 16;

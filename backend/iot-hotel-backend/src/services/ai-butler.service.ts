@@ -563,7 +563,7 @@ export class AIButlerService {
     
     // WAV: 52 49 46 46 ... 57 41 56 45 (RIFF ... WAVE)
     // AMR: 23 21 (%)
-    // AAC: often starts with FF
+    // AAC: 通常以 FF 开头
     // OPUS: 4F 67 67 53 (OggS)
     
     if (this.isWavFormat(buffer)) {
@@ -574,7 +574,7 @@ export class AIButlerService {
     // 检查是否是AMR (23 21)
     if (magicBytes.startsWith('2321')) {
       logger.info('检测到AMR格式，Fun-ASR支持但需要设置format=amr');
-      // AMR直接返回，但需要修改run-task参数
+      // AMR直接返回，但需要修改运行任务参数
       return buffer;
     }
     
