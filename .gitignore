@@ -92,6 +92,19 @@ emulator/build/
 # ==================== 文档目录（比赛提交时忽略所有文档）====================
 docs/
 
+# ==================== 忽略所有 Markdown 文档（只保留根目录 README.md）====================
+*.md
+!README.md
+
+# ==================== 忽略其他文档文件 ====================
+*.doc
+*.docx
+*.pdf
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
 # ==================== 测试报告和覆盖率报告 ====================
 **/coverage/
 **/coverage-report/
@@ -129,3 +142,28 @@ backend/iot-hotel-backend/.env服务器
 uploads/temp/
 temp/
 tmp/
+
+# ==================== 测试相关文件（保留测试代码，忽略测试报告和结果）====================
+tests/playwright-report/
+tests/test-results/
+tests/**/*.md
+
+# ==================== 个人配置文件 ====================
+*.private
+*.personal
+*.secret
+secrets/
+
+# ==================== 截图和图片（可能包含敏感信息）====================
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+!frontend/iot-hotel-web/src/assets/**/*.svg
+!frontend/iot-hotel-web/public/**/*.png
+!frontend/iot-hotel-web/public/**/*.jpg
+!mobile/iot_hotel_app/assets/**/*.png
+!mobile/iot_hotel_app/assets/**/*.jpg
