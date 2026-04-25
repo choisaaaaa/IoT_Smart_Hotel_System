@@ -172,3 +172,6 @@ screenshots/
 !frontend/iot-hotel-web/public/**/*.jpg
 !mobile/iot_hotel_app/assets/**/*.png
 !mobile/iot_hotel_app/assets/**/*.jpg
+
+/backup_all
+/.postman
