@@ -90,7 +90,7 @@ emulator/build/
 .trae/
 
 # ==================== 文档目录（比赛提交时忽略所有文档）====================
-docs/
+docs/*
 
 # ==================== 忽略所有 Markdown 文档（只保留根目录 README.md）====================
 *.md
@@ -153,6 +153,11 @@ tests/**/*.md
 *.personal
 *.secret
 secrets/
+
+# ==================== 根目录本地配置文件（可能包含个人信息）====================
+room_config.json
+front_desk_config.json
+floor_config.json
 
 # ==================== 截图和图片（可能包含敏感信息）====================
 screenshots/
