@@ -353,26 +353,59 @@
 
           <div class="terminal-mqtt-strip">
             <div class="mqtt-strip-header">
-              <span class="title"><HistoryOutlined /> 设备 MQTT 消息</span>
+              <div class="strip-title-block">
+                <span class="title"><HistoryOutlined /> 设备活动流</span>
+                <span class="strip-hint">MQTT 入/出站、平台状态与指令历史（按时间倒序）</span>
+              </div>
               <a-space size="small">
                 <a-checkbox v-model:checked="autoScroll">滚到底</a-checkbox>
-                <a-button size="small" @click="fetchMqttLogs(true)">
+                <a-button size="small" @click="refreshDebugActivityPanel">
                   <template #icon><SyncOutlined /></template>
                 </a-button>
-                <a-button size="small" @click="mqttLogs = []">
+                <a-button size="small" @click="clearDebugMqttLog">
                   <template #icon><ClearOutlined /></template>
                 </a-button>
               </a-space>
             </div>
             <div class="log-container log-container--strip" ref="logContainerRef">
-              <div v-for="log in mqttLogs" :key="log.id" class="log-item log-item--compact" :class="log.direction">
-                <div class="log-time">{{ formatTime(log.timestamp) }}</div>
-                <div class="log-topic"><code>{{ log.topic }}</code></div>
-                <div class="log-payload">
-                  <pre>{{ formatPayload(log.payload) }}</pre>
+              <template v-for="(row, idx) in debugStreamRows" :key="debugStreamRowKey(row, idx)">
+                <div
+                  v-if="row.kind === 'status'"
+                  class="log-item log-item--compact log-item--synth log-item--status"
+                >
+                  <div class="log-time">{{ row.data.last_seen ? formatTime(row.data.last_seen) : '—' }}</div>
+                  <div class="log-topic"><code>__system/device_register</code></div>
+                  <div class="log-payload">
+                    <pre>{{ formatStatusForStream(row.data) }}</pre>
+                  </div>
                 </div>
+                <div
+                  v-else-if="row.kind === 'command'"
+                  class="log-item log-item--compact log-item--synth log-item--command out"
+                >
+                  <div class="log-time">{{ formatTime(row.data.created_at) }}</div>
+                  <div class="log-topic">
+                    <code>control_queue / {{ row.data.command_type ?? 'command' }}</code>
+                  </div>
+                  <div class="log-payload">
+                    <pre>{{ formatCommandForStream(row.data) }}</pre>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="log-item log-item--compact"
+                  :class="row.data.direction"
+                >
+                  <div class="log-time">{{ formatTime(row.data.timestamp) }}</div>
+                  <div class="log-topic"><code>{{ row.data.topic }}</code></div>
+                  <div class="log-payload">
+                    <pre>{{ formatPayload(row.data.payload) }}</pre>
+                  </div>
+                </div>
+              </template>
+              <div v-if="debugStreamRows.length === 0" class="log-empty">
+                暂无可显示记录。若设备已连 MQTT 仍无数据，请点刷新；无「主题」行多半是后台尚未收到该设备 id 的入站报文或通信日志未入库。
               </div>
-              <div v-if="mqttLogs.length === 0" class="log-empty">等待该设备的通信数据…</div>
             </div>
           </div>
         </div>
@@ -617,6 +650,9 @@ const customMqtt = reactive({
 
 const debugTerminalSensors = ref<any[]>([])
 const debugTerminalSensorLoading = ref(false)
+/** 详情接口快照 + 本地列表行，供活动流中「设备状态」行使用 */
+const debugDeviceSnapshot = ref<Record<string, unknown> | null>(null)
+const debugCommandHistory = ref<any[]>([])
 
 const commandDeviceType = computed(() => {
   const t = currentDebug.deviceType
@@ -665,6 +701,106 @@ const simulationCommands = computed(() => {
   return []
 })
 
+type DebugStreamRow =
+  | { kind: 'status'; order: number; data: any }
+  | { kind: 'command'; order: number; data: any }
+  | { kind: 'mqtt'; order: number; data: any }
+
+const debugStreamRows = computed((): DebugStreamRow[] => {
+  const out: DebugStreamRow[] = []
+  const snap = debugDeviceSnapshot.value
+  if (snap && typeof snap === 'object') {
+    const t = snap.last_seen ? new Date(String(snap.last_seen)).getTime() : 0
+    out.push({ kind: 'status', order: t, data: snap })
+  }
+  for (const c of debugCommandHistory.value) {
+    const t = c.created_at ? new Date(c.created_at).getTime() : 0
+    out.push({ kind: 'command', order: t, data: c })
+  }
+  for (const log of mqttLogs.value) {
+    const t = log.timestamp ? new Date(log.timestamp).getTime() : 0
+    out.push({ kind: 'mqtt', order: t, data: log })
+  }
+  out.sort((a, b) => b.order - a.order)
+  return out
+})
+
+function debugStreamRowKey(row: DebugStreamRow, idx: number) {
+  if (row.kind === 'mqtt') return `mqtt-${row.data.id ?? idx}`
+  if (row.kind === 'command') return `cmd-${row.data.id ?? idx}`
+  return 'status-snap'
+}
+
+function formatStatusForStream(s: any) {
+  return JSON.stringify(
+    {
+      device_id: s.device_id,
+      device_name: s.device_name,
+      device_type: s.device_type,
+      device_status: s.device_status,
+      last_seen: s.last_seen,
+      ip_address: s.ip_address,
+      mac_address: s.mac_address,
+      area: s.area,
+      room_number: s.room_number
+    },
+    null,
+    2
+  )
+}
+
+function formatCommandForStream(c: any) {
+  return JSON.stringify(
+    {
+      command_type: c.command_type,
+      command_value: c.command_value,
+      command_status: c.command_status,
+      created_at: c.created_at
+    },
+    null,
+    2
+  )
+}
+
+function scrollLogToEnd() {
+  if (autoScroll.value && logContainerRef.value) {
+    setTimeout(() => {
+      if (logContainerRef.value) logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+    }, 100)
+  }
+}
+
+async function fetchDebugDeviceContext() {
+  if (!currentDebug.id) return
+  try {
+    const [detRes, cmdRes]: any = await Promise.all([
+      deviceApi.getDeviceDetail(currentDebug.id),
+      deviceApi.getCommandHistory(currentDebug.id, { page: 1, pageSize: 25 })
+    ])
+    if (detRes?.data) {
+      debugDeviceSnapshot.value = detRes.data
+    } else {
+      debugDeviceSnapshot.value = (devices.value.find((x: any) => x.id === currentDebug.id) as any) || null
+    }
+    const list = cmdRes?.data?.list
+    debugCommandHistory.value = Array.isArray(list) ? list : []
+  } catch {
+    debugDeviceSnapshot.value = (devices.value.find((x: any) => x.id === currentDebug.id) as any) || null
+    debugCommandHistory.value = []
+  }
+  scrollLogToEnd()
+}
+
+async function refreshDebugActivityPanel() {
+  await Promise.all([fetchMqttLogs(true), fetchDebugDeviceContext()])
+  fetchDebugRuntimeStatus()
+  await fetchDebugTerminalSensors()
+}
+
+function clearDebugMqttLog() {
+  mqttLogs.value = []
+}
+
 function openDebugTerminal(device: any) {
   Object.assign(currentDebug, {
     id: device.id,
@@ -675,10 +811,12 @@ function openDebugTerminal(device: any) {
   debugTerminalVisible.value = true
   fetchMqttLogs()
   fetchDebugRuntimeStatus()
+  fetchDebugDeviceContext()
   fetchDebugTerminalSensors()
   logTimer.value = setInterval(() => {
     fetchMqttLogs()
     fetchDebugRuntimeStatus()
+    fetchDebugDeviceContext()
     fetchDebugTerminalSensors({ silent: true })
   }, 3000)
 }
@@ -688,6 +826,8 @@ function closeDebugTerminal() {
   logTimer.value = null
   debugTerminalVisible.value = false
   debugTerminalSensors.value = []
+  debugDeviceSnapshot.value = null
+  debugCommandHistory.value = []
 }
 
 async function fetchMqttLogs(isManual = false) {
@@ -695,15 +835,12 @@ async function fetchMqttLogs(isManual = false) {
     const res: any = await request.get('/mqtt/logs', { 
       params: { device_id: currentDebug.deviceId, limit: 50 } 
     })
-    if (res.success) {
-      mqttLogs.value = res.data
+    const ok = res && (res.success === true || res.code === 200 || res.code === undefined)
+    if (ok && res.data !== undefined) {
+      mqttLogs.value = Array.isArray(res.data) ? res.data : []
       hydrateLastCommandResult()
       hydrateRuntimeFromLogs()
-      if (autoScroll.value && logContainerRef.value) {
-        setTimeout(() => {
-          logContainerRef.value!.scrollTop = logContainerRef.value!.scrollHeight
-        }, 100)
-      }
+      scrollLogToEnd()
     }
   } catch (err) {
     if (isManual) $notify.error({ title: '刷新日志失败', description: '无法刷新MQTT日志，请稍后重试 🔄' })
@@ -1437,19 +1574,39 @@ onUnmounted(() => {
   border-bottom: 1px solid #f0f0f0;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   flex-shrink: 0;
   background: #fff;
+}
+
+.strip-title-block {
+  min-width: 0;
+  flex: 1;
 }
 
 .mqtt-strip-header .title {
   font-weight: 600;
   color: #595959;
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: block;
+}
+
+.strip-hint {
+  display: block;
+  font-size: 10px;
+  color: #8c8c8c;
+  font-weight: 400;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.log-item--synth.log-item--status {
+  border-left-color: #faad14;
+}
+
+.log-item--synth.log-item--command {
+  border-left-color: #722ed1;
 }
 
 .device-card-mini {

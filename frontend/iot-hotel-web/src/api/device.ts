@@ -27,5 +27,11 @@ export const deviceApi = {
     request.get<ApiResponse<any[]>>(`/rfid/booking/${bookingId}`),
 
   getDeviceStatusHistory: (deviceId: string, params?: { limit?: number }) =>
-    request.get<ApiResponse<any[]>>(`/devices/${deviceId}/history`, { params })
+    request.get<ApiResponse<any[]>>(`/devices/${deviceId}/history`, { params }),
+
+  getCommandHistory: (id: number, params?: { page?: number; pageSize?: number }) =>
+    request.get<ApiResponse<{ list: any[]; pagination: { total: number; page: number; pageSize: number } }>>(
+      `/devices/${id}/commands`,
+      { params }
+    )
 }

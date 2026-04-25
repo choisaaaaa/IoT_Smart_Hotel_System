@@ -401,7 +401,11 @@ class MQTTService {
             if (topic.startsWith('hotel/call/signaling/')) {
               await this.handleCallSignaling(topic, data);
             }
+          } else if (topic.startsWith('hotel/device/data/')) {
+            // 未入库或未审核：只走传感器入库/预览，禁止进入下方签名校验（否则 device 可能为 undefined）
+            await this.handleSensorData(data as SensorDataPayload, device?.hotel_id);
           }
+          return;
         } else {
           logger.warn(`未审核通过的设备尝试发送业务指令: ${deviceId} [${topic}]`);
           return;
@@ -409,6 +413,11 @@ class MQTTService {
       }
 
       // 3. 已通过审核的设备，必须验证签名
+      if (!device) {
+        logger.error(`签名校验前缺少设备记录: ${deviceId} [${topic}]`);
+        return;
+      }
+
       if (!data.signature || !data.timestamp) {
         logger.error(`已审核设备发送消息缺少签名或时间戳: ${deviceId} [${topic}]`);
         return;
@@ -1600,6 +1609,20 @@ class MQTTService {
 
   async getCommunicationLogs(hotelId?: number, deviceId?: string, limit: number = 100, offset: number = 0): Promise<any[]> {
     try {
+      // 按酒店过滤时，仅用 mqtt_communication_logs.hotel_id 会漏掉历史行（曾写入 0 或与设备表不一致）；
+      // 通过 devices 表关联，只要 device_id 属于该酒店即可看到入站/出站记录。
+      if (deviceId && hotelId !== undefined && hotelId !== 0) {
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT m.* FROM mqtt_communication_logs m
+           INNER JOIN devices d ON m.device_id = d.device_id AND d.hotel_id = ?
+           WHERE d.device_id = ?
+           ORDER BY m.timestamp DESC
+           LIMIT ? OFFSET ?`,
+          [hotelId, deviceId, limit, offset]
+        );
+        return rows;
+      }
+
       let query = 'SELECT * FROM mqtt_communication_logs';
       const params: any[] = [];
       const conditions: string[] = [];

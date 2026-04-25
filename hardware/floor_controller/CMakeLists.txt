@@ -22,6 +22,7 @@ set(EXTRA_COMPONENT_DIRS
 # │ DHT11 数据线    │ 20   │ 与原客房 room_terminal 一致；旧楼控 GPIO4 空 │
 # │ NTC 10k 分压    │ 19   │ 与原客房「房内 NTC」一致，参与火灾温升判据   │
 # │ 楼控报警按键    │ 18   │ BTN_FLOOR_1（低有效）                        │
+# │ 有源蜂鸣器      │ 38   │ 默认 GLOBAL_BUZZER_PIN；广播长鸣/再发同指令关  │
 # │ RD-03 OT2 数字  │ 16   │ 毫米波「有人」输出→MCU（高=有人，driver_rd03_simple）│
 # └─────────────────┴──────┴──────────────────────────────────────────────┘
 # 若使用 RD-03 UART 版（接 MCU TX/RX），勿与本项 OT2 同脚复用；未接雷达时 GLOBAL_RD03_OT2_PIN=-1。

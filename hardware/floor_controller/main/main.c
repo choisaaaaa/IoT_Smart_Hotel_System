@@ -38,6 +38,8 @@ static const TickType_t FLOOR_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(80);
 static const TickType_t FLOOR_HEALTH_TASK_PERIOD = pdMS_TO_TICKS(600000);
 static volatile bool s_network_ready = false;
 static bool s_corridor_light_on = false;
+/** MQTT 广播类指令：蜂鸣器长鸣开/关（再发 broadcast_alarm|broadcast_start 为关闭） */
+static bool s_floor_broadcast_buzzer_on = false;
 static uint32_t s_reconnect_count = 0;
 
 /** 疑似火灾：DHT11 或 走廊 NTC 任一超温 + MQ2 烟雾 ADC 超阈（现场请标定 MQ2 基线） */
@@ -283,6 +285,40 @@ static void publish_floor_event(const char *event_type, const char *detail, cons
     cJSON_Delete(root);
 }
 
+/** 与物理「报警键」一致：上报告警事件 + 蜂鸣 2×100ms；若正有 MQTT 广播长鸣，短鸣后恢复长鸣 */
+static void floor_trigger_alarm_match_physical_button(void) {
+    publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发", "alarm");
+    hal_interactive_beep(2, 100);
+    if (s_floor_broadcast_buzzer_on) {
+        (void)hal_interactive_buzzer_steady(true);
+    }
+}
+
+/** 楼控/客房灯路：开、关均做继电器脉冲（弾接），不长期保持电平 */
+static const uint32_t k_floor_relay_light_pulse_ms = 220;
+
+static esp_err_t floor_relay_ch1_pulse(uint32_t hold_ms) {
+    esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+    if (e != ESP_OK) {
+        return e;
+    }
+    vTaskDelay(pdMS_TO_TICKS(hold_ms));
+    return hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+}
+
+static void floor_restart_task(void *arg) {
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+}
+
+static void floor_schedule_restart(void) {
+    if (xTaskCreate(floor_restart_task, "reboot", 2048, NULL, 1, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "创建重启任务失败，立即 esp_restart");
+        esp_restart();
+    }
+}
+
 static void publish_health_report(void) {
     if (!s_network_ready) {
         return;
@@ -323,13 +359,13 @@ static void publish_health_report(void) {
 
 static bool execute_room_command_on_floor(const char *cmd_type, const char **out_result_msg) {
     if (strcmp(cmd_type, "light_on") == 0) {
-        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
-        *out_result_msg = (err == ESP_OK) ? "执行成功" : "客房灯控失败";
+        esp_err_t err = floor_relay_ch1_pulse(k_floor_relay_light_pulse_ms);
+        *out_result_msg = (err == ESP_OK) ? "执行成功(继电器脉冲/开灯)" : "客房灯控失败";
         return (err == ESP_OK);
     }
     if (strcmp(cmd_type, "light_off") == 0) {
-        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
-        *out_result_msg = (err == ESP_OK) ? "执行成功" : "客房灯控失败";
+        esp_err_t err = floor_relay_ch1_pulse(k_floor_relay_light_pulse_ms);
+        *out_result_msg = (err == ESP_OK) ? "执行成功(继电器脉冲/关灯)" : "客房灯控失败";
         return (err == ESP_OK);
     }
     if (strcmp(cmd_type, "air_on") == 0) {
@@ -361,41 +397,53 @@ static bool execute_room_command_on_floor(const char *cmd_type, const char **out
 
 static bool execute_floor_command(const char *cmd_type, const char **out_result_msg) {
     if (strcmp(cmd_type, "light_on") == 0) {
-        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
+        esp_err_t err = floor_relay_ch1_pulse(k_floor_relay_light_pulse_ms);
         if (err == ESP_OK) {
             s_corridor_light_on = true;
         }
-        *out_result_msg = (err == ESP_OK) ? "执行成功" : "走廊灯控失败";
+        *out_result_msg = (err == ESP_OK) ? "执行成功(继电器脉冲/开灯)" : "走廊灯控失败";
         return (err == ESP_OK);
     }
 
     if (strcmp(cmd_type, "light_off") == 0) {
-        esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
+        esp_err_t err = floor_relay_ch1_pulse(k_floor_relay_light_pulse_ms);
         if (err == ESP_OK) {
             s_corridor_light_on = false;
         }
-        *out_result_msg = (err == ESP_OK) ? "执行成功" : "走廊灯控失败";
+        *out_result_msg = (err == ESP_OK) ? "执行成功(继电器脉冲/关灯)" : "走廊灯控失败";
         return (err == ESP_OK);
     }
 
     if (strcmp(cmd_type, "broadcast_alarm") == 0 || strcmp(cmd_type, "broadcast_start") == 0) {
-        (void)hal_interactive_beep(4, 120);
-        *out_result_msg = "广播警报已触发（蜂鸣器鸣叫）";
+        if (!s_floor_broadcast_buzzer_on) {
+            esp_err_t bz = hal_interactive_buzzer_steady(true);
+            if (bz == ESP_OK) {
+                s_floor_broadcast_buzzer_on = true;
+                publish_floor_event("floor_broadcast_buzzer", "蜂鸣器广播已开启(再发同指令可解除)", "alarm");
+                *out_result_msg = "广播蜂鸣：已长鸣(再发 broadcast_alarm 或 broadcast_start 取消)";
+            } else {
+                *out_result_msg = "广播蜂鸣：蜂鸣器未接入或未初始化，无法开";
+            }
+        } else {
+            (void)hal_interactive_buzzer_steady(false);
+            s_floor_broadcast_buzzer_on = false;
+            publish_floor_event("floor_broadcast_buzzer", "蜂鸣器广播已解除(同指令关)", "info");
+            *out_result_msg = "广播蜂鸣：已关闭";
+        }
         return true;
     }
 
     if (strcmp(cmd_type, "broadcast_stop") == 0) {
-        *out_result_msg = "广播警报停止（无需持续动作）";
+        (void)hal_interactive_buzzer_steady(false);
+        s_floor_broadcast_buzzer_on = false;
+        publish_floor_event("floor_broadcast_buzzer", "蜂鸣器广播已停止(broadcast_stop)", "info");
+        *out_result_msg = "广播蜂鸣：已停止";
         return true;
     }
 
-    if (strcmp(cmd_type, "floor_reset") == 0) {
-        (void)hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
-        vTaskDelay(pdMS_TO_TICKS(120));
-        (void)hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
-        s_corridor_light_on = false;
-        (void)hal_interactive_beep(3, 90);
-        *out_result_msg = "楼控复位完成（继电器弹一次+蜂鸣三声）";
+    if (strcmp(cmd_type, "floor_reset") == 0 || strcmp(cmd_type, "system_reset") == 0) {
+        floor_schedule_restart();
+        *out_result_msg = "系统复位：约0.5s后重启";
         return true;
     }
 
@@ -543,13 +591,40 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     int cmd_id = 0;
     char cmd_type_num_buf[24];
     const char *cmd_type_str = mqtt_cmd_get_type_str(cmd_type_item, cmd_type_num_buf, sizeof(cmd_type_num_buf));
-    if (!mqtt_cmd_get_int(cmd_id_item, &cmd_id) || cmd_type_str == NULL) {
-        ESP_LOGD(TAG, "非规范指令体（需 command_id 为 number/十进制串，且 command_type 为 string/number）");
+    if (cmd_type_str == NULL) {
+        char preview[80];
+        if (data != NULL && data_len > 0) {
+            size_t n = (size_t)data_len < sizeof(preview) - 1u ? (size_t)data_len : sizeof(preview) - 1u;
+            memcpy(preview, data, n);
+            preview[n] = '\0';
+        } else {
+            preview[0] = '\0';
+        }
+        ESP_LOGW(TAG, "指令未执行: 缺少或无法解析 command_type len=%d 预览: %s", data_len, preview);
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
         cJSON_Delete(root);
         return;
+    }
+    /* command_id 可选：与当前云端一致时仅发 device_id + command_type；缺省 0 */
+    if (cmd_id_item != NULL && !cJSON_IsNull(cmd_id_item)) {
+        if (!mqtt_cmd_get_int(cmd_id_item, &cmd_id)) {
+            char preview[80];
+            if (data != NULL && data_len > 0) {
+                size_t n = (size_t)data_len < sizeof(preview) - 1u ? (size_t)data_len : sizeof(preview) - 1u;
+                memcpy(preview, data, n);
+                preview[n] = '\0';
+            } else {
+                preview[0] = '\0';
+            }
+            ESP_LOGW(TAG, "指令未执行: command_id 非数字/十进制串 len=%d 预览: %s", data_len, preview);
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            cJSON_Delete(root);
+            return;
+        }
     }
 
     const bool has_device_id = cJSON_IsString(device_id_item) && device_id_item->valuestring != NULL;
@@ -779,8 +854,7 @@ void task_floor_button_events(void *pvParameters) {
         bool alarm_pressed = hal_interactive_is_button_pressed(BTN_FLOOR_ALARM);
         if (alarm_pressed && !prev_alarm_pressed) {
             ESP_LOGI(TAG, "楼控按键触发: 报警键");
-            publish_floor_event("floor_alarm_pressed", "楼道报警按钮触发", "alarm");
-            hal_interactive_beep(2, 100);
+            floor_trigger_alarm_match_physical_button();
         }
         prev_alarm_pressed = alarm_pressed;
         vTaskDelay(FLOOR_BUTTON_TASK_PERIOD);

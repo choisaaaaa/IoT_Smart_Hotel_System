@@ -33,6 +33,12 @@ esp_err_t hal_interactive_init(void);
 esp_err_t hal_interactive_beep(uint8_t count, uint32_t duration_ms);
 
 /**
+ * @brief 有源蜂鸣器长鸣开/关（用于广播警报等，由 GPIO 常高/常低保持，非 beep 脉冲序列）
+ * @return ESP_OK 已驱动；ESP_ERR_INVALID_STATE 蜂鸣器未初始化或未接入
+ */
+esp_err_t hal_interactive_buzzer_steady(bool on);
+
+/**
  * @brief 设置特定序号的 RGB 灯珠颜色 (支持 WS2812B 状态墙)
  * @param led_index 灯珠序号 (如前台端有8颗灯珠代表8间房，index为0-7)
  * @param r 红色分量 (0-255)
