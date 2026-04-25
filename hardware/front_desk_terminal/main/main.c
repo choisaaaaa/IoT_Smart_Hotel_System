@@ -27,6 +27,10 @@
 #include "driver_ec11.h"
 #include "driver_oled.h"
 
+#ifndef FRONT_DESK_MINIMAL_HW
+#define FRONT_DESK_MINIMAL_HW 0
+#endif
+
 /*
  * 公网若按「设备号 / 固件版本 / 镜像版本」识别终端：
  * - 前台构建：device_id = front_desk_<后缀>，NVS 键 FrontDesk_ID
@@ -36,7 +40,7 @@
 #ifndef FRONT_DESK_ID_DEFAULT
 #define FRONT_DESK_ID_DEFAULT "02"
 #endif
-#define FRONT_FIRMWARE_VERSION "v1.2.0"
+#define FRONT_FIRMWARE_VERSION "v1.4.0"
 
 #if CONFIG_TERMINAL_ROLE_ROOM
 #define TERMINAL_MQTT_TOPIC_SUFFIX "room"
@@ -86,6 +90,8 @@ static uint32_t s_call_seq = 1;
 static const uint8_t k_default_card_key[6] __attribute__((unused)) = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static uint8_t s_card_aes_key[16];
 static char s_last_card_room_id[16] = "";
+/** 仅 MQTT「查卡/验卡」成功时为真，用于 command 回调联动 door_unlock（开卡/清卡不误触发） */
+static bool s_front_mqtt_verify_ok_for_door = false;
 static uint8_t s_last_uid[10] = {0};
 static uint8_t s_last_uid_len = 0;
 static bool s_last_uid_valid = false;
@@ -160,6 +166,8 @@ static void front_ec11_refresh_oled_mode_line(void);
 void task_front_oled_refresh(void *pvParameters);
 static void front_floor_env_mqtt_cb(const char *topic, const char *data, int data_len);
 static esp_err_t front_desk_run_door_pulse(void);
+static void uid_to_hex(const uint8_t *uid, uint8_t uid_len, char *out_hex, size_t out_size);
+static bool front_http_rfid_verify(const char *uid_hex, const char *room_number_str);
 
 static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
 {
@@ -402,6 +410,134 @@ static void publish_front_card_issued(const char *uid_hex, const char *room_id_s
     ESP_LOGI(TAG, "已上报 card_issued: uid=%s room=%s booking=%s type=%s", uid_hex,
              room_id_str ? room_id_str : "", booking_id_opt ? booking_id_opt : "",
              card_type_opt ? card_type_opt : "");
+}
+
+/** 与入住退房 WebSocket `card_revoked` 对齐：清卡/注销扇区成功后上报 */
+static void publish_front_card_revoked(const char *uid_hex_opt) {
+    if (!s_network_ready) {
+        return;
+    }
+
+    char timestamp[32];
+    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "device_id", device_id);
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
+    cJSON_AddStringToObject(root, "event_type", "card_revoked");
+    cJSON_AddStringToObject(root, "level", "info");
+
+    cJSON *dat = cJSON_CreateObject();
+    if (uid_hex_opt != NULL && uid_hex_opt[0] != '\0') {
+        cJSON_AddStringToObject(dat, "card_uid", uid_hex_opt);
+    }
+    cJSON_AddStringToObject(dat, "action", "revoke");
+    cJSON_AddItemToObject(root, "data", dat);
+
+    cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+    char signature[65];
+    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+        cJSON_AddStringToObject(root, "signature", signature);
+    }
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+    free(json_str);
+    cJSON_Delete(root);
+    ESP_LOGI(TAG, "已上报 card_revoked: uid=%s", uid_hex_opt ? uid_hex_opt : "");
+}
+
+static void front_read_uid_hex_optional(char *hex, size_t hex_sz) {
+    if (hex == NULL || hex_sz == 0) {
+        return;
+    }
+    hex[0] = '\0';
+    uint8_t uid[10] = {0};
+    uint8_t uid_len = 0;
+    if (driver_rc522_read_uid(uid, &uid_len) == ESP_OK && uid_len > 0) {
+        uid_to_hex(uid, uid_len, hex, hex_sz);
+    }
+}
+
+/**
+ * MQTT 查卡/验卡：与 RC522 轮询里扇区解密 + /rfid-access/verify 链一致。
+ * 演示(仅 UID)模式下与 publish_card_uid_event 一致：按 NVS 目标房号做后台校验。
+ */
+static bool front_desk_verify_card_for_command(const char **out_msg) {
+    static char s_detail[112];
+    if (out_msg == NULL) {
+        return false;
+    }
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+    uint8_t uid[10] = {0};
+    uint8_t uid_len = 0;
+    esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
+    if (err != ESP_OK || uid_len == 0) {
+        *out_msg = "未检测到卡片";
+        return false;
+    }
+    char uid_hex[32] = {0};
+    uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
+    if (target_room_id[0] == '\0') {
+        *out_msg = "未配置目标房号(Room_ID)，无法验卡";
+        return false;
+    }
+    if (!s_network_ready) {
+        *out_msg = "网络未就绪，无法后台验卡";
+        return false;
+    }
+    if (service_auth_get_state() != AUTH_STATE_APPROVED) {
+        *out_msg = "设备未鉴权，无法后台验卡";
+        return false;
+    }
+    char dk[256];
+    if (service_auth_get_device_key(dk, sizeof(dk)) != ESP_OK) {
+        *out_msg = "无法读取 device_key";
+        return false;
+    }
+    if (!front_http_rfid_verify(uid_hex, target_room_id)) {
+        *out_msg = "后台校验未通过（无权进入目标房或未登记）";
+        return false;
+    }
+    copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), target_room_id);
+    snprintf(s_detail, sizeof(s_detail), "验卡通过(仅UID)，目标房 %s", target_room_id);
+    *out_msg = s_detail;
+    return true;
+#else
+    uint8_t sector_data[16] = {0};
+    esp_err_t err = driver_rc522_read_sector(1, k_default_card_key, sector_data);
+    if (err != ESP_OK) {
+        *out_msg = "未检测到有效房卡";
+        return false;
+    }
+    char room_id[16] = {0};
+    if (!card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id))) {
+        *out_msg = "扇区无法解密或非本系统房卡";
+        return false;
+    }
+    uint8_t uid[10] = {0};
+    uint8_t uid_len = 0;
+    if (driver_rc522_read_uid(uid, &uid_len) != ESP_OK || uid_len == 0) {
+        *out_msg = "已读扇区但读 UID 失败";
+        return false;
+    }
+    char uid_hex[32] = {0};
+    uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
+    if (s_network_ready && service_auth_get_state() == AUTH_STATE_APPROVED) {
+        char dk[256];
+        if (service_auth_get_device_key(dk, sizeof(dk)) == ESP_OK) {
+            if (!front_http_rfid_verify(uid_hex, room_id)) {
+                *out_msg = "扇区可读但后台校验未通过（卡未登记或已失效）";
+                return false;
+            }
+        }
+    }
+    copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
+    snprintf(s_detail, sizeof(s_detail), "验卡通过，房号 %s", room_id);
+    *out_msg = s_detail;
+    return true;
+#endif
 }
 
 static bool handle_voice_control_command(const char *cmd_type, cJSON *root, const char **result_msg)
@@ -1565,6 +1701,11 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
         return true;
     }
     if (strcmp(cmd_type, "agent_session_start") == 0) {
+#if FRONT_DESK_MINIMAL_HW
+        *ok = false;
+        *out_msg = "当前为最小硬件（无语音上行），不支持 Agent 会话";
+        return true;
+#else
         uint32_t win_ms = 120000;
         cJSON *w = cJSON_GetObjectItem(root, "window_ms");
         if (cJSON_IsNumber(w) && w->valuedouble > 0) {
@@ -1574,12 +1715,19 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
         *ok = true;
         *out_msg = "Agent 语音窗口已开启（按住 PTT 上行）";
         return true;
+#endif
     }
     if (strcmp(cmd_type, "agent_session_end") == 0) {
+#if FRONT_DESK_MINIMAL_HW
+        *ok = false;
+        *out_msg = "当前为最小硬件（无语音上行），不支持 Agent 会话";
+        return true;
+#else
         voice_session_close_agent_window();
         *ok = true;
         *out_msg = "Agent 语音窗口已关闭";
         return true;
+#endif
     }
     if (strcmp(cmd_type, "alarm_trigger") == 0 || strcmp(cmd_type, "front_alarm") == 0) {
         publish_front_sos_alarm_msg("云端报警指令触发");
@@ -1594,6 +1742,8 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
 }
 
 static bool handle_front_card_command(const char *cmd_type, cJSON *root, const char **out_msg) {
+    s_front_mqtt_verify_ok_for_door = false;
+
     cJSON *owned_command_value = NULL;
     cJSON *command_value = parse_command_value_object(root, &owned_command_value);
 
@@ -1607,6 +1757,8 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         return true;
 #else
         uint8_t zeros[16] = {0};
+        char uidhex[32] = {0};
+        front_read_uid_hex_optional(uidhex, sizeof(uidhex));
         esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
         if (werr != ESP_OK) {
             ESP_LOGW(TAG, "clear_card 写卡失败: %s", esp_err_to_name(werr));
@@ -1616,6 +1768,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
             return false;
         }
+        publish_front_card_revoked(uidhex[0] != '\0' ? uidhex : NULL);
         *out_msg = "清卡完成";
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
@@ -1703,6 +1856,8 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
             return true;
 #else
+            char uidhex_sc[32] = {0};
+            front_read_uid_hex_optional(uidhex_sc, sizeof(uidhex_sc));
             uint8_t zeros[16] = {0};
             esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
             if (werr != ESP_OK) {
@@ -1713,12 +1868,23 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
                 }
                 return false;
             }
+            publish_front_card_revoked(uidhex_sc[0] != '\0' ? uidhex_sc : NULL);
             *out_msg = "已清空卡扇区";
             if (owned_command_value != NULL) {
                 cJSON_Delete(owned_command_value);
             }
             return true;
 #endif
+        }
+        if (strcmp(action, "verify") == 0 || strcmp(action, "query") == 0 || strcmp(action, "read") == 0) {
+            bool vok = front_desk_verify_card_for_command(out_msg);
+            if (vok) {
+                s_front_mqtt_verify_ok_for_door = true;
+            }
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return vok;
         }
         if (strcmp(action, "revoke") == 0 || strcmp(action, "deactivate") == 0) {
 #if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
@@ -1728,6 +1894,8 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
             return true;
 #else
+            char uidhex_rv[32] = {0};
+            front_read_uid_hex_optional(uidhex_rv, sizeof(uidhex_rv));
             uint8_t zeros[16] = {0};
             esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
             if (werr != ESP_OK) {
@@ -1738,6 +1906,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
                 }
                 return false;
             }
+            publish_front_card_revoked(uidhex_rv[0] != '\0' ? uidhex_rv : NULL);
             *out_msg = "注销擦卡完成";
             if (owned_command_value != NULL) {
                 cJSON_Delete(owned_command_value);
@@ -1877,12 +2046,21 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
 
     if (strcmp(cmd_type, "issue_card") == 0 || strcmp(cmd_type, "write_blank_card") == 0) {
         const char *room_id = target_room_id;
+        char room_storage[16] = {0};
+        char booking_storage[32] = {0};
         if (cJSON_IsObject(command_value)) {
             cJSON *room_item = cJSON_GetObjectItem(command_value, "room_id");
-            if (cJSON_IsString(room_item)) {
-                room_id = room_item->valuestring;
+            if (cJSON_IsString(room_item) && room_item->valuestring != NULL) {
+                copy_str_safe(room_storage, sizeof(room_storage), room_item->valuestring);
+                room_id = room_storage;
+            } else if (cjson_copy_scalar_string(command_value, "room_id", room_storage, sizeof(room_storage))) {
+                room_id = room_storage;
+            } else if (cjson_copy_scalar_string(command_value, "room_number", room_storage, sizeof(room_storage))) {
+                room_id = room_storage;
             }
+            (void)cjson_copy_scalar_string(command_value, "booking_id", booking_storage, sizeof(booking_storage));
         }
+        const char *booking_for_issue = (booking_storage[0] != '\0') ? booking_storage : "";
 
 #if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
         uint8_t uid[10] = {0};
@@ -1896,7 +2074,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         }
         char uid_hex[32] = {0};
         uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
-        publish_front_card_issued(uid_hex, room_id, "", "guest");
+        publish_front_card_issued(uid_hex, room_id, booking_for_issue, "guest");
         copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
         *out_msg = (strcmp(cmd_type, "write_blank_card") == 0) ? "空白卡登记成功(演示/仅UID)" : "开卡成功(演示/仅UID)";
         if (owned_command_value != NULL) {
@@ -1926,7 +2104,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
         if (driver_rc522_read_uid(uid, &uid_len) == ESP_OK && uid_len > 0) {
             char uid_hex[32] = {0};
             uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
-            publish_front_card_issued(uid_hex, room_id, "", "guest");
+            publish_front_card_issued(uid_hex, room_id, booking_for_issue, "guest");
             copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
         }
         *out_msg = (strcmp(cmd_type, "write_blank_card") == 0) ? "空白卡写入成功" : "开卡成功";
@@ -1939,53 +2117,14 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
 
     if (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0 ||
         strcmp(cmd_type, "read_card") == 0) {
-#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
-        uint8_t uid[10] = {0};
-        uint8_t uid_len = 0;
-        esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
-        if (err != ESP_OK || uid_len == 0) {
-            ESP_LOGW(TAG, "演示(仅UID): 未检测到卡片 (%s)", esp_err_to_name(err));
-            *out_msg = "未检测到卡片";
-            if (owned_command_value != NULL) {
-                cJSON_Delete(owned_command_value);
-            }
-            return false;
+        bool vok = front_desk_verify_card_for_command(out_msg);
+        if (vok) {
+            s_front_mqtt_verify_ok_for_door = true;
         }
-        /* 与本地刷卡一致：用房号 NVS target_room_id 作为联动开门依据 */
-        copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), target_room_id);
-        *out_msg = "读卡通过(演示/仅UID)";
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
-        return true;
-#else
-        uint8_t sector_data[16] = {0};
-        esp_err_t err = driver_rc522_read_sector(1, k_default_card_key, sector_data);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "非法卡: 未检测到有效房卡 (%s)", esp_err_to_name(err));
-            *out_msg = "未检测到有效房卡";
-            if (owned_command_value != NULL) {
-                cJSON_Delete(owned_command_value);
-            }
-            return false;
-        }
-
-        char room_id[16] = {0};
-        if (card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id))) {
-            copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
-            *out_msg = "刷卡通过";
-            if (owned_command_value != NULL) {
-                cJSON_Delete(owned_command_value);
-            }
-            return true;
-        }
-        ESP_LOGW(TAG, "非法卡: 扇区内容无法解密或非本系统房卡");
-        *out_msg = "扇区内容无法解密或非本系统房卡";
-        if (owned_command_value != NULL) {
-            cJSON_Delete(owned_command_value);
-        }
-        return false;
-#endif
+        return vok;
     }
 
     if (owned_command_value != NULL) {
@@ -2118,13 +2257,12 @@ static void front_desk_command_callback(const char *topic, const char *data, int
     ok = handle_front_card_command(cmd_type, root, &result_msg);
     publish_front_command_result(cmd_id, cmd_type, ok, result_msg);
 
-    if (ok && (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0 ||
-               strcmp(cmd_type, "read_card") == 0) &&
-        s_last_card_room_id[0] != '\0') {
+    if (ok && s_front_mqtt_verify_ok_for_door && s_last_card_room_id[0] != '\0') {
         publish_front_event("card_verified", "刷卡验证通过，已自动下发开门指令");
         publish_room_command(s_last_card_room_id, "door_unlock");
         ESP_LOGI(TAG, "刷卡通过，已触发房间开锁: room=%s", s_last_card_room_id);
     }
+    s_front_mqtt_verify_ok_for_door = false;
 
     if (ok) {
         hal_audio_beep_volume_pct(s_volume_pct);
@@ -2284,8 +2422,10 @@ static void auth_and_mqtt_task(void *pvParameters) {
     hal_audio_beep_volume_pct(s_volume_pct);
     hal_audio_beep_volume_pct(s_volume_pct);
 
+#if !FRONT_DESK_MINIMAL_HW
     // 订阅音频下行主题
     voice_session_subscribe_downlink();
+#endif
 
     if (s_floor_sensor_device_id[0] != '\0') {
         char t_temp[160];
@@ -2383,6 +2523,7 @@ void task_front_button_events(void *pvParameters) {
         TickType_t now = xTaskGetTickCount();
         bool ptt_pressed = hal_interactive_is_button_pressed(BTN_ROOM_PTT);
 
+#if !FRONT_DESK_MINIMAL_HW
         if (ptt_pressed && !s_ptt_prev) {
             s_ptt_press_tick = now;
             s_ptt_long_fired = false;
@@ -2395,6 +2536,7 @@ void task_front_button_events(void *pvParameters) {
                 voice_session_arm_agent_window(120000);
             }
         }
+#endif
         s_ptt_prev = ptt_pressed;
 
         bool sos_pressed = hal_interactive_is_button_pressed(BTN_ROOM_SOS);
@@ -2516,8 +2658,10 @@ void app_main(void) {
         }
     }
 
+#if !FRONT_DESK_MINIMAL_HW
     voice_session_init(device_id, (bool*)&s_network_ready, (bool*)&is_on_call, (bool*)&s_call_incoming_pending, current_call_id,
                        sizeof(current_call_id));
+#endif
 
     if (s_ec11_ready) {
         front_ec11_refresh_oled_mode_line();
@@ -2538,9 +2682,11 @@ void app_main(void) {
 #if !CONFIG_TERMINAL_ROLE_ROOM || CONFIG_TERMINAL_ROOM_ENABLE_RC522
     xTaskCreate(task_front_rc522_poll, "front_rc522_task", 4096, NULL, 4, NULL);
 #endif
+#if !FRONT_DESK_MINIMAL_HW
     xTaskCreate(voice_uplink_task, "voice_task", 12288, NULL, 5, NULL);
     xTaskCreate(task_front_ec11_peripheral, "front_ec11_task", 4096, NULL, 4, NULL);
     xTaskCreate(task_front_oled_refresh, "front_oled_task", 3072, NULL, 3, NULL);
+#endif
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

@@ -691,7 +691,8 @@ const simulationCommands = computed(() => {
     return [
       { label: '🆕 开卡-房间301', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '301', booking_id: 'BK001' } } },
       { label: '🆕 开卡-房间302', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '302', booking_id: 'BK002' } } },
-      { label: '🔍 验卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
+      { label: '🔍 验卡(verify_card)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
+      { label: '🔍 查卡(room_card_op)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'verify' } } },
       { label: '📖 读卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'read_card' } },
       { label: '📟 刷卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'swipe_card' } },
       { label: '🧹 清卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'clear_card' } },

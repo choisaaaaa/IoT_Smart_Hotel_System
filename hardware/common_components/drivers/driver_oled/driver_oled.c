@@ -78,6 +78,12 @@ esp_err_t driver_oled_init(void)
         return ESP_OK;
     }
 
+    if (GLOBAL_OLED_PIN_SDA < 0 || GLOBAL_OLED_PIN_SCL < 0) {
+        HAL_LOGI(TAG, "OLED 未接线 (SDA=%d SCL=%d)，跳过 I2C/面板初始化",
+                 (int)GLOBAL_OLED_PIN_SDA, (int)GLOBAL_OLED_PIN_SCL);
+        return ESP_OK;
+    }
+
     if (OLED_H != 32 && OLED_H != 64) {
         HAL_LOGE(TAG, "GLOBAL_OLED_HEIGHT must be 32 or 64");
         return ESP_ERR_NOT_SUPPORTED;
@@ -172,7 +178,7 @@ fail_panel:
 esp_err_t driver_oled_clear_screen(void)
 {
     if (!s_ready) {
-        return ESP_ERR_INVALID_STATE;
+        return ESP_OK;
     }
     memset(s_fb, 0, sizeof(s_fb));
     return flush_fb();
@@ -203,7 +209,9 @@ static void draw_text_line_fb(uint8_t line, const char *text)
 esp_err_t driver_oled_show_text_line(uint8_t line, const char *text)
 {
     if (!s_ready) {
-        return ESP_ERR_INVALID_STATE;
+        (void)line;
+        (void)text;
+        return ESP_OK;
     }
     if (text == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -215,7 +223,11 @@ esp_err_t driver_oled_show_text_line(uint8_t line, const char *text)
 esp_err_t driver_oled_show_4_lines(const char *l0, const char *l1, const char *l2, const char *l3)
 {
     if (!s_ready) {
-        return ESP_ERR_INVALID_STATE;
+        (void)l0;
+        (void)l1;
+        (void)l2;
+        (void)l3;
+        return ESP_OK;
     }
     if (l0 != NULL) draw_text_line_fb(0, l0);
     if (l1 != NULL) draw_text_line_fb(1, l1);

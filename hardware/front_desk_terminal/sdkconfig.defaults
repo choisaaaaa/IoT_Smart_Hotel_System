@@ -17,12 +17,12 @@ CONFIG_FRONT_DESK_NET_TEST_MODE=n
 # 演示：房卡只读 UID、不写扇区（展会/答辩）；生产环境改 n 并 fullclean 重编
 CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY=y
 
-# ---------- 客房主控（本仓库默认刷成客房端）----------
-# MQTT: hotel/device/command/room/room_<房号>；注册 device_type=room；NVS 键 Room_ID（默认房号见 main.c）
-# 改回前台机：CONFIG_TERMINAL_ROLE_FRONT_DESK=y 且 # CONFIG_TERMINAL_ROLE_ROOM is not set，并关闭下面 RC522
-# CONFIG_TERMINAL_ROLE_FRONT_DESK is not set
-CONFIG_TERMINAL_ROLE_ROOM=y
-CONFIG_TERMINAL_ROOM_ENABLE_RC522=y
+# ---------- 前台终端（默认）----------
+# MQTT: front_desk_<FrontDesk_ID>；注册 device_type=front_desk；NV S: FrontDesk_ID、Room_ID（联动开门房号）
+# 改客房主控：CONFIG_TERMINAL_ROLE_ROOM=y、# CONFIG_TERMINAL_ROLE_FRONT_DESK is not set，并 CONFIG_TERMINAL_ROOM_ENABLE_RC522=y（若需刷卡）
+CONFIG_TERMINAL_ROLE_FRONT_DESK=y
+# CONFIG_TERMINAL_ROLE_ROOM is not set
+# CONFIG_TERMINAL_ROOM_ENABLE_RC522 is not set
 
 # 默认 single app 仅 1MB，固件增长后 app_check_size 会失败；改用 large（factory≈1500K，4MB Flash 可接受）
 # CONFIG_PARTITION_TABLE_SINGLE_APP is not set

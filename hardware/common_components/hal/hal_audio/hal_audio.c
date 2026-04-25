@@ -1,4 +1,5 @@
 #include "hal_audio.h"
+#include "hal_interactive.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -48,6 +49,14 @@ static esp_err_t spk_write_pcm16_unlocked(const int16_t *samples, size_t sample_
 #endif
 
 esp_err_t hal_audio_init(void) {
+    if (GLOBAL_I2S_BCLK_PIN < 0 || GLOBAL_I2S_WS_PIN < 0 || GLOBAL_I2S_DIN_PIN < 0 ||
+        GLOBAL_I2S_DOUT_PIN < 0 || GLOBAL_I2S_MIC_PDM_CLK_PIN < 0) {
+        ESP_LOGI(TAG,
+                 "I2S/PDM 引脚未配置，跳过 MIC/功放；提示音可走有源蜂鸣器 (hal_interactive_beep)");
+        s_audio_ready = false;
+        return ESP_OK;
+    }
+
     /* 外设分配（ESP32-S3 限制：PDM 模式只支持 I2S0，I2S1 仅 STD/TDM）：
      *   MIC → I2S0 + PDM RX（PDM CLK 独立 GPIO，不与功放 BCLK 共用）
      *   SPK → I2S1 + STD TX
@@ -251,7 +260,20 @@ esp_err_t hal_audio_play_pcm16(const int16_t *samples, size_t sample_count)
 esp_err_t hal_audio_beep_volume_pct(int volume_pct_0_100)
 {
     if (!s_audio_ready) {
-        return ESP_ERR_INVALID_STATE;
+        if (volume_pct_0_100 <= 0) {
+            return ESP_OK;
+        }
+        if (volume_pct_0_100 > 100) {
+            volume_pct_0_100 = 100;
+        }
+        uint32_t d = (uint32_t)HAL_AUDIO_UI_BEEP_MS;
+        if (volume_pct_0_100 < 100) {
+            d = (uint32_t)((uint64_t)HAL_AUDIO_UI_BEEP_MS * (uint32_t)volume_pct_0_100 / 100u);
+            if (d < 20u) {
+                d = 20u;
+            }
+        }
+        return hal_interactive_beep(1, d);
     }
     if (volume_pct_0_100 <= 0) {
         return ESP_OK;

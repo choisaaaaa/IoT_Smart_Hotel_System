@@ -2,10 +2,10 @@ menu "Front desk terminal (main)"
 
     choice TERMINAL_PRODUCT_ROLE
         prompt "终端产品角色（编译期固定；menuconfig 选择后 idf.py build 再刷机）"
-        default TERMINAL_ROLE_ROOM
+        default TERMINAL_ROLE_FRONT_DESK
         help
             同一套源码可产出「前台」或「客房主控」固件：MQTT 主题段、注册 device_type、
-            JSON 内 device_type 与后台一致。当前仓库默认客房主控；改前台见 sdkconfig.defaults 说明。
+            JSON 内 device_type 与后台一致。本工程默认前台终端；改客房主控请选 room 并按需打开 RC522。
 
         config TERMINAL_ROLE_FRONT_DESK
             bool "前台终端 (front_desk)"

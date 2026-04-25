@@ -57,7 +57,8 @@ esp_err_t hal_interactive_init(void) {
         s_buzzer_ready = false;
         ESP_LOGI(TAG, "蜂鸣器未接入，已禁用");
     } else {
-        esp_err_t buzzer_err = driver_buzzer_active_init(GLOBAL_BUZZER_PIN, true);
+        esp_err_t buzzer_err =
+            driver_buzzer_active_init(GLOBAL_BUZZER_PIN, GLOBAL_BUZZER_ACTIVE_HIGH != 0);
         if (buzzer_err != ESP_OK) {
             ESP_LOGE(TAG, "蜂鸣器初始化失败 GPIO%d: %s", GLOBAL_BUZZER_PIN, esp_err_to_name(buzzer_err));
             s_buzzer_ready = false;

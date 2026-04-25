@@ -125,10 +125,10 @@ extern "C" {
 #define GLOBAL_VOICE_PLAY_JITTER_PREFILL_MS 0u
 #endif
 
-// SPI 总线 (RC522, W25Q64)
-#define GLOBAL_SPI_MOSI_PIN        11
+// SPI 总线 (RC522, W25Q64)；RC522 模块丝印 SDA=片选 NSS
+#define GLOBAL_SPI_MOSI_PIN        12
 #define GLOBAL_SPI_MISO_PIN        13
-#define GLOBAL_SPI_SCLK_PIN        12
+#define GLOBAL_SPI_SCLK_PIN        11
 #define GLOBAL_SPI_CS_RC522_PIN    10
 #define GLOBAL_SPI_CS_W25Q64_PIN   9
 
@@ -245,7 +245,11 @@ extern "C" {
 
 // 其他输出
 #ifndef GLOBAL_BUZZER_PIN
-#define GLOBAL_BUZZER_PIN          38 // 蜂鸣器 (高有效)
+#define GLOBAL_BUZZER_PIN          38 // 有源蜂鸣器 SIG/I/O 脚接 MCU（VCC/GND 按模块电压）
+#endif
+/** 1=高电平响、静默时为低；0=低电平响（三脚 VCC/GND/SIG 模块多为低电平触发）。由工程 CMake 覆盖。 */
+#ifndef GLOBAL_BUZZER_ACTIVE_HIGH
+#define GLOBAL_BUZZER_ACTIVE_HIGH 1
 #endif
 #define GLOBAL_RGB_LED_PIN         21 // WS2812 单线灯带(可选，旧规划)
 
