@@ -14,6 +14,29 @@ export interface RFIDCard {
   expires_at?: Date;
 }
 
+/** HTTP/MQTT 验卡共用：status 视为 active（兼容大小写与空白） */
+export function isRfidCardStatusActive(status: unknown): boolean {
+  return String(status ?? '')
+    .trim()
+    .toLowerCase() === 'active';
+}
+
+/**
+ * 退房日常见存为当日 00:00:00；当天下午刷卡时 `expires_at > now` 会误判过期。
+ * 约定：expires_at 所指自然日当天结束前均有效。
+ */
+export function isRfidGuestCardNotExpired(expiresAt: unknown): boolean {
+  if (expiresAt == null || expiresAt === '') {
+    return true;
+  }
+  const d = new Date(expiresAt as string | Date);
+  if (Number.isNaN(d.getTime())) {
+    return true;
+  }
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  return Date.now() <= end.getTime();
+}
+
 class RFIDService {
   /**
    * 注册/发卡

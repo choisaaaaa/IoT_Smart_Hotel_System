@@ -22,12 +22,12 @@
         
         <div class="header-actions">
           <a-space>
-            <a-select v-model:value="selectedDevice" placeholder="选择前台设备" style="width: 180px">
+            <a-select v-model:value="selectedDevice" placeholder="选择发卡/通信设备" style="width: 180px">
               <template #prefix><LaptopOutlined /></template>
               <a-select-option v-for="d in frontEndDevices" :key="d.device_id" :value="d.device_id">
                 {{ d.device_name || d.device_id }}
               </a-select-option>
-              <a-select-option v-if="frontEndDevices.length === 0" value="none" disabled>未发现前台设备</a-select-option>
+              <a-select-option v-if="frontEndDevices.length === 0" value="none" disabled>未发现可发卡设备</a-select-option>
             </a-select>
             <a-button @click="testCommunication" :loading="testing">
               <template #icon><ApiOutlined /></template>
@@ -603,9 +603,11 @@ async function fetchFrontEndDevices() {
   try {
     const res = await deviceApi.getDeviceList({ audit_status: 'approved' })
     if (res.data) {
-      // 过滤前台设备：device_type 为 'front_desk' 或者 device_id 以 'FRN_' 开头
-      const list = res.data.filter(d => 
-        d.device_type === 'front_desk' || 
+      // 发卡/通信：前台 front_desk，或统一固件客房主控 room / room_terminal（后端 room-card 已支持）
+      const list = res.data.filter(d =>
+        d.device_type === 'front_desk' ||
+        d.device_type === 'room' ||
+        d.device_type === 'room_terminal' ||
         (d.device_id && d.device_id.startsWith('FRN_'))
       )
       frontEndDevices.value = list
@@ -624,7 +626,7 @@ const getLogoUrl = (url?: string) => {
 
 async function testCommunication() {
   if (!selectedDevice.value) {
-    return $notify.warning({ title: '请选择设备', description: '请先选择一个前台设备' })
+    return $notify.warning({ title: '请选择设备', description: '请先选择一台发卡设备（前台或客房终端）' })
   }
   testing.value = true
   try {
@@ -789,17 +791,21 @@ async function handleCardOp() {
     const res: any = await request.post('/devices/room-card', {
       action: cardOpType.value,
       booking_id: selectedGuestForCard.value.id,
-      id_last_four: idLastFour.value
+      id_last_four: idLastFour.value,
+      ...(selectedDevice.value && selectedDevice.value !== 'none'
+        ? { device_id: selectedDevice.value }
+        : {})
     })
 
-    if (res.data.success) {
+    // request 拦截器已解包为业务体；/devices/room-card 返回 { success, message, data }（非嵌套在 data 里）
+    if (res.success) {
       $notify.info({ title: cardOpType.value === 'issue' ? '正在制卡' : '正在注销', description: cardOpType.value === 'issue' ? '请在设备上放置卡片...' : '正在注销房卡，请稍候...', key: 'card_op', duration: 0 })
       // 不立即关闭弹窗，等待 WebSocket 反馈或手动刷新
     } else {
-      NotifyPreset.operationFailed(res.data.message)
+      NotifyPreset.operationFailed(res.message || '发卡失败')
     }
   } catch (error: any) {
-    NotifyPreset.operationFailed(error.response?.data?.message || '设备通信失败')
+    NotifyPreset.operationFailed(error.response?.data?.message || error.message || '设备通信失败')
   } finally {
     cardOpLoading.value = false
   }

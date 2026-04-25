@@ -3,6 +3,7 @@
 #include "driver/spi_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "global_config.h"
 #include <string.h>
 
@@ -11,6 +12,7 @@ static const char *TAG = "RC522_HAL";
 static bool s_inited = false;
 static bool s_bus_inited = false;
 static spi_device_handle_t s_rc522_spi = NULL;
+static SemaphoreHandle_t s_rc522_lock = NULL;
 
 // MFRC522 寄存器定义
 #define RC522_REG_COMMAND       0x01
@@ -364,6 +366,35 @@ static esp_err_t rc522_mifare_write_block(uint8_t block_addr, const uint8_t *dat
     return ESP_OK;
 }
 
+/* 供读/写扇区在已持锁场景复用，避免递归加锁死锁 */
+static esp_err_t rc522_read_uid_internal(uint8_t *uid, uint8_t *uid_len) {
+    if (uid == NULL || uid_len == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_inited) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_err_t err = rc522_request_a();
+    if (err != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    err = rc522_anticoll_cl1(uid);
+    if (err != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    err = rc522_select_cl1(uid);
+    if (err != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    *uid_len = 4;
+    (void)rc522_halt_a();
+    return ESP_OK;
+}
+
 esp_err_t driver_rc522_init(void) {
     if (s_inited) {
         return ESP_OK;
@@ -402,6 +433,13 @@ esp_err_t driver_rc522_init(void) {
         ESP_LOGE(TAG, "RC522 add spi device failed: %s", esp_err_to_name(err));
         return err;
     }
+    if (s_rc522_lock == NULL) {
+        s_rc522_lock = xSemaphoreCreateMutex();
+        if (s_rc522_lock == NULL) {
+            ESP_LOGE(TAG, "创建 RC522 互斥锁失败");
+            return ESP_ERR_NO_MEM;
+        }
+    }
 
     rc522_write_reg(RC522_REG_COMMAND, PCD_SOFT_RESET);
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -431,35 +469,21 @@ esp_err_t driver_rc522_init(void) {
 }
 
 esp_err_t driver_rc522_read_uid(uint8_t *uid, uint8_t *uid_len) {
-    if (uid == NULL || uid_len == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (!s_inited) {
+    if (!s_inited || s_rc522_lock == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
-
-    esp_err_t err = rc522_request_a();
-    if (err != ESP_OK) {
-        return ESP_ERR_NOT_FOUND;
+    if (xSemaphoreTake(s_rc522_lock, pdMS_TO_TICKS(200)) != pdTRUE) {
+        ESP_LOGW(TAG, "RC522 busy: read_uid 等待锁超时");
+        return ESP_ERR_TIMEOUT;
     }
 
-    err = rc522_anticoll_cl1(uid);
-    if (err != ESP_OK) {
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    err = rc522_select_cl1(uid);
-    if (err != ESP_OK) {
-        return ESP_FAIL;
-    }
-
-    *uid_len = 4;
-    (void)rc522_halt_a();
-    return ESP_OK;
+    esp_err_t err = rc522_read_uid_internal(uid, uid_len);
+    xSemaphoreGive(s_rc522_lock);
+    return err;
 }
 
 esp_err_t driver_rc522_read_sector(uint8_t sector_num, const uint8_t *key, uint8_t *out_data) {
-    if (!s_inited) {
+    if (!s_inited || s_rc522_lock == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
     if (key == NULL || out_data == NULL) {
@@ -468,11 +492,16 @@ esp_err_t driver_rc522_read_sector(uint8_t sector_num, const uint8_t *key, uint8
     if (sector_num > 15) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (xSemaphoreTake(s_rc522_lock, pdMS_TO_TICKS(300)) != pdTRUE) {
+        ESP_LOGW(TAG, "RC522 busy: read_sector 等待锁超时");
+        return ESP_ERR_TIMEOUT;
+    }
 
     uint8_t uid[10] = {0};
     uint8_t uid_len = 0;
-    esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
+    esp_err_t err = rc522_read_uid_internal(uid, &uid_len);
     if (err != ESP_OK || uid_len < 4) {
+        xSemaphoreGive(s_rc522_lock);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -480,16 +509,18 @@ esp_err_t driver_rc522_read_sector(uint8_t sector_num, const uint8_t *key, uint8
     err = rc522_auth_a(block_addr, key, uid);
     if (err != ESP_OK) {
         rc522_stop_crypto();
+        xSemaphoreGive(s_rc522_lock);
         return err;
     }
 
     err = rc522_mifare_read_block(block_addr, out_data);
     rc522_stop_crypto();
+    xSemaphoreGive(s_rc522_lock);
     return err;
 }
 
 esp_err_t driver_rc522_write_sector(uint8_t sector_num, const uint8_t *key, const uint8_t *data) {
-    if (!s_inited) {
+    if (!s_inited || s_rc522_lock == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
     if (key == NULL || data == NULL) {
@@ -498,11 +529,16 @@ esp_err_t driver_rc522_write_sector(uint8_t sector_num, const uint8_t *key, cons
     if (sector_num > 15) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (xSemaphoreTake(s_rc522_lock, pdMS_TO_TICKS(300)) != pdTRUE) {
+        ESP_LOGW(TAG, "RC522 busy: write_sector 等待锁超时");
+        return ESP_ERR_TIMEOUT;
+    }
 
     uint8_t uid[10] = {0};
     uint8_t uid_len = 0;
-    esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
+    esp_err_t err = rc522_read_uid_internal(uid, &uid_len);
     if (err != ESP_OK || uid_len < 4) {
+        xSemaphoreGive(s_rc522_lock);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -510,11 +546,13 @@ esp_err_t driver_rc522_write_sector(uint8_t sector_num, const uint8_t *key, cons
     err = rc522_auth_a(block_addr, key, uid);
     if (err != ESP_OK) {
         rc522_stop_crypto();
+        xSemaphoreGive(s_rc522_lock);
         return err;
     }
 
     err = rc522_mifare_write_block(block_addr, data);
     rc522_stop_crypto();
+    xSemaphoreGive(s_rc522_lock);
     return err;
 }
 

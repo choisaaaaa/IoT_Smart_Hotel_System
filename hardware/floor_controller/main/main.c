@@ -42,10 +42,9 @@ static bool s_corridor_light_on = false;
 static bool s_floor_broadcast_buzzer_on = false;
 static uint32_t s_reconnect_count = 0;
 
-/** 疑似火灾：DHT11 或 走廊 NTC 任一超温 + MQ2 烟雾 ADC 超阈（现场请标定 MQ2 基线） */
+/** 疑似火灾：DHT/NTC 超温 且 MQ2 超阈；环境采样任务每次轮询（约 30s）若仍满足则均上报，不“只报一次” */
 static const float k_fire_suspect_temp_c = 40.0f;
 static const uint16_t k_fire_suspect_smoke_adc = 400;
-static bool s_fire_suspect_episode_reported = false;
 
 static void copy_str_safe(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0) return;
@@ -462,7 +461,7 @@ static void run_floor_local_policy(const sensor_data_t *env_data) {
     const bool smoky = env_data->air_quality_adc >= k_fire_suspect_smoke_adc;
 
     if (hot && smoky) {
-        if (!s_fire_suspect_episode_reported && s_network_ready) {
+        if (s_network_ready) {
             char detail[192];
             snprintf(detail, sizeof(detail),
                      "DHT=%.1f℃ NTC=%.1f℃(valid=%d) 烟雾ADC=%u 同时超阈，疑似火灾(需人工复核)",
@@ -471,12 +470,9 @@ static void run_floor_local_policy(const sensor_data_t *env_data) {
                      env_data->ntc_valid ? 1 : 0,
                      (unsigned)env_data->air_quality_adc);
             publish_floor_event("floor_fire_suspected", detail, "warning");
-            ESP_LOGW(TAG, "疑似火灾告警已上报: (DHT或NTC)>=%.0f℃ 且 MQ2ADC>=%u",
+            ESP_LOGW(TAG, "疑似火灾告警已上报(周期复测): (DHT或NTC)>=%.0f℃ 且 MQ2ADC>=%u",
                      (double)k_fire_suspect_temp_c, (unsigned)k_fire_suspect_smoke_adc);
-            s_fire_suspect_episode_reported = true;
         }
-    } else {
-        s_fire_suspect_episode_reported = false;
     }
 }
 

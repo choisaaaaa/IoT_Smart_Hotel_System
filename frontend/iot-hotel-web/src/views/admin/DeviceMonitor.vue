@@ -300,7 +300,7 @@
               <div v-else class="sensor-chip-row">
                 <div
                   v-for="sensor in debugTerminalSensors"
-                  :key="sensor.sensor_type"
+                  :key="`${sensor.sensor_type}-${sensor.device_id || ''}-${sensor.id ?? ''}`"
                   :class="['sensor-chip', getSensorStatus(sensor)]"
                 >
                   <span class="chip-label">{{ getSensorTypeName(sensor.sensor_type) }}</span>
@@ -339,7 +339,7 @@
               </a-button>
             </div>
 
-            <div class="telemetry-hint pane-section-title telemetry-hint-title">来自日志的上报快照（MQTT 入站解析）</div>
+            <div class="telemetry-hint pane-section-title telemetry-hint-title">上报快照（环境与本机状态，来自设备近期上报）</div>
             <div class="telemetry-mini-grid">
               <div class="telemetry-mini"><span>温度</span><b>{{ debugRuntime.temperature }}</b></div>
               <div class="telemetry-mini"><span>湿度</span><b>{{ debugRuntime.humidity }}</b></div>
@@ -692,7 +692,9 @@ const simulationCommands = computed(() => {
       { label: '🆕 开卡-房间301', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '301', booking_id: 'BK001' } } },
       { label: '🆕 开卡-房间302', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'issue', room_number: '302', booking_id: 'BK002' } } },
       { label: '🔍 验卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'verify_card' } },
+      { label: '📖 读卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'read_card' } },
       { label: '📟 刷卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'swipe_card' } },
+      { label: '🧹 清卡(别名)', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'clear_card' } },
       { label: '🗑️ 退卡', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'room_card_op', command_value: { action: 'revoke', room_number: '301' } } },
       { label: '🚨 前台报警', topic: `hotel/device/command/front_desk/${deviceId}`, payload: { device_id: deviceId, command_type: 'alarm_trigger' } },
       { label: '🚨 301 广播警报', topic: `hotel/device/command/room/room_301`, payload: { device_id: deviceId, command_type: 'broadcast_alarm' } }
@@ -795,13 +797,14 @@ async function refreshDebugActivityPanel() {
   await Promise.all([fetchMqttLogs(true), fetchDebugDeviceContext()])
   fetchDebugRuntimeStatus()
   await fetchDebugTerminalSensors()
+  applyDebugRuntimeFromSensorStrip()
 }
 
 function clearDebugMqttLog() {
   mqttLogs.value = []
 }
 
-function openDebugTerminal(device: any) {
+async function openDebugTerminal(device: any) {
   Object.assign(currentDebug, {
     id: device.id,
     deviceId: device.device_id,
@@ -809,15 +812,17 @@ function openDebugTerminal(device: any) {
     deviceType: device.device_type
   })
   debugTerminalVisible.value = true
-  fetchMqttLogs()
+  await fetchMqttLogs()
   fetchDebugRuntimeStatus()
-  fetchDebugDeviceContext()
-  fetchDebugTerminalSensors()
-  logTimer.value = setInterval(() => {
-    fetchMqttLogs()
+  await fetchDebugDeviceContext()
+  await fetchDebugTerminalSensors()
+  applyDebugRuntimeFromSensorStrip()
+  logTimer.value = setInterval(async () => {
+    await fetchMqttLogs()
     fetchDebugRuntimeStatus()
-    fetchDebugDeviceContext()
-    fetchDebugTerminalSensors({ silent: true })
+    await fetchDebugDeviceContext()
+    await fetchDebugTerminalSensors({ silent: true })
+    applyDebugRuntimeFromSensorStrip()
   }, 3000)
 }
 
@@ -1197,6 +1202,33 @@ async function fetchSensorData(deviceId: number) {
   }
 }
 
+/** 将传感器条数据填入下方「上报快照」网格（优先 DB 合并结果，避免仅依赖 MQTT 日志解析） */
+function applyDebugRuntimeFromSensorStrip() {
+  const findVal = (...types: string[]) => {
+    for (const t of types) {
+      const s = debugTerminalSensors.value.find((x: any) => x.sensor_type === t)
+      if (s != null && s.sensor_value != null && String(s.sensor_value) !== '') {
+        return String(s.sensor_value)
+      }
+    }
+    return undefined
+  }
+  const t = findVal('temperature', 'ntc_temp_c')
+  if (t !== undefined) debugRuntime.temperature = t
+  const h = findVal('humidity')
+  if (h !== undefined) debugRuntime.humidity = h
+  const sm = findVal('smoke', 'air_quality_adc', 'smoke_level')
+  if (sm !== undefined) debugRuntime.smoke = sm
+  const li = findVal('light', 'light_level', 'light_adc')
+  if (li !== undefined) debugRuntime.light = li
+  const ac = findVal('ac_target_temp')
+  if (ac !== undefined) debugRuntime.acTarget = ac
+  const br = findVal('light_brightness')
+  if (br !== undefined) debugRuntime.brightness = br
+  const vol = findVal('volume')
+  if (vol !== undefined) debugRuntime.volume = vol
+}
+
 async function fetchDebugTerminalSensors(options?: { silent?: boolean }) {
   if (!currentDebug.id) return
   const showSpin = !options?.silent
@@ -1217,6 +1249,9 @@ async function fetchDebugTerminalSensors(options?: { silent?: boolean }) {
 
 function getSensorTypeName(type: string): string {
   const map: Record<string, string> = {
+    light_brightness: '灯光亮度',
+    volume: '音量',
+    ac_target_temp: '空调目标温',
     temperature: '温度',
     humidity: '湿度',
     smoke: '烟雾(ADC)',

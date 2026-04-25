@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "esp_http_client.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include "cJSON.h"
@@ -20,21 +23,43 @@
 #include "global_config.h"
 #include "service_auth.h"
 #include "voice_session.h"
+#include "card_voice_playback.h"
 #include "driver_ec11.h"
 #include "driver_oled.h"
 
 /*
- * 公网若按「设备号 / 固件版本 / 镜像版本」识别终端，换身份时请改下面两处，
- * 并在后台登记新的 device_id（格式 front_desk_<后缀>）。也可不写死：配网后在 NVS
- * 写入键 FrontDesk_ID 覆盖默认后缀（与 hotel 命名空间一致，由 service_network 读写）。
+ * 公网若按「设备号 / 固件版本 / 镜像版本」识别终端：
+ * - 前台构建：device_id = front_desk_<后缀>，NVS 键 FrontDesk_ID
+ * - 客房主控构建：device_id = room_<房号>，NVS 键 Room_ID（与 room_terminal 一致）
+ * 角色由 menuconfig「终端产品角色」决定，改角色后需重编并刷机；后台 devices 须同类型审核。
  */
 #ifndef FRONT_DESK_ID_DEFAULT
 #define FRONT_DESK_ID_DEFAULT "02"
 #endif
 #define FRONT_FIRMWARE_VERSION "v1.2.0"
 
+#if CONFIG_TERMINAL_ROLE_ROOM
+#define TERMINAL_MQTT_TOPIC_SUFFIX "room"
+#define TERMINAL_DEVICE_TYPE_JSON  "room"
+#define TERMINAL_REGISTRATION_TYPE "room"
+#define TERMINAL_REGISTRATION_NAME "智能客房终端"
+#define TERMINAL_BOOT_BANNER_TEXT  "🏠 智慧客房主控"
+#define SOS_ALARM_LOCAL_MSG        "客房本地报警键触发"
+#else
+#define TERMINAL_MQTT_TOPIC_SUFFIX "front_desk"
+#define TERMINAL_DEVICE_TYPE_JSON  "front_desk"
+#define TERMINAL_REGISTRATION_TYPE "front_desk"
+#define TERMINAL_REGISTRATION_NAME "智能前台终端"
+#define TERMINAL_BOOT_BANNER_TEXT  "🛎️ 智慧前台管理端"
+#define SOS_ALARM_LOCAL_MSG        "前台本地报警键触发"
+#endif
+
 static const char *TAG = "FRONT_DESK_MAIN";
+#if CONFIG_TERMINAL_ROLE_ROOM
+static char device_id[32] = "room_UNKNOWN";
+#else
 static char device_id[32] = "front_desk_" FRONT_DESK_ID_DEFAULT;
+#endif
 static char mqtt_broker_uri[128] = GLOBAL_MQTT_BROKER_URI;
 static const TickType_t FRONT_HEARTBEAT_TASK_PERIOD = pdMS_TO_TICKS(60000);
 static const TickType_t FRONT_BUTTON_TASK_PERIOD = pdMS_TO_TICKS(60); /* 与客房 BUTTON_TASK_PERIOD 一致 */
@@ -58,21 +83,21 @@ static bool s_floor_got_smoke = false;
 static bool s_floor_got_human = false;
 static uint32_t s_command_seq = 1000;
 static uint32_t s_call_seq = 1;
-static const uint8_t k_default_card_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static const uint8_t k_default_card_key[6] __attribute__((unused)) = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static uint8_t s_card_aes_key[16];
 static char s_last_card_room_id[16] = "";
 static uint8_t s_last_uid[10] = {0};
 static uint8_t s_last_uid_len = 0;
 static bool s_last_uid_valid = false;
 
-/** 单路继电器「代客房」：亮灯状态；door_unlock 脉冲结束后恢复此状态 */
+/** 单路继电器 CH1：仅演示「空调/门锁」；灯光亮度由 RGB 独立表现，不再用 CH1 当灯 */
 static bool s_front_relay_latched_on = false;
 
 static bool is_on_call = false;
 static bool s_call_incoming_pending = false;
 static char current_call_id[64] = "";
 static int s_volume_pct = 60;
-/** EC11 灯光亮度档：与客房端 room_terminal main.c 一致，驱动代客房 CH1 + RGB */
+/** EC11 / 遥控灯光亮度：仅驱动 RGB，不改变空调继电器 */
 static int s_brightness_pct = 80;
 static uint8_t s_ac_target_temp = 24;
 
@@ -125,7 +150,7 @@ static TickType_t s_oled_status_until = 0;
 static void publish_room_command(const char *room_id, const char *command_type);
 static bool handle_voice_control_command(const char *cmd_type, cJSON *root, const char **result_msg);
 static void publish_front_sensor_data(const char *sensor_type, double value, const char *unit);
-static void front_apply_brightness_to_light(void);
+static void front_apply_light_rgb_from_brightness(void);
 static bool apply_front_scene(front_scene_mode_t mode, const char **out_result_msg);
 void task_front_ec11_peripheral(void *pvParameters);
 void publish_device_heartbeat(void);
@@ -134,6 +159,7 @@ static void front_oled_render_all(void);
 static void front_ec11_refresh_oled_mode_line(void);
 void task_front_oled_refresh(void *pvParameters);
 static void front_floor_env_mqtt_cb(const char *topic, const char *data, int data_len);
+static esp_err_t front_desk_run_door_pulse(void);
 
 static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
 {
@@ -157,7 +183,7 @@ static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
         if (parsed != NULL) {
             cJSON_Delete(parsed);
         }
-        ESP_LOGW(TAG, "command_value 不是合法 JSON 对象字符串");
+        ESP_LOGD(TAG, "command_value 非 JSON 对象字符串，已忽略");
         return NULL;
     }
     if (out_owned_json != NULL) {
@@ -184,13 +210,78 @@ static void load_nvs_string_with_fallback(const char *key, char *out, size_t out
     }
 }
 
+static const char *topic_tail(const char *topic)
+{
+    if (topic == NULL) {
+        return "";
+    }
+    const char *p = strrchr(topic, '/');
+    return (p != NULL) ? (p + 1) : topic;
+}
+
+static bool eq_nocase(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+    return strcasecmp(a, b) == 0;
+}
+
+/** 与楼控 floor_controller 一致：payload 为 all 或本机 device_id，或由订阅 topic 尾段推断本机 */
+static bool is_front_target_match(const char *target)
+{
+    if (target == NULL || target[0] == '\0') {
+        return false;
+    }
+    return eq_nocase(target, "all") || eq_nocase(target, device_id);
+}
+
+/** 与楼控一致：command_id 可为 JSON number，或 "123" 十进制串 */
+static bool mqtt_cmd_get_int(cJSON *item, int *out)
+{
+    if (item == NULL || out == NULL) {
+        return false;
+    }
+    if (cJSON_IsNumber(item)) {
+        *out = item->valueint;
+        return true;
+    }
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        char *end = NULL;
+        errno = 0;
+        long v = strtol(item->valuestring, &end, 10);
+        if (end == item->valuestring || *end != '\0' || errno == ERANGE) {
+            return false;
+        }
+        *out = (int)v;
+        return true;
+    }
+    return false;
+}
+
+/** command_type 一般为 string；也允许 number（与楼控联调弱类型对端） */
+static const char *mqtt_cmd_get_type_str(cJSON *item, char *buf, size_t buf_size)
+{
+    if (item == NULL || buf == NULL || buf_size < 2) {
+        return NULL;
+    }
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        return item->valuestring;
+    }
+    if (cJSON_IsNumber(item)) {
+        snprintf(buf, buf_size, "%d", item->valueint);
+        return buf;
+    }
+    return NULL;
+}
+
 static void publish_front_status_payload(cJSON *root) {
     if (!s_network_ready) {
         return;
     }
 
     char topic[128];
-    snprintf(topic, sizeof(topic), "%s/front_desk/%s", GLOBAL_TOPIC_DEVICE_STATUS_PREFIX, device_id);
+    snprintf(topic, sizeof(topic), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_STATUS_PREFIX, TERMINAL_MQTT_TOPIC_SUFFIX, device_id);
 
     /* 签名：与后端 sortObject+JSON.stringify 一致（键 ASCII 排序） */
     char signature[65];
@@ -213,7 +304,7 @@ static void publish_front_event(const char *event_type, const char *detail) {
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
     cJSON_AddStringToObject(root, "event_type", event_type);
     cJSON_AddStringToObject(root, "detail", detail);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
@@ -240,7 +331,7 @@ static void publish_front_sos_alarm_msg(const char *message) {
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
     cJSON_AddStringToObject(root, "event_type", "sos_alarm");
     cJSON_AddStringToObject(root, "level", "critical");
 
@@ -264,7 +355,7 @@ static void publish_front_sos_alarm_msg(const char *message) {
 }
 
 static void publish_front_sos_alarm(void) {
-    publish_front_sos_alarm_msg("前台本地报警键触发");
+    publish_front_sos_alarm_msg(SOS_ALARM_LOCAL_MSG);
 }
 
 /** 与后端 mqtt.service handleSecurityEvent(card_issued) 对齐：data.card_uid 必填 */
@@ -279,7 +370,7 @@ static void publish_front_card_issued(const char *uid_hex, const char *room_id_s
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
     cJSON_AddStringToObject(root, "event_type", "card_issued");
     cJSON_AddStringToObject(root, "level", "info");
 
@@ -385,6 +476,180 @@ static void uid_to_hex(const uint8_t *uid, uint8_t uid_len, char *out_hex, size_
     }
 }
 
+#define FRONT_RFID_VERIFY_RESP_MAX 768
+
+typedef struct {
+    char buf[FRONT_RFID_VERIFY_RESP_MAX];
+    size_t len;
+} front_rfid_verify_resp_t;
+
+static void front_build_rfid_verify_url(char *out, size_t out_len) {
+    if (out == NULL || out_len == 0) {
+        return;
+    }
+    char http_api_base[128];
+    load_nvs_string_with_fallback("HTTP_API_BASE", http_api_base, sizeof(http_api_base), "");
+    char register_url[192];
+    esp_err_t ue = service_auth_resolve_register_url(
+        mqtt_broker_uri,
+        (http_api_base[0] != '\0') ? http_api_base : NULL,
+        register_url,
+        sizeof(register_url));
+    if (ue != ESP_OK) {
+        snprintf(register_url, sizeof(register_url), "http://8.134.166.69:9000/api/v1/devices/register");
+    }
+    char *p = strstr(register_url, "/devices/register");
+    if (p != NULL) {
+        size_t prefix = (size_t)(p - register_url);
+        const char *suffix = "/rfid-access/verify";
+        if (prefix + strlen(suffix) + 1 > out_len) {
+            snprintf(out, out_len, "http://8.134.166.69:9000/api/v1/rfid-access/verify");
+            return;
+        }
+        memcpy(out, register_url, prefix);
+        memcpy(out + prefix, suffix, strlen(suffix) + 1);
+        return;
+    }
+    snprintf(out, out_len, "http://8.134.166.69:9000/api/v1/rfid-access/verify");
+}
+
+static esp_err_t front_rfid_verify_http_handler(esp_http_client_event_t *evt) {
+    front_rfid_verify_resp_t *r = (front_rfid_verify_resp_t *)evt->user_data;
+    if (evt->event_id != HTTP_EVENT_ON_DATA || r == NULL || evt->data == NULL || evt->data_len == 0) {
+        return ESP_OK;
+    }
+    size_t n = (size_t)evt->data_len;
+    if (r->len + n >= FRONT_RFID_VERIFY_RESP_MAX) {
+        n = FRONT_RFID_VERIFY_RESP_MAX - 1 - r->len;
+    }
+    if (n > 0) {
+        memcpy(r->buf + r->len, evt->data, n);
+        r->len += n;
+        r->buf[r->len] = '\0';
+    }
+    return ESP_OK;
+}
+
+/**
+ * 调用后台 /rfid-access/verify：校验 card_uid 是否为当前酒店有效房卡且有权进入 room_number_str 对应房间。
+ * 依赖设备 HTTP 头 x-device-id / x-device-key（与 deviceAuthMiddleware 一致）。
+ */
+static bool front_http_rfid_verify(const char *uid_hex, const char *room_number_str) {
+    if (uid_hex == NULL || uid_hex[0] == '\0' || room_number_str == NULL || room_number_str[0] == '\0') {
+        return false;
+    }
+    if (service_auth_get_state() != AUTH_STATE_APPROVED) {
+        return false;
+    }
+    char device_key[256];
+    if (service_auth_get_device_key(device_key, sizeof(device_key)) != ESP_OK) {
+        return false;
+    }
+    char verify_url[192];
+    front_build_rfid_verify_url(verify_url, sizeof(verify_url));
+
+    cJSON *body = cJSON_CreateObject();
+    if (body == NULL) {
+        return false;
+    }
+    cJSON_AddStringToObject(body, "card_uid", uid_hex);
+    cJSON_AddStringToObject(body, "room_number", room_number_str);
+    char *post = cJSON_PrintUnformatted(body);
+    cJSON_Delete(body);
+    if (post == NULL) {
+        return false;
+    }
+
+    front_rfid_verify_resp_t resp;
+    memset(&resp, 0, sizeof(resp));
+
+    esp_http_client_config_t cfg = {
+        .url = verify_url,
+        .event_handler = front_rfid_verify_http_handler,
+        .timeout_ms = 8000,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (client == NULL) {
+        free(post);
+        return false;
+    }
+    esp_http_client_set_user_data(client, &resp);
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "x-device-id", device_id);
+    esp_http_client_set_header(client, "x-device-key", device_key);
+    esp_http_client_set_post_field(client, post, strlen(post));
+    esp_err_t err = esp_http_client_perform(client);
+    int code = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+    free(post);
+
+    if (err != ESP_OK || code < 200 || code >= 300) {
+        ESP_LOGW(TAG, "RFID verify HTTP err=%s code=%d body=%s", esp_err_to_name(err), code, resp.buf);
+        return false;
+    }
+
+    cJSON *root = cJSON_Parse(resp.buf);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "RFID verify JSON 解析失败: %s", resp.buf);
+        return false;
+    }
+    cJSON *v = cJSON_GetObjectItem(root, "valid");
+    bool ok = false;
+    if (v != NULL) {
+        if (cJSON_IsBool(v)) {
+            ok = cJSON_IsTrue(v);
+        } else if (cJSON_IsNumber(v)) {
+            ok = (v->valuedouble != 0.0);
+        }
+    }
+    cJSON_Delete(root);
+    ESP_LOGI(TAG, "RFID verify: url=%s valid=%d", verify_url, (int)ok);
+    return ok;
+}
+
+static bool front_is_local_room_device_for(const char *room_for_cmd) {
+    if (room_for_cmd == NULL || room_for_cmd[0] == '\0') {
+        return false;
+    }
+    char expected[40];
+    snprintf(expected, sizeof(expected), "room_%s", room_for_cmd);
+    return strcmp(device_id, expected) == 0;
+}
+
+static void front_card_access_granted(const char *room_for_cmd, const char *notice) {
+    ESP_LOGI(TAG, "%s", notice);
+#if CONFIG_TERMINAL_ROLE_ROOM
+    card_voice_play_welcome(s_volume_pct);
+#endif
+    const bool local_door = front_is_local_room_device_for(room_for_cmd);
+#if CONFIG_TERMINAL_ROLE_ROOM
+    /* 本机即 room_301 时直接脉冲继电器，避免仅依赖 MQTT 自发自收导致无动作 */
+    if (local_door) {
+        (void)front_desk_run_door_pulse();
+    }
+#endif
+    if (s_network_ready) {
+        publish_front_event("card_verified", notice);
+        if (!local_door) {
+            publish_room_command(room_for_cmd, "door_unlock");
+        }
+    }
+#if !CONFIG_TERMINAL_ROLE_ROOM
+    hal_audio_beep_volume_pct(s_volume_pct);
+#endif
+}
+
+static void front_card_access_denied(const char *reason_log) {
+    ESP_LOGW(TAG, "%s", reason_log);
+#if CONFIG_TERMINAL_ROLE_ROOM
+    card_voice_play_invalid(s_volume_pct);
+#else
+    hal_audio_beep_volume_pct(s_volume_pct);
+    hal_audio_beep_volume_pct(s_volume_pct);
+#endif
+}
+
 /** 刷卡成功瞬间播提示音：先于 MQTT/签名，避免网络阻塞导致「读了卡却没声」。音量不低于下限，旋钮设得很小时仍能听见。 */
 static void front_desk_beep_card_detected(void) {
     int v = (int)s_volume_pct;
@@ -411,49 +676,97 @@ static void publish_card_uid_event(const uint8_t *uid, uint8_t uid_len) {
     ESP_LOGI(TAG, "RC522 检测到卡片 UID=%s", uid_hex);
 
     if (!s_network_ready) {
-        ESP_LOGW(TAG, "网络未就绪，跳过 card_uid_detected MQTT 上报 (UID=%s)", uid_hex);
+#if CONFIG_TERMINAL_ROLE_ROOM
+        ESP_LOGW(TAG, "网络未就绪：跳过刷卡 MQTT 上报 (UID=%s)；仅 UID 模式须联网由后台校验", uid_hex);
+#else
+        ESP_LOGW(TAG, "网络未就绪，跳过刷卡 MQTT 与验卡 (UID=%s)", uid_hex);
+        return;
+#endif
+    }
+
+    if (s_network_ready) {
+        char timestamp[32];
+        service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
+
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "device_id", device_id);
+        cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
+        cJSON_AddStringToObject(root, "event_type", "card_uid_detected");
+        cJSON_AddStringToObject(root, "card_uid", uid_hex);
+        cJSON_AddStringToObject(root, "timestamp", timestamp);
+
+        char signature[65];
+        if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
+            cJSON_AddStringToObject(root, "signature", signature);
+        }
+
+        char *json_str = cJSON_PrintUnformatted(root);
+        service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
+        free(json_str);
+        cJSON_Delete(root);
+    }
+
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+    /* 仅 UID：必须联网并由后台 rfid_cards 校验通过后才开门（与 /rfid-access/verify 一致） */
+    if (uid_len == 0 || target_room_id[0] == '\0') {
+        front_card_access_denied("演示(仅UID): 无有效 UID 或未配置 Room_ID");
         return;
     }
-
-    char timestamp[32];
-    service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
-
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
-    cJSON_AddStringToObject(root, "event_type", "card_uid_detected");
-    cJSON_AddStringToObject(root, "card_uid", uid_hex);
-    cJSON_AddStringToObject(root, "timestamp", timestamp);
-
-    char signature[65];
-    if (service_auth_sign_cjson_object(root, signature) == ESP_OK) {
-        cJSON_AddStringToObject(root, "signature", signature);
+    if (!s_network_ready) {
+        front_card_access_denied("演示(仅UID): 网络未就绪，无法校验 UID");
+        return;
     }
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    service_mqtt_publish(GLOBAL_TOPIC_SECURITY_EVENT, json_str);
-    free(json_str);
-    cJSON_Delete(root);
-
-    // 模拟客房端刷卡开门
+    if (!front_http_rfid_verify(uid_hex, target_room_id)) {
+        front_card_access_denied("演示(仅UID): UID 未通过后台校验或无权进入本房");
+        return;
+    }
+    {
+        char notice[96];
+        snprintf(notice, sizeof(notice), "房卡 UID 已校验，已下发 %s 开门指令", target_room_id);
+        front_card_access_granted(target_room_id, notice);
+    }
+#else
     uint8_t sector_data[16] = {0};
     if (driver_rc522_read_sector(1, k_default_card_key, sector_data) == ESP_OK) {
         char room_id[16] = {0};
         if (card_mifare_parse_sector_room(sector_data, s_card_aes_key, room_id, sizeof(room_id))) {
             if (strcmp(room_id, target_room_id) == 0) {
-                ESP_LOGI(TAG, "前台模拟刷卡: 验证通过，下发开门指令到 room_%s", room_id);
-                publish_front_event("card_verified", "前台模拟刷卡验证通过，已下发开门指令");
-                publish_room_command(room_id, "door_unlock");
-                hal_audio_beep_volume_pct(s_volume_pct);
+                bool uid_ok = true;
+                if (s_network_ready && service_auth_get_state() == AUTH_STATE_APPROVED) {
+                    char dk[256];
+                    if (service_auth_get_device_key(dk, sizeof(dk)) == ESP_OK) {
+                        uid_ok = front_http_rfid_verify(uid_hex, room_id);
+                    }
+                    /* 已联网但暂无法读取 device_key 时保留扇区结果，避免注册异常导致永不开门 */
+                }
+                if (!uid_ok) {
+                    front_card_access_denied("扇区房号匹配但 UID 未通过后台校验");
+                } else {
+                    char notice[96];
+                    snprintf(notice, sizeof(notice), "刷卡验证通过，已下发 %s 开门指令", room_id);
+                    front_card_access_granted(room_id, notice);
+                }
             } else {
-                ESP_LOGW(TAG, "前台模拟刷卡: 房号不匹配 (卡=%s, 目标=%s)", room_id, target_room_id);
+                ESP_LOGW(TAG, "房号不匹配 (卡=%s, 本机目标=%s)", room_id, target_room_id);
+#if CONFIG_TERMINAL_ROLE_ROOM
+                card_voice_play_invalid(s_volume_pct);
+#else
                 hal_audio_beep_volume_pct(s_volume_pct);
                 hal_audio_beep_volume_pct(s_volume_pct);
+#endif
             }
         } else {
-            ESP_LOGW(TAG, "前台模拟刷卡: 扇区内容无法解密");
+            ESP_LOGW(TAG, "扇区内容无法解密或非本系统房卡");
+#if CONFIG_TERMINAL_ROLE_ROOM
+            card_voice_play_invalid(s_volume_pct);
+#endif
         }
+    } else {
+#if CONFIG_TERMINAL_ROLE_ROOM
+        card_voice_play_invalid(s_volume_pct);
+#endif
     }
+#endif /* !CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY */
 }
 
 static void publish_health_report(void) {
@@ -470,11 +783,11 @@ static void publish_health_report(void) {
     char timestamp[32];
     char topic[128];
     service_network_get_iso8601_timestamp(timestamp, sizeof(timestamp));
-    snprintf(topic, sizeof(topic), "hotel/health/front_desk/%s", device_id);
+    snprintf(topic, sizeof(topic), "hotel/health/%s/%s", TERMINAL_MQTT_TOPIC_SUFFIX, device_id);
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
     cJSON_AddStringToObject(root, "firmware_version", FRONT_FIRMWARE_VERSION);
     cJSON_AddNumberToObject(root, "uptime_sec", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
     cJSON_AddNumberToObject(root, "free_heap_bytes", (double)esp_get_free_heap_size());
@@ -600,14 +913,6 @@ static bool cjson_copy_scalar_string(cJSON *parent, const char *key, char *out, 
     return false;
 }
 
-static void front_rgb_apply_for_latched_light(bool light_on) {
-    if (light_on) {
-        (void)hal_interactive_set_led_color(0, 255, 220, 160);
-    } else {
-        (void)hal_interactive_set_led_color(0, 28, 36, 72);
-    }
-}
-
 /** 与客房 publish_sensor_data 同 topic：hotel/device/data/{sensor_type}/{device_id} */
 static void publish_front_sensor_data(const char *sensor_type, double value, const char *unit) {
     if (!s_network_ready || sensor_type == NULL || unit == NULL) {
@@ -648,32 +953,26 @@ static void front_scene_to_rgb(front_scene_mode_t mode, uint8_t *r, uint8_t *g, 
     }
 }
 
-/** 抄自客房 apply_room_scene：前台仅 CH1 代客灯 + 氛围 RGB */
+/** 场景仅改 RGB 氛围；空调继电器由 air_on/air_off 单独控制 */
 static bool apply_front_scene(front_scene_mode_t mode, const char **out_result_msg) {
     if (out_result_msg == NULL) {
         return false;
     }
-    esp_err_t err;
-    bool main_light = false;
     uint8_t led_r = 0;
     uint8_t led_g = 0;
     uint8_t led_b = 0;
 
     switch (mode) {
         case FRONT_SCENE_WELCOME:
-            main_light = true;
             *out_result_msg = "已切换到迎宾场景";
             break;
         case FRONT_SCENE_READING:
-            main_light = true;
             *out_result_msg = "已切换到阅读场景";
             break;
         case FRONT_SCENE_NIGHT:
-            main_light = false;
             *out_result_msg = "已切换到夜灯场景";
             break;
         case FRONT_SCENE_SLEEP:
-            main_light = false;
             *out_result_msg = "已切换到睡眠场景";
             break;
         default:
@@ -682,16 +981,9 @@ static bool apply_front_scene(front_scene_mode_t mode, const char **out_result_m
     }
     front_scene_to_rgb(mode, &led_r, &led_g, &led_b);
 
-    err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, main_light);
+    esp_err_t err = hal_interactive_set_led_color(0, led_r, led_g, led_b);
     if (err != ESP_OK) {
-        *out_result_msg = "场景切换失败: 主灯控制失败";
-        return false;
-    }
-    s_front_relay_latched_on = main_light;
-
-    err = hal_interactive_set_led_color(0, led_r, led_g, led_b);
-    if (err != ESP_OK) {
-        *out_result_msg = "场景切换失败: 氛围灯控制失败";
+        *out_result_msg = "场景切换失败: RGB 失败";
         return false;
     }
 
@@ -699,15 +991,14 @@ static bool apply_front_scene(front_scene_mode_t mode, const char **out_result_m
     return true;
 }
 
-/** 抄自客房 room_apply_brightness_to_light：PWM 感 RGB + CH1 随亮度开关 */
-static void front_apply_brightness_to_light(void) {
-    ESP_LOGI(TAG, "代客主灯亮度：%d%%", s_brightness_pct);
-    s_front_relay_latched_on = (s_brightness_pct > 0);
-    esp_err_t err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, s_front_relay_latched_on);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "主灯继电器驱动失败: %s", esp_err_to_name(err));
+/** 灯光亮度：仅 PWM/RGB 表现，不碰空调继电器 CH1 */
+static void front_apply_light_rgb_from_brightness(void) {
+    ESP_LOGI(TAG, "灯光(RGB)：%d%%", s_brightness_pct);
+    if (s_brightness_pct <= 0) {
+        (void)hal_interactive_set_led_color(0, 0, 0, 0);
+        return;
     }
-    uint8_t b = (uint8_t)((s_brightness_pct <= 0) ? 0 : (s_brightness_pct * 255 / 100));
+    uint8_t b = (uint8_t)(s_brightness_pct * 255 / 100);
     (void)hal_interactive_set_led_color(0, b, (uint8_t)((uint16_t)b * 200 / 255), (uint8_t)(b / 2));
 }
 
@@ -834,7 +1125,7 @@ static void front_oled_render_all(void) {
         if (s_oled_status_line[0] != '\0') {
             s_oled_status_line[0] = '\0';
         }
-        snprintf(l3, sizeof(l3), "L%d A0 C0 D0 Sc:%s",
+        snprintf(l3, sizeof(l3), "AC%d A0 C0 D0 Sc:%s",
                  s_front_relay_latched_on ? 1 : 0,
                  front_scene_label_short(s_scene_mode));
     }
@@ -860,9 +1151,25 @@ void task_front_ec11_peripheral(void *pvParameters) {
     static bool s_sw_prev_stable = false;
     static TickType_t s_sw_down_tick = 0;
     static bool s_sw_held = false;
+    static TickType_t s_last_ec11_init_try = 0;
 
     while (1) {
         if (!s_ec11_ready) {
+            /* 上电时序或 GPIO 未就绪时首次 init 可能失败，周期性重试 */
+            TickType_t nowt = xTaskGetTickCount();
+            if ((nowt - s_last_ec11_init_try) >= pdMS_TO_TICKS(3000)) {
+                s_last_ec11_init_try = nowt;
+                if (GLOBAL_EC11_A_PIN >= 0 && GLOBAL_EC11_B_PIN >= 0) {
+                    esp_err_t ec_err = driver_ec11_init(GLOBAL_EC11_A_PIN, GLOBAL_EC11_B_PIN, GLOBAL_EC11_SW_PIN);
+                    if (ec_err == ESP_OK) {
+                        s_ec11_ready = true;
+                        ESP_LOGI(TAG, "EC11 初始化成功（任务内重试）");
+                        front_ec11_refresh_oled_mode_line();
+                    } else {
+                        ESP_LOGW(TAG, "EC11 仍未就绪: %s（检查 A/B/SW 接线与 GPIO）", esp_err_to_name(ec_err));
+                    }
+                }
+            }
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
         }
@@ -898,7 +1205,11 @@ void task_front_ec11_peripheral(void *pvParameters) {
             s_sw_prev_stable = sw_pressed;
         }
 
-        if (dir != DRIVER_EC11_DIR_NONE && !sw_pressed) {
+        /*
+         * 旋转调节不再依赖「SW 未按下」：SW 浮空/常低/误触时原先会永远不调音量亮度。
+         * 模式切换仍靠长按 SW 松手判定，与旋转互不冲突。
+         */
+        if (dir != DRIVER_EC11_DIR_NONE) {
             switch (s_ec11_function_mode) {
                 case FRONT_EC11_MODE_VOLUME: {
                     const int prev_vol = s_volume_pct;
@@ -932,7 +1243,8 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     if (s_brightness_pct > 100) {
                         s_brightness_pct = 100;
                     }
-                    front_apply_brightness_to_light();
+                    front_apply_light_rgb_from_brightness();
+                    driver_ec11_clear_rotation_accumulator();
                     publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
                     ESP_LOGI(TAG, "EC11 灯光亮度: %d%%", s_brightness_pct);
                     front_ec11_refresh_oled_mode_line();
@@ -949,6 +1261,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                         t = FRONT_EC11_AC_TEMP_MAX_C;
                     }
                     s_ac_target_temp = (uint8_t)t;
+                    driver_ec11_clear_rotation_accumulator();
                     publish_front_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
                     ESP_LOGI(TAG, "空调目标温度: %u℃（演示上报，无红外真机）", (unsigned)s_ac_target_temp);
                     front_ec11_refresh_oled_mode_line();
@@ -963,6 +1276,7 @@ void task_front_ec11_peripheral(void *pvParameters) {
                     }
                     const char *scene_msg = "";
                     bool ok = apply_front_scene(next, &scene_msg);
+                    driver_ec11_clear_rotation_accumulator();
                     ESP_LOGI(TAG, "EC11 场景: %s ok=%d", scene_msg, (int)ok);
                     publish_device_heartbeat();
                     front_ec11_refresh_oled_mode_line();
@@ -985,11 +1299,11 @@ static esp_err_t front_desk_run_door_pulse(void) {
     (void)hal_interactive_set_led_color(0, 255, 180, 40);
     vTaskDelay(pdMS_TO_TICKS(1500));
     err = hal_actuators_set_state(ACTUATOR_RELAY_CH1, s_front_relay_latched_on);
-    front_rgb_apply_for_latched_light(s_front_relay_latched_on);
+    front_apply_light_rgb_from_brightness();
     return err;
 }
 
-/** 与客房 read_int_from_cmd_payload：解析 value / command_value */
+/** 与客房 read_int_from_cmd_payload：解析 value / command_value（含字符串数字） */
 static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
 {
     if (root == NULL || out_value == NULL) {
@@ -1000,13 +1314,17 @@ static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
         *out_value = (int)v->valuedouble;
         return true;
     }
+    if (cJSON_IsString(v) && v->valuestring != NULL && v->valuestring[0] != '\0') {
+        *out_value = (int)strtol(v->valuestring, NULL, 10);
+        return true;
+    }
     cJSON *command_value = cJSON_GetObjectItem(root, "command_value");
     if (cJSON_IsNumber(command_value)) {
         *out_value = (int)command_value->valuedouble;
         return true;
     }
     if (cJSON_IsString(command_value) && command_value->valuestring != NULL) {
-        *out_value = atoi(command_value->valuestring);
+        *out_value = (int)strtol(command_value->valuestring, NULL, 10);
         return true;
     }
     if (cJSON_IsObject(command_value)) {
@@ -1015,8 +1333,65 @@ static bool read_int_from_cmd_payload(cJSON *root, int *out_value)
             *out_value = (int)inner->valuedouble;
             return true;
         }
+        if (cJSON_IsString(inner) && inner->valuestring != NULL) {
+            *out_value = (int)strtol(inner->valuestring, NULL, 10);
+            return true;
+        }
     }
     return false;
+}
+
+/**
+ * 绝对值：value / command_value；
+ * 相对调节：管理后台 DeviceMonitor「亮度/音量/空调调大调小」使用 command_delta + command_direction(up|down)。
+ */
+static bool read_relative_or_absolute_int(cJSON *root, int *io_val, int min_v, int max_v)
+{
+    if (root == NULL || io_val == NULL) {
+        return false;
+    }
+    if (read_int_from_cmd_payload(root, io_val)) {
+        if (*io_val < min_v) {
+            *io_val = min_v;
+        }
+        if (*io_val > max_v) {
+            *io_val = max_v;
+        }
+        return true;
+    }
+    cJSON *dj = cJSON_GetObjectItem(root, "command_delta");
+    int delta = 0;
+    if (cJSON_IsNumber(dj)) {
+        delta = (int)dj->valuedouble;
+    } else if (cJSON_IsString(dj) && dj->valuestring != NULL) {
+        delta = (int)strtol(dj->valuestring, NULL, 10);
+    } else {
+        return false;
+    }
+    if (delta == 0) {
+        return false;
+    }
+    cJSON *dirj = cJSON_GetObjectItem(root, "command_direction");
+    if (!cJSON_IsString(dirj) || dirj->valuestring == NULL) {
+        return false;
+    }
+    int sign = 0;
+    if (strcasecmp(dirj->valuestring, "up") == 0) {
+        sign = 1;
+    } else if (strcasecmp(dirj->valuestring, "down") == 0) {
+        sign = -1;
+    } else {
+        return false;
+    }
+    int v = *io_val + sign * delta;
+    if (v < min_v) {
+        v = min_v;
+    }
+    if (v > max_v) {
+        v = max_v;
+    }
+    *io_val = v;
+    return true;
 }
 
 /**
@@ -1028,35 +1403,37 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
         return false;
     }
     if (strcmp(cmd_type, "light_on") == 0) {
-        s_front_relay_latched_on = true;
-        esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
-        front_rgb_apply_for_latched_light(true);
-        *ok = (e == ESP_OK);
-        *out_msg = *ok ? "执行成功" : "继电器失败";
+        if (s_brightness_pct <= 0) {
+            s_brightness_pct = 80;
+        }
+        front_apply_light_rgb_from_brightness();
+        publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
+        front_ec11_refresh_oled_mode_line();
+        *ok = true;
+        *out_msg = "灯光已打开(RGB)";
         return true;
     }
     if (strcmp(cmd_type, "light_off") == 0) {
-        s_front_relay_latched_on = false;
-        esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
-        front_rgb_apply_for_latched_light(false);
-        *ok = (e == ESP_OK);
-        *out_msg = *ok ? "执行成功" : "继电器失败";
+        s_brightness_pct = 0;
+        front_apply_light_rgb_from_brightness();
+        publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
+        front_ec11_refresh_oled_mode_line();
+        *ok = true;
+        *out_msg = "灯光已关闭(RGB)";
         return true;
     }
     if (strcmp(cmd_type, "air_on") == 0) {
         s_front_relay_latched_on = true;
         esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, true);
-        front_rgb_apply_for_latched_light(true);
         *ok = (e == ESP_OK);
-        *out_msg = *ok ? "执行成功" : "继电器失败";
+        *out_msg = *ok ? "空调(继电器)已开" : "继电器失败";
         return true;
     }
     if (strcmp(cmd_type, "air_off") == 0) {
         s_front_relay_latched_on = false;
         esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
-        front_rgb_apply_for_latched_light(false);
         *ok = (e == ESP_OK);
-        *out_msg = *ok ? "执行成功" : "继电器失败";
+        *out_msg = *ok ? "空调(继电器)已关" : "继电器失败";
         return true;
     }
     if (strcmp(cmd_type, "door_unlock") == 0) {
@@ -1068,7 +1445,6 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
     if (strcmp(cmd_type, "door_lock") == 0) {
         s_front_relay_latched_on = false;
         esp_err_t e = hal_actuators_set_state(ACTUATOR_RELAY_CH1, false);
-        front_rgb_apply_for_latched_light(false);
         *ok = (e == ESP_OK);
         *out_msg = *ok ? "执行成功" : "继电器失败";
         return true;
@@ -1089,36 +1465,25 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
     }
     if (strcmp(cmd_type, "set_light_brightness") == 0 || strcmp(cmd_type, "light_brightness") == 0) {
         int b = s_brightness_pct;
-        if (!read_int_from_cmd_payload(root, &b)) {
+        if (!read_relative_or_absolute_int(root, &b, 0, 100)) {
             *ok = false;
-            *out_msg = "缺少亮度参数(value)";
+            *out_msg = "缺少亮度参数(value 或 command_delta+direction)";
             return true;
         }
-        if (b < 0) {
-            b = 0;
-        }
-        if (b > 100) {
-            b = 100;
-        }
         s_brightness_pct = b;
-        front_apply_brightness_to_light();
+        front_apply_light_rgb_from_brightness();
         publish_front_sensor_data("light_brightness", (double)s_brightness_pct, "%");
+        front_ec11_refresh_oled_mode_line();
         *ok = true;
         *out_msg = "灯光亮度已调整";
         return true;
     }
     if (strcmp(cmd_type, "set_ac_temp") == 0 || strcmp(cmd_type, "ac_set_temp") == 0 || strcmp(cmd_type, "ac_temp") == 0) {
         int t = (int)s_ac_target_temp;
-        if (!read_int_from_cmd_payload(root, &t)) {
+        if (!read_relative_or_absolute_int(root, &t, FRONT_EC11_AC_TEMP_MIN_C, FRONT_EC11_AC_TEMP_MAX_C)) {
             *ok = false;
-            *out_msg = "缺少空调温度参数(value)";
+            *out_msg = "缺少空调温度参数(value 或 command_delta+direction)";
             return true;
-        }
-        if (t < FRONT_EC11_AC_TEMP_MIN_C) {
-            t = FRONT_EC11_AC_TEMP_MIN_C;
-        }
-        if (t > FRONT_EC11_AC_TEMP_MAX_C) {
-            t = FRONT_EC11_AC_TEMP_MAX_C;
         }
         s_ac_target_temp = (uint8_t)t;
         publish_front_sensor_data("ac_target_temp", (double)s_ac_target_temp, "C");
@@ -1128,20 +1493,15 @@ static bool try_front_actuator_command(const char *cmd_type, cJSON *root, bool *
     }
     if (strcmp(cmd_type, "set_volume") == 0 || strcmp(cmd_type, "volume_set") == 0 || strcmp(cmd_type, "volume") == 0) {
         int vol = s_volume_pct;
-        if (!read_int_from_cmd_payload(root, &vol)) {
+        if (!read_relative_or_absolute_int(root, &vol, 0, 100)) {
             *ok = false;
-            *out_msg = "缺少音量参数(value)";
+            *out_msg = "缺少音量参数(value 或 command_delta+direction)";
             return true;
-        }
-        if (vol < 0) {
-            vol = 0;
-        }
-        if (vol > 100) {
-            vol = 100;
         }
         s_volume_pct = vol;
         hal_audio_set_playback_volume_pct(s_volume_pct);
         publish_front_sensor_data("volume", (double)s_volume_pct, "%");
+        front_ec11_refresh_oled_mode_line();
         *ok = true;
         *out_msg = "音量已调整";
         return true;
@@ -1237,6 +1597,33 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
     cJSON *owned_command_value = NULL;
     cJSON *command_value = parse_command_value_object(root, &owned_command_value);
 
+    /* 网页/设备监控常用别名：清卡=擦除扇区 1 应用块（与 room_card_op action=sync_clear 一致），无需 command_value */
+    if (strcmp(cmd_type, "clear_card") == 0) {
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+        *out_msg = "演示模式：已跳过擦除扇区（仅 UID 演示）";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        return true;
+#else
+        uint8_t zeros[16] = {0};
+        esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
+        if (werr != ESP_OK) {
+            ESP_LOGW(TAG, "clear_card 写卡失败: %s", esp_err_to_name(werr));
+            *out_msg = "清卡失败，请贴卡";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return false;
+        }
+        *out_msg = "清卡完成";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        return true;
+#endif
+    }
+
     /* Web/后端统一走 room_card_op（command_value 为 JSON 字符串或对象），与 emulator/front_desk 一致 */
     if (strcmp(cmd_type, "room_card_op") == 0) {
         if (command_value == NULL) {
@@ -1252,6 +1639,13 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             (cJSON_IsString(act_item) && act_item->valuestring != NULL) ? act_item->valuestring : "issue";
 
         if (strcmp(action, "sync") == 0) {
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+            *out_msg = "演示模式已跳过扇区同步";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return true;
+#else
             cJSON *ct_item = cJSON_GetObjectItem(command_value, "card_type");
             const char *ctype_str = "guest";
             if (cJSON_IsString(ct_item) && ct_item->valuestring != NULL && ct_item->valuestring[0] != '\0') {
@@ -1299,8 +1693,16 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
                 cJSON_Delete(owned_command_value);
             }
             return true;
+#endif
         }
         if (strcmp(action, "sync_clear") == 0) {
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+            *out_msg = "演示模式已跳过清空扇区";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return true;
+#else
             uint8_t zeros[16] = {0};
             esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
             if (werr != ESP_OK) {
@@ -1316,8 +1718,16 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
                 cJSON_Delete(owned_command_value);
             }
             return true;
+#endif
         }
         if (strcmp(action, "revoke") == 0 || strcmp(action, "deactivate") == 0) {
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+            *out_msg = "演示模式已跳过注销擦卡";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return true;
+#else
             uint8_t zeros[16] = {0};
             esp_err_t werr = driver_rc522_write_sector(1, k_default_card_key, zeros);
             if (werr != ESP_OK) {
@@ -1333,6 +1743,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
                 cJSON_Delete(owned_command_value);
             }
             return true;
+#endif
         }
 
         if (strcmp(action, "issue") != 0) {
@@ -1377,6 +1788,34 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
         }
 
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+        {
+            uint8_t uid[10] = {0};
+            uint8_t uid_len = 0;
+            esp_err_t uerr = driver_rc522_read_uid(uid, &uid_len);
+            if (uerr != ESP_OK || uid_len == 0) {
+                *out_msg = "请贴卡（演示模式读 UID）";
+                if (owned_command_value != NULL) {
+                    cJSON_Delete(owned_command_value);
+                }
+                return false;
+            }
+            char uid_hex[32] = {0};
+            uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
+            if (strcmp(ctype_str, "guest") == 0) {
+                publish_front_card_issued(uid_hex, room_for_card, booking_str, ctype_str);
+                copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_for_card);
+            } else {
+                publish_front_card_issued(uid_hex, "", booking_str, ctype_str);
+                s_last_card_room_id[0] = '\0';
+            }
+            *out_msg = "开卡成功(演示/仅UID)";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return true;
+        }
+#else
         uint8_t block[16] = {0};
         if (strcmp(ctype_str, "guest") == 0) {
             if (!card_mifare_encrypt_room_payload(room_for_card, s_card_aes_key, block)) {
@@ -1433,6 +1872,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             cJSON_Delete(owned_command_value);
         }
         return true;
+#endif
     }
 
     if (strcmp(cmd_type, "issue_card") == 0 || strcmp(cmd_type, "write_blank_card") == 0) {
@@ -1444,6 +1884,26 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             }
         }
 
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+        uint8_t uid[10] = {0};
+        uint8_t uid_len = 0;
+        if (driver_rc522_read_uid(uid, &uid_len) != ESP_OK || uid_len == 0) {
+            *out_msg = "请贴卡（演示模式读 UID）";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return false;
+        }
+        char uid_hex[32] = {0};
+        uid_to_hex(uid, uid_len, uid_hex, sizeof(uid_hex));
+        publish_front_card_issued(uid_hex, room_id, "", "guest");
+        copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), room_id);
+        *out_msg = (strcmp(cmd_type, "write_blank_card") == 0) ? "空白卡登记成功(演示/仅UID)" : "开卡成功(演示/仅UID)";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        return true;
+#else
         uint8_t block[16] = {0};
         if (!card_mifare_encrypt_room_payload(room_id, s_card_aes_key, block)) {
             *out_msg = "房号无效或过长，无法组包";
@@ -1474,9 +1934,31 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             cJSON_Delete(owned_command_value);
         }
         return true;
+#endif
     }
 
-    if (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0) {
+    if (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0 ||
+        strcmp(cmd_type, "read_card") == 0) {
+#if CONFIG_FRONT_DESK_DEMO_CARD_UID_ONLY
+        uint8_t uid[10] = {0};
+        uint8_t uid_len = 0;
+        esp_err_t err = driver_rc522_read_uid(uid, &uid_len);
+        if (err != ESP_OK || uid_len == 0) {
+            ESP_LOGW(TAG, "演示(仅UID): 未检测到卡片 (%s)", esp_err_to_name(err));
+            *out_msg = "未检测到卡片";
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            return false;
+        }
+        /* 与本地刷卡一致：用房号 NVS target_room_id 作为联动开门依据 */
+        copy_str_safe(s_last_card_room_id, sizeof(s_last_card_room_id), target_room_id);
+        *out_msg = "读卡通过(演示/仅UID)";
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
+        return true;
+#else
         uint8_t sector_data[16] = {0};
         esp_err_t err = driver_rc522_read_sector(1, k_default_card_key, sector_data);
         if (err != ESP_OK) {
@@ -1503,6 +1985,7 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
             cJSON_Delete(owned_command_value);
         }
         return false;
+#endif
     }
 
     if (owned_command_value != NULL) {
@@ -1512,7 +1995,6 @@ static bool handle_front_card_command(const char *cmd_type, cJSON *root, const c
 }
 
 static void front_desk_command_callback(const char *topic, const char *data, int data_len) {
-    (void)topic;
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
         return;
@@ -1521,20 +2003,82 @@ static void front_desk_command_callback(const char *topic, const char *data, int
     cJSON *cmd_id_item = cJSON_GetObjectItem(root, "command_id");
     cJSON *device_id_item = cJSON_GetObjectItem(root, "device_id");
     cJSON *cmd_type_item = cJSON_GetObjectItem(root, "command_type");
-    if (!cJSON_IsNumber(cmd_id_item) || !cJSON_IsString(device_id_item) || !cJSON_IsString(cmd_type_item)) {
-        ESP_LOGW(TAG, "指令字段缺失: 需要 command_id/device_id/command_type");
+    cJSON *owned_command_value = NULL;
+    (void)parse_command_value_object(root, &owned_command_value);
+
+    int cmd_id = 0;
+    char cmd_type_num_buf[24];
+    const char *cmd_type_str = mqtt_cmd_get_type_str(cmd_type_item, cmd_type_num_buf, sizeof(cmd_type_num_buf));
+    if (cmd_type_str == NULL) {
+        char preview[80];
+        if (data != NULL && data_len > 0) {
+            size_t n = (size_t)data_len < sizeof(preview) - 1u ? (size_t)data_len : sizeof(preview) - 1u;
+            memcpy(preview, data, n);
+            preview[n] = '\0';
+        } else {
+            preview[0] = '\0';
+        }
+        ESP_LOGW(TAG, "指令未执行: 缺少或无法解析 command_type len=%d 预览: %s", data_len, preview);
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         cJSON_Delete(root);
         return;
     }
-    if (strcmp(device_id_item->valuestring, device_id) != 0) {
-        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s", device_id_item->valuestring, device_id);
+    /* command_id 可选：与楼控一致，缺省 0；若存在须为 number 或十进制串 */
+    if (cmd_id_item != NULL && !cJSON_IsNull(cmd_id_item)) {
+        if (!mqtt_cmd_get_int(cmd_id_item, &cmd_id)) {
+            char preview[80];
+            if (data != NULL && data_len > 0) {
+                size_t n = (size_t)data_len < sizeof(preview) - 1u ? (size_t)data_len : sizeof(preview) - 1u;
+                memcpy(preview, data, n);
+                preview[n] = '\0';
+            } else {
+                preview[0] = '\0';
+            }
+            ESP_LOGW(TAG, "指令未执行: command_id 非数字/十进制串 len=%d 预览: %s", data_len, preview);
+            if (owned_command_value != NULL) {
+                cJSON_Delete(owned_command_value);
+            }
+            cJSON_Delete(root);
+            return;
+        }
+    }
+
+    const bool has_device_id = cJSON_IsString(device_id_item) && device_id_item->valuestring != NULL;
+    const char *payload_device_id = has_device_id ? device_id_item->valuestring : "";
+    const char *t_tail = topic_tail(topic);
+    char topic_suffix[32];
+    snprintf(topic_suffix, sizeof(topic_suffix), "/%s/", TERMINAL_MQTT_TOPIC_SUFFIX);
+    const bool topic_for_this = (topic != NULL && strstr(topic, topic_suffix) != NULL);
+
+    bool is_for_us = false;
+    if (has_device_id) {
+        is_for_us = is_front_target_match(payload_device_id);
+    } else {
+        is_for_us = topic_for_this && is_front_target_match(t_tail);
+    }
+
+    ESP_LOGI(TAG, "指令解析: cmd_id=%d cmd_type=%s payload_device_id=%s topic_target=%s match=%d",
+             cmd_id,
+             cmd_type_str,
+             has_device_id ? payload_device_id : "(missing)",
+             t_tail,
+             is_for_us ? 1 : 0);
+
+    if (!is_for_us) {
+        ESP_LOGW(TAG, "忽略非本机指令: payload_target=%s topic_target=%s self=%s",
+                 has_device_id ? payload_device_id : "(missing)", t_tail, device_id);
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         cJSON_Delete(root);
         return;
     }
 
     const char *result_msg = "前台未识别指令";
-    const char *cmd_type = cmd_type_item->valuestring;
-    
+    const char *cmd_type = cmd_type_str;
+
     // 拦截语音控制指令（最小状态机），音频内容仍由 voice_downlink_mqtt_cb 处理
     if (strcmp(cmd_type, "incoming_call") == 0 ||
         strcmp(cmd_type, "accept_call") == 0 ||
@@ -1543,16 +2087,19 @@ static void front_desk_command_callback(const char *topic, const char *data, int
         strcmp(cmd_type, "agent_reply") == 0) {
 
         bool ok = handle_voice_control_command(cmd_type, root, &result_msg);
-        publish_front_command_result(cmd_id_item->valueint, cmd_type, ok, result_msg);
+        publish_front_command_result(cmd_id, cmd_type, ok, result_msg);
         front_oled_flash_status(cmd_type, 2000);
         front_oled_render_all();
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         cJSON_Delete(root);
         return;
     }
 
     bool ok = false;
     if (try_front_actuator_command(cmd_type, root, &ok, &result_msg)) {
-        publish_front_command_result(cmd_id_item->valueint, cmd_type_item->valuestring, ok, result_msg);
+        publish_front_command_result(cmd_id, cmd_type, ok, result_msg);
         if (ok) {
             hal_audio_beep_volume_pct(s_volume_pct);
         } else {
@@ -1561,14 +2108,19 @@ static void front_desk_command_callback(const char *topic, const char *data, int
         }
         front_oled_flash_status(cmd_type, 2000);
         front_oled_render_all();
+        if (owned_command_value != NULL) {
+            cJSON_Delete(owned_command_value);
+        }
         cJSON_Delete(root);
         return;
     }
 
     ok = handle_front_card_command(cmd_type, root, &result_msg);
-    publish_front_command_result(cmd_id_item->valueint, cmd_type_item->valuestring, ok, result_msg);
+    publish_front_command_result(cmd_id, cmd_type, ok, result_msg);
 
-    if (ok && (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0) && s_last_card_room_id[0] != '\0') {
+    if (ok && (strcmp(cmd_type, "verify_card") == 0 || strcmp(cmd_type, "swipe_card") == 0 ||
+               strcmp(cmd_type, "read_card") == 0) &&
+        s_last_card_room_id[0] != '\0') {
         publish_front_event("card_verified", "刷卡验证通过，已自动下发开门指令");
         publish_room_command(s_last_card_room_id, "door_unlock");
         ESP_LOGI(TAG, "刷卡通过，已触发房间开锁: room=%s", s_last_card_room_id);
@@ -1582,6 +2134,9 @@ static void front_desk_command_callback(const char *topic, const char *data, int
     }
     front_oled_flash_status(cmd_type, 2000);
     front_oled_render_all();
+    if (owned_command_value != NULL) {
+        cJSON_Delete(owned_command_value);
+    }
     cJSON_Delete(root);
 }
 
@@ -1650,7 +2205,7 @@ void publish_device_online_status() {
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "device_id", device_id);
-    cJSON_AddStringToObject(root, "device_type", "front_desk");
+    cJSON_AddStringToObject(root, "device_type", TERMINAL_DEVICE_TYPE_JSON);
     cJSON_AddStringToObject(root, "status", "online");
     cJSON_AddStringToObject(root, "firmware_version", FRONT_FIRMWARE_VERSION);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
@@ -1695,13 +2250,13 @@ static void auth_and_mqtt_task(void *pvParameters) {
     }
     ESP_LOGI(TAG, "设备注册 URL: %s (broker=%s)", register_url, mqtt_broker_uri);
 
-    // 前台设备注册：hotel_id 须与后台该门店一致（当前为酒店 3）
+    /* hotel_id 须与后台该门店一致（当前为酒店 3） */
     service_auth_perform_registration_blocking(
         register_url,
         3,
         device_id,
-        "front_desk",
-        "智能前台终端",
+        TERMINAL_REGISTRATION_TYPE,
+        TERMINAL_REGISTRATION_NAME,
         FRONT_FIRMWARE_VERSION
     );
 
@@ -1714,7 +2269,7 @@ static void auth_and_mqtt_task(void *pvParameters) {
     service_mqtt_start(mqtt_broker_uri, device_id);
     service_mqtt_subscribe(GLOBAL_TOPIC_DEVICE_COMMAND_RESULT, front_command_result_callback);
     char sub_topic[128];
-    snprintf(sub_topic, sizeof(sub_topic), "%s/front_desk/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, device_id);
+    snprintf(sub_topic, sizeof(sub_topic), "%s/%s/%s", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, TERMINAL_MQTT_TOPIC_SUFFIX, device_id);
     service_mqtt_subscribe(sub_topic, front_desk_command_callback);
     
     // 延迟一小段以确保 MQTT 连接建立
@@ -1877,7 +2432,9 @@ void task_front_rc522_poll(void *pvParameters) {
                 memcpy(s_last_uid, uid, uid_len);
                 s_last_uid_len = uid_len;
                 s_last_uid_valid = true;
+#if !CONFIG_TERMINAL_ROLE_ROOM
                 front_desk_beep_card_detected();
+#endif
                 publish_card_uid_event(uid, uid_len);
             }
         } else if (err == ESP_ERR_NOT_FOUND) {
@@ -1898,7 +2455,7 @@ void task_front_rc522_poll(void *pvParameters) {
 
 // 主入口
 void app_main(void) {
-    ESP_LOGI(TAG, "========== 🛎️ 智慧前台管理端 启动 ==========");
+    ESP_LOGI(TAG, "========== %s 启动 ==========", TERMINAL_BOOT_BANNER_TEXT);
 
     // 1. 初始化系统非易失性存储 (NVS)
     esp_err_t ret = nvs_flash_init();
@@ -1911,10 +2468,17 @@ void app_main(void) {
     service_auth_init();
     
     // 2. 从 NVS 读取配置（NVS 优先，默认值兜底）
+#if CONFIG_TERMINAL_ROLE_ROOM
+    char room_num[16] = {0};
+    load_nvs_string_with_fallback("Room_ID", room_num, sizeof(room_num), "301");
+    snprintf(device_id, sizeof(device_id), "room_%s", room_num);
+    copy_str_safe(target_room_id, sizeof(target_room_id), room_num);
+#else
     char front_id[16] = {0};
     load_nvs_string_with_fallback("FrontDesk_ID", front_id, sizeof(front_id), FRONT_DESK_ID_DEFAULT);
     snprintf(device_id, sizeof(device_id), "front_desk_%s", front_id);
     load_nvs_string_with_fallback("Room_ID", target_room_id, sizeof(target_room_id), "301");
+#endif
     load_nvs_string_with_fallback("Floor_Sensor_Device_Id", s_floor_sensor_device_id,
                                   sizeof(s_floor_sensor_device_id), "floor_03");
     load_nvs_string_with_fallback("MQTT_BROKER_URI", mqtt_broker_uri, sizeof(mqtt_broker_uri), GLOBAL_MQTT_BROKER_URI);
@@ -1929,14 +2493,19 @@ void app_main(void) {
     driver_oled_init();
     driver_oled_clear_screen();
     driver_oled_show_text_line(0, "Booting...");
+#if !CONFIG_TERMINAL_ROLE_ROOM || CONFIG_TERMINAL_ROOM_ENABLE_RC522
     driver_rc522_init();
+#else
+    ESP_LOGW(TAG, "客房主控构建：已跳过 RC522（需刷卡时在 menuconfig 打开 TERMINAL_ROOM_ENABLE_RC522）");
+#endif
     if (hal_actuators_init() != ESP_OK) {
         ESP_LOGW(TAG, "继电器初始化失败，请检查 GLOBAL_RELAY_CH1_PIN");
     }
     hal_interactive_init();
     hal_audio_init();
     hal_audio_set_playback_volume_pct(s_volume_pct);
-    
+    front_apply_light_rgb_from_brightness();
+
     if (GLOBAL_EC11_A_PIN >= 0 && GLOBAL_EC11_B_PIN >= 0) {
         esp_err_t ec_err = driver_ec11_init(GLOBAL_EC11_A_PIN, GLOBAL_EC11_B_PIN, GLOBAL_EC11_SW_PIN);
         if (ec_err == ESP_OK) {
@@ -1966,7 +2535,9 @@ void app_main(void) {
     xTaskCreate(task_front_heartbeat, "front_heartbeat_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_front_health_report, "front_health_task", 4096, NULL, 5, NULL);
     xTaskCreate(task_front_button_events, "front_button_task", 3072, NULL, 4, NULL);
+#if !CONFIG_TERMINAL_ROLE_ROOM || CONFIG_TERMINAL_ROOM_ENABLE_RC522
     xTaskCreate(task_front_rc522_poll, "front_rc522_task", 4096, NULL, 4, NULL);
+#endif
     xTaskCreate(voice_uplink_task, "voice_task", 12288, NULL, 5, NULL);
     xTaskCreate(task_front_ec11_peripheral, "front_ec11_task", 4096, NULL, 4, NULL);
     xTaskCreate(task_front_oled_refresh, "front_oled_task", 3072, NULL, 3, NULL);

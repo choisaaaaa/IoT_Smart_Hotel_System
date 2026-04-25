@@ -194,7 +194,8 @@ export class AIButlerService {
       type: 'function',
       function: {
         name: 'control_device',
-        description: '控制房间内的智能设备（灯光、空调、窗帘、电视等）',
+        description:
+          '控制房间内由智能终端一体机执行的设备能力：灯光、空调(开/关/设温)、窗帘、电视、门锁、场景等。无需数据库中存在单独的「空调」设备行；只要本房已绑定已审核的客房终端(room/front_desk)，即可下发并真实执行。',
         parameters: {
           type: 'object',
           properties: {
@@ -221,7 +222,8 @@ export class AIButlerService {
       type: 'function',
       function: {
         name: 'get_room_status',
-        description: '查询房间当前状态（设备状态、温度、湿度等）',
+        description:
+          '查询房间当前状态。返回中的设备列表来自后台登记；客房一体机仍可直接通过 control_device 控制灯光、空调、亮度、音量、场景等，勿因列表未逐项列出空调而拒绝控制。',
         parameters: {
           type: 'object',
           properties: {},
@@ -331,47 +333,72 @@ export class AIButlerService {
       const roomIdStr = String(roomId);
       logger.debug(`验证入住状态 - 原始roomId: ${roomId}, 转换后: ${roomIdStr}`);
 
-      // 策略1: 直接作为 device_id 查找
+      // 策略1: 直接作为 device_id 查找（允许 room_id 未绑：用 device_id=room_<房号> 反查房）
       const [deviceRows] = await pool.query<RowDataPacket[]>(
         `SELECT d.device_id, d.room_id, r.room_number FROM devices d
          LEFT JOIN rooms r ON d.room_id = r.id
-         WHERE d.device_id = ? AND d.room_id IS NOT NULL`,
+         WHERE d.device_id = ?`,
         [roomIdStr]
       );
       if (deviceRows.length > 0) {
-        actualRoomDbId = deviceRows[0].room_id;
-        actualRoomNumber = deviceRows[0].room_number;
-        deviceFoundId = deviceRows[0].device_id;
-        logger.info(`通过设备ID ${roomIdStr} 解析到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
-      }
-
-      // 策略2: 如果策略1失败，尝试从 roomId 中提取数字作为 room_id
-      if (!actualRoomDbId) {
-        const numericId = roomIdStr.replace(/^room_?/, '');
-        if (numericId && /^\d+$/.test(numericId)) {
-          const numId = parseInt(numericId);
-          const [roomRows] = await pool.query<RowDataPacket[]>(
-            `SELECT r.id, r.room_number FROM rooms r WHERE r.id = ?`,
-            [numId]
-          );
-          if (roomRows.length > 0) {
-            actualRoomDbId = roomRows[0].id;
-            actualRoomNumber = roomRows[0].room_number;
-            logger.info(`通过解析数字 ${numId} 找到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+        const row = deviceRows[0];
+        deviceFoundId = row.device_id as string;
+        if (row.room_id != null) {
+          actualRoomDbId = row.room_id as number;
+          actualRoomNumber = row.room_number as string;
+          logger.info(`通过设备ID ${roomIdStr} 解析到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+        } else {
+          const suffix = String(row.device_id || '').replace(/^room_/i, '');
+          if (suffix && /^\d+$/.test(suffix)) {
+            const [rFix] = await pool.query<RowDataPacket[]>(
+              `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ? LIMIT 1`,
+              [suffix]
+            );
+            if (rFix.length > 0) {
+              actualRoomDbId = rFix[0].id as number;
+              actualRoomNumber = rFix[0].room_number as string;
+              logger.info(
+                `设备 ${roomIdStr} 未绑 room_id，已用房号 ${suffix} 解析房间DB ID ${actualRoomDbId}`
+              );
+            }
           }
         }
       }
 
-      // 策略3: 尝试作为 room_number 查找
+      // 策略2: 提取数字：先按 rooms 主键 id，再按 room_number（301 常为房号而非主键）
       if (!actualRoomDbId) {
+        const numericId = roomIdStr.replace(/^room_?/i, '');
+        if (numericId && /^\d+$/.test(numericId)) {
+          const numId = parseInt(numericId, 10);
+          let [roomRows] = await pool.query<RowDataPacket[]>(
+            `SELECT r.id, r.room_number FROM rooms r WHERE r.id = ?`,
+            [numId]
+          );
+          if (roomRows.length === 0) {
+            [roomRows] = await pool.query<RowDataPacket[]>(
+              `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ? LIMIT 1`,
+              [numericId]
+            );
+          }
+          if (roomRows.length > 0) {
+            actualRoomDbId = roomRows[0].id as number;
+            actualRoomNumber = roomRows[0].room_number as string;
+            logger.info(`通过数字/房号 ${numericId} 找到房间DB ID ${actualRoomDbId}, 房号 ${actualRoomNumber}`);
+          }
+        }
+      }
+
+      // 策略3: 作为 room_number 查找（支持 room_301 → 301）
+      if (!actualRoomDbId) {
+        const stripped = roomIdStr.replace(/^room_/i, '');
         const [roomRows] = await pool.query<RowDataPacket[]>(
-          `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ?`,
-          [roomIdStr]
+          `SELECT r.id, r.room_number FROM rooms r WHERE r.room_number = ? OR r.room_number = ? LIMIT 1`,
+          [roomIdStr, stripped]
         );
         if (roomRows.length > 0) {
-          actualRoomDbId = roomRows[0].id;
-          actualRoomNumber = roomRows[0].room_number;
-          logger.info(`通过房号 ${roomIdStr} 找到房间DB ID ${actualRoomDbId}`);
+          actualRoomDbId = roomRows[0].id as number;
+          actualRoomNumber = roomRows[0].room_number as string;
+          logger.info(`通过房号 ${roomIdStr}/${stripped} 找到房间DB ID ${actualRoomDbId}`);
         }
       }
 
@@ -989,6 +1016,8 @@ export class AIButlerService {
 4. **酒店信息** - 提供酒店设施信息、营业时间、周边推荐等
 5. **人工转接** - 当无法处理或客人明确要求时，转接人工前台
 
+客房智能终端为**一体机**：灯光、空调（演示继电器/目标温度）、亮度、音量、场景等均由该终端统一执行，与房内 EC11 旋钮同一套状态。**客人要求开关空调、关灯、调亮度/音量/场景时，必须调用 control_device**，不要以「数据库里没有单独登记的空调设备」为由拒绝；get_room_status 里列出的设备仅为登记项，不代表终端不具备上述能力。
+
 ⚠️ 重要约束：
 - 严格基于知识库中的实际内容回复，禁止编造任何未在知识库中提供的信息
 - 如果知识库中没有相关信息，请明确告知"该信息暂未录入，建议联系前台咨询"
@@ -1125,17 +1154,25 @@ export class AIButlerService {
    */
   private async resolveRoomTerminalDeviceId(roomDbId: number): Promise<string | null> {
     try {
+      // 兼容：后台只录了 device_id=room_301 但 room_id 未绑；或 device_type 登记不一致
       const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT device_id, device_type FROM devices
-         WHERE room_id = ?
-           AND device_type IN ('room', 'room_terminal', 'front_desk')
-           AND audit_status = 'approved'
-         ORDER BY FIELD(device_type, 'room', 'room_terminal', 'front_desk'), updated_at DESC
+        `SELECT d.device_id, d.device_type
+         FROM devices d
+         INNER JOIN rooms r ON r.id = ?
+         WHERE d.audit_status = 'approved'
+           AND d.device_type IN ('room', 'room_terminal', 'front_desk')
+           AND (d.room_id = r.id OR d.device_id = CONCAT('room_', r.room_number))
+         ORDER BY
+           CASE WHEN d.room_id = r.id THEN 0 ELSE 1 END,
+           FIELD(d.device_type, 'room', 'room_terminal', 'front_desk'),
+           d.updated_at DESC
          LIMIT 1`,
         [roomDbId]
       );
       if (rows.length === 0) {
-        logger.warn(`[AI-Butler] 房间 room_id=${roomDbId} 无已审核的 room/front_desk 设备记录`);
+        logger.warn(
+          `[AI-Butler] 房间 room_db_id=${roomDbId} 无已审核设备：请在 devices 中绑定 room_id，或登记 device_id=room_<房号> 且审核通过`
+        );
         return null;
       }
       const id = String(rows[0].device_id);
@@ -1164,7 +1201,7 @@ export class AIButlerService {
 
     const targetDeviceId = await this.resolveRoomTerminalDeviceId(session.roomDbId);
     if (!targetDeviceId) {
-      return '抱歉，本房间还没有绑定已审核的客房智能设备，请联系前台完成设备登记后再试。';
+      return `抱歉，未找到本房已审核的智能终端。请在后台 devices 中登记并审核 device_id=room_${session.roomId}（或与房号一致），或将设备的 room_id 绑到本房。`;
     }
 
     const command = this.buildDeviceCommand(String(device_type), String(action), value);
@@ -1284,7 +1321,8 @@ export class AIButlerService {
 
       return `${session.roomId}号房状态：
 🏠 房型：${room.type_name || '标准间'}
-📱 设备：${deviceList.join('、') || '无智能设备'}
+📱 登记设备：${deviceList.join('、') || '无单独登记项'}
+💡 说明：若本房已绑定已审核的智能终端，语音可直接开关灯/空调、调亮度与音量、切换场景（与房内旋钮同一逻辑，由终端真实执行）。
 🌡️ 温度：正常（请查看室内显示屏获取精确数据）
 
 还需要了解什么吗？`;

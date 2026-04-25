@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import pool, { RowDataPacket } from '../../config/database';
 import aiButlerService from '../../services/ai-butler.service';
-import mqttService from '../../services/mqtt.service';
+import { getVoiceAgentBridge } from '../../services/voice-agent-bridge.service';
 import { CallService } from '../../services/call.service';
 import websocketService from '../../services/websocket.service';
 import { authenticate } from '../../middleware/auth';
 import logger from '../../utils/logger';
+import { isSystemAdmin } from '../../utils/role';
 
 /**
  * @swagger
@@ -415,14 +416,43 @@ router.post('/broadcast',
 
       logger.info(`收到房间广播请求: 房间=${JSON.stringify(roomIds)}, 文本="${text}"`);
 
-      // 1. 批量查询房间对应的设备 ID
-      // 使用 IN 查询，支持多个房间号或 ID
-      const [devices] = await pool.query<RowDataPacket[]>(
-        `SELECT d.device_id, r.room_number FROM devices d
-         JOIN rooms r ON d.room_id = r.id
-         WHERE (r.room_number IN (?) OR r.id IN (?)) AND d.device_type = 'room'`,
-        [roomIds, roomIds]
-      );
+      // 1. 批量查询房间对应的设备 ID（与 ai-butler resolveRoomTerminalDeviceId 对齐：
+      //    允许仅登记 device_id=room_<房号> 而未绑 room_id；device_type 可为 room_terminal）
+      const user = req.user as { hotel_id?: number; role?: string } | undefined;
+      const hotelId = user?.hotel_id;
+      const scopeHotel = hotelId != null && !isSystemAdmin(user?.role);
+
+      let deviceSql = `
+        SELECT d.device_id, r.room_number
+        FROM rooms r
+        INNER JOIN devices d
+          ON d.audit_status = 'approved'
+          AND d.device_type IN ('room', 'room_terminal')
+          AND (d.room_id = r.id OR d.device_id = CONCAT('room_', r.room_number))
+        WHERE (r.room_number IN (?) OR r.id IN (?))`;
+      const deviceParams: unknown[] = [roomIds, roomIds];
+      if (scopeHotel) {
+        deviceSql += ' AND r.hotel_id = ?';
+        deviceParams.push(hotelId);
+      }
+      deviceSql += `
+        ORDER BY
+          CASE WHEN d.room_id = r.id THEN 0 ELSE 1 END,
+          FIELD(d.device_type, 'room', 'room_terminal'),
+          d.updated_at DESC`;
+
+      const [deviceRows] = await pool.query<RowDataPacket[]>(deviceSql, deviceParams);
+
+      const seenRoom = new Set<string>();
+      const devices: RowDataPacket[] = [];
+      for (const row of deviceRows) {
+        const rn = String(row.room_number);
+        if (seenRoom.has(rn)) {
+          continue;
+        }
+        seenRoom.add(rn);
+        devices.push(row);
+      }
 
       if (devices.length === 0) {
         return res.status(404).json({
@@ -432,10 +462,11 @@ router.post('/broadcast',
         });
       }
 
-      // 2. 调用 TTS 合成语音 (只合成一次)
-      const audioBase64 = await aiButlerService.textToSpeech(text);
+      // 2. TTS 一次 → 16k PCM（与客房 voice_session 下行协议一致），经 VoiceAgentBridge 分片发到
+      //    hotel/device/audio/downlink/{device_id}（固件不订阅 hotel/ai/response）
+      const pcm16 = await aiButlerService.textToSpeechPcmS16k(text).catch(() => Buffer.alloc(0));
 
-      if (!audioBase64) {
+      if (!pcm16 || pcm16.length < 2) {
         return res.status(500).json({
           code: 500,
           message: '语音合成失败',
@@ -443,25 +474,26 @@ router.post('/broadcast',
         });
       }
 
-      // 3. 循环下发消息
-      const results = [];
+      const bridge = getVoiceAgentBridge();
+      const results: { room_id: string | number; device_id: string }[] = [];
       for (const device of devices) {
-        const deviceId = device.device_id;
+        const deviceId = String(device.device_id);
         const actualRoomNumber = device.room_number;
-        
-        const topic = `hotel/ai/response/room/${deviceId}`;
-        const payload = {
-          device_id: deviceId,
-          room_id: actualRoomNumber,
-          text: text,
-          audio_base64: audioBase64,
-          timestamp: Date.now(),
-          type: 'broadcast'
-        };
+        const ok = await bridge.publishBroadcastPcm(deviceId, pcm16);
+        if (ok) {
+          results.push({ room_id: actualRoomNumber, device_id: deviceId });
+          logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+        } else {
+          logger.warn(`广播未下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+        }
+      }
 
-        await mqttService.publish(topic, payload);
-        results.push({ room_id: actualRoomNumber, device_id: deviceId });
-        logger.info(`广播已下发至房间 ${actualRoomNumber} (设备 ${deviceId})`);
+      if (results.length === 0) {
+        return res.status(500).json({
+          code: 500,
+          message: '语音已合成但未能下发到任何终端（请确认设备已审核且在线订阅下行主题）',
+          data: null
+        });
       }
 
       res.json({

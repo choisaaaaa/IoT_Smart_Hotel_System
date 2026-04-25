@@ -1,5 +1,29 @@
 menu "Front desk terminal (main)"
 
+    choice TERMINAL_PRODUCT_ROLE
+        prompt "终端产品角色（编译期固定；menuconfig 选择后 idf.py build 再刷机）"
+        default TERMINAL_ROLE_ROOM
+        help
+            同一套源码可产出「前台」或「客房主控」固件：MQTT 主题段、注册 device_type、
+            JSON 内 device_type 与后台一致。当前仓库默认客房主控；改前台见 sdkconfig.defaults 说明。
+
+        config TERMINAL_ROLE_FRONT_DESK
+            bool "前台终端 (front_desk)"
+
+        config TERMINAL_ROLE_ROOM
+            bool "客房主控 (room)"
+    endchoice
+
+    config TERMINAL_ROOM_ENABLE_RC522
+        bool "客房模式下启用 RC522 读卡轮询任务"
+        depends on TERMINAL_ROLE_ROOM
+        default n
+        help
+            演示板未接读卡器时关闭。开启后：刷卡仅读扇区验房（开卡仍须前台）。
+            人声提示：main/welcome_card.pcm、invalid_card.pcm（16k s16le 单声道）；
+            可运行 tools/gen_card_voice_pcm.py（默认 auto：已配置 XFYUN_* 环境变量则用讯飞，
+            否则 edge-tts；pip install websocket-client）。缺文件则回退蜂鸣。
+
     config FRONT_DESK_NET_TEST_MODE
         bool "仅配网 + MQTT 联调（跳过全部外设初始化）"
         default n
@@ -7,5 +31,13 @@ menu "Front desk terminal (main)"
             启用后 app_main 只执行：NVS、WiFi 配网、MQTT 连接，
             并在 hotel/net_test/broadcast 上订阅/心跳，便于多块板互通验证。
             关闭后恢复完整前台业务（RC522/按键/指示灯等）。
+
+    config FRONT_DESK_DEMO_CARD_UID_ONLY
+        bool "演示：房卡仅用芯片 UID（不读写 MIFARE 扇区）"
+        default n
+        help
+            发卡：只读 UID 并上报 card_issued（与网页订单一致，不写扇区）。
+            验卡/读卡/刷卡指令与本地 RC522 轮询：只读 UID；联动开门房号使用 NVS Room_ID（target_room_id），
+            与刷「客房主控」角色时一致，便于演示。关闭后恢复扇区 AES 读写（接近生产）。
 
 endmenu
