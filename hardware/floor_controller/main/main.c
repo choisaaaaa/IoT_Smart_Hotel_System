@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -62,6 +63,88 @@ static void load_nvs_string_with_fallback(const char *key, char *out, size_t out
     }
 }
 
+static const char *topic_tail(const char *topic)
+{
+    if (topic == NULL) {
+        return "";
+    }
+    const char *p = strrchr(topic, '/');
+    return (p != NULL) ? (p + 1) : topic;
+}
+
+static bool eq_nocase(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+    return strcasecmp(a, b) == 0;
+}
+
+static bool is_floor_target_match(const char *target)
+{
+    if (target == NULL || target[0] == '\0') {
+        return false;
+    }
+    if (eq_nocase(target, "all") || eq_nocase(target, device_id) || eq_nocase(target, current_floor_id)) {
+        return true;
+    }
+    char flo_alias[24];
+    int floor_num = atoi(current_floor_id);
+    if (floor_num > 0) {
+        snprintf(flo_alias, sizeof(flo_alias), "FLO_%dF", floor_num);
+    } else {
+        snprintf(flo_alias, sizeof(flo_alias), "FLO_%sF", current_floor_id);
+    }
+    return eq_nocase(target, flo_alias);
+}
+
+static bool is_room_target_match(const char *target)
+{
+    if (target == NULL || target[0] == '\0') {
+        return false;
+    }
+    return eq_nocase(target, "all") || eq_nocase(target, room_device_id) || eq_nocase(target, target_room_id);
+}
+
+/** 与常见后端约定对齐：command_id 可为 JSON number，或 "123" 字符串 */
+static bool mqtt_cmd_get_int(cJSON *item, int *out)
+{
+    if (item == NULL || out == NULL) {
+        return false;
+    }
+    if (cJSON_IsNumber(item)) {
+        *out = item->valueint;
+        return true;
+    }
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        char *end = NULL;
+        errno = 0;
+        long v = strtol(item->valuestring, &end, 10);
+        if (end == item->valuestring || *end != '\0' || errno == ERANGE) {
+            return false;
+        }
+        *out = (int)v;
+        return true;
+    }
+    return false;
+}
+
+/** command_type 一般为 string；也允许数字，便于与弱类型对端联调 */
+static const char *mqtt_cmd_get_type_str(cJSON *item, char *buf, size_t buf_size)
+{
+    if (item == NULL || buf == NULL || buf_size < 2) {
+        return NULL;
+    }
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        return item->valuestring;
+    }
+    if (cJSON_IsNumber(item)) {
+        snprintf(buf, buf_size, "%d", item->valueint);
+        return buf;
+    }
+    return NULL;
+}
+
 static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
 {
     if (out_owned_json != NULL) {
@@ -84,7 +167,8 @@ static cJSON *parse_command_value_object(cJSON *root, cJSON **out_owned_json)
         if (parsed != NULL) {
             cJSON_Delete(parsed);
         }
-        ESP_LOGW(TAG, "command_value 不是合法 JSON 对象字符串");
+        /* 多数楼控指令只依赖 command_type，command_value 仅作扩展；非法则按无参处理 */
+        ESP_LOGD(TAG, "command_value 非 JSON 对象字符串，已忽略");
         return NULL;
     }
     if (out_owned_json != NULL) {
@@ -442,8 +526,7 @@ void publish_room_sensor_data(const char *sensor_type, double value, const char 
 
 // MQTT 消息接收回调 (群控解析)
 void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
-    (void)topic;
-    ESP_LOGI(TAG, "==== 收到云端 MQTT 楼控/客房指令 ====");
+    ESP_LOGI(TAG, "==== 收到云端 MQTT 指令 topic=%s len=%d ====", topic ? topic : "(null)", data_len);
     
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
@@ -457,8 +540,11 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
     cJSON *owned_command_value = NULL;
     parse_command_value_object(root, &owned_command_value);
 
-    if (!cJSON_IsNumber(cmd_id_item) || !cJSON_IsString(device_id_item) || !cJSON_IsString(cmd_type_item)) {
-        ESP_LOGW(TAG, "指令字段缺失: 需要 command_id/device_id/command_type");
+    int cmd_id = 0;
+    char cmd_type_num_buf[24];
+    const char *cmd_type_str = mqtt_cmd_get_type_str(cmd_type_item, cmd_type_num_buf, sizeof(cmd_type_num_buf));
+    if (!mqtt_cmd_get_int(cmd_id_item, &cmd_id) || cmd_type_str == NULL) {
+        ESP_LOGD(TAG, "非规范指令体（需 command_id 为 number/十进制串，且 command_type 为 string/number）");
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
@@ -466,11 +552,36 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
         return;
     }
 
-    bool is_floor_cmd = (strcmp(device_id_item->valuestring, device_id) == 0);
-    bool is_room_cmd = (strcmp(device_id_item->valuestring, room_device_id) == 0);
+    const bool has_device_id = cJSON_IsString(device_id_item) && device_id_item->valuestring != NULL;
+    const char *payload_device_id = has_device_id ? device_id_item->valuestring : "";
+    const char *target = topic_tail(topic);
+    const bool topic_floor = (topic != NULL && strstr(topic, "/floor/") != NULL);
+    const bool topic_room = (topic != NULL && strstr(topic, "/room/") != NULL);
+
+    bool is_floor_cmd = false;
+    bool is_room_cmd = false;
+    if (has_device_id) {
+        is_floor_cmd = is_floor_target_match(payload_device_id);
+        is_room_cmd = is_room_target_match(payload_device_id);
+    } else {
+        is_floor_cmd = topic_floor && is_floor_target_match(target);
+        is_room_cmd = topic_room && is_room_target_match(target);
+    }
+
+    ESP_LOGI(TAG, "指令解析: cmd_id=%d cmd_type=%s payload_device_id=%s topic_target=%s floor_match=%d room_match=%d",
+             cmd_id,
+             cmd_type_str,
+             has_device_id ? payload_device_id : "(missing)",
+             target,
+             is_floor_cmd ? 1 : 0,
+             is_room_cmd ? 1 : 0);
 
     if (!is_floor_cmd && !is_room_cmd) {
-        ESP_LOGW(TAG, "忽略非本机指令: target=%s self=%s/%s", device_id_item->valuestring, device_id, room_device_id);
+        ESP_LOGW(TAG, "忽略非本机指令: payload_target=%s topic_target=%s self_floor=%s self_room=%s",
+                 has_device_id ? payload_device_id : "(missing)",
+                 target,
+                 device_id,
+                 room_device_id);
         if (owned_command_value != NULL) {
             cJSON_Delete(owned_command_value);
         }
@@ -478,20 +589,22 @@ void floor_mqtt_callback(const char *topic, const char *data, int data_len) {
         return;
     }
 
-    if (cJSON_IsNumber(cmd_id_item) && cJSON_IsString(cmd_type_item)) {
-        int cmd_id = cmd_id_item->valueint;
-        const char *cmd_type = cmd_type_item->valuestring;
+    {
         const char *result_msg = "未识别的指令";
         bool exec_success = false;
 
         if (is_floor_cmd) {
-            exec_success = execute_floor_command(cmd_type, &result_msg);
-            publish_command_result(cmd_id, cmd_type, exec_success, result_msg);
+            ESP_LOGI(TAG, "执行楼控指令: %s", cmd_type_str);
+            exec_success = execute_floor_command(cmd_type_str, &result_msg);
+            publish_command_result(cmd_id, cmd_type_str, exec_success, result_msg);
             publish_floor_runtime_status();
         } else if (is_room_cmd) {
-            exec_success = execute_room_command_on_floor(cmd_type, &result_msg);
-            publish_room_command_result(cmd_id, cmd_type, exec_success, result_msg);
+            ESP_LOGI(TAG, "执行客房代控指令: %s", cmd_type_str);
+            exec_success = execute_room_command_on_floor(cmd_type_str, &result_msg);
+            publish_room_command_result(cmd_id, cmd_type_str, exec_success, result_msg);
         }
+        ESP_LOGI(TAG, "指令执行结束: cmd_id=%d type=%s success=%d result=%s",
+                 cmd_id, cmd_type_str, exec_success ? 1 : 0, result_msg);
     }
     if (owned_command_value != NULL) {
         cJSON_Delete(owned_command_value);
@@ -542,6 +655,31 @@ static void auth_and_mqtt_task(void *pvParameters) {
     err = service_mqtt_subscribe(sub_topic, floor_mqtt_callback);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "订阅楼控指令失败: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "已订阅楼控指令: %s", sub_topic);
+    }
+
+    char floor_alias_topic[128];
+    int floor_num = atoi(current_floor_id);
+    if (floor_num > 0) {
+        snprintf(floor_alias_topic, sizeof(floor_alias_topic), "%s/floor/FLO_%dF", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, floor_num);
+    } else {
+        snprintf(floor_alias_topic, sizeof(floor_alias_topic), "%s/floor/FLO_%sF", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX, current_floor_id);
+    }
+    err = service_mqtt_subscribe(floor_alias_topic, floor_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅楼层别名指令失败: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "已订阅楼层别名指令: %s", floor_alias_topic);
+    }
+
+    char floor_all_topic[128];
+    snprintf(floor_all_topic, sizeof(floor_all_topic), "%s/floor/all", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX);
+    err = service_mqtt_subscribe(floor_all_topic, floor_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅楼层广播指令失败: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "已订阅楼层广播指令: %s", floor_all_topic);
     }
 
     char room_sub_topic[128];
@@ -549,6 +687,17 @@ static void auth_and_mqtt_task(void *pvParameters) {
     err = service_mqtt_subscribe(room_sub_topic, floor_mqtt_callback);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "订阅客房指令失败: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "已订阅客房指令: %s", room_sub_topic);
+    }
+
+    char room_all_topic[128];
+    snprintf(room_all_topic, sizeof(room_all_topic), "%s/room/all", GLOBAL_TOPIC_DEVICE_COMMAND_PREFIX);
+    err = service_mqtt_subscribe(room_all_topic, floor_mqtt_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "订阅客房广播指令失败: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "已订阅客房广播指令: %s", room_all_topic);
     }
 
     vTaskDelay(pdMS_TO_TICKS(1000));
