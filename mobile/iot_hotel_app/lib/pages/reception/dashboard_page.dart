@@ -1,271 +1,74 @@
-import 'package:flutter/material.dart' hide DateUtils;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../core/utils/date_utils.dart';
 import '../../core/theme/app_colors.dart';
-import '../../services/auth_service.dart';
 import '../../core/auth/auth_state_notifier.dart';
 import '../../services/hotel_service.dart';
-import '../../services/maintenance_service.dart';
-import '../../services/booking_service.dart';
-import '../../models/booking.dart';
-import '../../services/delivery_service.dart';
+import '../../services/device_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/environment_service.dart';
-import 'checkin_out_page.dart';
-import 'bookings_page.dart';
-import 'room_availability_page.dart';
-import 'device_management_page.dart';
-import 'work_orders_page.dart';
-import 'delivery_orders_page.dart';
-import 'voice_calls_page.dart';
-import 'bills_page.dart';
-import 'price_settings_page.dart';
-import '../admin/environment_monitor_page.dart';
-import 'environment_monitor_page.dart';
-import '../admin/price_calendar_page.dart';
-import '../admin/coupon_manage_page.dart';
+import '../../services/booking_service.dart';
+import '../../services/room_service.dart';
+import '../../services/maintenance_service.dart';
 
 class ReceptionDashboardPage extends ConsumerStatefulWidget {
   const ReceptionDashboardPage({super.key});
 
   @override
-  ConsumerState<ReceptionDashboardPage> createState() => ReceptionDashboardPageState();
+  ConsumerState<ReceptionDashboardPage> createState() => _ReceptionDashboardPageState();
 }
 
-class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> {
-  int _currentIndex = 0;
-  int _notificationCount = 0;
-  bool _hasEnvAlert = false;
+class _ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> {
+  int _selectedIndex = 0;
 
-  final List<_BottomNavItem> _bottomNavItems = const [
-    _BottomNavItem(icon: Icons.dashboard_rounded, label: '总览', pageKey: 'dashboard'),
-    _BottomNavItem(icon: Icons.how_to_reg_rounded, label: '接待', pageKey: 'checkin_out'),
-    _BottomNavItem(icon: Icons.door_back_door_rounded, label: '客房', pageKey: 'rooms'),
-    _BottomNavItem(icon: Icons.build_rounded, label: '工单', pageKey: 'work_orders'),
-    _BottomNavItem(icon: Icons.receipt_long_rounded, label: '账单', pageKey: 'bills'),
+  final List<_NavItem> _navItems = const [
+    _NavItem(icon: Icons.work_rounded, label: '工作台'),
+    _NavItem(icon: Icons.assignment_rounded, label: '工单'),
+    _NavItem(icon: Icons.phone_in_talk_rounded, label: '通话'),
+    _NavItem(icon: Icons.person_rounded, label: '我的'),
   ];
-
-  final List<_DrawerItemBase> _drawerItems = const [
-    _DrawerItem(icon: Icons.calendar_month_rounded, label: '预订管理', pageKey: 'bookings'),
-    _DrawerItem(icon: Icons.devices_rounded, label: '设备管理', pageKey: 'devices'),
-    _DrawerItem(icon: Icons.delivery_dining_rounded, label: '客房送物', pageKey: 'delivery'),
-    _DrawerItem(icon: Icons.phone_in_talk_rounded, label: '语音通话', pageKey: 'voice_calls'),
-    _DrawerItem(icon: Icons.thermostat_rounded, label: '环境监测', pageKey: 'environment'),
-    _DrawerItem(icon: Icons.security_rounded, label: '报警面板', pageKey: 'alarms'),
-    _DividerItem(),
-    _DrawerItem(icon: Icons.price_change_rounded, label: '房价设置', pageKey: 'price_settings'),
-    _DrawerItem(icon: Icons.calendar_today_rounded, label: '价格日历', pageKey: 'price_calendar'),
-    _DrawerItem(icon: Icons.local_offer_rounded, label: '优惠券管理', pageKey: 'coupons'),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadNotificationCount();
-  }
-
-  Future<void> _loadNotificationCount() async {
-    try {
-      // 获取待处理工单数量
-      final maintenanceResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 100);
-      final deliveryResult = await ref.read(deliveryServiceProvider).getDeliveryOrders(status: 'pending', pageSize: 100);
-
-      int count = 0;
-      int pendingWorkOrders = 0;
-      int pendingDeliveries = 0;
-
-      if (maintenanceResult.success && maintenanceResult.data != null) {
-        final dynamic data = maintenanceResult.data;
-        if (data is List) {
-          pendingWorkOrders = data.length;
-        } else if (data is Map) {
-          final listData = data['list'];
-          pendingWorkOrders = (listData is List) ? listData.length : 0;
-        }
-      }
-
-      if (deliveryResult.success && deliveryResult.data != null) {
-        final dynamic data = deliveryResult.data;
-        if (data is List) {
-          pendingDeliveries = data.length;
-        } else if (data is Map) {
-          final listData = data['list'];
-          pendingDeliveries = (listData is List) ? listData.length : 0;
-        }
-      }
-
-      count = pendingWorkOrders + pendingDeliveries;
-
-      // 检查环境异常告警
-      try {
-        final envResult = await ref.read(environmentServiceProvider).getFireAlarms(status: 'active', limit: 20);
-        if (envResult.success && envResult.data != null) {
-          final data = envResult.data!;
-          final alarms = data['alarms'] as List? ?? [];
-          final activeAlarms = alarms.where((a) => a['status'] == 'active').length;
-          if (activeAlarms > 0) {
-            _hasEnvAlert = true;
-            count += activeAlarms;
-          }
-        }
-      } catch (e) {
-        debugPrint('环境告警检查失败: $e');
-      }
-
-      if (mounted) setState(() => _notificationCount = count);
-    } catch (e) {
-      debugPrint('✗ notifications: $e');
-    }
-  }
-
-  Widget _getPage(String pageKey) {
-    switch (pageKey) {
-      case 'dashboard':
-        return const _ReceptionHomeContent();
-      case 'checkin_out':
-        return const CheckInOutPage();
-      case 'rooms':
-        return const RoomAvailabilityPage();
-      case 'work_orders':
-        return const WorkOrdersPage();
-      case 'bills':
-        return const BillsPage();
-      case 'bookings':
-        return const BookingsPage();
-      case 'devices':
-        return const DeviceManagementPage();
-      case 'delivery':
-        return const DeliveryOrdersPage();
-      case 'voice_calls':
-        return const VoiceCallsPage();
-      case 'environment':
-        return const EnvironmentMonitorPage();
-      case 'alarms':
-        return const ReceptionEnvironmentPage();
-      case 'price_settings':
-        return const PriceSettingsPage();
-      case 'price_calendar':
-        return const PriceCalendarPage();
-      case 'coupons':
-        return const CouponManagePage();
-      default:
-        return const _ReceptionHomeContent();
-    }
-  }
-
-  void _navigateToPage(String pageKey) {
-    final bottomIndex = _bottomNavItems.indexWhere((item) => item.pageKey == pageKey);
-    if (bottomIndex >= 0) {
-      setState(() => _currentIndex = bottomIndex);
-    } else {
-      // 先关闭抽屉，再显示页面
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-      _showPageAsSheet(pageKey);
-    }
-  }
-
-  void _showPageAsSheet(String pageKey) {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => _SubPageScaffold(
-        title: _getPageTitle(pageKey),
-        child: _getPage(pageKey),
-      ),
-    ));
-  }
-
-  String _getPageTitle(String pageKey) {
-    switch (pageKey) {
-      case 'bookings': return '预订管理';
-      case 'devices': return '设备管理';
-      case 'delivery': return '客房送物';
-      case 'voice_calls': return '语音通话';
-      case 'environment': return '环境监测';
-      case 'alarms': return '报警面板';
-      case 'price_settings': return '房价设置';
-      case 'price_calendar': return '价格日历';
-      case 'coupons': return '优惠券管理';
-      default: return '';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final currentPageKey = _bottomNavItems[_currentIndex].pageKey;
+    final pages = [
+      const _WorkbenchTab(),
+      const _WorkOrdersTab(),
+      const _CallsTab(),
+      const _ProfileTab(),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('慧宿 · 前台端', style: GoogleFonts.notoSansSc(fontWeight: FontWeight.bold)),
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_rounded),
-                onPressed: () => _showNotificationPanel(),
-              ),
-              if (_notificationCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
-                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                    child: Text('$_notificationCount', style: const TextStyle(color: Colors.white, fontSize: 9), textAlign: TextAlign.center),
-                  ),
-                ),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const CircleAvatar(radius: 16, backgroundColor: AppColors.primary, child: Icon(Icons.person, size: 18, color: Colors.white)),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await ref.read(authServiceProvider).logout();
-                if (!context.mounted) return;
-                context.go('/login');
-              } else if (value == 'switch_mode') {
-                _showModeSwitchDialog();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'switch_mode', child: Row(children: [Icon(Icons.swap_horiz), SizedBox(width: 8), Text('切换模式')])),
-              const PopupMenuItem(value: 'profile', child: Text('个人信息')),
-              const PopupMenuItem(value: 'logout', child: Text('退出登录')),
-            ],
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      drawer: _buildDrawer(),
-      body: _getPage(currentPageKey),
+      body: IndexedStack(index: _selectedIndex, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -2))],
+          color: Colors.white.withValues(alpha: 0.72),
+          border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.18))),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
         ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: _bottomNavItems.asMap().entries.map((entry) {
+              children: _navItems.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
-                final isSelected = index == _currentIndex;
-                return _BottomNavItemWidget(
-                  icon: item.icon,
-                  label: item.label,
-                  isSelected: isSelected,
-                  onTap: () => setState(() => _currentIndex = index),
+                final isSelected = index == _selectedIndex;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedIndex = index),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(item.icon, size: 22, color: isSelected ? AppColors.gold : AppColors.textHint),
+                        const SizedBox(height: 2),
+                        Text(item.label, style: TextStyle(fontSize: 10, color: isSelected ? AppColors.gold : AppColors.textHint, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
+                      ],
+                    ),
+                  ),
                 );
               }).toList(),
             ),
@@ -274,738 +77,825 @@ class ReceptionDashboardPageState extends ConsumerState<ReceptionDashboardPage> 
       ),
     );
   }
-
-  Widget _buildDrawer() {
-    final authState = ref.read(authStateProvider);
-    final username = authState.username;
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(radius: 28, backgroundColor: Colors.white, child: Icon(Icons.support_agent, size: 28, color: AppColors.primary)),
-                  const SizedBox(height: 12),
-                  Text(username ?? '前台员工', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('前台管理', style: TextStyle(color: Colors.white, fontSize: 12)),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text('更多功能', style: GoogleFonts.notoSansSc(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                  ),
-                  ..._drawerItems.map((item) {
-                    if (item is _DividerItem) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Divider(height: 1),
-                      );
-                    }
-                    final drawerItem = item as _DrawerItem;
-                    return ListTile(
-                      leading: Icon(drawerItem.icon, size: 22, color: AppColors.textSecondary),
-                      title: Text(drawerItem.label, style: GoogleFonts.notoSansSc(fontSize: 14)),
-                      trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textHint),
-                      onTap: () => _navigateToPage(drawerItem.pageKey),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.swap_horiz, size: 22),
-              title: const Text('切换模式'),
-              onTap: () {
-                Navigator.pop(context);
-                _showModeSwitchDialog();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, size: 22, color: AppColors.error),
-              title: const Text('退出登录', style: TextStyle(color: AppColors.error)),
-              onTap: () async {
-                await ref.read(authServiceProvider).logout();
-                if (!context.mounted) return;
-                context.go('/login');
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showModeSwitchDialog() {
-    final authState = ref.read(authStateProvider);
-    final modes = <AppMode, String>{
-      AppMode.customer: '顾客端',
-      AppMode.reception: '前台端',
-      AppMode.manager: '管理端',
-      AppMode.system: '系统管理',
-      AppMode.guest: '游客端',
-    };
-
-    showDialog(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('切换模式'),
-        children: modes.entries.where((e) => authState.canSwitchTo(e.key)).map((e) {
-          return SimpleDialogOption(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(authStateProvider.notifier).switchMode(e.key);
-              _navigateToMode(e.key);
-            },
-            child: Row(children: [
-              Icon(_modeIcon(e.key), color: AppColors.primary),
-              const SizedBox(width: 12),
-              Text(e.value, style: const TextStyle(fontSize: 16)),
-            ]),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  IconData _modeIcon(AppMode mode) {
-    switch (mode) {
-      case AppMode.guest: return Icons.visibility_outlined;
-      case AppMode.customer: return Icons.person_outline;
-      case AppMode.reception: return Icons.support_agent_outlined;
-      case AppMode.manager: return Icons.admin_panel_settings_outlined;
-      case AppMode.system: return Icons.security_outlined;
-    }
-  }
-
-  void _navigateToMode(AppMode mode) {
-    switch (mode) {
-      case AppMode.guest:
-      case AppMode.customer:
-        context.go('/');
-        break;
-      case AppMode.reception:
-        context.go('/reception');
-        break;
-      case AppMode.manager:
-        context.go('/admin');
-        break;
-      case AppMode.system:
-        context.go('/system');
-        break;
-    }
-  }
-
-  void _showNotificationPanel() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            const Text('消息通知', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            _buildNotificationItem('工单处理', '有新的待处理工单', Icons.build_rounded, AppColors.warning, 'work_orders'),
-            _buildNotificationItem('客房送物', '有新的送物请求', Icons.delivery_dining_rounded, AppColors.info, 'delivery'),
-            if (_hasEnvAlert)
-              _buildNotificationItem('环境异常', '有环境异常告警', Icons.thermostat_rounded, AppColors.error, 'environment'),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    ).then((_) => _loadNotificationCount());
-  }
-
-  Widget _buildNotificationItem(String title, String desc, IconData icon, Color color, String pageKey) {
-    return ListTile(
-      leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.1), child: Icon(icon, color: color, size: 20)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(desc),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.pop(context);
-        _navigateToPage(pageKey);
-      },
-    );
-  }
 }
 
-class _ReceptionHomeContent extends ConsumerStatefulWidget {
-  const _ReceptionHomeContent();
+class _NavItem {
+  final IconData icon;
+  final String label;
+  const _NavItem({required this.icon, required this.label});
+}
 
+class _WorkbenchTab extends ConsumerStatefulWidget {
+  const _WorkbenchTab();
   @override
-  ConsumerState<_ReceptionHomeContent> createState() => _ReceptionHomeContentState();
+  ConsumerState<_WorkbenchTab> createState() => _WorkbenchTabState();
 }
 
-class _ReceptionHomeContentState extends ConsumerState<_ReceptionHomeContent> {
-  Map<String, dynamic>? _dashboardStats;
-  List<dynamic> _workOrders = [];
-  List<Booking> _arrivals = [];
-  List<Booking> _todayCheckIns = [];
-  List<Booking> _todayCheckOuts = [];
-  List<Booking> _currentGuests = [];
+class _WorkbenchTabState extends ConsumerState<_WorkbenchTab> {
+  Map<String, dynamic> _stats = {};
+  List<Map<String, dynamic>> _pendingOrders = [];
+  Map<String, dynamic> _envData = {};
+  String _hotelName = '';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    _loadData();
   }
 
-  Future<void> _loadDashboardData() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // 获取当前用户的酒店ID
       final hotelId = await ref.read(authServiceProvider).getCurrentHotelId();
-      
-      final statsResult = await ref.read(hotelServiceProvider).getDashboardStats();
-      final workOrdersResult = await ref.read(maintenanceServiceProvider).getWorkOrders(status: 'pending', pageSize: 5);
-      final arrivalsResult = await ref.read(hotelServiceProvider).getTodayArrivals();
-      final bookingsResult = await ref.read(bookingServiceProvider).getBookings(
-        pageSize: 100,
-        hotelId: hotelId,
-      );
+      if (hotelId == null) { if (mounted) setState(() => _isLoading = false); return; }
 
-      if (mounted) {
-        final allBookingsRaw = bookingsResult.success ? (bookingsResult.data ?? []) : [];
-        final allBookings = allBookingsRaw is List<Booking>
-            ? allBookingsRaw
-            : allBookingsRaw.map((b) => b is Booking ? b : Booking.fromJson(b as Map<String, dynamic>)).toList();
-        final now = DateTime.now();
-        final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      try {
+        final hotelInfoRes = await ref.read(hotelServiceProvider).getHotelInfo();
+        if (hotelInfoRes.success && hotelInfoRes.data != null) {
+          if (mounted) setState(() => _hotelName = hotelInfoRes.data!['hotel_name'] ?? '');
+        }
+      } catch (_) {}
 
-        setState(() {
-          _dashboardStats = statsResult.success ? statsResult.data : null;
-          _workOrders = workOrdersResult.success ? (workOrdersResult.data ?? []) : [];
-          _arrivals = arrivalsResult.success
-              ? (arrivalsResult.data ?? []).map((a) => a is Booking ? a : Booking.fromJson(a as Map<String, dynamic>)).toList()
-              : [];
-          _todayCheckIns = allBookings.where((b) =>
-            b.status == 'confirmed' && b.checkInDate.toString().startsWith(todayStr)
-          ).toList();
-          _todayCheckOuts = allBookings.where((b) =>
-            b.status == 'checked_in'
-          ).toList();
-          _currentGuests = allBookings.where((b) => b.status == 'checked_in').toList();
-        });
-      }
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      try {
+        final checkinRes = await ref.read(bookingServiceProvider).getBookings(
+          hotelId: hotelId,
+          status: 'confirmed',
+          checkInDate: todayStr,
+          pageSize: 100,
+        );
+        if (checkinRes.success && checkinRes.data != null) {
+          if (mounted) setState(() => _stats['today_checkins'] = checkinRes.data!.length);
+        }
+      } catch (_) {}
+
+      try {
+        final checkoutRes = await ref.read(bookingServiceProvider).getBookings(
+          hotelId: hotelId,
+          status: 'checked_in',
+          pageSize: 100,
+        );
+        if (checkoutRes.success && checkoutRes.data != null) {
+          if (mounted) setState(() => _stats['current_staying'] = checkoutRes.data!.length);
+        }
+      } catch (_) {}
+
+      try {
+        final pendingRes = await ref.read(bookingServiceProvider).getBookings(
+          hotelId: hotelId,
+          status: 'pending',
+          pageSize: 100,
+        );
+        if (pendingRes.success && pendingRes.data != null) {
+          if (mounted) setState(() => _stats['pending_count'] = pendingRes.data!.length);
+        }
+      } catch (_) {}
+
+      try {
+        final roomRes = await ref.read(roomServiceProvider).getRooms(
+          hotelId: hotelId,
+          pageSize: 200,
+        );
+        if (roomRes.success && roomRes.data != null) {
+          final rooms = roomRes.data!;
+          final available = rooms.where((r) => (r.status) == 'available').length;
+          final occupied = rooms.where((r) => (r.status) == 'occupied').length;
+          final cleaning = rooms.where((r) => (r.status) == 'cleaning').length;
+          final maintenance = rooms.where((r) => (r.status) == 'maintenance').length;
+          if (mounted) {
+            setState(() {
+              _stats['available_rooms'] = available;
+              _stats['current_staying'] = occupied;
+              _stats['cleaning_rooms'] = cleaning;
+              _stats['maintenance_rooms'] = maintenance;
+            });
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final maintenanceRes = await ref.read(maintenanceServiceProvider).getMaintenanceTickets(
+          status: 'pending',
+          pageSize: 10,
+        );
+        if (maintenanceRes.success && maintenanceRes.data != null) {
+          if (mounted) setState(() => _pendingOrders = List<Map<String, dynamic>>.from(maintenanceRes.data!.map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{})));
+        }
+      } catch (_) {}
+
+      try {
+        final result = await ref.read(deviceServiceProvider).getDevices(hotelId: hotelId);
+        if (result.success) {
+          final devices = List<Map<String, dynamic>>.from(result.data ?? []);
+          final sensors = devices.where((d) {
+            final type = (d['device_type'] ?? '').toString().toLowerCase();
+            return type.contains('sensor') || type.contains('温湿度') || type.contains('传感器');
+          }).toList();
+          if (sensors.isNotEmpty && mounted) {
+            setState(() => _envData = {
+              'temperature': sensors.first['temperature'] ?? sensors.first['data']?['temperature'] ?? '--',
+              'humidity': sensors.first['humidity'] ?? sensors.first['data']?['humidity'] ?? '--',
+            });
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final envResult = await ref.read(environmentServiceProvider).getEnvironmentData();
+        if (envResult.success && envResult.data != null) {
+          final envData = envResult.data!;
+          final list = envData['list'] ?? envData['data'] ?? [];
+          if (list is List && list.isNotEmpty && mounted) {
+            double totalTemp = 0;
+            double totalHumidity = 0;
+            int tempCount = 0;
+            int humidityCount = 0;
+            for (final item in list) {
+              final temp = item['temperature'] ?? item['avg_temperature'] ?? item['temp'];
+              final humidity = item['humidity'] ?? item['avg_humidity'];
+              if (temp != null) {
+                totalTemp += (temp is num ? temp : double.tryParse(temp.toString()) ?? 0).toDouble();
+                tempCount++;
+              }
+              if (humidity != null) {
+                totalHumidity += (humidity is num ? humidity : double.tryParse(humidity.toString()) ?? 0).toDouble();
+                humidityCount++;
+              }
+            }
+            setState(() {
+              if (tempCount > 0) {
+                _envData['temperature'] = (totalTemp / tempCount).toStringAsFixed(1);
+              }
+              if (humidityCount > 0) {
+                _envData['humidity'] = (totalHumidity / humidityCount).toStringAsFixed(0);
+              }
+              _envData['air_quality'] = '优';
+            });
+          }
+        }
+      } catch (_) {}
     } catch (e) {
-      debugPrint('✗ dashboard: $e');
+      debugPrint('receptionStats: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _navigateToPage(String pageKey) {
-    final state = context.findAncestorStateOfType<ReceptionDashboardPageState>();
-    final bottomIndex = state?._bottomNavItems.indexWhere((item) => item.pageKey == pageKey) ?? -1;
-    if (bottomIndex >= 0 && state != null) {
-      state.setState(() => state._currentIndex = bottomIndex);
-    } else if (state != null) {
-      state._navigateToPage(pageKey);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
-    }
-
-    // 优先使用本地计算的数据，_dashboardStats 作为次要数据源
-    // 当 _dashboardStats 返回0值时不应覆盖本地计算的正确数据
-    final statsCheckIn = _dashboardStats?['today_checkin'];
-    final statsCheckOut = _dashboardStats?['today_checkout'];
-    final statsGuests = _dashboardStats?['current_guests'];
-    final statsTasks = _dashboardStats?['pending_tasks'];
-
-    final todayCheckIn = (statsCheckIn != null && statsCheckIn != 0)
-        ? statsCheckIn.toString()
-        : _todayCheckIns.length.toString();
-    final todayCheckOut = (statsCheckOut != null && statsCheckOut != 0)
-        ? statsCheckOut.toString()
-        : _todayCheckOuts.length.toString();
-    final currentGuests = (statsGuests != null && statsGuests != 0)
-        ? statsGuests.toString()
-        : _currentGuests.length.toString();
-    final pendingTasks = (statsTasks != null && statsTasks != 0)
-        ? statsTasks.toString()
-        : _workOrders.length.toString();
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return RefreshIndicator(
-      onRefresh: _loadDashboardData,
+      onRefresh: _loadData,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('今日概况', style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.4,
-              children: [
-                _QuickStatCard(title: '今日入住', value: todayCheckIn, icon: Icons.login_rounded, color: AppColors.success, onTap: () => _navigateToPage('checkin_out')),
-                _QuickStatCard(title: '今日退房', value: todayCheckOut, icon: Icons.logout_rounded, color: AppColors.warning, onTap: () => _navigateToPage('checkin_out')),
-                _QuickStatCard(title: '在住客人', value: currentGuests, icon: Icons.people_rounded, color: AppColors.info, onTap: () => _navigateToPage('rooms')),
-                _QuickStatCard(title: '待处理事项', value: pendingTasks, icon: Icons.pending_actions_rounded, color: AppColors.error, onTap: () => _navigateToPage('work_orders')),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildTodayTimeline(),
-            const SizedBox(height: 24),
-            _buildCurrentGuestsTable(),
-            const SizedBox(height: 24),
-            _buildTaskCard(context),
-            const SizedBox(height: 24),
-            _buildArrivalCard(context),
-            const SizedBox(height: 20),
+            _buildHeader(),
+            _buildQuickActions(),
+            _buildRoomStatusGrid(),
+            _buildPendingOrders(),
+            _buildEnvironment(),
+            const SizedBox(height: 100),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTodayTimeline() {
+  Widget _buildHeader() {
+    final authState = ref.read(authStateProvider);
+    final hotelName = _hotelName.isNotEmpty ? _hotelName : '我的酒店';
+    final username = authState.username ?? '前台';
+
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.only(top: 48, left: 20, right: 20, bottom: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('今日入住/退房', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              GestureDetector(onTap: () => _navigateToPage('checkin_out'), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_todayCheckIns.isEmpty && _todayCheckOuts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('今日暂无入住/退房安排', style: TextStyle(color: AppColors.textSecondary))),
-            )
-          else ...[
-            if (_todayCheckIns.isNotEmpty) ...[
-              Row(children: [
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text('今日入住 ${_todayCheckIns.length}', style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.bold))),
-              ]),
-              const SizedBox(height: 8),
-              ..._todayCheckIns.take(3).map((b) => _TimelineItem(
-                icon: Icons.login_rounded,
-                color: AppColors.success,
-                title: b.guestName ?? '-',
-                subtitle: '${b.roomNumber ?? '${b.roomId}号房'} · ${b.roomType ?? ''}',
-                time: DateUtils.formatDotDate(b.checkInDate),
-              )),
-            ],
-            if (_todayCheckOuts.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(children: [
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text('今日退房 ${_todayCheckOuts.length}', style: TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.bold))),
-              ]),
-              const SizedBox(height: 8),
-              ..._todayCheckOuts.take(3).map((b) => _TimelineItem(
-                icon: Icons.logout_rounded,
-                color: AppColors.warning,
-                title: b.guestName ?? '-',
-                subtitle: '${b.roomNumber ?? '${b.roomId}号房'} · ${b.roomType ?? ''}',
-                time: DateUtils.formatDotDate(b.checkOutDate),
-              )),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentGuestsTable() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('在住客人', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              GestureDetector(onTap: () => _navigateToPage('rooms'), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_currentGuests.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('暂无在住客人', style: TextStyle(color: AppColors.textSecondary))),
-            )
-          else
-            ..._currentGuests.take(5).map((b) => Column(
-              children: [
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(radius: 16, backgroundColor: AppColors.info.withValues(alpha: 0.1), child: Text((b.guestName ?? '?')[0], style: TextStyle(color: AppColors.info, fontSize: 14, fontWeight: FontWeight.bold))),
-                  title: Text('${b.guestName ?? '-'} · ${b.roomNumber ?? '${b.roomId}号房'}', style: GoogleFonts.notoSansSc(fontSize: 14)),
-                  subtitle: Text('${DateUtils.formatDotDate(b.checkInDate)} ~ ${DateUtils.formatDotDate(b.checkOutDate)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SmallActionButton(label: '退房', color: AppColors.warning, onTap: () => _handleCheckout(b)),
-                      const SizedBox(width: 6),
-                      _SmallActionButton(label: '续住', color: AppColors.primary, onTap: () => _handleExtendStay(b)),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-              ],
-            )),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleCheckout(Booking booking) async {
-    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('确认退房'),
-      content: Text('客人：${booking.guestName ?? '-'}，房间：${booking.roomNumber ?? '${booking.roomId}号房'}'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: AppColors.warning), child: const Text('确认退房')),
-      ],
-    ));
-    if (confirm != true) return;
-
-    try {
-      final result = await ref.read(bookingServiceProvider).checkout(booking.id);
-      if (result.success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('退房办理成功'), backgroundColor: AppColors.success));
-        _loadDashboardData();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message ?? '操作失败')));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('操作失败，请重试')));
-    }
-  }
-
-  void _handleExtendStay(Booking booking) {
-    context.push('/extend-stay/${booking.id}', extra: {'bookingId': booking.id});
-  }
-
-  Widget _buildTaskCard(BuildContext context) {
-    final urgentCount = _workOrders.where((w) => w['is_urgent'] == true || w['priority'] == 'high').length;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('待处理工单', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              Row(children: [
-                if (urgentCount > 0)
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text('$urgentCount个加急', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold))),
-                const SizedBox(width: 8),
-                GestureDetector(onTap: () => _navigateToPage('work_orders'), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
-              ]),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_workOrders.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('暂无待处理工单', style: TextStyle(color: AppColors.textSecondary))),
-            )
-          else
-            ..._workOrders.take(3).expand((order) => [
-              _WorkOrderItem(
-                room: '${order['room_number'] ?? ''}房',
-                type: order['type'] ?? '其他',
-                desc: order['description'] ?? '待处理',
-                time: _formatTime(order['created_at']),
-                urgent: order['is_urgent'] == true || order['priority'] == 'high',
-              ),
-              const Divider(height: 1),
-            ]),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(dynamic dateTime) {
-    if (dateTime == null) return '';
-    try {
-      final date = DateTime.parse(dateTime.toString());
-      final utc8 = DateUtils.toUtc8(date);
-      final diff = DateTime.now().difference(utc8);
-      if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
-      if (diff.inHours < 24) return '${diff.inHours}小时前';
-      return '${diff.inDays}天前';
-    } catch (e) {
-      return dateTime.toString();
-    }
-  }
-
-  Widget _buildArrivalCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('今日预订到店', style: GoogleFonts.notoSansSc(fontSize: 16, fontWeight: FontWeight.bold)),
-              GestureDetector(onTap: () => _navigateToPage('bookings'), child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 12))),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_arrivals.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('暂无今日到店预订', style: TextStyle(color: AppColors.textSecondary))),
-            )
-          else
-            ..._arrivals.take(3).map(
-              (b) => ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(radius: 14, backgroundColor: AppColors.background, child: Icon(Icons.person_outline, size: 16)),
-                title: Text('${b.guestName ?? '-'} · ${b.roomType ?? '-'} · ${b.checkInDate.month}/${b.checkInDate.day}', style: GoogleFonts.notoSansSc(fontSize: 14)),
-                trailing: const Icon(Icons.chevron_right, size: 16),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-  const _QuickStatCard({required this.title, required this.value, required this.icon, required this.color, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.1))),
-        child: Row(
-          children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(value, style: GoogleFonts.notoSansSc(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                  Text(title, style: GoogleFonts.notoSansSc(fontSize: 10, color: AppColors.textSecondary)),
+                  Text(hotelName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('前台: $username', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
                 ],
               ),
-            ),
-            if (onTap != null) const Icon(Icons.chevron_right, size: 16, color: AppColors.textHint),
-          ],
+              Container(
+                width: 36, height: 36,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [AppColors.goldDark, AppColors.gold, AppColors.goldLight]),
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
+                ),
+                child: Center(child: Text(username[0], style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildHeaderStat('${_stats['today_checkins'] ?? 0}', '今日入住', valueColor: AppColors.gold)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildHeaderStat('${_stats['today_checkouts'] ?? 0}', '今日退房')),
+              const SizedBox(width: 8),
+              Expanded(child: _buildHeaderStat('${_stats['current_staying'] ?? 0}', '当前在住')),
+              const SizedBox(width: 8),
+              Expanded(child: _buildHeaderStat('${_stats['pending_count'] ?? 0}', '待处理', valueColor: AppColors.warning)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderStat(String value, String label, {Color? valueColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(color: valueColor ?? Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 8)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    final actions = [
+      _QuickAction(icon: Icons.login_rounded, label: '办理入住', color: AppColors.success, onTap: () => context.push('/reception/checkin-out')),
+      _QuickAction(icon: Icons.logout_rounded, label: '办理退房', color: AppColors.info, onTap: () => context.push('/reception/checkin-out')),
+      _QuickAction(icon: Icons.vpn_key_rounded, label: '发放房卡', color: AppColors.gold, onTap: () => context.push('/reception/checkin-out')),
+      _QuickAction(icon: Icons.phone_in_talk_rounded, label: '呼叫客房', color: Colors.purple, onTap: () => context.push('/reception/voice-calls')),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: Transform.translate(
+        offset: const Offset(0, -12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('快捷操作', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              const SizedBox(height: 12),
+              Row(
+                children: actions.map((action) => Expanded(
+                  child: GestureDetector(
+                    onTap: action.onTap,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 48, height: 48,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [action.color, action.color.withValues(alpha: 0.6)]),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(action.icon, size: 24, color: Colors.white),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(action.label, style: const TextStyle(fontSize: 10, color: AppColors.textPrimary, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                )).toList(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _TimelineItem extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final String time;
-  const _TimelineItem({required this.icon, required this.color, required this.title, required this.subtitle, required this.time});
+  Widget _buildRoomStatusGrid() {
+    final total = _stats['total_rooms'] ?? 0;
+    final available = _stats['available_rooms'] ?? 0;
+    final occupied = _stats['current_staying'] ?? 0;
+    final cleaning = _stats['cleaning_rooms'] ?? 0;
+    final maintenance = _stats['maintenance_rooms'] ?? 0;
 
-  @override
-  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('房态速览', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              GestureDetector(
+                onTap: () => context.push('/reception/room-availability'),
+                child: const Text('查看详情', style: TextStyle(fontSize: 10, color: AppColors.gold, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _buildRoomStatusCard('$available', '空闲', AppColors.roomAvailable, total > 0 ? available / total : 0)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildRoomStatusCard('$occupied', '在住', AppColors.roomOccupied, total > 0 ? occupied / total : 0)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildRoomStatusCard('$cleaning', '清洁', AppColors.roomCleaning, total > 0 ? cleaning / total : 0)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildRoomStatusCard('$maintenance', '维修', AppColors.roomMaintenance, total > 0 ? maintenance / total : 0)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomStatusCard(String value, String label, Color color, double rate) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.2))),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.7))),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: rate.clamp(0.0, 1.0),
+                backgroundColor: AppColors.divider,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingOrders() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('待办工单', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              if (_pendingOrders.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: AppColors.warning, borderRadius: BorderRadius.circular(8)),
+                  child: Text('${_pendingOrders.length}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_pendingOrders.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.divider)),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: AppColors.success.withValues(alpha: 0.5), size: 20),
+                  const SizedBox(width: 8),
+                  const Text('暂无待办工单', style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+                ],
+              ),
+            )
+          else
+            ..._pendingOrders.take(3).map((order) => _buildOrderCard(order)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    final type = order['type'] ?? order['order_type'] ?? 'service';
+    final isUrgent = order['priority'] == 'high' || order['urgent'] == true;
+    final color = isUrgent ? AppColors.error : AppColors.warning;
+
+    IconData typeIcon;
+    switch (type.toString().toLowerCase()) {
+      case 'cleaning': typeIcon = Icons.cleaning_services; break;
+      case 'maintenance': typeIcon = Icons.build; break;
+      case 'delivery': typeIcon = Icons.room_service; break;
+      default: typeIcon = Icons.assignment;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.2))),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: color, size: 16),
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)),
+            child: Icon(typeIcon, size: 16, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w600)),
-                Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text(order['fault_type'] ?? order['title'] ?? order['description'] ?? '工单', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                Text('${order['room_number'] ?? order['room'] ?? ''} · ${order['created_at'] ?? ''}', style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
               ],
             ),
           ),
-          Text(time, style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+          GestureDetector(
+            onTap: () => _handleOrderAction(order),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('处理', style: TextStyle(color: Colors.white, fontSize: 10)),
+            ),
+          ),
         ],
       ),
     );
   }
-}
 
-class _SmallActionButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _SmallActionButton({required this.label, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-        child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-      ),
-    );
-  }
-}
-
-class _WorkOrderItem extends StatelessWidget {
-  final String room, type, desc, time;
-  final bool urgent;
-  const _WorkOrderItem({required this.room, required this.type, required this.desc, required this.time, this.urgent = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text('$room · $type', style: GoogleFonts.notoSansSc(fontSize: 14, fontWeight: FontWeight.w600)),
-                    if (urgent) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(4)), child: const Text('加急', style: TextStyle(color: Colors.white, fontSize: 8)))]
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(desc, style: GoogleFonts.notoSansSc(fontSize: 12, color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          Text(time, style: GoogleFonts.notoSansSc(fontSize: 11, color: AppColors.textHint)),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavItem {
-  final IconData icon;
-  final String label;
-  final String pageKey;
-  const _BottomNavItem({required this.icon, required this.label, required this.pageKey});
-}
-
-class _DrawerItem implements _DrawerItemBase {
-  final IconData icon;
-  final String label;
-  final String pageKey;
-  const _DrawerItem({required this.icon, required this.label, required this.pageKey});
-}
-
-class _DividerItem implements _DrawerItemBase {
-  const _DividerItem();
-}
-
-abstract class _DrawerItemBase {}
-
-class _BottomNavItemWidget extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-  const _BottomNavItemWidget({required this.icon, required this.label, required this.isSelected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+  void _handleOrderAction(Map<String, dynamic> order) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 24, color: isSelected ? AppColors.primary : AppColors.textHint),
-            const SizedBox(height: 2),
-            Text(label, style: GoogleFonts.notoSansSc(fontSize: 11, color: isSelected ? AppColors.primary : AppColors.textHint, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
+            const Text('处理工单', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Text('工单类型: ${order['fault_type'] ?? order['title'] ?? '工单'}'),
+            Text('房间: ${order['room_number'] ?? order['room'] ?? '-'}'),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final orderId = order['id'];
+                      if (orderId != null) {
+                        final result = await ref.read(maintenanceServiceProvider).updateMaintenanceStatus(
+                          int.parse(orderId.toString()),
+                          'completed',
+                        );
+                        if (result.success && mounted) {
+                          setState(() {
+                            _pendingOrders.removeWhere((o) => o['id'].toString() == orderId.toString());
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('工单已处理'), backgroundColor: AppColors.success),
+                          );
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('处理失败: ${result.message}'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      }
+                    },
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    child: const Text('确认完成'),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildEnvironment() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('环境监测', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              GestureDetector(
+                onTap: () => context.push('/reception/environment'),
+                child: const Text('查看详情', style: TextStyle(fontSize: 10, color: AppColors.gold, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Icon(Icons.thermostat, size: 28, color: AppColors.error.withValues(alpha: 0.7)),
+                      const SizedBox(height: 4),
+                      Text('${_envData['temperature'] ?? '--'}°C', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const Text('温度', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 40, color: AppColors.divider),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Icon(Icons.water_drop, size: 28, color: AppColors.info.withValues(alpha: 0.7)),
+                      const SizedBox(height: 4),
+                      Text('${_envData['humidity'] ?? '--'}%', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const Text('湿度', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 40, color: AppColors.divider),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Icon(Icons.air, size: 28, color: AppColors.success.withValues(alpha: 0.7)),
+                      const SizedBox(height: 4),
+                      Text('${_envData['air_quality'] ?? '--'}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const Text('空气质量', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _SubPageScaffold extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _SubPageScaffold({required this.title, required this.child});
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _QuickAction({required this.icon, required this.label, required this.color, required this.onTap});
+}
+
+class _WorkOrdersTab extends ConsumerStatefulWidget {
+  const _WorkOrdersTab();
+  @override
+  ConsumerState<_WorkOrdersTab> createState() => _WorkOrdersTabState();
+}
+
+class _WorkOrdersTabState extends ConsumerState<_WorkOrdersTab> {
+  List<Map<String, dynamic>> _orders = [];
+  bool _isLoading = true;
+  String? _statusFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    try {
+      final hotelId = await ref.read(authServiceProvider).getCurrentHotelId();
+      if (hotelId == null) { if (mounted) setState(() => _isLoading = false); return; }
+
+      final result = await ref.read(maintenanceServiceProvider).getMaintenanceTickets(
+        status: _statusFilter,
+        pageSize: 100,
+      );
+      if (result.success && result.data != null) {
+        if (mounted) setState(() => _orders = List<Map<String, dynamic>>.from(result.data!.map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{})));
+      }
+    } catch (e) {
+      debugPrint('workOrders: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: Text(title),
+      appBar: AppBar(title: const Text('工单管理'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            _FilterChip(label: '全部', isSelected: _statusFilter == null, onTap: () { setState(() => _statusFilter = null); _loadOrders(); }),
+            const SizedBox(width: 6),
+            _FilterChip(label: '待处理', isSelected: _statusFilter == 'pending', onTap: () { setState(() => _statusFilter = 'pending'); _loadOrders(); }),
+            const SizedBox(width: 6),
+            _FilterChip(label: '处理中', isSelected: _statusFilter == 'processing', onTap: () { setState(() => _statusFilter = 'processing'); _loadOrders(); }),
+            const SizedBox(width: 6),
+            _FilterChip(label: '已完成', isSelected: _statusFilter == 'completed', onTap: () { setState(() => _statusFilter = 'completed'); _loadOrders(); }),
+          ])),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _loadOrders,
+                  child: _orders.isEmpty
+                      ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[300]), const SizedBox(height: 16), const Text('暂无工单', style: TextStyle(color: AppColors.textHint))]))
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _orders.length,
+                          itemBuilder: (ctx, i) {
+                            final o = _orders[i];
+                            final status = o['status'] ?? 'pending';
+                            Color statusColor;
+                            switch (status) {
+                              case 'completed': statusColor = AppColors.success; break;
+                              case 'processing': statusColor = AppColors.info; break;
+                              case 'pending': statusColor = AppColors.warning; break;
+                              default: statusColor = AppColors.textHint;
+                            }
+                            return Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(
+                              leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.assignment, color: statusColor, size: 20)),
+                              title: Text(o['title'] ?? o['description'] ?? '工单${o['id']}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                              subtitle: Text('${o['room_number'] ?? ''} | ${o['type'] ?? ''}'),
+                              trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Text(status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold))),
+                              onTap: () => context.push('/reception/work-orders'),
+                            ));
+                          },
+                        ),
+              ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(color: isSelected ? AppColors.primary : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider)),
+        child: Text(label, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
       ),
-      body: child,
+    );
+  }
+}
+
+class _CallsTab extends ConsumerStatefulWidget {
+  const _CallsTab();
+  @override
+  ConsumerState<_CallsTab> createState() => _CallsTabState();
+}
+
+class _CallsTabState extends ConsumerState<_CallsTab> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('语音通话'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                borderRadius: BorderRadius.circular(40),
+              ),
+              child: const Icon(Icons.phone_in_talk, size: 40, color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+            const Text('语音通话功能', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            const Text('点击下方按钮进入通话管理', style: TextStyle(fontSize: 13, color: AppColors.textHint)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => context.push('/reception/voice-calls'),
+              icon: const Icon(Icons.phone),
+              label: const Text('进入通话管理'),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileTab extends ConsumerStatefulWidget {
+  const _ProfileTab();
+  @override
+  ConsumerState<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends ConsumerState<_ProfileTab> {
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.read(authStateProvider);
+    final username = authState.username ?? '前台';
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('我的'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56, height: 56,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(colors: [AppColors.goldDark, AppColors.gold, AppColors.goldLight]),
+                      borderRadius: BorderRadius.all(Radius.circular(28)),
+                    ),
+                    child: Center(child: Text(username[0], style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold))),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(username, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('前台员工', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            _menuCard(Icons.login, '入住/退房管理', () => context.push('/reception/checkin-out')),
+            _menuCard(Icons.book_online, '预订管理', () => context.push('/reception/bookings')),
+            _menuCard(Icons.meeting_room, '房态查看', () => context.push('/reception/room-availability')),
+            _menuCard(Icons.devices, '设备管理', () => context.push('/reception/devices')),
+            _menuCard(Icons.receipt_long, '账单管理', () => context.push('/reception/bills')),
+            _menuCard(Icons.local_offer, '价格设置', () => context.push('/reception/price-settings')),
+            _menuCard(Icons.calendar_month, '价格日历', () => context.push('/reception/price-calendar')),
+            _menuCard(Icons.local_offer_outlined, '优惠券管理', () => context.push('/reception/coupons')),
+            _menuCard(Icons.thermostat, '环境监测', () => context.push('/reception/environment')),
+            const SizedBox(height: 20),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.logout, color: AppColors.error),
+                title: const Text('退出登录', style: TextStyle(color: AppColors.error)),
+                onTap: () => ref.read(authStateProvider.notifier).clearAuth(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _menuCard(IconData icon, String label, VoidCallback onTap) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.primary),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        trailing: const Icon(Icons.chevron_right, color: AppColors.textHint),
+        onTap: onTap,
+      ),
     );
   }
 }

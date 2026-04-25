@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/hotel_service.dart';
+import '../../services/auth_service.dart';
 
 class ReportsPage extends ConsumerStatefulWidget {
   const ReportsPage({super.key});
@@ -26,9 +27,11 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
     setState(() => _isLoading = true);
     try {
       final now = DateTime.now();
+      final hotelId = await ref.read(authServiceProvider).getCurrentHotelId();
       final reportResult = await ref.read(hotelServiceProvider).getMonthlyReport(
         year: now.year.toString(),
         month: now.month.toString(),
+        hotelId: hotelId,
       );
       if (reportResult.success && mounted) {
         setState(() => _reportData = reportResult.data);

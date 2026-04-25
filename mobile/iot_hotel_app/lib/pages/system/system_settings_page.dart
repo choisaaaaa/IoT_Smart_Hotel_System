@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/auth/auth_state_notifier.dart';
+import '../../core/constants/api_constants.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/constants/mqtt_constants.dart';
+import '../../services/system_config_service.dart';
 
 class SystemSettingsPage extends ConsumerStatefulWidget {
   const SystemSettingsPage({super.key});
@@ -22,35 +27,72 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
-    // 模拟从本地存储或API加载设置
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() {
-      _settings = {
-        'app_name': 'IoT智慧酒店',
-        'app_version': '1.0.0',
-        'api_base_url': 'http://8.134.166.69:9000',
-        'mqtt_broker': 'mqtt://8.134.166.69:1883',
-        'auto_update': true,
-        'push_notifications': true,
-        'dark_mode': false,
-        'language': 'zh-CN',
-        'cache_enabled': true,
-        'debug_mode': false,
-      };
-    });
+    try {
+      final configRes = await ref.read(systemConfigServiceProvider).getAllConfigs();
+      final configs = configRes.success ? (configRes.data ?? {}) : {};
+
+      final apiBaseUrl = ApiConstants.baseUrl.replaceAll('/api/v1/', '');
+      final mqttBroker = 'mqtt://${MqttConstants.brokerHost}:${MqttConstants.brokerPort}';
+
+      setState(() {
+        _settings = {
+          'app_name': configs['app_name'] ?? AppConstants.appName,
+          'app_version': configs['app_version'] ?? AppConstants.appVersion,
+          'api_base_url': configs['api_base_url'] ?? apiBaseUrl,
+          'mqtt_broker': configs['mqtt_broker'] ?? mqttBroker,
+          'auto_update': configs['auto_update'] == true || configs['auto_update'] == 'true',
+          'push_notifications': configs['push_notifications'] != false && configs['push_notifications'] != 'false',
+          'dark_mode': configs['dark_mode'] == true || configs['dark_mode'] == 'true',
+          'language': configs['language'] ?? 'zh-CN',
+          'cache_enabled': configs['cache_enabled'] != false && configs['cache_enabled'] != 'false',
+          'debug_mode': configs['debug_mode'] == true || configs['debug_mode'] == 'true',
+        };
+      });
+    } catch (_) {
+      final apiBaseUrl = ApiConstants.baseUrl.replaceAll('/api/v1/', '');
+      final mqttBroker = 'mqtt://${MqttConstants.brokerHost}:${MqttConstants.brokerPort}';
+      setState(() {
+        _settings = {
+          'app_name': AppConstants.appName,
+          'app_version': AppConstants.appVersion,
+          'api_base_url': apiBaseUrl,
+          'mqtt_broker': mqttBroker,
+          'auto_update': true,
+          'push_notifications': true,
+          'dark_mode': false,
+          'language': 'zh-CN',
+          'cache_enabled': true,
+          'debug_mode': false,
+        };
+      });
+    }
     setState(() => _isLoading = false);
   }
 
   Future<void> _saveSettings() async {
     setState(() => _isLoading = true);
-    // 模拟保存设置
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() => _isLoading = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('设置已保存')),
-      );
+    try {
+      final configMap = Map<String, dynamic>.from(_settings);
+      if (configMap.containsKey('api_base_url')) {
+        final newUrl = configMap['api_base_url'] as String;
+        if (newUrl.isNotEmpty) {
+          ApiConstants.setBaseUrl(newUrl.endsWith('/api/v1/') ? newUrl : '$newUrl/api/v1/');
+        }
+      }
+      await ref.read(systemConfigServiceProvider).updateConfigs(configMap);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('设置已保存'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败: $e'), backgroundColor: AppColors.error),
+        );
+      }
     }
+    setState(() => _isLoading = false);
   }
 
   void _updateSetting(String key, dynamic value) {
@@ -95,6 +137,43 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                     label: const Text('保存设置'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 登出按钮
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('确认登出'),
+                          content: const Text('确定要退出登录吗？'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('取消'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                              child: const Text('登出'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && context.mounted) {
+                        ref.read(authStateProvider.notifier).clearAuth();
+                      }
+                    },
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    label: const Text('退出登录'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),

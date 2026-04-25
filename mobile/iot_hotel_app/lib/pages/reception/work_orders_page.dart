@@ -44,8 +44,9 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
   }
 
   Future<void> _loadMaintenanceOrders() async {
-    final result = await ref.read(maintenanceServiceProvider).getWorkOrders(
-          status: _statusFilter.isEmpty ? null : _statusFilter,
+    final status = _statusFilter.isEmpty || _statusFilter == '全部' ? null : _statusFilter;
+    final result = await ref.read(maintenanceServiceProvider).getMaintenanceTickets(
+          status: status,
           pageSize: 100,
         );
     if (result.success && mounted) {
@@ -340,7 +341,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
   Future<void> _startProcess(int orderId) async {
     final result = await ref
         .read(maintenanceServiceProvider)
-        .updateWorkOrderStatus(orderId, 'assigned');
+        .updateMaintenanceStatus(orderId, 'assigned');
     if (result.success) {
       _loadMaintenanceOrders();
       if (mounted) {
@@ -354,7 +355,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
   Future<void> _startWork(int orderId) async {
     final result = await ref
         .read(maintenanceServiceProvider)
-        .updateWorkOrderStatus(orderId, 'processing');
+        .updateMaintenanceStatus(orderId, 'processing');
     if (result.success) {
       _loadMaintenanceOrders();
       if (mounted) {
@@ -368,7 +369,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
   Future<void> _completeOrder(int orderId) async {
     final result = await ref
         .read(maintenanceServiceProvider)
-        .updateWorkOrderStatus(orderId, 'completed');
+        .updateMaintenanceStatus(orderId, 'completed');
     if (result.success) {
       _loadMaintenanceOrders();
       if (mounted) {
@@ -409,7 +410,7 @@ class _WorkOrdersPageState extends ConsumerState<WorkOrdersPage>
         onSubmit: (data) async {
           final result = await ref
               .read(maintenanceServiceProvider)
-              .createWorkOrder(data);
+              .createMaintenanceTicket(data);
           if (result.success) {
             _loadMaintenanceOrders();
             if (!context.mounted) return;
@@ -605,7 +606,7 @@ class _MaintenanceOrderCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            order['title'] ?? '维修工单',
+            order['fault_type'] ?? order['title'] ?? '维修工单',
             style: GoogleFonts.notoSansSc(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -629,10 +630,10 @@ class _MaintenanceOrderCard extends StatelessWidget {
               ),
             ],
           ),
-          if (order['description'] != null) ...[
+          if (order['fault_description'] != null || order['description'] != null) ...[
             const SizedBox(height: 8),
             Text(
-              order['description'],
+              order['fault_description'] ?? order['description'] ?? '',
               style: TextStyle(color: Colors.grey[500], fontSize: 13),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

@@ -155,7 +155,7 @@ class _CheckInOutPageState extends ConsumerState<CheckInOutPage>
   }
 
   Widget _buildCheckInForm() {
-    final confirmedBookings = _todayBookings.where((b) => b.status == 'confirmed').toList();
+    final confirmedBookings = _todayBookings.where((b) => b.status == 'confirmed' || b.status == 'pending').toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(

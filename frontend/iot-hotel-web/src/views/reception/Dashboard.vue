@@ -373,11 +373,16 @@ async function loadTodayBookings() {
   try {
     const today = formatDate(now())
     const res: any = await bookingApi.getBookingList({ 
-      checkin_date: today,
       pageSize: 1000 
     })
-    // 不过滤状态，展示所有今日预订
-    todayBookings.value = res.data?.list || []
+    const allList = res.data?.list || []
+    
+    // 过滤出今日需要处理的预订：今天入住且状态为待处理/已确认/预入住
+    todayBookings.value = allList.filter((item: any) => {
+      const isTodayCheckin = dayjs(item.check_in_date).isSame(today, 'day')
+      const isPendingCheckin = ['pending', 'confirmed', 'pre_checked_in'].includes(item.status)
+      return isTodayCheckin && isPendingCheckin
+    })
   } catch (error) {
     console.error('加载预订失败:', error)
   }

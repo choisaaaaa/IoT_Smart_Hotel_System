@@ -1,7 +1,7 @@
 name: iot_hotel_app
 description: "智联酒店 - 智慧酒店物联网控制系统跨平台App"
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.11.4
